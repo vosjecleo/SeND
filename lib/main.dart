@@ -6,6 +6,7 @@ import 'matrix/matrix_backend.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Matrix only constructs its E2EE engine when Vodozemac is ready first.
   await vodozemac.init();
   final backend = MatrixBackend();
   runApp(DeltiecordApp(backend: backend));

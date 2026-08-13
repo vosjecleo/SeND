@@ -66,6 +66,7 @@ class ChatMessage {
     required this.timestamp,
     required this.pending,
     this.reply,
+    this.avatarBytes,
   });
 
   final String id;
@@ -74,6 +75,7 @@ class ChatMessage {
   final DateTime timestamp;
   final bool pending;
   final ReplyPreview? reply;
+  final Uint8List? avatarBytes;
 }
 
 class ReplyPreview {

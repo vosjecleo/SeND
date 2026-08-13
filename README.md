@@ -21,6 +21,15 @@ Session data is stored outside the repository in the platform application-data
 directory. On Linux, Deltiecord applies owner-only permissions to its data
 directory and database. Passwords are never stored by the application.
 
+### Encryption trust behavior
+
+Deltiecord delivers room keys to every non-blocked device in an encrypted room,
+matching the usability expected of a general chat client. Device verification
+and cross-signing status remain visible, but an unverified recipient device is
+not silently excluded from new messages. Explicitly blocked devices never
+receive keys. Existing outbound sessions are rotated once per room after launch
+so changes in eligible devices take effect before the next message is sent.
+
 ## Development
 
 Flutter 3.47 or newer is recommended.

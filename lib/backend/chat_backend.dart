@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import '../models/chat_models.dart';
 
+/// Matrix-independent application boundary consumed by Flutter widgets.
+///
+/// Keeping SDK objects behind this contract lets desktop and future Android
+/// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
   SessionStatus get status;
   String? get error;

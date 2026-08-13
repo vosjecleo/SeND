@@ -1,16 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'matrix_client_factory.dart';
 
 class MatrixBackend extends ChatBackend {
   Client? _client;
@@ -26,8 +22,11 @@ class MatrixBackend extends ChatBackend {
   final Set<String> _loadedBackupRoomIds = {};
   final Map<String, Uint8List> _avatarBytes = {};
   final Map<String, Uri?> _avatarUris = {};
+  final Map<String, Uint8List> _senderAvatarBytes = {};
+  final Map<String, Uri?> _senderAvatarUris = {};
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
+  final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
@@ -131,6 +130,7 @@ class MatrixBackend extends ChatBackend {
               timestamp: event.originServerTs,
               pending: !event.status.isSent,
               reply: _replyPreviews[event.eventId],
+              avatarBytes: _senderAvatarBytes[event.senderId],
             ),
           )
           .toList(growable: false) ??
@@ -139,34 +139,7 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> initialize() async {
     try {
-      final support = await getApplicationSupportDirectory();
-      final dataDirectory = Directory(p.join(support.path, 'deltiecord'));
-      await dataDirectory.create(recursive: true);
-      if (Platform.isLinux || Platform.isMacOS) {
-        await Process.run('chmod', ['700', dataDirectory.path]);
-      }
-
-      final databasePath = p.join(dataDirectory.path, 'matrix.db');
-      late final sqflite.Database database;
-      DatabaseFactory? ffiFactory;
-      if (Platform.isLinux || Platform.isWindows) {
-        sqfliteFfiInit();
-        ffiFactory = databaseFactoryFfi;
-        database = await ffiFactory.openDatabase(databasePath);
-      } else {
-        database = await sqflite.openDatabase(databasePath);
-      }
-      if (Platform.isLinux || Platform.isMacOS) {
-        await Process.run('chmod', ['600', databasePath]);
-      }
-
-      final sdkDatabase = await MatrixSdkDatabase.init(
-        'deltiecord',
-        database: database,
-        sqfliteFactory: ffiFactory,
-        fileStorageLocation: dataDirectory.uri,
-      );
-      _client = Client('Deltiecord', database: sdkDatabase);
+      _client = await createMatrixClient();
       _syncSubscription = _matrix.onSync.stream.listen((_) {
         notifyListeners();
         unawaited(_refreshRoomMetadata());
@@ -230,8 +203,11 @@ class MatrixBackend extends ChatBackend {
       _loadedBackupRoomIds.clear();
       _avatarBytes.clear();
       _avatarUris.clear();
+      _senderAvatarBytes.clear();
+      _senderAvatarUris.clear();
       _decryptedPreviews.clear();
       _replyPreviews.clear();
+      _outboundSessionsReset.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -387,9 +363,9 @@ class MatrixBackend extends ChatBackend {
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
       await _loadRoomBackupKeys(room);
-      _timeline = await room.getTimeline(onUpdate: notifyListeners);
+      _timeline = await room.getTimeline(onUpdate: _onTimelineUpdate);
       await _decryptTimelineEvents(_timeline!);
-      await _hydrateReplies(_timeline!);
+      await _hydrateTimelineMetadata(_timeline!);
       _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -410,7 +386,7 @@ class MatrixBackend extends ChatBackend {
     try {
       await timeline.requestHistory(historyCount: 50);
       await _decryptTimelineEvents(timeline);
-      await _hydrateReplies(timeline);
+      await _hydrateTimelineMetadata(timeline);
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {
@@ -424,12 +400,35 @@ class MatrixBackend extends ChatBackend {
     final value = text.trim();
     if (value.isEmpty || _selectedRoomId == null) return;
     try {
-      await _matrix.getRoomById(_selectedRoomId!)!.sendTextEvent(value);
+      final room = _matrix.getRoomById(_selectedRoomId!);
+      if (room == null) throw StateError('The selected room is unavailable.');
+      await _prepareEncryptedSend(room);
+      await room.sendTextEvent(value);
     } catch (exception) {
       _error = _friendlyError(exception);
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<void> _prepareEncryptedSend(Room room) async {
+    if (!room.encrypted || _outboundSessionsReset.contains(room.id)) return;
+    final keyManager = _matrix.encryption?.keyManager;
+    if (keyManager == null) {
+      throw StateError('End-to-end encryption is not ready.');
+    }
+    // Sessions created under the earlier verified-only policy remember the
+    // excluded devices. Rotate once so all current non-blocked devices receive
+    // the new Megolm session before ciphertext is sent.
+    await keyManager.loadOutboundGroupSession(room.id);
+    await keyManager.clearOrUseOutboundGroupSession(room.id, wipe: true);
+    _outboundSessionsReset.add(room.id);
+  }
+
+  void _onTimelineUpdate() {
+    notifyListeners();
+    final timeline = _timeline;
+    if (timeline != null) unawaited(_hydrateTimelineMetadata(timeline));
   }
 
   RoomSummary _roomSummary(Room room) => RoomSummary(
@@ -554,6 +553,39 @@ class MatrixBackend extends ChatBackend {
       }
     });
     notifyListeners();
+  }
+
+  Future<void> _hydrateTimelineMetadata(Timeline timeline) async {
+    await _hydrateSenderAvatars(timeline);
+    await _hydrateReplies(timeline);
+    notifyListeners();
+  }
+
+  Future<void> _hydrateSenderAvatars(Timeline timeline) async {
+    for (final event in timeline.events) {
+      final sender = event.senderFromMemoryOrFallback;
+      final avatar = sender.avatarUrl;
+      if (_senderAvatarUris.containsKey(event.senderId) &&
+          _senderAvatarUris[event.senderId] == avatar) {
+        continue;
+      }
+      _senderAvatarUris[event.senderId] = avatar;
+      _senderAvatarBytes.remove(event.senderId);
+      if (avatar == null || !avatar.isScheme('mxc')) continue;
+      try {
+        final response = await _matrix.getContentThumbnail(
+          avatar.host,
+          avatar.pathSegments.join('/'),
+          64,
+          64,
+          method: Method.crop,
+          animated: false,
+        );
+        _senderAvatarBytes[event.senderId] = response.data;
+      } catch (_) {
+        // Missing profile media should fall back to an initial.
+      }
+    }
   }
 
   Future<void> _hydrateReplies(Timeline timeline) async {

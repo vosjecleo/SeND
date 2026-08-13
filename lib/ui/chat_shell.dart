@@ -513,62 +513,91 @@ class _MessageRow extends StatelessWidget {
       opacity: message.pending ? 0.55 : 1,
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, startsGroup ? 10 : 2, 20, 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (message.reply case final reply?)
-              Container(
-                margin: const EdgeInsets.only(left: 2, bottom: 5),
-                padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xff292a30),
-                  border: Border(
-                    left: BorderSide(color: Color(0xff747fdb), width: 3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      reply.sender,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xffb8bfff),
+            if (startsGroup)
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: const Color(0xff3a3c46),
+                backgroundImage: message.avatarBytes == null
+                    ? null
+                    : MemoryImage(message.avatarBytes!),
+                child: message.avatarBytes == null
+                    ? Text(
+                        message.sender.trim().isEmpty
+                            ? '?'
+                            : message.sender.characters.first.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
+              )
+            else
+              const SizedBox(width: 34),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (message.reply case final reply?)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 5),
+                      padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xff292a30),
+                        border: Border(
+                          left: BorderSide(color: Color(0xff747fdb), width: 3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            reply.sender,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xffb8bfff),
+                            ),
+                          ),
+                          Text(
+                            reply.body.replaceAll('\n', ' '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      reply.body.replaceAll('\n', ' '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
+                  if (startsGroup)
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            message.sender,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          time,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: const Color(0xff989aa5)),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            if (startsGroup)
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      message.sender,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: SelectableText(
+                      message.body,
+                      style: const TextStyle(height: 1.28),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    time,
-                    style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(color: const Color(0xff989aa5)),
                   ),
                 ],
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: SelectableText(
-                message.body,
-                style: const TextStyle(height: 1.28),
               ),
             ),
           ],
