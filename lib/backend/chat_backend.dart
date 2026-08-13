@@ -6,6 +6,7 @@ abstract class ChatBackend extends ChangeNotifier {
   SessionStatus get status;
   String? get error;
   String? get userId;
+  EncryptionSetupState get encryptionSetup;
   List<SpaceSummary> get spaces;
   String? get selectedSpaceId;
   List<RoomSummary> get rooms;
@@ -21,6 +22,9 @@ abstract class ChatBackend extends ChangeNotifier {
   });
   Future<void> logout();
   void clearError();
+  Future<void> refreshEncryptionSetup();
+  Future<void> recoverEncryption(String recoveryKeyOrPassphrase);
+  Future<String> createEncryptionSetup();
   void selectSpace(String? spaceId);
   Future<void> selectRoom(String roomId);
   Future<void> sendMessage(String text);

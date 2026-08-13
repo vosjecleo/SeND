@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'security_center.dart';
 
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});
@@ -39,26 +40,69 @@ class _ChatShellState extends State<ChatShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          SizedBox(width: 68, child: _SpaceBar(backend: widget.backend)),
-          const VerticalDivider(width: 1),
-          SizedBox(width: 280, child: _RoomPanel(backend: widget.backend)),
-          const VerticalDivider(width: 1),
+          if (widget.backend.encryptionSetup.needsAttention)
+            _SecurityBanner(backend: widget.backend),
           Expanded(
-            child: widget.backend.selectedRoom == null
-                ? const _EmptyConversation()
-                : _Conversation(
-                    backend: widget.backend,
-                    controller: _message,
-                    sending: _sending,
-                    onSend: _send,
-                  ),
+            child: Row(
+              children: [
+                SizedBox(width: 68, child: _SpaceBar(backend: widget.backend)),
+                const VerticalDivider(width: 1),
+                SizedBox(
+                  width: 280,
+                  child: _RoomPanel(backend: widget.backend),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: widget.backend.selectedRoom == null
+                      ? const _EmptyConversation()
+                      : _Conversation(
+                          backend: widget.backend,
+                          controller: _message,
+                          sending: _sending,
+                          onSend: _send,
+                        ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _SecurityBanner extends StatelessWidget {
+  const _SecurityBanner({required this.backend});
+
+  final ChatBackend backend;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0xff4b3c19),
+    child: InkWell(
+      onTap: () => showSecurityCenter(context, backend),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 19),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text(
+                'Encrypted history is not fully protected on this device.',
+              ),
+            ),
+            TextButton(
+              onPressed: () => showSecurityCenter(context, backend),
+              child: const Text('Fix encryption'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _SpaceBar extends StatelessWidget {
@@ -219,11 +263,25 @@ class _RoomPanel extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: IconButton(
-              tooltip: 'Log out',
-              icon: const Icon(Icons.logout, size: 19),
-              onPressed: backend.logout,
+              tooltip: 'Encryption & recovery',
+              icon: Icon(
+                backend.encryptionSetup.status == EncryptionSetupStatus.ready
+                    ? Icons.verified_user
+                    : Icons.gpp_maybe,
+                size: 19,
+              ),
+              onPressed: () => showSecurityCenter(context, backend),
             ),
           ),
+          SizedBox(
+            height: 34,
+            child: TextButton.icon(
+              onPressed: backend.logout,
+              icon: const Icon(Icons.logout, size: 16),
+              label: const Text('Log out'),
+            ),
+          ),
+          const SizedBox(height: 4),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -49,6 +50,48 @@ void main() {
     expect(backend.selectedSpaceId, '!space:example.org');
     expect(find.text('Deltie Club'), findsOneWidget);
   });
+
+  testWidgets('prompts an unverified device for recovery', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..security = const EncryptionSetupState(
+        status: EncryptionSetupStatus.needsRecovery,
+        keyBackupEnabled: true,
+        crossSigningEnabled: true,
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(find.text('Fix encryption'), findsOneWidget);
+    await tester.tap(find.text('Fix encryption'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recovery required'), findsOneWidget);
+    expect(find.text('Recover & verify'), findsOneWidget);
+    expect(find.text('Encrypted key backup'), findsOneWidget);
+  });
+
+  testWidgets('requires saving a newly generated recovery key', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..security = const EncryptionSetupState(
+        status: EncryptionSetupStatus.needsSetup,
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Fix encryption'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set up encryption'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('recovery-key'), findsOneWidget);
+    expect(
+      find.text('I saved this recovery key somewhere safe'),
+      findsOneWidget,
+    );
+    final done = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Done'),
+    );
+    expect(done.onPressed, isNull);
+  });
 }
 
 class FakeBackend extends ChatBackend {
@@ -57,9 +100,17 @@ class FakeBackend extends ChatBackend {
   RoomSummary? currentRoom;
   List<SpaceSummary> spaceList = const [];
   String? currentSpaceId;
+  EncryptionSetupState security = const EncryptionSetupState(
+    status: EncryptionSetupStatus.ready,
+    keyBackupEnabled: true,
+    crossSigningEnabled: true,
+    deviceVerified: true,
+  );
 
   @override
   String? get error => null;
+  @override
+  EncryptionSetupState get encryptionSetup => security;
   @override
   List<ChatMessage> get messages => const [];
   @override
@@ -81,6 +132,12 @@ class FakeBackend extends ChatBackend {
   Future<void> initialize() async {}
   @override
   void clearError() {}
+  @override
+  Future<String> createEncryptionSetup() async => 'recovery-key';
+  @override
+  Future<void> recoverEncryption(String recoveryKeyOrPassphrase) async {}
+  @override
+  Future<void> refreshEncryptionSetup() async {}
   @override
   void selectSpace(String? spaceId) {
     currentSpaceId = spaceId;

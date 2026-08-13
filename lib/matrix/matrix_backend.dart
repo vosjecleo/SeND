@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
+import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
@@ -20,6 +21,9 @@ class MatrixBackend extends ChatBackend {
   String? _selectedRoomId;
   String? _selectedSpaceId;
   bool _timelineLoading = false;
+  EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
+    status: EncryptionSetupStatus.loading,
+  );
 
   Client get _matrix => _client!;
 
@@ -29,6 +33,8 @@ class MatrixBackend extends ChatBackend {
   String? get error => _error;
   @override
   String? get userId => _client?.userID;
+  @override
+  EncryptionSetupState get encryptionSetup => _encryptionSetup;
   @override
   String? get selectedSpaceId => _selectedSpaceId;
   @override
@@ -149,6 +155,7 @@ class MatrixBackend extends ChatBackend {
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;
       _error = null;
+      if (_matrix.isLogged()) unawaited(refreshEncryptionSetup());
     } catch (exception) {
       _status = SessionStatus.failed;
       _error = _friendlyError(exception);
@@ -174,6 +181,7 @@ class MatrixBackend extends ChatBackend {
         initialDeviceDisplayName: 'Deltiecord Desktop',
       );
       _status = SessionStatus.signedIn;
+      await refreshEncryptionSetup();
     } catch (exception) {
       _status = SessionStatus.signedOut;
       _error = _friendlyError(exception);
@@ -189,6 +197,9 @@ class MatrixBackend extends ChatBackend {
       await _matrix.logout();
       _selectedRoomId = null;
       _selectedSpaceId = null;
+      _encryptionSetup = const EncryptionSetupState(
+        status: EncryptionSetupStatus.loading,
+      );
       _status = SessionStatus.signedOut;
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -200,6 +211,123 @@ class MatrixBackend extends ChatBackend {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  Future<void> refreshEncryptionSetup() async {
+    if (_client == null || !_matrix.isLogged()) return;
+    _encryptionSetup = const EncryptionSetupState(
+      status: EncryptionSetupStatus.loading,
+    );
+    notifyListeners();
+    try {
+      final encryption = _matrix.encryption;
+      if (encryption == null) {
+        _encryptionSetup = const EncryptionSetupState(
+          status: EncryptionSetupStatus.unavailable,
+          message: 'End-to-end encryption is unavailable on this device.',
+        );
+      } else {
+        final state = await _matrix.getCryptoIdentityState();
+        final ownDevice = _matrix
+            .userDeviceKeys[_matrix.userID]
+            ?.deviceKeys[_matrix.deviceID];
+        final deviceVerified = ownDevice?.verified ?? false;
+        final hasSecureStorage = encryption.ssss.defaultKeyId != null;
+        final status = state.initialized
+            ? state.connected && deviceVerified
+                  ? EncryptionSetupStatus.ready
+                  : EncryptionSetupStatus.needsRecovery
+            : hasSecureStorage ||
+                  state.keyBackupEnabled ||
+                  state.crossSigningEnabled
+            ? EncryptionSetupStatus.needsRepair
+            : EncryptionSetupStatus.needsSetup;
+        _encryptionSetup = EncryptionSetupState(
+          status: status,
+          keyBackupEnabled: state.keyBackupEnabled,
+          crossSigningEnabled: state.crossSigningEnabled,
+          deviceVerified: deviceVerified,
+        );
+      }
+    } catch (exception) {
+      _encryptionSetup = EncryptionSetupState(
+        status: EncryptionSetupStatus.error,
+        message: _friendlyError(exception),
+      );
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> recoverEncryption(String recoveryKeyOrPassphrase) async {
+    final credential = recoveryKeyOrPassphrase.trim();
+    if (credential.isEmpty) throw ArgumentError('Enter a recovery key.');
+    try {
+      final current = await _matrix.getCryptoIdentityState();
+      if (current.initialized) {
+        if (!current.connected) {
+          await _matrix.restoreCryptoIdentity(credential);
+        } else {
+          await _matrix.encryption!.crossSigning.selfSign(
+            keyOrPassphrase: credential,
+          );
+        }
+      } else {
+        await _matrix.initCryptoIdentity(
+          reuseExistingStorageRecoveryKeyOrPassphrase: credential,
+          wipeSecureStorage: false,
+          wipeKeyBackup: false,
+          wipeCrossSigning: false,
+          setupMasterKey: !current.crossSigningEnabled,
+          setupSelfSigningKey: !current.crossSigningEnabled,
+          setupUserSigningKey: !current.crossSigningEnabled,
+          setupOnlineKeyBackup: !current.keyBackupEnabled,
+        );
+      }
+      await refreshEncryptionSetup();
+    } catch (exception) {
+      _encryptionSetup = EncryptionSetupState(
+        status: _encryptionSetup.status,
+        keyBackupEnabled: _encryptionSetup.keyBackupEnabled,
+        crossSigningEnabled: _encryptionSetup.crossSigningEnabled,
+        deviceVerified: _encryptionSetup.deviceVerified,
+        message: _friendlyError(exception),
+      );
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> createEncryptionSetup() async {
+    try {
+      final current = await _matrix.getCryptoIdentityState();
+      if (current.initialized ||
+          _matrix.encryption?.ssss.defaultKeyId != null) {
+        throw StateError(
+          'Existing encrypted identity data was found. Recover it instead of replacing it.',
+        );
+      }
+      final recoveryKey = await _matrix.initCryptoIdentity(
+        keyName: 'Deltiecord recovery key',
+        wipeSecureStorage: false,
+        wipeKeyBackup: false,
+        wipeCrossSigning: false,
+      );
+      await refreshEncryptionSetup();
+      return recoveryKey;
+    } catch (exception) {
+      _encryptionSetup = EncryptionSetupState(
+        status: _encryptionSetup.status,
+        keyBackupEnabled: _encryptionSetup.keyBackupEnabled,
+        crossSigningEnabled: _encryptionSetup.crossSigningEnabled,
+        deviceVerified: _encryptionSetup.deviceVerified,
+        message: _friendlyError(exception),
+      );
+      notifyListeners();
+      rethrow;
+    }
   }
 
   @override

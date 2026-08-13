@@ -11,6 +11,9 @@ and backend architecture can later be reused on Android.
 - Joined-room list with unread counts
 - Live room timelines and plain-text sending
 - End-to-end encrypted room support through the Matrix SDK
+- Device authorization through Matrix recovery keys/security passphrases
+- Cross-signing and encrypted key-backup status with non-destructive repair
+- First-time secure-secret-storage setup with recovery-key confirmation
 - Loading, startup, authentication, timeline, and sending error states
 - Matrix-independent widget/backend boundary
 
