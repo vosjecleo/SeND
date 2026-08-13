@@ -1,0 +1,272 @@
+import 'package:flutter/material.dart';
+
+import '../backend/chat_backend.dart';
+import '../models/chat_models.dart';
+
+class ChatShell extends StatefulWidget {
+  const ChatShell({required this.backend, super.key});
+
+  final ChatBackend backend;
+
+  @override
+  State<ChatShell> createState() => _ChatShellState();
+}
+
+class _ChatShellState extends State<ChatShell> {
+  final _message = TextEditingController();
+  bool _sending = false;
+
+  Future<void> _send() async {
+    final text = _message.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    _message.clear();
+    try {
+      await widget.backend.sendMessage(text);
+    } catch (_) {
+      if (mounted) _message.text = text;
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          SizedBox(width: 280, child: _RoomPanel(backend: widget.backend)),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: widget.backend.selectedRoom == null
+                ? const _EmptyConversation()
+                : _Conversation(
+                    backend: widget.backend,
+                    controller: _message,
+                    sending: _sending,
+                    onSend: _send,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomPanel extends StatelessWidget {
+  const _RoomPanel({required this.backend});
+
+  final ChatBackend backend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xff202126),
+      child: Column(
+        children: [
+          Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.centerLeft,
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xff35363d))),
+            ),
+            child: const Text(
+              'Rooms',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: backend.rooms.isEmpty
+                ? const Center(child: Text('No joined rooms'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: backend.rooms.length,
+                    itemBuilder: (context, index) {
+                      final room = backend.rooms[index];
+                      final selected = backend.selectedRoom?.id == room.id;
+                      return ListTile(
+                        dense: true,
+                        selected: selected,
+                        leading: const Icon(Icons.tag, size: 18),
+                        title: Text(
+                          room.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          room.lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: room.unreadCount > 0
+                            ? Badge(label: Text('${room.unreadCount}'))
+                            : null,
+                        onTap: () => backend.selectRoom(room.id),
+                      );
+                    },
+                  ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            dense: true,
+            title: Text(
+              backend.userId ?? 'Matrix account',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              tooltip: 'Log out',
+              icon: const Icon(Icons.logout, size: 19),
+              onPressed: backend.logout,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Conversation extends StatelessWidget {
+  const _Conversation({
+    required this.backend,
+    required this.controller,
+    required this.sending,
+    required this.onSend,
+  });
+
+  final ChatBackend backend;
+  final TextEditingController controller;
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final room = backend.selectedRoom!;
+    return Column(
+      children: [
+        Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          alignment: Alignment.centerLeft,
+          decoration: const BoxDecoration(
+            color: Color(0xff292a30),
+            border: Border(bottom: BorderSide(color: Color(0xff35363d))),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.tag, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  room.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (backend.error case final error?)
+          MaterialBanner(
+            content: Text(error),
+            actions: [
+              TextButton(
+                onPressed: backend.clearError,
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        Expanded(
+          child: backend.timelineLoading
+              ? const Center(child: CircularProgressIndicator())
+              : backend.messages.isEmpty
+              ? const Center(child: Text('No messages yet'))
+              : ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  itemCount: backend.messages.length,
+                  itemBuilder: (context, index) =>
+                      _MessageRow(message: backend.messages[index]),
+                ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
+          child: TextField(
+            controller: controller,
+            enabled: !sending,
+            onSubmitted: (_) => onSend(),
+            decoration: InputDecoration(
+              hintText: 'Message #${room.name}',
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: IconButton(
+                tooltip: 'Send',
+                onPressed: sending ? null : onSend,
+                icon: const Icon(Icons.send, size: 20),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MessageRow extends StatelessWidget {
+  const _MessageRow({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final local = message.timestamp.toLocal();
+    final time = TimeOfDay.fromDateTime(local).format(context);
+    return Opacity(
+      opacity: message.pending ? 0.55 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 150,
+              child: Text(
+                message.sender,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(child: SelectableText(message.body)),
+            const SizedBox(width: 12),
+            Text(time, style: Theme.of(context).textTheme.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyConversation extends StatelessWidget {
+  const _EmptyConversation();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.forum_outlined, size: 46),
+        SizedBox(height: 12),
+        Text('Choose a room to start chatting'),
+      ],
+    ),
+  );
+}

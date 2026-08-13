@@ -1,0 +1,24 @@
+import 'package:flutter/foundation.dart';
+
+import '../models/chat_models.dart';
+
+abstract class ChatBackend extends ChangeNotifier {
+  SessionStatus get status;
+  String? get error;
+  String? get userId;
+  List<RoomSummary> get rooms;
+  RoomSummary? get selectedRoom;
+  List<ChatMessage> get messages;
+  bool get timelineLoading;
+
+  Future<void> initialize();
+  Future<void> login({
+    required Uri homeserver,
+    required String username,
+    required String password,
+  });
+  Future<void> logout();
+  void clearError();
+  Future<void> selectRoom(String roomId);
+  Future<void> sendMessage(String text);
+}
