@@ -376,6 +376,7 @@ class MatrixBackend extends ChatBackend {
       if (room == null) throw StateError('That room is no longer available.');
       await _loadRoomBackupKeys(room);
       _timeline = await room.getTimeline(onUpdate: notifyListeners);
+      await _decryptTimelineEvents(_timeline!);
       _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -503,6 +504,23 @@ class MatrixBackend extends ChatBackend {
     } on MatrixException catch (exception) {
       if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
     }
+  }
+
+  Future<void> _decryptTimelineEvents(Timeline timeline) async {
+    final encryption = _matrix.encryption;
+    if (encryption == null) return;
+    await _matrix.database.transaction(() async {
+      for (var index = 0; index < timeline.events.length; index++) {
+        final event = timeline.events[index];
+        if (event.type != EventTypes.Encrypted) continue;
+        timeline.events[index] = await encryption.decryptRoomEvent(
+          event,
+          store: true,
+          updateType: EventUpdateType.history,
+        );
+      }
+    });
+    notifyListeners();
   }
 
   Future<void> _closeTimeline() async {
