@@ -89,9 +89,12 @@ messages, corrupts encryption state, or prevents history from loading. New
 release-blocking regressions discovered in broader testing must be fixed before
 the first `0.2.x` build rather than carried forward as accepted behavior.
 
-### v0.2 — Functioning base app
+### v0.2 — Functioning base app (current)
 
 `0.2` is the first complete everyday messaging baseline.
+
+- [x] Keep keyboard focus in the message composer when opening or changing a
+  conversation and after sending, so typing can begin immediately.
 
 - Compose plain text and rich text with a compact WYSIWYG editor: bold, italic,
   underline, strikethrough, inline code, code blocks, quotes, links, lists, and

@@ -174,12 +174,15 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.text('general'));
     await tester.pump();
+    final composer = tester.widget<EditableText>(find.byType(EditableText));
+    expect(composer.focusNode.hasFocus, isTrue);
     await tester.enterText(find.byType(TextField), 'hello from Deltiecord');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
     expect(backend.sentMessages, ['hello from Deltiecord']);
     expect(find.text('hello from Deltiecord'), findsNothing);
+    expect(composer.focusNode.hasFocus, isTrue);
   });
 }
 

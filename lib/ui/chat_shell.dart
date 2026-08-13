@@ -350,11 +350,21 @@ class _Conversation extends StatefulWidget {
 
 class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
+  final _composerFocus = FocusNode(debugLabel: 'message composer');
+  String? _roomId;
 
   @override
   void initState() {
     super.initState();
+    _roomId = widget.backend.selectedRoom?.id;
     _scrollController.addListener(_loadHistoryNearTop);
+    _focusComposerAfterBuild();
+  }
+
+  void _focusComposerAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !widget.sending) _composerFocus.requestFocus();
+    });
   }
 
   void _loadHistoryNearTop() {
@@ -367,14 +377,20 @@ class _ConversationState extends State<_Conversation> {
   @override
   void didUpdateWidget(covariant _Conversation oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.backend.selectedRoom?.id != widget.backend.selectedRoom?.id) {
+    final roomId = widget.backend.selectedRoom?.id;
+    if (_roomId != roomId) {
+      _roomId = roomId;
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      _focusComposerAfterBuild();
+    } else if (oldWidget.sending && !widget.sending) {
+      _focusComposerAfterBuild();
     }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -473,6 +489,8 @@ class _ConversationState extends State<_Conversation> {
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
           child: TextField(
             controller: widget.controller,
+            focusNode: _composerFocus,
+            autofocus: true,
             enabled: !widget.sending,
             onSubmitted: (_) => widget.onSend(),
             decoration: InputDecoration(
