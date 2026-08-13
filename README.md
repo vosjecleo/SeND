@@ -62,12 +62,16 @@ interoperability or encrypted account data.
 
 - **v0.1 — Testing grounds:** validate the Matrix foundation, E2EE recovery,
   Spaces, DMs, timelines, and rapid UX experiments.
-- **v0.2 — Functioning base app:** dependable everyday text chat, history,
-  replies, edits, reactions, media, unread state, and notifications.
+- **v0.2 — Functioning base app:** dependable everyday chat with correct
+  unread/read receipts and send failure handling; replies, edits and reactions;
+  image/video upload and viewing (spoilered and unspoilered); WYSIWYG markup
+  with spoilers and Matrix mentions; file download/opening; and basic desktop
+  notifications.
 - **v0.3 — Grand features:** all major desired capabilities implemented,
   including voice-room and MatrixRTC foundations.
 - **v0.4 — UI/UX rough-complete:** settings, interface polish, density and
-  layout customization, accessibility, and coherent desktop workflows.
+  layout customization, accessibility, coherent desktop workflows, and an
+  option to replace or hide the native GTK window title bar.
 - **v0.5 — Roles and administration:** member/mod/admin presentation,
   permissions, correctly disabled controls, and Space/group creation and
   management.

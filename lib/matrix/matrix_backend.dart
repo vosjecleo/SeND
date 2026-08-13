@@ -28,6 +28,8 @@ class MatrixBackend extends ChatBackend {
   final Map<String, ReplyPreview> _replyPreviews = {};
   final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
+  final Set<String> _roomsMarkingRead = {};
+  final Map<String, String> _lastMarkedReadEventIds = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
   );
@@ -367,6 +369,7 @@ class MatrixBackend extends ChatBackend {
       await _decryptTimelineEvents(_timeline!);
       await _hydrateTimelineMetadata(_timeline!);
       _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
+      await _markSelectedRoomRead();
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {
@@ -428,7 +431,41 @@ class MatrixBackend extends ChatBackend {
   void _onTimelineUpdate() {
     notifyListeners();
     final timeline = _timeline;
-    if (timeline != null) unawaited(_hydrateTimelineMetadata(timeline));
+    if (timeline != null) {
+      unawaited(_hydrateTimelineMetadata(timeline));
+      unawaited(_markSelectedRoomRead());
+    }
+  }
+
+  Future<void> _markSelectedRoomRead() async {
+    final timeline = _timeline;
+    if (timeline == null || timeline.room.id != _selectedRoomId) return;
+
+    String? newestSyncedEventId;
+    for (final event in timeline.events) {
+      if (event.status.isSynced) {
+        newestSyncedEventId = event.eventId;
+        break;
+      }
+    }
+    if (newestSyncedEventId == null ||
+        newestSyncedEventId == _lastMarkedReadEventIds[timeline.room.id] ||
+        _roomsMarkingRead.contains(timeline.room.id)) {
+      return;
+    }
+
+    final roomId = timeline.room.id;
+    _roomsMarkingRead.add(roomId);
+    try {
+      // Timeline.setReadMarker sends both the fully-read marker and the
+      // account's configured public/private receipt for this event.
+      await timeline.setReadMarker(eventId: newestSyncedEventId);
+      _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
+    } catch (_) {
+      // Receipt failures are non-fatal and will be retried on the next update.
+    } finally {
+      _roomsMarkingRead.remove(roomId);
+    }
   }
 
   RoomSummary _roomSummary(Room room) => RoomSummary(
@@ -446,8 +483,14 @@ class MatrixBackend extends ChatBackend {
     if (decrypted != null) return decrypted;
     if (event.type == EventTypes.Encrypted) return 'Encrypted message';
     if (event.type != EventTypes.Message) return 'Room activity';
-    return event.body;
+    return _messagePreview(event);
   }
+
+  String _messagePreview(Event event) => event.calcUnlocalizedBody(
+    hideReply: true,
+    hideEdit: true,
+    plaintextBody: true,
+  );
 
   Future<void> _refreshRoomMetadata() async {
     if (_refreshingRoomMetadata || !_matrix.isLogged()) return;
@@ -497,7 +540,7 @@ class MatrixBackend extends ChatBackend {
     final event = room.lastEvent;
     if (event == null) return false;
     if (event.type == EventTypes.Message) {
-      final body = event.body;
+      final body = _messagePreview(event);
       if (_decryptedPreviews[event.eventId] == body) return false;
       _decryptedPreviews[event.eventId] = body;
       return true;
@@ -519,7 +562,7 @@ class MatrixBackend extends ChatBackend {
     }
     final decrypted = await _matrix.encryption!.decryptRoomEvent(event);
     if (decrypted.type != EventTypes.Message) return false;
-    final body = decrypted.body;
+    final body = _messagePreview(decrypted);
     if (_decryptedPreviews[event.eventId] == body) return false;
     _decryptedPreviews[event.eventId] = body;
     return true;
