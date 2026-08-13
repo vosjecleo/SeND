@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
@@ -22,6 +23,10 @@ class MatrixBackend extends ChatBackend {
   String? _selectedSpaceId;
   bool _timelineLoading = false;
   final Set<String> _loadedBackupRoomIds = {};
+  final Map<String, Uint8List> _avatarBytes = {};
+  final Map<String, Uri?> _avatarUris = {};
+  final Map<String, String> _decryptedPreviews = {};
+  bool _refreshingRoomMetadata = false;
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
   );
@@ -42,8 +47,11 @@ class MatrixBackend extends ChatBackend {
   List<SpaceSummary> get spaces => _joinedRooms
       .where((room) => room.isSpace)
       .map(
-        (room) =>
-            SpaceSummary(id: room.id, name: room.getLocalizedDisplayname()),
+        (room) => SpaceSummary(
+          id: room.id,
+          name: room.getLocalizedDisplayname(),
+          avatarBytes: _avatarBytes[room.id],
+        ),
       )
       .toList(growable: false);
   @override
@@ -148,9 +156,10 @@ class MatrixBackend extends ChatBackend {
         fileStorageLocation: dataDirectory.uri,
       );
       _client = Client('Deltiecord', database: sdkDatabase);
-      _syncSubscription = _matrix.onSync.stream.listen(
-        (_) => notifyListeners(),
-      );
+      _syncSubscription = _matrix.onSync.stream.listen((_) {
+        notifyListeners();
+        unawaited(_refreshRoomMetadata());
+      });
       _loginSubscription = _matrix.onLoginStateChanged.stream.listen((_) {
         _status = _matrix.isLogged()
             ? SessionStatus.signedIn
@@ -162,7 +171,10 @@ class MatrixBackend extends ChatBackend {
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;
       _error = null;
-      if (_matrix.isLogged()) unawaited(refreshEncryptionSetup());
+      if (_matrix.isLogged()) {
+        unawaited(refreshEncryptionSetup());
+        unawaited(_refreshRoomMetadata());
+      }
     } catch (exception) {
       _status = SessionStatus.failed;
       _error = _friendlyError(exception);
@@ -205,6 +217,9 @@ class MatrixBackend extends ChatBackend {
       _selectedRoomId = null;
       _selectedSpaceId = null;
       _loadedBackupRoomIds.clear();
+      _avatarBytes.clear();
+      _avatarUris.clear();
+      _decryptedPreviews.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -294,6 +309,7 @@ class MatrixBackend extends ChatBackend {
         );
       }
       await refreshEncryptionSetup();
+      unawaited(_refreshRoomMetadata());
     } catch (exception) {
       _encryptionSetup = EncryptionSetupState(
         status: _encryptionSetup.status,
@@ -387,13 +403,93 @@ class MatrixBackend extends ChatBackend {
     name: room.getLocalizedDisplayname(),
     lastMessage: _eventPreview(room.lastEvent),
     unreadCount: room.notificationCount,
+    usesChannelIcon: _selectedSpaceId != null,
+    avatarBytes: _avatarBytes[room.id],
   );
 
   String _eventPreview(Event? event) {
     if (event == null) return 'No messages yet';
+    final decrypted = _decryptedPreviews[event.eventId];
+    if (decrypted != null) return decrypted;
     if (event.type == EventTypes.Encrypted) return 'Encrypted message';
     if (event.type != EventTypes.Message) return 'Room activity';
     return event.body;
+  }
+
+  Future<void> _refreshRoomMetadata() async {
+    if (_refreshingRoomMetadata || !_matrix.isLogged()) return;
+    _refreshingRoomMetadata = true;
+    var changed = false;
+    try {
+      for (final room in _joinedRooms) {
+        try {
+          if (!room.isSpace) await room.loadHeroUsers();
+          changed = await _refreshAvatar(room) || changed;
+          if (!room.isSpace) {
+            changed = await _refreshPreview(room) || changed;
+          }
+        } catch (_) {
+          // One unavailable avatar or key must not block the other rooms.
+        }
+      }
+    } finally {
+      _refreshingRoomMetadata = false;
+      if (changed) notifyListeners();
+    }
+  }
+
+  Future<bool> _refreshAvatar(Room room) async {
+    final avatar = room.avatar;
+    if (_avatarUris.containsKey(room.id) && _avatarUris[room.id] == avatar) {
+      return false;
+    }
+    _avatarUris[room.id] = avatar;
+    _avatarBytes.remove(room.id);
+    if (avatar == null || !avatar.isScheme('mxc')) return true;
+    final mediaId = avatar.pathSegments.join('/');
+    if (mediaId.isEmpty) return true;
+    final response = await _matrix.getContentThumbnail(
+      avatar.host,
+      mediaId,
+      96,
+      96,
+      method: Method.crop,
+      animated: false,
+    );
+    _avatarBytes[room.id] = response.data;
+    return true;
+  }
+
+  Future<bool> _refreshPreview(Room room) async {
+    final event = room.lastEvent;
+    if (event == null) return false;
+    if (event.type == EventTypes.Message) {
+      final body = event.body;
+      if (_decryptedPreviews[event.eventId] == body) return false;
+      _decryptedPreviews[event.eventId] = body;
+      return true;
+    }
+    if (event.type != EventTypes.Encrypted || _matrix.encryption == null) {
+      return false;
+    }
+    final encrypted = event.parsedRoomEncryptedContent;
+    final sessionId = encrypted.sessionId;
+    final keyManager = _matrix.encryption!.keyManager;
+    if (sessionId != null &&
+        keyManager.enabled &&
+        await keyManager.isCached()) {
+      try {
+        await keyManager.loadSingleKey(room.id, sessionId);
+      } on MatrixException catch (exception) {
+        if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
+      }
+    }
+    final decrypted = await _matrix.encryption!.decryptRoomEvent(event);
+    if (decrypted.type != EventTypes.Message) return false;
+    final body = decrypted.body;
+    if (_decryptedPreviews[event.eventId] == body) return false;
+    _decryptedPreviews[event.eventId] = body;
+    return true;
   }
 
   Future<void> _loadRoomBackupKeys(Room room) async {

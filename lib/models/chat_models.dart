@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
 enum EncryptionSetupStatus {
@@ -31,10 +33,11 @@ class EncryptionSetupState {
 }
 
 class SpaceSummary {
-  const SpaceSummary({required this.id, required this.name});
+  const SpaceSummary({required this.id, required this.name, this.avatarBytes});
 
   final String id;
   final String name;
+  final Uint8List? avatarBytes;
 }
 
 class RoomSummary {
@@ -43,12 +46,16 @@ class RoomSummary {
     required this.name,
     required this.lastMessage,
     required this.unreadCount,
+    required this.usesChannelIcon,
+    this.avatarBytes,
   });
 
   final String id;
   final String name;
   final String lastMessage;
   final int unreadCount;
+  final bool usesChannelIcon;
+  final Uint8List? avatarBytes;
 }
 
 class ChatMessage {

@@ -134,15 +134,22 @@ class _SpaceBar extends StatelessWidget {
                 tooltip: space.name,
                 selected: backend.selectedSpaceId == space.id,
                 onTap: () => backend.selectSpace(space.id),
-                child: Text(
-                  _initials(space.name),
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: space.avatarBytes == null
+                    ? Text(
+                        _initials(space.name),
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : Image.memory(
+                        space.avatarBytes!,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                      ),
               ),
             ),
         ],
@@ -181,6 +188,7 @@ class _SpaceButton extends StatelessWidget {
               ? Theme.of(context).colorScheme.primaryContainer
               : const Color(0xff2b2d34),
           borderRadius: BorderRadius.circular(selected ? 13 : 24),
+          clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(selected ? 13 : 24),
@@ -235,7 +243,7 @@ class _RoomPanel extends StatelessWidget {
                       return ListTile(
                         dense: true,
                         selected: selected,
-                        leading: const Icon(Icons.tag, size: 18),
+                        leading: _RoomIcon(room: room, size: 30),
                         title: Text(
                           room.name,
                           maxLines: 1,
@@ -288,6 +296,41 @@ class _RoomPanel extends StatelessWidget {
   }
 }
 
+class _RoomIcon extends StatelessWidget {
+  const _RoomIcon({required this.room, required this.size});
+
+  final RoomSummary room;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (room.usesChannelIcon) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: const Icon(Icons.tag, size: 18),
+      );
+    }
+    final avatar = room.avatarBytes;
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: const Color(0xff3a3c46),
+      backgroundImage: avatar == null ? null : MemoryImage(avatar),
+      child: avatar == null
+          ? Text(
+              room.name.trim().isEmpty
+                  ? '?'
+                  : room.name.trim().characters.first.toUpperCase(),
+              style: TextStyle(
+                fontSize: size * 0.4,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
 class _Conversation extends StatelessWidget {
   const _Conversation({
     required this.backend,
@@ -316,7 +359,7 @@ class _Conversation extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.tag, size: 20),
+              _RoomIcon(room: room, size: 30),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

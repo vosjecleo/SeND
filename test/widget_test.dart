@@ -23,6 +23,7 @@ void main() {
           name: 'general',
           lastMessage: 'Hello there',
           unreadCount: 2,
+          usesChannelIcon: false,
         ),
       ];
     await tester.pumpWidget(DeltiecordApp(backend: backend));
