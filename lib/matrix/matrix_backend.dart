@@ -21,6 +21,7 @@ class MatrixBackend extends ChatBackend {
   String? _selectedRoomId;
   String? _selectedSpaceId;
   bool _timelineLoading = false;
+  final Set<String> _loadedBackupRoomIds = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
   );
@@ -97,12 +98,18 @@ class MatrixBackend extends ChatBackend {
   @override
   List<ChatMessage> get messages =>
       _timeline?.events
-          .where((event) => event.type == EventTypes.Message)
+          .where(
+            (event) =>
+                event.type == EventTypes.Message ||
+                event.type == EventTypes.Encrypted,
+          )
           .map(
             (event) => ChatMessage(
               id: event.eventId,
               sender: event.senderFromMemoryOrFallback.calcDisplayname(),
-              body: event.body,
+              body: event.type == EventTypes.Encrypted
+                  ? 'Unable to decrypt this message'
+                  : event.body,
               timestamp: event.originServerTs,
               pending: !event.status.isSent,
             ),
@@ -197,6 +204,7 @@ class MatrixBackend extends ChatBackend {
       await _matrix.logout();
       _selectedRoomId = null;
       _selectedSpaceId = null;
+      _loadedBackupRoomIds.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -350,7 +358,9 @@ class MatrixBackend extends ChatBackend {
     try {
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
+      await _loadRoomBackupKeys(room);
       _timeline = await room.getTimeline(onUpdate: notifyListeners);
+      _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {
@@ -375,9 +385,29 @@ class MatrixBackend extends ChatBackend {
   RoomSummary _roomSummary(Room room) => RoomSummary(
     id: room.id,
     name: room.getLocalizedDisplayname(),
-    lastMessage: room.lastEvent?.body ?? 'No messages yet',
+    lastMessage: _eventPreview(room.lastEvent),
     unreadCount: room.notificationCount,
   );
+
+  String _eventPreview(Event? event) {
+    if (event == null) return 'No messages yet';
+    if (event.type == EventTypes.Encrypted) return 'Encrypted message';
+    if (event.type != EventTypes.Message) return 'Room activity';
+    return event.body;
+  }
+
+  Future<void> _loadRoomBackupKeys(Room room) async {
+    if (!room.encrypted || _loadedBackupRoomIds.contains(room.id)) return;
+    final keyManager = _matrix.encryption?.keyManager;
+    if (keyManager == null || !keyManager.enabled) return;
+    if (!await keyManager.isCached()) return;
+    try {
+      await keyManager.loadAllKeysFromRoom(room.id);
+      _loadedBackupRoomIds.add(room.id);
+    } on MatrixException catch (exception) {
+      if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
+    }
+  }
 
   Future<void> _closeTimeline() async {
     _timeline?.cancelSubscriptions();
