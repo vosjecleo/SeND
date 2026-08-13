@@ -126,6 +126,61 @@ void main() {
     expect(find.text('My actual reply'), findsOneWidget);
     expect(find.textContaining('> <'), findsNothing);
   });
+
+  testWidgets('loads older history from the timeline control', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..moreHistory = true
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Older messages exist',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$message',
+          sender: 'Alice',
+          body: 'Newest message',
+          timestamp: DateTime(2026, 8, 13, 12),
+          pending: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+    await tester.tap(find.text('Load older messages'));
+
+    expect(backend.historyRequests, 1);
+  });
+
+  testWidgets('sends composer text and clears it after success', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'No messages yet',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'hello from Deltiecord');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+
+    expect(backend.sentMessages, ['hello from Deltiecord']);
+    expect(find.text('hello from Deltiecord'), findsNothing);
+  });
 }
 
 class FakeBackend extends ChatBackend {
@@ -137,6 +192,7 @@ class FakeBackend extends ChatBackend {
   List<ChatMessage> messageList = const [];
   bool moreHistory = false;
   int historyRequests = 0;
+  final List<String> sentMessages = [];
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
     keyBackupEnabled: true,
@@ -206,5 +262,5 @@ class FakeBackend extends ChatBackend {
   }
 
   @override
-  Future<void> sendMessage(String text) async {}
+  Future<void> sendMessage(String text) async => sentMessages.add(text);
 }

@@ -17,6 +17,7 @@ class MatrixBackend extends ChatBackend {
   String? _error;
   String? _selectedRoomId;
   String? _selectedSpaceId;
+  int _timelineGeneration = 0;
   bool _timelineLoading = false;
   bool _historyLoading = false;
   final Set<String> _loadedBackupRoomIds = {};
@@ -28,6 +29,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, ReplyPreview> _replyPreviews = {};
   final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
+  bool _roomMetadataRefreshRequested = false;
   final Set<String> _roomsMarkingRead = {};
   final Map<String, String> _lastMarkedReadEventIds = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -141,6 +143,9 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> initialize() async {
     try {
+      await _syncSubscription?.cancel();
+      await _loginSubscription?.cancel();
+      _client?.dispose();
       _client = await createMatrixClient();
       _syncSubscription = _matrix.onSync.stream.listen((_) {
         notifyListeners();
@@ -210,6 +215,8 @@ class MatrixBackend extends ChatBackend {
       _decryptedPreviews.clear();
       _replyPreviews.clear();
       _outboundSessionsReset.clear();
+      _roomsMarkingRead.clear();
+      _lastMarkedReadEventIds.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -357,6 +364,7 @@ class MatrixBackend extends ChatBackend {
   Future<void> selectRoom(String roomId) async {
     if (_selectedRoomId == roomId && _timeline != null) return;
     await _closeTimeline();
+    final generation = _timelineGeneration;
     _selectedRoomId = roomId;
     _timelineLoading = true;
     _error = null;
@@ -365,16 +373,30 @@ class MatrixBackend extends ChatBackend {
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
       await _loadRoomBackupKeys(room);
-      _timeline = await room.getTimeline(onUpdate: _onTimelineUpdate);
-      await _decryptTimelineEvents(_timeline!);
-      await _hydrateTimelineMetadata(_timeline!);
-      _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
+      if (!_isCurrentSelection(roomId, generation)) return;
+      final timeline = await room.getTimeline(
+        onUpdate: () => _onTimelineUpdate(generation),
+      );
+      if (!_isCurrentSelection(roomId, generation)) {
+        timeline.cancelSubscriptions();
+        return;
+      }
+      _timeline = timeline;
+      await _decryptTimelineEvents(timeline);
+      if (!_isCurrentTimeline(timeline, generation)) return;
+      await _hydrateTimelineMetadata(timeline);
+      if (!_isCurrentTimeline(timeline, generation)) return;
+      timeline.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
       await _markSelectedRoomRead();
     } catch (exception) {
-      _error = _friendlyError(exception);
+      if (_isCurrentSelection(roomId, generation)) {
+        _error = _friendlyError(exception);
+      }
     } finally {
-      _timelineLoading = false;
-      notifyListeners();
+      if (_isCurrentSelection(roomId, generation)) {
+        _timelineLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -388,7 +410,9 @@ class MatrixBackend extends ChatBackend {
     notifyListeners();
     try {
       await timeline.requestHistory(historyCount: 50);
+      if (!identical(timeline, _timeline)) return;
       await _decryptTimelineEvents(timeline);
+      if (!identical(timeline, _timeline)) return;
       await _hydrateTimelineMetadata(timeline);
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -428,39 +452,57 @@ class MatrixBackend extends ChatBackend {
     _outboundSessionsReset.add(room.id);
   }
 
-  void _onTimelineUpdate() {
+  bool _isCurrentSelection(String roomId, int generation) =>
+      generation == _timelineGeneration && roomId == _selectedRoomId;
+
+  bool _isCurrentTimeline(Timeline timeline, int generation) =>
+      generation == _timelineGeneration && identical(timeline, _timeline);
+
+  void _onTimelineUpdate(int generation) {
+    if (generation != _timelineGeneration) return;
     notifyListeners();
     final timeline = _timeline;
     if (timeline != null) {
-      unawaited(_hydrateTimelineMetadata(timeline));
+      unawaited(_hydrateCurrentTimeline(timeline, generation));
       unawaited(_markSelectedRoomRead());
     }
   }
 
-  Future<void> _markSelectedRoomRead() async {
-    final timeline = _timeline;
-    if (timeline == null || timeline.room.id != _selectedRoomId) return;
+  Future<void> _hydrateCurrentTimeline(
+    Timeline timeline,
+    int generation,
+  ) async {
+    if (!_isCurrentTimeline(timeline, generation)) return;
+    await _hydrateTimelineMetadata(timeline);
+  }
 
-    String? newestSyncedEventId;
-    for (final event in timeline.events) {
-      if (event.status.isSynced) {
-        newestSyncedEventId = event.eventId;
-        break;
-      }
-    }
-    if (newestSyncedEventId == null ||
-        newestSyncedEventId == _lastMarkedReadEventIds[timeline.room.id] ||
-        _roomsMarkingRead.contains(timeline.room.id)) {
+  Future<void> _markSelectedRoomRead() async {
+    final initialTimeline = _timeline;
+    if (initialTimeline == null || initialTimeline.room.id != _selectedRoomId) {
       return;
     }
-
-    final roomId = timeline.room.id;
+    final roomId = initialTimeline.room.id;
+    if (_roomsMarkingRead.contains(roomId)) return;
     _roomsMarkingRead.add(roomId);
     try {
-      // Timeline.setReadMarker sends both the fully-read marker and the
-      // account's configured public/private receipt for this event.
-      await timeline.setReadMarker(eventId: newestSyncedEventId);
-      _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
+      while (identical(initialTimeline, _timeline) &&
+          roomId == _selectedRoomId) {
+        String? newestSyncedEventId;
+        for (final event in initialTimeline.events) {
+          if (event.status.isSynced) {
+            newestSyncedEventId = event.eventId;
+            break;
+          }
+        }
+        if (newestSyncedEventId == null ||
+            newestSyncedEventId == _lastMarkedReadEventIds[roomId]) {
+          return;
+        }
+        // Timeline.setReadMarker sends both the fully-read marker and the
+        // account's configured public/private receipt for this event.
+        await initialTimeline.setReadMarker(eventId: newestSyncedEventId);
+        _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
+      }
     } catch (_) {
       // Receipt failures are non-fatal and will be retried on the next update.
     } finally {
@@ -493,21 +535,25 @@ class MatrixBackend extends ChatBackend {
   );
 
   Future<void> _refreshRoomMetadata() async {
+    _roomMetadataRefreshRequested = true;
     if (_refreshingRoomMetadata || !_matrix.isLogged()) return;
     _refreshingRoomMetadata = true;
     var changed = false;
     try {
-      for (final room in _joinedRooms) {
-        try {
-          if (!room.isSpace) await room.loadHeroUsers();
-          changed = await _refreshAvatar(room) || changed;
-          if (!room.isSpace) {
-            changed = await _refreshPreview(room) || changed;
+      do {
+        _roomMetadataRefreshRequested = false;
+        for (final room in _joinedRooms) {
+          try {
+            if (!room.isSpace) await room.loadHeroUsers();
+            changed = await _refreshAvatar(room) || changed;
+            if (!room.isSpace) {
+              changed = await _refreshPreview(room) || changed;
+            }
+          } catch (_) {
+            // One unavailable avatar or key must not block the other rooms.
           }
-        } catch (_) {
-          // One unavailable avatar or key must not block the other rooms.
         }
-      }
+      } while (_roomMetadataRefreshRequested && _matrix.isLogged());
     } finally {
       _refreshingRoomMetadata = false;
       if (changed) notifyListeners();
@@ -657,6 +703,7 @@ class MatrixBackend extends ChatBackend {
   }
 
   Future<void> _closeTimeline() async {
+    _timelineGeneration++;
     _timeline?.cancelSubscriptions();
     _timeline = null;
   }

@@ -62,28 +62,32 @@ interoperability or encrypted account data. A milestone is reached only when
 its features work in encrypted and unencrypted rooms, survive an application
 restart, have useful failure states, and pass analysis and automated tests.
 
-### v0.1 — Testing grounds (current)
+### v0.1 — Testing grounds (complete in v0.1.9)
 
 The purpose of `0.1.x` is to prove the foundation while the application is
 still cheap to change.
 
-- Stable login, logout, session restoration, sync, and local encrypted storage.
-- Recovery-key/security-passphrase account recovery, cross-signing, device
+- [x] Stable login, logout, session restoration, sync, and local encrypted
+  storage.
+- [x] Recovery-key/security-passphrase account recovery, cross-signing, device
   authorization, and encrypted key backup.
-- Reliable decryption of live events, paginated history, and room-list previews.
-- Reliable encrypted and unencrypted text sending, with visible send failures.
-- Spaces as the server rail; Space children as channels; Home limited to DMs and
-  group chats.
-- Compact, scrollable message history with avatars, timestamps, reply context,
-  unread badges, and read receipts.
-- Room, DM, group-chat, user, and Space avatars with sensible fallbacks.
-- Cleanup of the backend/UI boundary so later media, RTC, and Android work do
+- [x] Reliable decryption of live events, paginated history, and room-list
+  previews.
+- [x] Reliable encrypted and unencrypted text sending, with visible send
+  failures.
+- [x] Spaces as the server rail; Space children as channels; Home limited to DMs
+  and group chats.
+- [x] Compact, scrollable message history with avatars, timestamps, reply
+  context, unread badges, and read receipts.
+- [x] Room, DM, group-chat, user, and Space avatars with sensible fallbacks.
+- [x] Cleanup of the backend/UI boundary so later media, RTC, and Android work do
   not leak Matrix SDK objects into widgets.
 
-Promotion gate: ordinary text conversations must be trustworthy enough for
-daily testing. There must be no known bug that loses a session, sends
-undecryptable messages, corrupts encryption state, or prevents history from
-loading.
+Promotion gate: **passed by v0.1.9.** Ordinary text conversations are suitable
+for daily testing, with no known bug that loses a session, sends undecryptable
+messages, corrupts encryption state, or prevents history from loading. New
+release-blocking regressions discovered in broader testing must be fixed before
+the first `0.2.x` build rather than carried forward as accepted behavior.
 
 ### v0.2 — Functioning base app
 
