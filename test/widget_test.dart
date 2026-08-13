@@ -93,6 +93,39 @@ void main() {
     );
     expect(done.onPressed, isNull);
   });
+
+  testWidgets('renders replies as metadata above the message body', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Reply',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$reply',
+          sender: 'Alice',
+          body: 'My actual reply',
+          timestamp: DateTime(2026, 8, 13, 12),
+          pending: false,
+          reply: const ReplyPreview(sender: 'Bob', body: 'Original message'),
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+
+    expect(find.text('Original message'), findsOneWidget);
+    expect(find.text('My actual reply'), findsOneWidget);
+    expect(find.textContaining('> <'), findsNothing);
+  });
 }
 
 class FakeBackend extends ChatBackend {
@@ -101,6 +134,9 @@ class FakeBackend extends ChatBackend {
   RoomSummary? currentRoom;
   List<SpaceSummary> spaceList = const [];
   String? currentSpaceId;
+  List<ChatMessage> messageList = const [];
+  bool moreHistory = false;
+  int historyRequests = 0;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
     keyBackupEnabled: true,
@@ -113,7 +149,7 @@ class FakeBackend extends ChatBackend {
   @override
   EncryptionSetupState get encryptionSetup => security;
   @override
-  List<ChatMessage> get messages => const [];
+  List<ChatMessage> get messages => messageList;
   @override
   List<RoomSummary> get rooms => roomList;
   @override
@@ -126,6 +162,10 @@ class FakeBackend extends ChatBackend {
   SessionStatus get status => currentStatus;
   @override
   bool get timelineLoading => false;
+  @override
+  bool get historyLoading => false;
+  @override
+  bool get canLoadMoreHistory => moreHistory;
   @override
   String? get userId => '@deltie:example.org';
 
@@ -158,6 +198,11 @@ class FakeBackend extends ChatBackend {
   Future<void> selectRoom(String roomId) async {
     currentRoom = roomList.firstWhere((room) => room.id == roomId);
     notifyListeners();
+  }
+
+  @override
+  Future<void> loadMoreHistory() async {
+    historyRequests++;
   }
 
   @override

@@ -22,10 +22,12 @@ class MatrixBackend extends ChatBackend {
   String? _selectedRoomId;
   String? _selectedSpaceId;
   bool _timelineLoading = false;
+  bool _historyLoading = false;
   final Set<String> _loadedBackupRoomIds = {};
   final Map<String, Uint8List> _avatarBytes = {};
   final Map<String, Uri?> _avatarUris = {};
   final Map<String, String> _decryptedPreviews = {};
+  final Map<String, ReplyPreview> _replyPreviews = {};
   bool _refreshingRoomMetadata = false;
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
@@ -56,6 +58,10 @@ class MatrixBackend extends ChatBackend {
       .toList(growable: false);
   @override
   bool get timelineLoading => _timelineLoading;
+  @override
+  bool get historyLoading => _historyLoading;
+  @override
+  bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
 
   @override
   List<RoomSummary> get rooms {
@@ -117,9 +123,14 @@ class MatrixBackend extends ChatBackend {
               sender: event.senderFromMemoryOrFallback.calcDisplayname(),
               body: event.type == EventTypes.Encrypted
                   ? 'Unable to decrypt this message'
-                  : event.body,
+                  : event.calcUnlocalizedBody(
+                      hideReply: true,
+                      hideEdit: true,
+                      plaintextBody: true,
+                    ),
               timestamp: event.originServerTs,
               pending: !event.status.isSent,
+              reply: _replyPreviews[event.eventId],
             ),
           )
           .toList(growable: false) ??
@@ -220,6 +231,7 @@ class MatrixBackend extends ChatBackend {
       _avatarBytes.clear();
       _avatarUris.clear();
       _decryptedPreviews.clear();
+      _replyPreviews.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -377,11 +389,32 @@ class MatrixBackend extends ChatBackend {
       await _loadRoomBackupKeys(room);
       _timeline = await room.getTimeline(onUpdate: notifyListeners);
       await _decryptTimelineEvents(_timeline!);
+      await _hydrateReplies(_timeline!);
       _timeline!.requestKeys(tryOnlineBackup: true, onlineKeyBackupOnly: false);
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {
       _timelineLoading = false;
+      notifyListeners();
+    }
+  }
+
+  @override
+  Future<void> loadMoreHistory() async {
+    final timeline = _timeline;
+    if (timeline == null || _historyLoading || !timeline.canRequestHistory) {
+      return;
+    }
+    _historyLoading = true;
+    notifyListeners();
+    try {
+      await timeline.requestHistory(historyCount: 50);
+      await _decryptTimelineEvents(timeline);
+      await _hydrateReplies(timeline);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    } finally {
+      _historyLoading = false;
       notifyListeners();
     }
   }
@@ -521,6 +554,31 @@ class MatrixBackend extends ChatBackend {
       }
     });
     notifyListeners();
+  }
+
+  Future<void> _hydrateReplies(Timeline timeline) async {
+    for (final event in timeline.events) {
+      if (event.type != EventTypes.Message ||
+          event.inReplyToEventId() == null ||
+          _replyPreviews.containsKey(event.eventId)) {
+        continue;
+      }
+      var repliedTo = await event.getReplyEvent(timeline);
+      if (repliedTo == null) continue;
+      if (repliedTo.type == EventTypes.Encrypted &&
+          _matrix.encryption != null) {
+        repliedTo = await _matrix.encryption!.decryptRoomEvent(repliedTo);
+      }
+      if (repliedTo.type != EventTypes.Message) continue;
+      _replyPreviews[event.eventId] = ReplyPreview(
+        sender: repliedTo.senderFromMemoryOrFallback.calcDisplayname(),
+        body: repliedTo.calcUnlocalizedBody(
+          hideReply: true,
+          hideEdit: true,
+          plaintextBody: true,
+        ),
+      );
+    }
   }
 
   Future<void> _closeTimeline() async {

@@ -13,6 +13,8 @@ abstract class ChatBackend extends ChangeNotifier {
   RoomSummary? get selectedRoom;
   List<ChatMessage> get messages;
   bool get timelineLoading;
+  bool get historyLoading;
+  bool get canLoadMoreHistory;
 
   Future<void> initialize();
   Future<void> login({
@@ -27,5 +29,6 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<String> createEncryptionSetup();
   void selectSpace(String? spaceId);
   Future<void> selectRoom(String roomId);
+  Future<void> loadMoreHistory();
   Future<void> sendMessage(String text);
 }

@@ -65,6 +65,7 @@ class ChatMessage {
     required this.body,
     required this.timestamp,
     required this.pending,
+    this.reply,
   });
 
   final String id;
@@ -72,4 +73,12 @@ class ChatMessage {
   final String body;
   final DateTime timestamp;
   final bool pending;
+  final ReplyPreview? reply;
+}
+
+class ReplyPreview {
+  const ReplyPreview({required this.sender, required this.body});
+
+  final String sender;
+  final String body;
 }

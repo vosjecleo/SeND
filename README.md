@@ -44,3 +44,28 @@ Clang, CMake, Ninja, pkg-config, and GTK development libraries.
 
 The current UI is deliberately minimal. Spaces, the Home DM view, richer
 messages, and MatrixRTC voice rooms are post-V0 milestones.
+
+## Roadmap
+
+Deltiecord uses the `0.1.x` line as an active testing ground. Features may be
+rough there, but changes must remain testable and must not compromise Matrix
+interoperability or encrypted account data.
+
+- **v0.1 — Testing grounds:** validate the Matrix foundation, E2EE recovery,
+  Spaces, DMs, timelines, and rapid UX experiments.
+- **v0.2 — Functioning base app:** dependable everyday text chat, history,
+  replies, edits, reactions, media, unread state, and notifications.
+- **v0.3 — Grand features:** all major desired capabilities implemented,
+  including voice-room and MatrixRTC foundations.
+- **v0.4 — UI/UX rough-complete:** settings, interface polish, density and
+  layout customization, accessibility, and coherent desktop workflows.
+- **v0.5 — Roles and administration:** member/mod/admin presentation,
+  permissions, correctly disabled controls, and Space/group creation and
+  management.
+- **Later v0.x — Stabilization:** milestones will be defined from real-world
+  testing and remaining platform work.
+- **v1.0 — Stable desktop release:** every agreed desktop feature implemented,
+  interoperable, tested, and reliable enough for general use.
+
+Android remains a shared-architecture target after the desktop application is
+stable enough that its backend and interaction model are worth carrying over.

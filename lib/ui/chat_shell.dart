@@ -331,7 +331,7 @@ class _RoomIcon extends StatelessWidget {
   }
 }
 
-class _Conversation extends StatelessWidget {
+class _Conversation extends StatefulWidget {
   const _Conversation({
     required this.backend,
     required this.controller,
@@ -345,8 +345,44 @@ class _Conversation extends StatelessWidget {
   final VoidCallback onSend;
 
   @override
+  State<_Conversation> createState() => _ConversationState();
+}
+
+class _ConversationState extends State<_Conversation> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_loadHistoryNearTop);
+  }
+
+  void _loadHistoryNearTop() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 240) {
+      widget.backend.loadMoreHistory();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _Conversation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.backend.selectedRoom?.id != widget.backend.selectedRoom?.id) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final backend = widget.backend;
     final room = backend.selectedRoom!;
+    final messages = backend.messages;
     return Column(
       children: [
         Container(
@@ -387,27 +423,65 @@ class _Conversation extends StatelessWidget {
               : backend.messages.isEmpty
               ? const Center(child: Text('No messages yet'))
               : ListView.builder(
+                  controller: _scrollController,
                   reverse: true,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  itemCount: backend.messages.length,
-                  itemBuilder: (context, index) =>
-                      _MessageRow(message: backend.messages[index]),
+                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 14),
+                  itemCount:
+                      messages.length +
+                      (backend.historyLoading || backend.canLoadMoreHistory
+                          ? 1
+                          : 0),
+                  itemBuilder: (context, index) {
+                    if (index == messages.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Center(
+                          child: backend.historyLoading
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : TextButton.icon(
+                                  onPressed: backend.loadMoreHistory,
+                                  icon: const Icon(Icons.history, size: 17),
+                                  label: const Text('Load older messages'),
+                                ),
+                        ),
+                      );
+                    }
+                    final message = messages[index];
+                    final older = index + 1 < messages.length
+                        ? messages[index + 1]
+                        : null;
+                    final startsGroup =
+                        older == null ||
+                        older.sender != message.sender ||
+                        message.timestamp.difference(older.timestamp) >
+                            const Duration(minutes: 7) ||
+                        message.reply != null;
+                    return _MessageRow(
+                      message: message,
+                      startsGroup: startsGroup,
+                    );
+                  },
                 ),
         ),
         const Divider(height: 1),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
           child: TextField(
-            controller: controller,
-            enabled: !sending,
-            onSubmitted: (_) => onSend(),
+            controller: widget.controller,
+            enabled: !widget.sending,
+            onSubmitted: (_) => widget.onSend(),
             decoration: InputDecoration(
               hintText: 'Message #${room.name}',
               border: const OutlineInputBorder(),
               isDense: true,
               suffixIcon: IconButton(
                 tooltip: 'Send',
-                onPressed: sending ? null : onSend,
+                onPressed: widget.sending ? null : widget.onSend,
                 icon: const Icon(Icons.send, size: 20),
               ),
             ),
@@ -419,33 +493,84 @@ class _Conversation extends StatelessWidget {
 }
 
 class _MessageRow extends StatelessWidget {
-  const _MessageRow({required this.message});
+  const _MessageRow({required this.message, required this.startsGroup});
 
   final ChatMessage message;
+  final bool startsGroup;
 
   @override
   Widget build(BuildContext context) {
     final local = message.timestamp.toLocal();
-    final time = TimeOfDay.fromDateTime(local).format(context);
+    final now = DateTime.now();
+    final clock = TimeOfDay.fromDateTime(local).format(context);
+    final time =
+        local.year == now.year &&
+            local.month == now.month &&
+            local.day == now.day
+        ? clock
+        : '${local.day}/${local.month}/${local.year} $clock';
     return Opacity(
       opacity: message.pending ? 0.55 : 1,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: EdgeInsets.fromLTRB(20, startsGroup ? 10 : 2, 20, 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: 150,
-              child: Text(
-                message.sender,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            if (message.reply case final reply?)
+              Container(
+                margin: const EdgeInsets.only(left: 2, bottom: 5),
+                padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
+                decoration: const BoxDecoration(
+                  color: Color(0xff292a30),
+                  border: Border(
+                    left: BorderSide(color: Color(0xff747fdb), width: 3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      reply.sender,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xffb8bfff),
+                      ),
+                    ),
+                    Text(
+                      reply.body.replaceAll('\n', ' '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            if (startsGroup)
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      message.sender,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    time,
+                    style: Theme.of(context).textTheme.labelSmall
+                        ?.copyWith(color: const Color(0xff989aa5)),
+                  ),
+                ],
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: SelectableText(
+                message.body,
+                style: const TextStyle(height: 1.28),
               ),
             ),
-            Expanded(child: SelectableText(message.body)),
-            const SizedBox(width: 12),
-            Text(time, style: Theme.of(context).textTheme.labelSmall),
           ],
         ),
       ),
