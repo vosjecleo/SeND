@@ -18,6 +18,7 @@ class MatrixBackend extends ChatBackend {
   SessionStatus _status = SessionStatus.starting;
   String? _error;
   String? _selectedRoomId;
+  String? _selectedSpaceId;
   bool _timelineLoading = false;
 
   Client get _matrix => _client!;
@@ -29,15 +30,57 @@ class MatrixBackend extends ChatBackend {
   @override
   String? get userId => _client?.userID;
   @override
+  String? get selectedSpaceId => _selectedSpaceId;
+  @override
+  List<SpaceSummary> get spaces => _joinedRooms
+      .where((room) => room.isSpace)
+      .map(
+        (room) =>
+            SpaceSummary(id: room.id, name: room.getLocalizedDisplayname()),
+      )
+      .toList(growable: false);
+  @override
   bool get timelineLoading => _timelineLoading;
 
   @override
-  List<RoomSummary> get rooms =>
+  List<RoomSummary> get rooms {
+    final selectedSpaceId = _selectedSpaceId;
+    final visible = selectedSpaceId == null
+        ? _homeRooms
+        : _roomsForSpace(selectedSpaceId);
+    return visible.map(_roomSummary).toList(growable: false);
+  }
+
+  List<Room> get _joinedRooms =>
       _client?.rooms
           .where((room) => room.membership == Membership.join)
-          .map(_roomSummary)
           .toList(growable: false) ??
       const [];
+
+  Set<String> get _allSpaceChildIds => _joinedRooms
+      .where((room) => room.isSpace)
+      .expand((space) => space.spaceChildren)
+      .map((child) => child.roomId)
+      .whereType<String>()
+      .toSet();
+
+  List<Room> get _homeRooms => _joinedRooms
+      .where(
+        (room) =>
+            !room.isSpace &&
+            (room.isDirectChat || !_allSpaceChildIds.contains(room.id)),
+      )
+      .toList(growable: false);
+
+  List<Room> _roomsForSpace(String spaceId) {
+    final space = _client?.getRoomById(spaceId);
+    if (space == null || !space.isSpace) return const [];
+    final children = space.spaceChildren
+        .map((child) => _client?.getRoomById(child.roomId ?? ''))
+        .whereType<Room>()
+        .where((room) => room.membership == Membership.join && !room.isSpace);
+    return children.toList(growable: false);
+  }
 
   @override
   RoomSummary? get selectedRoom {
@@ -145,6 +188,7 @@ class MatrixBackend extends ChatBackend {
       await _closeTimeline();
       await _matrix.logout();
       _selectedRoomId = null;
+      _selectedSpaceId = null;
       _status = SessionStatus.signedOut;
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -155,6 +199,15 @@ class MatrixBackend extends ChatBackend {
   @override
   void clearError() {
     _error = null;
+    notifyListeners();
+  }
+
+  @override
+  void selectSpace(String? spaceId) {
+    if (_selectedSpaceId == spaceId) return;
+    _selectedSpaceId = spaceId;
+    _selectedRoomId = null;
+    _closeTimeline();
     notifyListeners();
   }
 

@@ -33,12 +33,30 @@ void main() {
     expect(backend.selectedRoom?.id, '!general:example.org');
     expect(find.text('No messages yet'), findsOneWidget);
   });
+
+  testWidgets('selects a Matrix Space from the server bar', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..spaceList = const [
+        SpaceSummary(id: '!space:example.org', name: 'Deltie Club'),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(find.byTooltip('Deltie Club'), findsOneWidget);
+    await tester.tap(find.byTooltip('Deltie Club'));
+    await tester.pump();
+
+    expect(backend.selectedSpaceId, '!space:example.org');
+    expect(find.text('Deltie Club'), findsOneWidget);
+  });
 }
 
 class FakeBackend extends ChatBackend {
   SessionStatus currentStatus = SessionStatus.starting;
   List<RoomSummary> roomList = const [];
   RoomSummary? currentRoom;
+  List<SpaceSummary> spaceList = const [];
+  String? currentSpaceId;
 
   @override
   String? get error => null;
@@ -46,6 +64,10 @@ class FakeBackend extends ChatBackend {
   List<ChatMessage> get messages => const [];
   @override
   List<RoomSummary> get rooms => roomList;
+  @override
+  List<SpaceSummary> get spaces => spaceList;
+  @override
+  String? get selectedSpaceId => currentSpaceId;
   @override
   RoomSummary? get selectedRoom => currentRoom;
   @override
@@ -59,6 +81,13 @@ class FakeBackend extends ChatBackend {
   Future<void> initialize() async {}
   @override
   void clearError() {}
+  @override
+  void selectSpace(String? spaceId) {
+    currentSpaceId = spaceId;
+    currentRoom = null;
+    notifyListeners();
+  }
+
   @override
   Future<void> login({
     required Uri homeserver,

@@ -41,6 +41,8 @@ class _ChatShellState extends State<ChatShell> {
     return Scaffold(
       body: Row(
         children: [
+          SizedBox(width: 68, child: _SpaceBar(backend: widget.backend)),
+          const VerticalDivider(width: 1),
           SizedBox(width: 280, child: _RoomPanel(backend: widget.backend)),
           const VerticalDivider(width: 1),
           Expanded(
@@ -54,6 +56,93 @@ class _ChatShellState extends State<ChatShell> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SpaceBar extends StatelessWidget {
+  const _SpaceBar({required this.backend});
+
+  final ChatBackend backend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xff191a1e),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        children: [
+          _SpaceButton(
+            tooltip: 'Home',
+            selected: backend.selectedSpaceId == null,
+            onTap: () => backend.selectSpace(null),
+            child: const Icon(Icons.home_filled, size: 21),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+            child: Divider(height: 1),
+          ),
+          for (final space in backend.spaces)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: _SpaceButton(
+                tooltip: space.name,
+                selected: backend.selectedSpaceId == space.id,
+                onTap: () => backend.selectSpace(space.id),
+                child: Text(
+                  _initials(space.name),
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final words = name.trim().split(RegExp(r'\s+'));
+    if (words.isEmpty || words.first.isEmpty) return '?';
+    return words.take(2).map((word) => word[0].toUpperCase()).join();
+  }
+}
+
+class _SpaceButton extends StatelessWidget {
+  const _SpaceButton({
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+    required this.child,
+  });
+
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        height: 48,
+        child: Material(
+          color: selected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : const Color(0xff2b2d34),
+          borderRadius: BorderRadius.circular(selected ? 13 : 24),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(selected ? 13 : 24),
+            child: Center(child: child),
+          ),
+        ),
       ),
     );
   }
@@ -77,9 +166,17 @@ class _RoomPanel extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Color(0xff35363d))),
             ),
-            child: const Text(
-              'Rooms',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            child: Text(
+              backend.selectedSpaceId == null
+                  ? 'Home'
+                  : backend.spaces
+                            .where(
+                              (space) => space.id == backend.selectedSpaceId,
+                            )
+                            .map((space) => space.name)
+                            .firstOrNull ??
+                        'Space',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(

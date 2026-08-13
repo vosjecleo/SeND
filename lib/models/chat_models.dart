@@ -1,5 +1,12 @@
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
+class SpaceSummary {
+  const SpaceSummary({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
 class RoomSummary {
   const RoomSummary({
     required this.id,
