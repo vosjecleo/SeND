@@ -15,4 +15,15 @@ void main() {
     expect(message.html, contains('data-mx-spoiler'));
     expect(message.html, isNot(contains(spoilerEditorColor)));
   });
+
+  test('converts typed markup without exposing formatting controls', () {
+    final document = Document()..insert(0, '**bold** _italic_ ||hidden||');
+
+    final message = serializeRichMessage(document);
+
+    expect(message.plainText, '**bold** _italic_ ||hidden||');
+    expect(message.html, contains('<strong>bold</strong>'));
+    expect(message.html, contains('<em>italic</em>'));
+    expect(message.html, contains('data-mx-spoiler'));
+  });
 }

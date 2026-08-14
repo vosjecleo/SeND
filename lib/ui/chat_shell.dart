@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -926,222 +927,88 @@ class _RichComposerState extends State<_RichComposer> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.fromLTRB(14, 8, 10, 12),
-    decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xff777985)),
-      borderRadius: BorderRadius.circular(4),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        SizedBox(
-          height: 34,
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Attach file',
-                visualDensity: VisualDensity.compact,
-                onPressed: widget.enabled ? widget.onAttach : null,
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.bold,
-                        tooltip: 'Bold',
-                        icon: Icons.format_bold,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.italic,
-                        tooltip: 'Italic',
-                        icon: Icons.format_italic,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.underline,
-                        tooltip: 'Underline',
-                        icon: Icons.format_underlined,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.strikeThrough,
-                        tooltip: 'Strikethrough',
-                        icon: Icons.format_strikethrough,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.inlineCode,
-                        tooltip: 'Inline code',
-                        icon: Icons.code,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.codeBlock,
-                        tooltip: 'Code block',
-                        icon: Icons.data_object,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.blockQuote,
-                        tooltip: 'Quote',
-                        icon: Icons.format_quote,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.ul,
-                        tooltip: 'Bulleted list',
-                        icon: Icons.format_list_bulleted,
-                      ),
-                      _QuillFormatButton(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        attribute: Attribute.ol,
-                        tooltip: 'Numbered list',
-                        icon: Icons.format_list_numbered,
-                      ),
-                      QuillToolbarLinkStyleButton(
-                        controller: widget.controller,
-                        baseOptions: QuillToolbarBaseButtonOptions(
-                          iconSize: 17,
-                          afterButtonPressed: widget.focusNode.requestFocus,
-                        ),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Spoiler',
-                        icon: const Icon(
-                          Icons.visibility_off_outlined,
-                          size: 17,
-                        ),
-                        onPressed: () {
-                          final current = widget.controller
-                              .getSelectionStyle()
-                              .attributes[Attribute.background.key]
-                              ?.value;
-                          widget.controller.formatSelection(
-                            BackgroundAttribute(
-                              current == spoilerEditorColor
-                                  ? null
-                                  : spoilerEditorColor,
-                            ),
-                          );
-                          widget.focusNode.requestFocus();
-                        },
-                      ),
-                    ],
-                  ),
+        IconButton(
+          tooltip: 'Add media or file',
+          visualDensity: VisualDensity.compact,
+          onPressed: widget.enabled ? widget.onAttach : null,
+          icon: const Icon(Icons.add_circle_outline, size: 21),
+        ),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xff777985)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: QuillEditor(
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              scrollController: _scrollController,
+              config: QuillEditorConfig(
+                autoFocus: false,
+                minHeight: 38,
+                maxHeight: 150,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
                 ),
+                placeholder: 'Message #${widget.roomName}',
+                // ignore: experimental_member_use
+                onKeyPressed: (event, _) {
+                  if (event is KeyDownEvent &&
+                      widget.mentionSuggestions.isNotEmpty) {
+                    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                      widget.onMentionSelectionChanged(
+                        (widget.mentionSelectionIndex + 1) %
+                            widget.mentionSuggestions.length,
+                      );
+                      return KeyEventResult.handled;
+                    }
+                    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                      widget.onMentionSelectionChanged(
+                        (widget.mentionSelectionIndex - 1) %
+                            widget.mentionSuggestions.length,
+                      );
+                      return KeyEventResult.handled;
+                    }
+                    if (event.logicalKey == LogicalKeyboardKey.enter &&
+                        !HardwareKeyboard.instance.isShiftPressed) {
+                      widget.onMentionSelected(
+                        widget
+                            .mentionSuggestions[widget.mentionSelectionIndex]
+                            .userId,
+                      );
+                      return KeyEventResult.handled;
+                    }
+                  }
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.enter &&
+                      !HardwareKeyboard.instance.isShiftPressed) {
+                    widget.onSend();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
               ),
-              IconButton(
-                tooltip: 'Send',
-                visualDensity: VisualDensity.compact,
-                onPressed: widget.enabled ? widget.onSend : null,
-                icon: const Icon(Icons.send, size: 18),
-              ),
-            ],
+            ),
           ),
         ),
-        const Divider(height: 1),
-        QuillEditor(
-          controller: widget.controller,
-          focusNode: widget.focusNode,
-          scrollController: _scrollController,
-          config: QuillEditorConfig(
-            autoFocus: false,
-            minHeight: 38,
-            maxHeight: 150,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            placeholder: 'Message #${widget.roomName}',
-            // ignore: experimental_member_use
-            onKeyPressed: (event, _) {
-              if (event is KeyDownEvent &&
-                  widget.mentionSuggestions.isNotEmpty) {
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  widget.onMentionSelectionChanged(
-                    (widget.mentionSelectionIndex + 1) %
-                        widget.mentionSuggestions.length,
-                  );
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                  widget.onMentionSelectionChanged(
-                    (widget.mentionSelectionIndex - 1) %
-                        widget.mentionSuggestions.length,
-                  );
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.enter &&
-                    !HardwareKeyboard.instance.isShiftPressed) {
-                  widget.onMentionSelected(
-                    widget
-                        .mentionSuggestions[widget.mentionSelectionIndex]
-                        .userId,
-                  );
-                  return KeyEventResult.handled;
-                }
-              }
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.enter &&
-                  !HardwareKeyboard.instance.isShiftPressed) {
-                widget.onSend();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-          ),
+        IconButton(
+          tooltip: 'Send',
+          visualDensity: VisualDensity.compact,
+          onPressed: widget.enabled ? widget.onSend : null,
+          icon: const Icon(Icons.send, size: 20),
         ),
       ],
     ),
   );
 }
 
-class _QuillFormatButton extends StatelessWidget {
-  const _QuillFormatButton({
-    required this.controller,
-    required this.focusNode,
-    required this.attribute,
-    required this.tooltip,
-    required this.icon,
-  });
-
-  final QuillController controller;
-  final FocusNode focusNode;
-  final Attribute attribute;
-  final String tooltip;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    visualDensity: VisualDensity.compact,
-    tooltip: tooltip,
-    icon: Icon(icon, size: 17),
-    onPressed: () {
-      final selected = controller.getSelectionStyle().attributes.containsKey(
-        attribute.key,
-      );
-      controller.formatSelection(
-        selected ? Attribute.clone(attribute, null) : attribute,
-      );
-      focusNode.requestFocus();
-    },
-  );
-}
-
-class _MessageRow extends StatelessWidget {
+class _MessageRow extends StatefulWidget {
   const _MessageRow({
     required this.message,
     required this.startsGroup,
@@ -1167,6 +1034,39 @@ class _MessageRow extends StatelessWidget {
   final ChatBackend backend;
 
   @override
+  State<_MessageRow> createState() => _MessageRowState();
+}
+
+class _MessageRowState extends State<_MessageRow> {
+  Timer? _hoverTimer;
+  bool _hovered = false;
+  bool _showActions = false;
+
+  ChatMessage get message => widget.message;
+
+  void _enter(PointerEnterEvent _) {
+    _hoverTimer?.cancel();
+    setState(() => _hovered = true);
+    _hoverTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted && _hovered) setState(() => _showActions = true);
+    });
+  }
+
+  void _exit(PointerExitEvent _) {
+    _hoverTimer?.cancel();
+    setState(() => _hovered = false);
+    _hoverTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted && !_hovered) setState(() => _showActions = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _hoverTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
@@ -1190,177 +1090,219 @@ class _MessageRow extends StatelessWidget {
         ),
       );
     }
-    return Opacity(
-      opacity: message.pending ? 0.55 : 1,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, startsGroup ? 10 : 2, 20, 2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (startsGroup)
-              CircleAvatar(
-                radius: 17,
-                backgroundColor: const Color(0xff3a3c46),
-                backgroundImage: message.avatarBytes == null
-                    ? null
-                    : MemoryImage(message.avatarBytes!),
-                child: message.avatarBytes == null
-                    ? Text(
-                        message.sender.trim().isEmpty
-                            ? '?'
-                            : message.sender.characters.first.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+    return MouseRegion(
+      onEnter: _enter,
+      onExit: _exit,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        color: _hovered ? const Color(0xff292a30) : Colors.transparent,
+        child: Opacity(
+          opacity: message.pending ? 0.55 : 1,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, widget.startsGroup ? 8 : 1, 20, 1),
+            child: Stack(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.startsGroup)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: const Color(0xff3a3c46),
+                          backgroundImage: message.avatarBytes == null
+                              ? null
+                              : MemoryImage(message.avatarBytes!),
+                          child: message.avatarBytes == null
+                              ? Text(
+                                  message.sender.trim().isEmpty
+                                      ? '?'
+                                      : message.sender.characters.first
+                                            .toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
+                              : null,
                         ),
                       )
-                    : null,
-              )
-            else
-              const SizedBox(width: 34),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (message.reply case final reply?)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 5),
-                      padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xff292a30),
-                        border: Border(
-                          left: BorderSide(color: Color(0xff747fdb), width: 3),
-                        ),
-                      ),
+                    else
+                      const SizedBox(width: 34),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            reply.sender,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xffb8bfff),
+                          if (widget.startsGroup)
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    message.sender,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.05,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  time,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: const Color(0xff989aa5),
+                                      ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Text(
-                            reply.body.replaceAll('\n', ' '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                          if (message.reply case final reply?)
+                            Container(
+                              margin: const EdgeInsets.only(top: 3, bottom: 2),
+                              padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
+                              decoration: const BoxDecoration(
+                                color: Color(0xff292a30),
+                                border: Border(
+                                  left: BorderSide(
+                                    color: Color(0xff747fdb),
+                                    width: 3,
+                                  ),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    reply.sender,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xffb8bfff),
+                                    ),
+                                  ),
+                                  Text(
+                                    reply.body.replaceAll('\n', ' '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (message.body.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.zero,
+                              child: message.formattedBody != null
+                                  ? MatrixHtmlText(
+                                      html: message.formattedBody!,
+                                      fallback: message.body,
+                                    )
+                                  : SelectableText(
+                                      message.body,
+                                      style: TextStyle(
+                                        height: 1.16,
+                                        fontStyle: message.redacted
+                                            ? FontStyle.italic
+                                            : FontStyle.normal,
+                                        color: message.redacted
+                                            ? const Color(0xff989aa5)
+                                            : null,
+                                      ),
+                                    ),
+                            ),
+                          if (message.attachment case final attachment?)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: _AttachmentView(
+                                backend: widget.backend,
+                                messageId: message.id,
+                                attachment: attachment,
+                              ),
+                            ),
+                          if (message.edited)
+                            const Text(
+                              '(edited)',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xff989aa5),
+                              ),
+                            ),
+                          if (message.failed)
+                            Row(
+                              children: [
+                                const Text(
+                                  'Failed to send',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: widget.onRetry,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          if (message.transferStatus case final status?)
+                            Text(
+                              status,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xffb8bfff),
+                              ),
+                            ),
+                          if (message.reactions.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  for (final reaction in message.reactions)
+                                    ActionChip(
+                                      visualDensity: VisualDensity.compact,
+                                      backgroundColor: reaction.reactedByMe
+                                          ? const Color(0xff424a78)
+                                          : const Color(0xff303139),
+                                      label: Text(
+                                        '${reaction.key} ${reaction.count}',
+                                      ),
+                                      onPressed: () =>
+                                          widget.onToggleReaction(reaction.key),
+                                    ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                  if (startsGroup)
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            message.sender,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          time,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: const Color(0xff989aa5)),
-                        ),
-                        const Spacer(),
-                        _MessageActions(
-                          onReply: onReply,
-                          onEdit: onEdit,
-                          onDelete: onDelete,
-                          onReact: onReact,
-                          onRetry: onRetry,
-                          onCancel: onCancel,
-                        ),
-                      ],
+                  ],
+                ),
+                if (_showActions)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xff202126),
+                        border: Border.all(color: const Color(0xff41434c)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: _MessageActions(
+                        onReply: widget.onReply,
+                        onEdit: widget.onEdit,
+                        onDelete: widget.onDelete,
+                        onReact: widget.onReact,
+                        onRetry: widget.onRetry,
+                        onCancel: widget.onCancel,
+                      ),
                     ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: message.formattedBody != null
-                        ? MatrixHtmlText(
-                            html: message.formattedBody!,
-                            fallback: message.body,
-                          )
-                        : SelectableText(
-                            message.body,
-                            style: TextStyle(
-                              height: 1.28,
-                              fontStyle: message.redacted
-                                  ? FontStyle.italic
-                                  : FontStyle.normal,
-                              color: message.redacted
-                                  ? const Color(0xff989aa5)
-                                  : null,
-                            ),
-                          ),
                   ),
-                  if (message.attachment case final attachment?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: _AttachmentView(
-                        backend: backend,
-                        messageId: message.id,
-                        attachment: attachment,
-                      ),
-                    ),
-                  if (message.edited)
-                    const Text(
-                      '(edited)',
-                      style: TextStyle(fontSize: 11, color: Color(0xff989aa5)),
-                    ),
-                  if (message.failed)
-                    Row(
-                      children: [
-                        const Text(
-                          'Failed to send',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.redAccent,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: onRetry,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  if (message.transferStatus case final status?)
-                    Text(
-                      status,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xffb8bfff),
-                      ),
-                    ),
-                  if (message.reactions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: [
-                          for (final reaction in message.reactions)
-                            ActionChip(
-                              visualDensity: VisualDensity.compact,
-                              backgroundColor: reaction.reactedByMe
-                                  ? const Color(0xff424a78)
-                                  : const Color(0xff303139),
-                              label: Text('${reaction.key} ${reaction.count}'),
-                              onPressed: () => onToggleReaction(reaction.key),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1519,22 +1461,25 @@ class _AttachmentViewState extends State<_AttachmentView> {
   @override
   Widget build(BuildContext context) {
     if (widget.attachment.spoiler && !_revealed) {
-      return SizedBox(
-        width: 360,
-        height: 120,
-        child: Material(
-          color: const Color(0xff17181c),
-          borderRadius: BorderRadius.circular(5),
-          child: InkWell(
-            onTap: () => setState(() => _revealed = true),
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.visibility_off_outlined),
-                  SizedBox(height: 5),
-                  Text('Spoiler — click to reveal'),
-                ],
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(
+          width: 104,
+          height: 58,
+          child: Material(
+            color: const Color(0xff17181c),
+            borderRadius: BorderRadius.circular(5),
+            child: InkWell(
+              onTap: () => setState(() => _revealed = true),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.visibility_off_outlined, size: 17),
+                    SizedBox(height: 2),
+                    Text('Reveal spoiler', style: TextStyle(fontSize: 10)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1565,7 +1510,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
   Widget _buildImage() {
     _imageBytes ??= widget.backend.downloadAttachment(
       widget.messageId,
-      thumbnail: true,
+      thumbnail: !widget.attachment.animated,
     );
     return FutureBuilder<Uint8List>(
       future: _imageBytes,
@@ -1583,16 +1528,23 @@ class _AttachmentViewState extends State<_AttachmentView> {
         final bytes = snapshot.data;
         if (bytes == null) {
           return const SizedBox(
-            width: 360,
-            height: 160,
+            width: 92,
+            height: 72,
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460, maxHeight: 360),
-          child: InkWell(
-            onTap: _save,
-            child: Image.memory(bytes, fit: BoxFit.contain),
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 92, maxHeight: 72),
+            child: InkWell(
+              onTap: _open,
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+            ),
           ),
         );
       },
@@ -1711,10 +1663,41 @@ class _InlineVideoState extends State<_InlineVideo> {
   late final Player _player = Player();
   late final VideoController _controller = VideoController(_player);
   bool _opening = false;
+  bool _opened = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_prepare());
+  }
+
+  Future<void> _prepare() async {
+    if (_opening || _opened) return;
+    setState(() => _opening = true);
+    try {
+      final source = await widget.backend.getMediaPlaybackSource(
+        widget.messageId,
+      );
+      if (source == null) return;
+      await _player.open(
+        Media(source.uri.toString(), httpHeaders: source.headers),
+        play: false,
+      );
+      _opened = true;
+    } catch (exception) {
+      _error = exception.toString();
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
 
   Future<void> _play() async {
     if (_opening) return;
+    if (_opened) {
+      await _player.playOrPause();
+      return;
+    }
     setState(() {
       _opening = true;
       _error = null;
@@ -1730,6 +1713,7 @@ class _InlineVideoState extends State<_InlineVideo> {
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
       );
+      _opened = true;
     } catch (exception) {
       if (mounted) setState(() => _error = exception.toString());
     } finally {
@@ -1744,58 +1728,64 @@ class _InlineVideoState extends State<_InlineVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxWidth: 520),
-    color: Colors.black,
-    child: AspectRatio(
-      aspectRatio: 16 / 9,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Video(controller: _controller),
-          if (!_player.state.playing)
-            IconButton.filled(
-              tooltip: 'Stream video',
-              onPressed: _opening ? null : _play,
-              icon: _opening
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.play_arrow),
-            ),
-          Positioned(
-            right: 44,
-            top: 4,
-            child: IconButton.filledTonal(
-              tooltip: 'Open video externally',
-              onPressed: widget.onOpen,
-              icon: const Icon(Icons.open_in_new, size: 18),
-            ),
-          ),
-          Positioned(
-            right: 4,
-            top: 4,
-            child: IconButton.filledTonal(
-              tooltip: 'Save video',
-              onPressed: widget.onSave,
-              icon: const Icon(Icons.download, size: 18),
-            ),
-          ),
-          if (_error case final error?)
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: SizedBox(
+      width: 104,
+      height: 59,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Video(controller: _controller),
+            if (!_player.state.playing)
+              IconButton.filled(
+                tooltip: 'Stream video',
+                onPressed: _opening ? null : _play,
+                icon: _opening
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.play_arrow),
+              ),
             Positioned(
-              left: 8,
-              right: 8,
-              bottom: 8,
-              child: Text(
-                error,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              right: 0,
+              top: 0,
+              child: SizedBox.square(
+                dimension: 24,
+                child: PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  iconSize: 14,
+                  tooltip: 'Video options',
+                  onSelected: (value) =>
+                      value == 'open' ? widget.onOpen() : widget.onSave(),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'open',
+                      child: Text('Open externally'),
+                    ),
+                    PopupMenuItem(value: 'save', child: Text('Save video')),
+                  ],
+                ),
               ),
             ),
-        ],
+            if (_error case final error?)
+              Positioned(
+                left: 3,
+                right: 3,
+                bottom: 2,
+                child: Text(
+                  error,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 8),
+                ),
+              ),
+          ],
+        ),
       ),
     ),
   );

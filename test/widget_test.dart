@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
@@ -130,6 +131,7 @@ void main() {
     expect(find.text('My actual reply'), findsOneWidget);
     expect(find.textContaining('> <'), findsNothing);
 
+    await _revealMessageActions(tester, find.text('My actual reply'));
     await tester.tap(find.byTooltip('Reply'));
     await tester.pump();
     expect(find.text('Replying to Alice'), findsOneWidget);
@@ -174,6 +176,7 @@ void main() {
     await tester.tap(find.text('👍 2'));
     expect(backend.toggledReactions, [(r'$own', '👍')]);
 
+    await _revealMessageActions(tester, find.text('Original').last);
     await tester.tap(find.byTooltip('Message actions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit message'));
@@ -184,6 +187,7 @@ void main() {
     await tester.pump();
     expect(backend.lastEditMessageId, r'$own');
 
+    await _revealMessageActions(tester, find.text('Original').last);
     await tester.tap(find.byTooltip('Message actions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete message'));
@@ -339,6 +343,14 @@ Future<void> _enterComposer(WidgetTester tester, String text) async {
     ChangeSource.local,
   );
   await tester.pump();
+}
+
+Future<void> _revealMessageActions(WidgetTester tester, Finder message) async {
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer();
+  await mouse.moveTo(tester.getCenter(message));
+  await tester.pump(const Duration(milliseconds: 1100));
+  await mouse.removePointer();
 }
 
 class FakeBackend extends ChatBackend {

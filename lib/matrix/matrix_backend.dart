@@ -164,18 +164,23 @@ class MatrixBackend extends ChatBackend {
           final isMessage =
               displayEvent.type == EventTypes.Message ||
               displayEvent.type == EventTypes.Encrypted;
+          final attachment = _attachmentFor(displayEvent);
+          final body = event.redacted
+              ? 'Message deleted'
+              : displayEvent.type == EventTypes.Encrypted
+              ? 'Unable to decrypt this message'
+              : attachment?.caption ??
+                    (attachment == null
+                        ? displayEvent.calcUnlocalizedBody(
+                            hideReply: true,
+                            hideEdit: true,
+                            plaintextBody: true,
+                          )
+                        : '');
           return ChatMessage(
             id: event.eventId,
             sender: event.senderFromMemoryOrFallback.calcDisplayname(),
-            body: event.redacted
-                ? 'Message deleted'
-                : displayEvent.type == EventTypes.Encrypted
-                ? 'Unable to decrypt this message'
-                : displayEvent.calcUnlocalizedBody(
-                    hideReply: true,
-                    hideEdit: true,
-                    plaintextBody: true,
-                  ),
+            body: body,
             timestamp: event.originServerTs,
             pending: event.status.isSending,
             failed: event.status.isError,
@@ -191,8 +196,10 @@ class MatrixBackend extends ChatBackend {
             edited: displayEvent.eventId != event.eventId,
             redacted: event.redacted,
             reactions: _reactionSummaries(event, timeline),
-            attachment: _attachmentFor(displayEvent),
-            formattedBody: displayEvent.isRichMessage
+            attachment: attachment,
+            formattedBody:
+                displayEvent.isRichMessage &&
+                    (attachment == null || attachment.caption != null)
                 ? displayEvent.formattedText
                 : null,
             reply: _replyPreviews[event.eventId],
@@ -219,9 +226,14 @@ class MatrixBackend extends ChatBackend {
       MessageTypes.Audio => AttachmentKind.audio,
       _ => AttachmentKind.file,
     };
+    final name = event.content.tryGet<String>('filename') ?? event.body;
+    final caption =
+        event.body.trim().isNotEmpty && event.body.trim() != name.trim()
+        ? event.body.trim()
+        : null;
     return ChatAttachment(
       kind: kind,
-      name: event.content.tryGet<String>('filename') ?? event.body,
+      name: name,
       mimeType: event.attachmentMimetype,
       size: event.infoMap.tryGet<int>('size'),
       encrypted: event.isAttachmentEncrypted,
@@ -231,6 +243,9 @@ class MatrixBackend extends ChatBackend {
               ) ==
               true ||
           event.content.tryGet<bool>('m.spoiler') == true,
+      caption: caption,
+      hasThumbnail: event.hasThumbnail,
+      animated: event.attachmentMimetype == 'image/gif',
     );
   }
 
@@ -381,12 +396,26 @@ class MatrixBackend extends ChatBackend {
               room.highlightCount == 0)) {
         continue;
       }
+      var displayEvent = event;
+      if (event.type == EventTypes.Encrypted && _matrix.encryption != null) {
+        try {
+          displayEvent = await _matrix.encryption!.decryptRoomEvent(event);
+        } catch (_) {
+          // A key arriving later will still update the room preview. The
+          // notification must remain useful without delaying sync forever.
+        }
+      }
       final sender = event.senderFromMemoryOrFallback.calcDisplayname();
+      final notificationBody = displayEvent.type == EventTypes.Message
+          ? displayEvent.calcUnlocalizedBody(
+              hideReply: true,
+              hideEdit: true,
+              plaintextBody: true,
+            )
+          : 'New room activity';
       await _notifications.show(
         title: '$sender in ${room.getLocalizedDisplayname()}',
-        // Message previews remain private until the settings pass can expose
-        // an explicit opt-in preference.
-        body: event.hasAttachment ? 'Sent an attachment' : 'New message',
+        body: notificationBody,
       );
     }
   }

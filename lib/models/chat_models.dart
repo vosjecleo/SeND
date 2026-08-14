@@ -108,6 +108,9 @@ class ChatAttachment {
     required this.size,
     required this.encrypted,
     required this.spoiler,
+    this.caption,
+    this.hasThumbnail = false,
+    this.animated = false,
   });
 
   final AttachmentKind kind;
@@ -116,6 +119,9 @@ class ChatAttachment {
   final int? size;
   final bool encrypted;
   final bool spoiler;
+  final String? caption;
+  final bool hasThumbnail;
+  final bool animated;
 }
 
 class AttachmentDraft {
