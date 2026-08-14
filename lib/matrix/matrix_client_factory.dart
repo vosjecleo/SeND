@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+const deltiecordRoomPresentationEventType = 'net.deltiecord.room.presentation';
+
 /// Creates the Matrix SDK client and its platform-appropriate persistent store.
 ///
 /// Session tokens, Olm state, and cached room keys stay in the application data
@@ -38,6 +40,11 @@ Future<Client> createMatrixClient() async {
   return Client(
     'Deltiecord',
     database: sdkDatabase,
+    // Room presentation controls whether a room exposes a timeline/composer or
+    // MatrixRTC controls. Load it with the initial room state so a fresh device
+    // cannot briefly (or permanently, without another rebuild) treat a voice
+    // room as a text room while the SDK lazily hydrates custom state.
+    importantStateEvents: {deltiecordRoomPresentationEventType},
     // Deltiecord warns about verification separately. Excluding an unverified
     // device here would create ciphertext its owner cannot decrypt.
     shareKeysWith: ShareKeysWith.all,

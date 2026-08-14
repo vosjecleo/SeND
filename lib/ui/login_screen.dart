@@ -20,11 +20,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    final uri = Uri.tryParse(_homeserver.text.trim());
+    final uri = normalizedHomeserverUri(_homeserver.text);
     if (uri == null) return;
     await widget.backend.login(
       homeserver: uri,
-      username: _username.text.trim(),
+      username: normalizedMatrixLoginName(_username.text),
       password: _password.text,
     );
   }
@@ -68,9 +68,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
-                      final uri = Uri.tryParse(value?.trim() ?? '');
-                      return uri == null || !uri.hasScheme || !uri.hasAuthority
-                          ? 'Enter a complete homeserver URL.'
+                      final uri = normalizedHomeserverUri(value ?? '');
+                      return uri == null
+                          ? 'Enter a valid homeserver address.'
                           : null;
                     },
                   ),
@@ -125,4 +125,23 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+/// Accepts the hostname-oriented input people commonly use for homeservers.
+Uri? normalizedHomeserverUri(String input) {
+  final value = input.trim();
+  if (value.isEmpty) return null;
+  final withScheme = value.contains('://') ? value : 'https://$value';
+  final uri = Uri.tryParse(withScheme);
+  if (uri == null || uri.scheme != 'https' || !uri.hasAuthority) return null;
+  return uri;
+}
+
+/// Synapse accepts a localpart consistently even when deployments reject a
+/// fully-qualified Matrix ID in the password-login identifier.
+String normalizedMatrixLoginName(String input) {
+  final value = input.trim();
+  if (!value.startsWith('@')) return value;
+  final separator = value.indexOf(':', 1);
+  return separator > 1 ? value.substring(1, separator) : value;
 }

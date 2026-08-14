@@ -31,7 +31,7 @@ final _webUrlPattern = RegExp(r'https?://[^\s<>]+');
 /// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
   static const _settingsAccountDataType = 'net.deltiecord.settings';
-  static const _roomPresentationEventType = 'net.deltiecord.room.presentation';
+  static const _roomPresentationEventType = deltiecordRoomPresentationEventType;
 
   MatrixBackend({ChatNotificationSink? notifications})
     : _notifications = notifications ?? const SilentChatNotificationSink();
