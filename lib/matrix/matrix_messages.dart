@@ -42,6 +42,12 @@ extension _MatrixMessages on MatrixBackend {
           value,
           inReplyTo: replyEvent,
           editEventId: editMessageId,
+          // Deltiecord does not expose the SDK's slash-command interface.
+          // Treat Unix paths and other leading-slash text literally.
+          parseCommands: false,
+          // Rich markup is serialized by the composer and uses the branch
+          // below; avoid a second, behaviorally different Markdown pass.
+          parseMarkdown: false,
         );
       } else {
         await room.sendEvent(

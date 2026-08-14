@@ -26,4 +26,13 @@ void main() {
     expect(message.html, contains('<em>italic</em>'));
     expect(message.html, contains('data-mx-spoiler'));
   });
+
+  test('keeps filesystem paths as literal plain text', () {
+    final document = Document()..insert(0, '/home/user/project/file.txt');
+
+    final message = serializeRichMessage(document);
+
+    expect(message.plainText, '/home/user/project/file.txt');
+    expect(message.html, isNull);
+  });
 }
