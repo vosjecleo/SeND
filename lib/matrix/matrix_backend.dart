@@ -13,6 +13,7 @@ import 'media_range_proxy.dart';
 
 class MatrixBackend extends ChatBackend {
   static const _settingsAccountDataType = 'net.deltiecord.settings';
+  static const _roomPresentationEventType = 'net.deltiecord.room.presentation';
 
   MatrixBackend({ChatNotificationSink? notifications})
     : _notifications = notifications ?? const SilentChatNotificationSink();
@@ -43,6 +44,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _lastMarkedReadEventIds = {};
   final Map<String, String?> _firstUnreadEventIds = {};
   final Map<String, String> _lastNotificationEventIds = {};
+  final Map<String, RoomPresentation> _roomPresentationOverrides = {};
   bool _notificationsPrimed = false;
   bool _notificationPreviewsEnabled = true;
   int? _maximumUploadBytes;
@@ -425,6 +427,7 @@ class MatrixBackend extends ChatBackend {
       _lastMarkedReadEventIds.clear();
       _firstUnreadEventIds.clear();
       _lastNotificationEventIds.clear();
+      _roomPresentationOverrides.clear();
       _notificationsPrimed = false;
       _maximumUploadBytes = null;
       _mediaPlaybackSources.clear();
@@ -658,6 +661,12 @@ class MatrixBackend extends ChatBackend {
     try {
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
+      await room.postLoad();
+      if (_presentationFor(room) == RoomPresentation.voice) {
+        _timelineLoading = false;
+        notifyListeners();
+        return;
+      }
       await _loadRoomBackupKeys(room);
       if (!_isCurrentSelection(roomId, generation)) return;
       final timeline = await room.getTimeline(
@@ -684,6 +693,34 @@ class MatrixBackend extends ChatBackend {
         _timelineLoading = false;
         notifyListeners();
       }
+    }
+  }
+
+  @override
+  Future<void> setRoomPresentation(
+    String roomId,
+    RoomPresentation presentation,
+  ) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) throw StateError('That room is no longer available.');
+    try {
+      await _matrix.setRoomStateWithKey(
+        room.id,
+        _roomPresentationEventType,
+        '',
+        {'kind': presentation.name},
+      );
+      _roomPresentationOverrides[roomId] = presentation;
+      if (roomId == _selectedRoomId) {
+        await _closeTimeline();
+        _selectedRoomId = null;
+        await selectRoom(roomId);
+      }
+      notifyListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+      rethrow;
     }
   }
 
@@ -1109,8 +1146,47 @@ class MatrixBackend extends ChatBackend {
     lastMessage: _eventPreview(room.lastEvent),
     unreadCount: room.notificationCount,
     usesChannelIcon: _selectedSpaceId != null,
+    presentation: _presentationFor(room),
+    voiceParticipants: _voiceParticipants(room),
     avatarBytes: _avatarBytes[room.id],
   );
+
+  RoomPresentation _presentationFor(Room room) {
+    final overridden = _roomPresentationOverrides[room.id];
+    if (overridden != null) return overridden;
+    final kind = room
+        .getState(_roomPresentationEventType)
+        ?.content
+        .tryGet<String>('kind');
+    return kind == RoomPresentation.voice.name
+        ? RoomPresentation.voice
+        : RoomPresentation.text;
+  }
+
+  List<VoiceParticipantSummary> _voiceParticipants(Room room) {
+    final memberStates = room.states[EventTypes.GroupCallMember];
+    if (memberStates == null) return const [];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final participants = <String, VoiceParticipantSummary>{};
+    for (final state in memberStates.values) {
+      final memberships = state.content.tryGetList('memberships') ?? const [];
+      final active = memberships.whereType<Map>().any((membership) {
+        final expires = membership['expires_ts'];
+        return expires is int && expires > now;
+      });
+      if (!active) continue;
+      final userId = state.senderId;
+      final user = room.unsafeGetUserFromMemoryOrFallback(userId);
+      participants[userId] = VoiceParticipantSummary(
+        userId: userId,
+        displayName: user.calcDisplayname(),
+        avatarBytes: _senderAvatarBytes['${room.id}|$userId'],
+      );
+    }
+    final result = participants.values.toList(growable: false);
+    result.sort((a, b) => a.displayName.compareTo(b.displayName));
+    return result;
+  }
 
   String _eventPreview(Event? event) {
     if (event == null) return 'No messages yet';
@@ -1137,6 +1213,7 @@ class MatrixBackend extends ChatBackend {
         _roomMetadataRefreshRequested = false;
         for (final room in _joinedRooms) {
           try {
+            await room.postLoad();
             if (!room.isSpace) await room.loadHeroUsers();
             changed = await _refreshAvatar(room) || changed;
             if (!room.isSpace) {

@@ -57,6 +57,34 @@ void main() {
     expect(find.text('Deltie Club'), findsOneWidget);
   });
 
+  testWidgets('opens voice rooms without exposing a message composer', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:example.org'
+      ..spaceList = const [
+        SpaceSummary(id: '!space:example.org', name: 'Deltie'),
+      ]
+      ..roomList = const [
+        RoomSummary(
+          id: '!voice:example.org',
+          name: 'Lounge',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+          presentation: RoomPresentation.voice,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Lounge'));
+    await tester.pump();
+
+    expect(find.text('VOICE ROOMS'), findsOneWidget);
+    expect(find.text('Nobody is connected'), findsOneWidget);
+    expect(find.byType(QuillEditor), findsNothing);
+  });
+
   testWidgets('prompts an unverified device for recovery', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
@@ -508,6 +536,11 @@ class FakeBackend extends ChatBackend {
 
   @override
   Future<void> setSelectedRoomMuted(bool muted) async {}
+  @override
+  Future<void> setRoomPresentation(
+    String roomId,
+    RoomPresentation presentation,
+  ) async {}
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
 

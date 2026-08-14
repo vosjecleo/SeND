@@ -311,6 +311,8 @@ class _ChatShellState extends State<ChatShell> {
                 Expanded(
                   child: widget.backend.selectedRoom == null
                       ? const _EmptyConversation()
+                      : widget.backend.selectedRoom!.isVoice
+                      ? _VoiceRoomView(room: widget.backend.selectedRoom!)
                       : _Conversation(
                           backend: widget.backend,
                           controller: _message,
@@ -486,6 +488,8 @@ class _RoomPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textRooms = backend.rooms.where((room) => !room.isVoice).toList();
+    final voiceRooms = backend.rooms.where((room) => room.isVoice).toList();
     return Material(
       color: const Color(0xff202126),
       child: Column(
@@ -513,32 +517,19 @@ class _RoomPanel extends StatelessWidget {
           Expanded(
             child: backend.rooms.isEmpty
                 ? const Center(child: Text('No joined rooms'))
-                : ListView.builder(
+                : ListView(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    itemCount: backend.rooms.length,
-                    itemBuilder: (context, index) {
-                      final room = backend.rooms[index];
-                      final selected = backend.selectedRoom?.id == room.id;
-                      return ListTile(
-                        dense: true,
-                        selected: selected,
-                        leading: _RoomIcon(room: room, size: 30),
-                        title: Text(
-                          room.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          room.lastMessage,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: room.unreadCount > 0
-                            ? Badge(label: Text('${room.unreadCount}'))
-                            : null,
-                        onTap: () => backend.selectRoom(room.id),
-                      );
-                    },
+                    children: [
+                      if (backend.selectedSpaceId != null &&
+                          textRooms.isNotEmpty)
+                        const _RoomSectionLabel('TEXT ROOMS'),
+                      for (final room in textRooms)
+                        _RoomListTile(backend: backend, room: room),
+                      if (voiceRooms.isNotEmpty)
+                        const _RoomSectionLabel('VOICE ROOMS'),
+                      for (final room in voiceRooms)
+                        _RoomListTile(backend: backend, room: room),
+                    ],
                   ),
           ),
           const Divider(height: 1),
@@ -575,6 +566,76 @@ class _RoomPanel extends StatelessWidget {
   }
 }
 
+class _RoomSectionLabel extends StatelessWidget {
+  const _RoomSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(14, 9, 10, 3),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xff989aa5),
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
+}
+
+class _RoomListTile extends StatelessWidget {
+  const _RoomListTile({required this.backend, required this.room});
+
+  final ChatBackend backend;
+  final RoomSummary room;
+
+  @override
+  Widget build(BuildContext context) {
+    final participantCount = room.voiceParticipants.length;
+    return ListTile(
+      dense: true,
+      selected: backend.selectedRoom?.id == room.id,
+      leading: _RoomIcon(room: room, size: 30),
+      title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        room.isVoice
+            ? participantCount == 0
+                  ? 'Nobody connected'
+                  : '$participantCount connected'
+            : room.lastMessage,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: backend.selectedSpaceId == null
+          ? room.unreadCount > 0
+                ? Badge(label: Text('${room.unreadCount}'))
+                : null
+          : PopupMenuButton<RoomPresentation>(
+              tooltip: 'Room presentation',
+              iconSize: 17,
+              onSelected: (presentation) =>
+                  backend.setRoomPresentation(room.id, presentation),
+              itemBuilder: (context) => [
+                CheckedPopupMenuItem(
+                  value: RoomPresentation.text,
+                  checked: !room.isVoice,
+                  child: const Text('Text room'),
+                ),
+                CheckedPopupMenuItem(
+                  value: RoomPresentation.voice,
+                  checked: room.isVoice,
+                  child: const Text('Voice room'),
+                ),
+              ],
+            ),
+      onTap: () => backend.selectRoom(room.id),
+    );
+  }
+}
+
 class _RoomIcon extends StatelessWidget {
   const _RoomIcon({required this.room, required this.size});
 
@@ -583,6 +644,13 @@ class _RoomIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (room.isVoice) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: const Icon(Icons.volume_up_outlined, size: 18),
+      );
+    }
     if (room.usesChannelIcon) {
       return SizedBox(
         width: size,
@@ -608,6 +676,79 @@ class _RoomIcon extends StatelessWidget {
           : null,
     );
   }
+}
+
+class _VoiceRoomView extends StatelessWidget {
+  const _VoiceRoomView({required this.room});
+
+  final RoomSummary room;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: const BoxDecoration(
+          color: Color(0xff292a30),
+          border: Border(bottom: BorderSide(color: Color(0xff35363d))),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.volume_up_outlined, size: 20),
+            const SizedBox(width: 9),
+            Text(
+              room.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.headset_mic_outlined, size: 42),
+                const SizedBox(height: 12),
+                Text(
+                  room.voiceParticipants.isEmpty
+                      ? 'Nobody is connected'
+                      : '${room.voiceParticipants.length} connected',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final participant in room.voiceParticipants)
+                  ListTile(
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 14,
+                      backgroundImage: participant.avatarBytes == null
+                          ? null
+                          : MemoryImage(participant.avatarBytes!),
+                      child: participant.avatarBytes == null
+                          ? Text(participant.displayName.characters.first)
+                          : null,
+                    ),
+                    title: Text(participant.displayName),
+                    trailing: participant.speaking
+                        ? const Icon(Icons.graphic_eq, color: Color(0xff76d49b))
+                        : null,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _Conversation extends StatefulWidget {

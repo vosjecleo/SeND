@@ -37,6 +37,10 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<String> createEncryptionSetup();
   void selectSpace(String? spaceId);
   Future<void> selectRoom(String roomId);
+  Future<void> setRoomPresentation(
+    String roomId,
+    RoomPresentation presentation,
+  );
   Future<void> setSelectedRoomMuted(bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
   Future<void> loadMoreHistory();

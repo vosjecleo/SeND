@@ -40,6 +40,22 @@ class SpaceSummary {
   final Uint8List? avatarBytes;
 }
 
+enum RoomPresentation { text, voice }
+
+class VoiceParticipantSummary {
+  const VoiceParticipantSummary({
+    required this.userId,
+    required this.displayName,
+    this.avatarBytes,
+    this.speaking = false,
+  });
+
+  final String userId;
+  final String displayName;
+  final Uint8List? avatarBytes;
+  final bool speaking;
+}
+
 class RoomSummary {
   const RoomSummary({
     required this.id,
@@ -47,6 +63,8 @@ class RoomSummary {
     required this.lastMessage,
     required this.unreadCount,
     required this.usesChannelIcon,
+    this.presentation = RoomPresentation.text,
+    this.voiceParticipants = const [],
     this.avatarBytes,
   });
 
@@ -55,7 +73,11 @@ class RoomSummary {
   final String lastMessage;
   final int unreadCount;
   final bool usesChannelIcon;
+  final RoomPresentation presentation;
+  final List<VoiceParticipantSummary> voiceParticipants;
   final Uint8List? avatarBytes;
+
+  bool get isVoice => presentation == RoomPresentation.voice;
 }
 
 class ChatMessage {
