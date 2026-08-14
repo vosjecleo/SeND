@@ -62,7 +62,10 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
     if (offset < widget.text.length) {
       spans.add(TextSpan(text: widget.text.substring(offset)));
     }
-    return SelectableText.rich(TextSpan(style: widget.style, children: spans));
+    return SelectableText.rich(
+      TextSpan(style: widget.style, children: spans),
+      contextMenuBuilder: _noContextMenu,
+    );
   }
 }
 
@@ -98,8 +101,16 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
   Widget build(BuildContext context) {
     final document = html_parser.parseFragment(widget.html);
     final spans = _nodes(document.nodes, const TextStyle(height: 1.28));
-    if (spans.isEmpty) return SelectableText(widget.fallback);
-    return SelectableText.rich(TextSpan(children: spans));
+    if (spans.isEmpty) {
+      return SelectableText(
+        widget.fallback,
+        contextMenuBuilder: _noContextMenu,
+      );
+    }
+    return SelectableText.rich(
+      TextSpan(children: spans),
+      contextMenuBuilder: _noContextMenu,
+    );
   }
 
   List<InlineSpan> _nodes(Iterable<dom.Node> nodes, TextStyle style) =>
@@ -201,3 +212,8 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     return children;
   }
 }
+
+Widget _noContextMenu(
+  BuildContext context,
+  EditableTextState editableTextState,
+) => const SizedBox.shrink();
