@@ -113,32 +113,74 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
-  List<ChatMessage> get messages =>
-      _timeline?.events
-          .where(
-            (event) =>
-                event.type == EventTypes.Message ||
-                event.type == EventTypes.Encrypted,
-          )
-          .map(
-            (event) => ChatMessage(
-              id: event.eventId,
-              sender: event.senderFromMemoryOrFallback.calcDisplayname(),
-              body: event.type == EventTypes.Encrypted
-                  ? 'Unable to decrypt this message'
-                  : event.calcUnlocalizedBody(
-                      hideReply: true,
-                      hideEdit: true,
-                      plaintextBody: true,
-                    ),
-              timestamp: event.originServerTs,
-              pending: !event.status.isSent,
-              reply: _replyPreviews[event.eventId],
-              avatarBytes: _senderAvatarBytes[event.senderId],
-            ),
-          )
-          .toList(growable: false) ??
-      const [];
+  List<ChatMessage> get messages {
+    final timeline = _timeline;
+    if (timeline == null) return const [];
+    return timeline.events
+        .where(
+          (event) =>
+              event.type == EventTypes.Message ||
+              event.type == EventTypes.Encrypted,
+        )
+        .where((event) => event.relationshipType != RelationshipTypes.edit)
+        .map((event) {
+          final displayEvent = event.type == EventTypes.Message
+              ? event.getDisplayEvent(timeline)
+              : event;
+          return ChatMessage(
+            id: event.eventId,
+            sender: event.senderFromMemoryOrFallback.calcDisplayname(),
+            body: event.redacted
+                ? 'Message deleted'
+                : displayEvent.type == EventTypes.Encrypted
+                ? 'Unable to decrypt this message'
+                : displayEvent.calcUnlocalizedBody(
+                    hideReply: true,
+                    hideEdit: true,
+                    plaintextBody: true,
+                  ),
+            timestamp: event.originServerTs,
+            pending: event.status.isSending,
+            failed: event.status.isError,
+            own: event.senderId == _matrix.userID,
+            canRedact: event.canRedact && !event.redacted,
+            edited: displayEvent.eventId != event.eventId,
+            redacted: event.redacted,
+            reactions: _reactionSummaries(event, timeline),
+            reply: _replyPreviews[event.eventId],
+            avatarBytes: _senderAvatarBytes[event.senderId],
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<ReactionSummary> _reactionSummaries(Event event, Timeline timeline) {
+    final reactions = event.aggregatedEvents(
+      timeline,
+      RelationshipTypes.reaction,
+    );
+    final counts = <String, int>{};
+    final mine = <String>{};
+    for (final reaction in reactions.where((reaction) => !reaction.redacted)) {
+      final key = reaction.content
+          .tryGetMap<String, Object?>('m.relates_to')
+          ?.tryGet<String>('key');
+      if (key == null || key.isEmpty) continue;
+      counts.update(key, (count) => count + 1, ifAbsent: () => 1);
+      if (reaction.senderId == _matrix.userID) mine.add(key);
+    }
+    final summaries = counts.entries
+        .map(
+          (entry) => ReactionSummary(
+            key: entry.key,
+            count: entry.value,
+            reactedByMe: mine.contains(entry.key),
+          ),
+        )
+        .toList(growable: false);
+    summaries.sort((a, b) => a.key.compareTo(b.key));
+    return summaries;
+  }
 
   @override
   Future<void> initialize() async {
@@ -423,14 +465,83 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(
+    String text, {
+    String? replyToMessageId,
+    String? editMessageId,
+  }) async {
     final value = text.trim();
     if (value.isEmpty || _selectedRoomId == null) return;
     try {
       final room = _matrix.getRoomById(_selectedRoomId!);
       if (room == null) throw StateError('The selected room is unavailable.');
       await _prepareEncryptedSend(room);
-      await room.sendTextEvent(value);
+      final replyEvent = replyToMessageId == null
+          ? null
+          : _eventById(replyToMessageId);
+      await room.sendTextEvent(
+        value,
+        inReplyTo: replyEvent,
+        editEventId: editMessageId,
+      );
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Event? _eventById(String eventId) {
+    final timeline = _timeline;
+    if (timeline == null) return null;
+    for (final event in timeline.events) {
+      if (event.eventId == eventId) return event;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> redactMessage(String messageId) async {
+    final event = _eventById(messageId);
+    if (event == null) throw StateError('That message is no longer available.');
+    if (!event.canRedact) throw StateError('You cannot delete that message.');
+    try {
+      await event.redactEvent(redactAllEdits: true);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> toggleReaction(String messageId, String key) async {
+    final value = key.trim();
+    if (value.isEmpty) return;
+    final timeline = _timeline;
+    final event = _eventById(messageId);
+    if (timeline == null || event == null) {
+      throw StateError('That message is no longer available.');
+    }
+    try {
+      final ownReaction = event
+          .aggregatedEvents(timeline, RelationshipTypes.reaction)
+          .where(
+            (reaction) =>
+                reaction.senderId == _matrix.userID &&
+                !reaction.redacted &&
+                reaction.content
+                        .tryGetMap<String, Object?>('m.relates_to')
+                        ?.tryGet<String>('key') ==
+                    value,
+          )
+          .firstOrNull;
+      if (ownReaction != null) {
+        await ownReaction.redactEvent();
+      } else {
+        await _prepareEncryptedSend(event.room);
+        await event.room.sendReaction(event.eventId, value);
+      }
     } catch (exception) {
       _error = _friendlyError(exception);
       notifyListeners();

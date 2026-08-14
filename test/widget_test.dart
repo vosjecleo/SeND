@@ -125,6 +125,68 @@ void main() {
     expect(find.text('Original message'), findsOneWidget);
     expect(find.text('My actual reply'), findsOneWidget);
     expect(find.textContaining('> <'), findsNothing);
+
+    await tester.tap(find.byTooltip('Reply'));
+    await tester.pump();
+    expect(find.text('Replying to Alice'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'A second reply');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    expect(backend.lastReplyToMessageId, r'$reply');
+  });
+
+  testWidgets('edits, deletes, and reacts through message actions', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Original',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$own',
+          sender: 'Deltie',
+          body: 'Original',
+          timestamp: DateTime(2026, 8, 13, 12),
+          pending: false,
+          own: true,
+          canRedact: true,
+          reactions: const [
+            ReactionSummary(key: '👍', count: 2, reactedByMe: true),
+          ],
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+
+    await tester.tap(find.text('👍 2'));
+    expect(backend.toggledReactions, [(r'$own', '👍')]);
+
+    await tester.tap(find.byTooltip('Message actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit message'));
+    await tester.pump();
+    expect(find.text('Editing message'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Changed');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    expect(backend.lastEditMessageId, r'$own');
+
+    await tester.tap(find.byTooltip('Message actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete message'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(backend.redactedMessageIds, [r'$own']);
   });
 
   testWidgets('loads older history from the timeline control', (tester) async {
@@ -196,6 +258,10 @@ class FakeBackend extends ChatBackend {
   bool moreHistory = false;
   int historyRequests = 0;
   final List<String> sentMessages = [];
+  final List<String> redactedMessageIds = [];
+  final List<(String, String)> toggledReactions = [];
+  String? lastReplyToMessageId;
+  String? lastEditMessageId;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
     keyBackupEnabled: true,
@@ -265,5 +331,23 @@ class FakeBackend extends ChatBackend {
   }
 
   @override
-  Future<void> sendMessage(String text) async => sentMessages.add(text);
+  Future<void> sendMessage(
+    String text, {
+    String? replyToMessageId,
+    String? editMessageId,
+  }) async {
+    sentMessages.add(text);
+    lastReplyToMessageId = replyToMessageId;
+    lastEditMessageId = editMessageId;
+  }
+
+  @override
+  Future<void> redactMessage(String messageId) async {
+    redactedMessageIds.add(messageId);
+  }
+
+  @override
+  Future<void> toggleReaction(String messageId, String key) async {
+    toggledReactions.add((messageId, key));
+  }
 }

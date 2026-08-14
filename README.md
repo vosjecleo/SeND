@@ -105,10 +105,10 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
   general files. Images and videos may be marked as spoilers before sending.
 - Generate safe thumbnails, expose upload/download progress, validate file
   limits, and provide retry/cancel behavior without freezing the timeline.
-- Display replies cleanly and support creating replies from the timeline.
-- Edit and delete/redact the user's own messages, with unobtrusive edited and
+- [x] Display replies cleanly and support creating replies from the timeline.
+- [x] Edit and delete/redact the user's own messages, with unobtrusive edited and
   deleted indicators.
-- Add, remove, and summarize emoji reactions.
+- [x] Add, remove, and summarize emoji reactions.
 - Maintain accurate unread counts, highlights, read markers, receipts, and a
   jump-to-first-unread affordance.
 - Queue sending state visibly and distinguish pending, sent, failed, and retrying

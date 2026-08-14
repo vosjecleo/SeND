@@ -15,7 +15,10 @@ class ChatShell extends StatefulWidget {
 
 class _ChatShellState extends State<ChatShell> {
   final _message = TextEditingController();
+  final _composerFocus = FocusNode(debugLabel: 'message composer');
   bool _sending = false;
+  ChatMessage? _replyingTo;
+  ChatMessage? _editingMessage;
 
   Future<void> _send() async {
     final text = _message.text.trim();
@@ -23,7 +26,17 @@ class _ChatShellState extends State<ChatShell> {
     setState(() => _sending = true);
     _message.clear();
     try {
-      await widget.backend.sendMessage(text);
+      await widget.backend.sendMessage(
+        text,
+        replyToMessageId: _replyingTo?.id,
+        editMessageId: _editingMessage?.id,
+      );
+      if (mounted) {
+        setState(() {
+          _replyingTo = null;
+          _editingMessage = null;
+        });
+      }
     } catch (_) {
       if (mounted) _message.text = text;
     } finally {
@@ -31,9 +44,40 @@ class _ChatShellState extends State<ChatShell> {
     }
   }
 
+  void _replyTo(ChatMessage message) {
+    setState(() {
+      _replyingTo = message;
+      _editingMessage = null;
+    });
+    _composerFocus.requestFocus();
+  }
+
+  void _edit(ChatMessage message) {
+    _message
+      ..text = message.body
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: message.body.length,
+      );
+    setState(() {
+      _editingMessage = message;
+      _replyingTo = null;
+    });
+    _composerFocus.requestFocus();
+  }
+
+  void _cancelComposerAction() {
+    setState(() {
+      _replyingTo = null;
+      _editingMessage = null;
+    });
+    _composerFocus.requestFocus();
+  }
+
   @override
   void dispose() {
     _message.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -60,8 +104,14 @@ class _ChatShellState extends State<ChatShell> {
                       : _Conversation(
                           backend: widget.backend,
                           controller: _message,
+                          composerFocus: _composerFocus,
                           sending: _sending,
+                          replyingTo: _replyingTo,
+                          editingMessage: _editingMessage,
                           onSend: _send,
+                          onReply: _replyTo,
+                          onEdit: _edit,
+                          onCancelComposerAction: _cancelComposerAction,
                         ),
                 ),
               ],
@@ -335,14 +385,26 @@ class _Conversation extends StatefulWidget {
   const _Conversation({
     required this.backend,
     required this.controller,
+    required this.composerFocus,
     required this.sending,
+    required this.replyingTo,
+    required this.editingMessage,
     required this.onSend,
+    required this.onReply,
+    required this.onEdit,
+    required this.onCancelComposerAction,
   });
 
   final ChatBackend backend;
   final TextEditingController controller;
+  final FocusNode composerFocus;
   final bool sending;
+  final ChatMessage? replyingTo;
+  final ChatMessage? editingMessage;
   final VoidCallback onSend;
+  final ValueChanged<ChatMessage> onReply;
+  final ValueChanged<ChatMessage> onEdit;
+  final VoidCallback onCancelComposerAction;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -350,7 +412,6 @@ class _Conversation extends StatefulWidget {
 
 class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
-  final _composerFocus = FocusNode(debugLabel: 'message composer');
   String? _roomId;
 
   @override
@@ -363,7 +424,7 @@ class _ConversationState extends State<_Conversation> {
 
   void _focusComposerAfterBuild() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !widget.sending) _composerFocus.requestFocus();
+      if (mounted && !widget.sending) widget.composerFocus.requestFocus();
     });
   }
 
@@ -390,8 +451,48 @@ class _ConversationState extends State<_Conversation> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _composerFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _deleteMessage(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text(
+          'This removes the message for everyone in the room.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await widget.backend.redactMessage(message.id);
+  }
+
+  Future<void> _pickReaction(ChatMessage message) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final emoji = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(origin.dx + 360, origin.dy + 120, 0, 0),
+      items: const ['👍', '❤️', '😂', '🎉', '👀', '❓']
+          .map(
+            (emoji) => PopupMenuItem(
+              value: emoji,
+              child: Text(emoji, style: const TextStyle(fontSize: 22)),
+            ),
+          )
+          .toList(growable: false),
+    );
+    if (emoji != null) await widget.backend.toggleReaction(message.id, emoji);
   }
 
   @override
@@ -480,16 +581,40 @@ class _ConversationState extends State<_Conversation> {
                     return _MessageRow(
                       message: message,
                       startsGroup: startsGroup,
+                      onReply: () => widget.onReply(message),
+                      onEdit: message.own && !message.redacted
+                          ? () => widget.onEdit(message)
+                          : null,
+                      onDelete: message.canRedact
+                          ? () => _deleteMessage(message)
+                          : null,
+                      onReact: message.redacted
+                          ? null
+                          : () => _pickReaction(message),
+                      onToggleReaction: (key) =>
+                          backend.toggleReaction(message.id, key),
                     );
                   },
                 ),
         ),
         const Divider(height: 1),
+        if (widget.replyingTo case final message?)
+          _ComposerContext(
+            label: 'Replying to ${message.sender}',
+            body: message.body,
+            onCancel: widget.onCancelComposerAction,
+          )
+        else if (widget.editingMessage case final message?)
+          _ComposerContext(
+            label: 'Editing message',
+            body: message.body,
+            onCancel: widget.onCancelComposerAction,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
           child: TextField(
             controller: widget.controller,
-            focusNode: _composerFocus,
+            focusNode: widget.composerFocus,
             autofocus: true,
             enabled: !widget.sending,
             onSubmitted: (_) => widget.onSend(),
@@ -511,10 +636,23 @@ class _ConversationState extends State<_Conversation> {
 }
 
 class _MessageRow extends StatelessWidget {
-  const _MessageRow({required this.message, required this.startsGroup});
+  const _MessageRow({
+    required this.message,
+    required this.startsGroup,
+    required this.onReply,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onReact,
+    required this.onToggleReaction,
+  });
 
   final ChatMessage message;
   final bool startsGroup;
+  final VoidCallback onReply;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onReact;
+  final ValueChanged<String> onToggleReaction;
 
   @override
   Widget build(BuildContext context) {
@@ -606,15 +744,59 @@ class _MessageRow extends StatelessWidget {
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(color: const Color(0xff989aa5)),
                         ),
+                        const Spacer(),
+                        _MessageActions(
+                          onReply: onReply,
+                          onEdit: onEdit,
+                          onDelete: onDelete,
+                          onReact: onReact,
+                        ),
                       ],
                     ),
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
                     child: SelectableText(
                       message.body,
-                      style: const TextStyle(height: 1.28),
+                      style: TextStyle(
+                        height: 1.28,
+                        fontStyle: message.redacted
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                        color: message.redacted
+                            ? const Color(0xff989aa5)
+                            : null,
+                      ),
                     ),
                   ),
+                  if (message.edited)
+                    const Text(
+                      '(edited)',
+                      style: TextStyle(fontSize: 11, color: Color(0xff989aa5)),
+                    ),
+                  if (message.failed)
+                    const Text(
+                      'Failed to send',
+                      style: TextStyle(fontSize: 11, color: Colors.redAccent),
+                    ),
+                  if (message.reactions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final reaction in message.reactions)
+                            ActionChip(
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: reaction.reactedByMe
+                                  ? const Color(0xff424a78)
+                                  : const Color(0xff303139),
+                              label: Text('${reaction.key} ${reaction.count}'),
+                              onPressed: () => onToggleReaction(reaction.key),
+                            ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -623,6 +805,101 @@ class _MessageRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MessageActions extends StatelessWidget {
+  const _MessageActions({
+    required this.onReply,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onReact,
+  });
+
+  final VoidCallback onReply;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onReact;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: 'Reply',
+        onPressed: onReply,
+        icon: const Icon(Icons.reply, size: 16),
+      ),
+      PopupMenuButton<String>(
+        tooltip: 'Message actions',
+        iconSize: 17,
+        onSelected: (action) => switch (action) {
+          'react' => onReact?.call(),
+          'edit' => onEdit?.call(),
+          'delete' => onDelete?.call(),
+          _ => null,
+        },
+        itemBuilder: (context) => [
+          if (onReact != null)
+            const PopupMenuItem(value: 'react', child: Text('Add reaction')),
+          if (onEdit != null)
+            const PopupMenuItem(value: 'edit', child: Text('Edit message')),
+          if (onDelete != null)
+            const PopupMenuItem(value: 'delete', child: Text('Delete message')),
+        ],
+      ),
+    ],
+  );
+}
+
+class _ComposerContext extends StatelessWidget {
+  const _ComposerContext({
+    required this.label,
+    required this.body,
+    required this.onCancel,
+  });
+
+  final String label;
+  final String body;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: const Color(0xff202126),
+    padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
+    child: Row(
+      children: [
+        const Icon(Icons.subdirectory_arrow_right, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                body.replaceAll('\n', ' '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Color(0xff989aa5)),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Cancel',
+          visualDensity: VisualDensity.compact,
+          onPressed: onCancel,
+          icon: const Icon(Icons.close, size: 16),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmptyConversation extends StatelessWidget {

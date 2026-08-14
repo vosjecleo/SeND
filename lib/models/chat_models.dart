@@ -65,6 +65,12 @@ class ChatMessage {
     required this.body,
     required this.timestamp,
     required this.pending,
+    this.failed = false,
+    this.own = false,
+    this.canRedact = false,
+    this.edited = false,
+    this.redacted = false,
+    this.reactions = const [],
     this.reply,
     this.avatarBytes,
   });
@@ -74,8 +80,26 @@ class ChatMessage {
   final String body;
   final DateTime timestamp;
   final bool pending;
+  final bool failed;
+  final bool own;
+  final bool canRedact;
+  final bool edited;
+  final bool redacted;
+  final List<ReactionSummary> reactions;
   final ReplyPreview? reply;
   final Uint8List? avatarBytes;
+}
+
+class ReactionSummary {
+  const ReactionSummary({
+    required this.key,
+    required this.count,
+    required this.reactedByMe,
+  });
+
+  final String key;
+  final int count;
+  final bool reactedByMe;
 }
 
 class ReplyPreview {

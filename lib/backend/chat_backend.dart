@@ -34,5 +34,11 @@ abstract class ChatBackend extends ChangeNotifier {
   void selectSpace(String? spaceId);
   Future<void> selectRoom(String roomId);
   Future<void> loadMoreHistory();
-  Future<void> sendMessage(String text);
+  Future<void> sendMessage(
+    String text, {
+    String? replyToMessageId,
+    String? editMessageId,
+  });
+  Future<void> redactMessage(String messageId);
+  Future<void> toggleReaction(String messageId, String key);
 }
