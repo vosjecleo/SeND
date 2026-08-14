@@ -936,7 +936,7 @@ class _RichComposerState extends State<_RichComposer> {
           tooltip: 'Add media or file',
           visualDensity: VisualDensity.compact,
           onPressed: widget.enabled ? widget.onAttach : null,
-          icon: const Icon(Icons.add_circle_outline, size: 21),
+          icon: const Icon(Icons.add_circle_outline, size: 25),
         ),
         Expanded(
           child: Container(
@@ -950,11 +950,11 @@ class _RichComposerState extends State<_RichComposer> {
               scrollController: _scrollController,
               config: QuillEditorConfig(
                 autoFocus: false,
-                minHeight: 38,
-                maxHeight: 150,
+                minHeight: 32,
+                maxHeight: 132,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 8,
+                  vertical: 5,
                 ),
                 placeholder: 'Message #${widget.roomName}',
                 // ignore: experimental_member_use
@@ -1001,7 +1001,7 @@ class _RichComposerState extends State<_RichComposer> {
           tooltip: 'Send',
           visualDensity: VisualDensity.compact,
           onPressed: widget.enabled ? widget.onSend : null,
-          icon: const Icon(Icons.send, size: 20),
+          icon: const Icon(Icons.send, size: 25),
         ),
       ],
     ),
@@ -1464,8 +1464,8 @@ class _AttachmentViewState extends State<_AttachmentView> {
       return Align(
         alignment: Alignment.centerLeft,
         child: SizedBox(
-          width: 104,
-          height: 58,
+          width: 208,
+          height: 116,
           child: Material(
             color: const Color(0xff17181c),
             borderRadius: BorderRadius.circular(5),
@@ -1528,15 +1528,15 @@ class _AttachmentViewState extends State<_AttachmentView> {
         final bytes = snapshot.data;
         if (bytes == null) {
           return const SizedBox(
-            width: 92,
-            height: 72,
+            width: 184,
+            height: 144,
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
         return Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 92, maxHeight: 72),
+            constraints: const BoxConstraints(maxWidth: 184, maxHeight: 144),
             child: InkWell(
               onTap: _open,
               child: Image.memory(
@@ -1731,8 +1731,8 @@ class _InlineVideoState extends State<_InlineVideo> {
   Widget build(BuildContext context) => Align(
     alignment: Alignment.centerLeft,
     child: SizedBox(
-      width: 104,
-      height: 59,
+      width: 208,
+      height: 118,
       child: ColoredBox(
         color: Colors.black,
         child: Stack(

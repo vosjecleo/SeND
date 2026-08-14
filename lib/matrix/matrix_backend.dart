@@ -169,6 +169,8 @@ class MatrixBackend extends ChatBackend {
               ? 'Message deleted'
               : displayEvent.type == EventTypes.Encrypted
               ? 'Unable to decrypt this message'
+              : !isMessage
+              ? _systemEventBody(displayEvent)
               : attachment?.caption ??
                     (attachment == null
                         ? displayEvent.calcUnlocalizedBody(
@@ -217,6 +219,47 @@ class MatrixBackend extends ChatBackend {
       event.type == EventTypes.RoomTopic ||
       event.type == EventTypes.RoomAvatar ||
       event.type == EventTypes.Encryption;
+
+  String _systemEventBody(Event event) {
+    final actor = event.senderFromMemoryOrFallback.calcDisplayname();
+    if (event.type == EventTypes.RoomMember) {
+      final user =
+          event.stateKeyUser?.calcDisplayname() ?? event.stateKey ?? actor;
+      return switch (event.roomMemberChangeType) {
+        RoomMemberChangeType.join => '$user joined the room',
+        RoomMemberChangeType.acceptInvite => '$user accepted the invitation',
+        RoomMemberChangeType.rejectInvite => '$user rejected the invitation',
+        RoomMemberChangeType.withdrawInvitation =>
+          '$actor withdrew the invitation for $user',
+        RoomMemberChangeType.leave => '$user left the room',
+        RoomMemberChangeType.kick => '$actor removed $user from the room',
+        RoomMemberChangeType.invite => '$actor invited $user',
+        RoomMemberChangeType.ban => '$actor banned $user',
+        RoomMemberChangeType.unban => '$actor unbanned $user',
+        RoomMemberChangeType.knock => '$user requested to join',
+        RoomMemberChangeType.avatar => '$user changed their profile picture',
+        RoomMemberChangeType.displayname => _displayNameChange(event, user),
+        RoomMemberChangeType.other => '$user updated their room profile',
+      };
+    }
+    return switch (event.type) {
+      EventTypes.RoomName =>
+        '$actor changed the room name to ${event.content.tryGet<String>('name') ?? 'an unnamed room'}',
+      EventTypes.RoomTopic =>
+        '$actor changed the topic to ${event.content.tryGet<String>('topic') ?? ''}',
+      EventTypes.RoomAvatar => '$actor changed the room picture',
+      EventTypes.Encryption => '$actor enabled end-to-end encryption',
+      _ => '$actor updated the room',
+    };
+  }
+
+  String _displayNameChange(Event event, String currentName) {
+    final previousName = event.prevContent?.tryGet<String>('displayname');
+    if (previousName == null || previousName.isEmpty) {
+      return '${event.stateKey ?? currentName} is now known as $currentName';
+    }
+    return '$previousName changed their name to $currentName';
+  }
 
   ChatAttachment? _attachmentFor(Event event) {
     if (!event.hasAttachment) return null;
