@@ -2419,75 +2419,78 @@ class _LinkPreviewCard extends StatelessWidget {
         ? maxHeight * aspectRatio
         : maxWidth;
     final mediaHeight = mediaWidth / aspectRatio;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: InkWell(
-        onTap: () => launchUrl(preview.url),
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: const Color(0xff292a30),
-            border: Border.all(color: const Color(0xff3b3d46)),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (video != null)
-                SizedBox(
-                  width: mediaWidth,
-                  height: mediaHeight,
-                  child: _LinkVideoPlayer(
-                    uri: video,
-                    thumbnail: preview.imageBytes,
-                  ),
-                )
-              else if (preview.imageBytes case final image?)
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: maxWidth,
-                    maxHeight: maxHeight,
-                  ),
-                  child: Image.memory(image, fit: BoxFit.contain),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      preview.siteName ?? preview.url.host,
-                      style: const TextStyle(
-                        color: Color(0xffa7a9b4),
-                        fontSize: 11,
-                      ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: mediaWidth,
+        child: InkWell(
+          onTap: () => launchUrl(preview.url),
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(0xff292a30),
+              border: Border.all(color: const Color(0xff3b3d46)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (video != null)
+                  SizedBox(
+                    width: mediaWidth,
+                    height: mediaHeight,
+                    child: _LinkVideoPlayer(
+                      uri: video,
+                      thumbnail: preview.imageBytes,
                     ),
-                    if (preview.title case final title?) ...[
-                      const SizedBox(height: 3),
+                  )
+                else if (preview.imageBytes case final image?)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                    ),
+                    child: Image.memory(image, fit: BoxFit.contain),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        preview.siteName ?? preview.url.host,
                         style: const TextStyle(
-                          color: Color(0xffb8bfff),
-                          fontWeight: FontWeight.w600,
+                          color: Color(0xffa7a9b4),
+                          fontSize: 11,
                         ),
                       ),
+                      if (preview.title case final title?) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xffb8bfff),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      if (preview.description case final description?) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, height: 1.25),
+                        ),
+                      ],
                     ],
-                    if (preview.description case final description?) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        description,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, height: 1.25),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
