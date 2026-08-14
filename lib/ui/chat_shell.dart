@@ -944,55 +944,58 @@ class _RichComposerState extends State<_RichComposer> {
               border: Border.all(color: const Color(0xff777985)),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: QuillEditor(
-              controller: widget.controller,
-              focusNode: widget.focusNode,
-              scrollController: _scrollController,
-              config: QuillEditorConfig(
-                autoFocus: false,
-                minHeight: 32,
-                maxHeight: 132,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                placeholder: 'Message #${widget.roomName}',
-                // ignore: experimental_member_use
-                onKeyPressed: (event, _) {
-                  if (event is KeyDownEvent &&
-                      widget.mentionSuggestions.isNotEmpty) {
-                    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                      widget.onMentionSelectionChanged(
-                        (widget.mentionSelectionIndex + 1) %
-                            widget.mentionSuggestions.length,
-                      );
-                      return KeyEventResult.handled;
+            child: DefaultTextStyle.merge(
+              style: const TextStyle(fontSize: 15),
+              child: QuillEditor(
+                controller: widget.controller,
+                focusNode: widget.focusNode,
+                scrollController: _scrollController,
+                config: QuillEditorConfig(
+                  autoFocus: false,
+                  minHeight: 32,
+                  maxHeight: 132,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
+                  placeholder: 'Message #${widget.roomName}',
+                  // ignore: experimental_member_use
+                  onKeyPressed: (event, _) {
+                    if (event is KeyDownEvent &&
+                        widget.mentionSuggestions.isNotEmpty) {
+                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                        widget.onMentionSelectionChanged(
+                          (widget.mentionSelectionIndex + 1) %
+                              widget.mentionSuggestions.length,
+                        );
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                        widget.onMentionSelectionChanged(
+                          (widget.mentionSelectionIndex - 1) %
+                              widget.mentionSuggestions.length,
+                        );
+                        return KeyEventResult.handled;
+                      }
+                      if (event.logicalKey == LogicalKeyboardKey.enter &&
+                          !HardwareKeyboard.instance.isShiftPressed) {
+                        widget.onMentionSelected(
+                          widget
+                              .mentionSuggestions[widget.mentionSelectionIndex]
+                              .userId,
+                        );
+                        return KeyEventResult.handled;
+                      }
                     }
-                    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                      widget.onMentionSelectionChanged(
-                        (widget.mentionSelectionIndex - 1) %
-                            widget.mentionSuggestions.length,
-                      );
-                      return KeyEventResult.handled;
-                    }
-                    if (event.logicalKey == LogicalKeyboardKey.enter &&
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter &&
                         !HardwareKeyboard.instance.isShiftPressed) {
-                      widget.onMentionSelected(
-                        widget
-                            .mentionSuggestions[widget.mentionSelectionIndex]
-                            .userId,
-                      );
+                      widget.onSend();
                       return KeyEventResult.handled;
                     }
-                  }
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.enter &&
-                      !HardwareKeyboard.instance.isShiftPressed) {
-                    widget.onSend();
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
+                    return KeyEventResult.ignored;
+                  },
+                ),
               ),
             ),
           ),
@@ -1533,10 +1536,14 @@ class _AttachmentViewState extends State<_AttachmentView> {
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
+        final screen = MediaQuery.sizeOf(context);
         return Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 184, maxHeight: 144),
+            constraints: BoxConstraints(
+              maxWidth: screen.width * 0.5,
+              maxHeight: screen.height * 0.5,
+            ),
             child: InkWell(
               onTap: _open,
               child: Image.memory(
@@ -1728,67 +1735,81 @@ class _InlineVideoState extends State<_InlineVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: SizedBox(
-      width: 208,
-      height: 118,
-      child: ColoredBox(
-        color: Colors.black,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Video(controller: _controller),
-            if (!_player.state.playing)
-              IconButton.filled(
-                tooltip: 'Stream video',
-                onPressed: _opening ? null : _play,
-                icon: _opening
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.play_arrow),
-              ),
-            Positioned(
-              right: 0,
-              top: 0,
-              child: SizedBox.square(
-                dimension: 24,
-                child: PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  iconSize: 14,
-                  tooltip: 'Video options',
-                  onSelected: (value) =>
-                      value == 'open' ? widget.onOpen() : widget.onSave(),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'open',
-                      child: Text('Open externally'),
-                    ),
-                    PopupMenuItem(value: 'save', child: Text('Save video')),
-                  ],
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final maxWidth = screen.width * 0.5;
+    final maxHeight = screen.height * 0.5;
+    final sourceWidth = widget.attachment.width?.toDouble() ?? 16;
+    final sourceHeight = widget.attachment.height?.toDouble() ?? 9;
+    final aspectRatio = sourceWidth > 0 && sourceHeight > 0
+        ? sourceWidth / sourceHeight
+        : 16 / 9;
+    final width = maxWidth / maxHeight > aspectRatio
+        ? maxHeight * aspectRatio
+        : maxWidth;
+    final height = width / aspectRatio;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: ColoredBox(
+          color: Colors.black,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Video(controller: _controller),
+              if (!_player.state.playing)
+                IconButton.filled(
+                  tooltip: 'Stream video',
+                  onPressed: _opening ? null : _play,
+                  icon: _opening
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow),
                 ),
-              ),
-            ),
-            if (_error case final error?)
               Positioned(
-                left: 3,
-                right: 3,
-                bottom: 2,
-                child: Text(
-                  error,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70, fontSize: 8),
+                right: 0,
+                top: 0,
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    iconSize: 14,
+                    tooltip: 'Video options',
+                    onSelected: (value) =>
+                        value == 'open' ? widget.onOpen() : widget.onSave(),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'open',
+                        child: Text('Open externally'),
+                      ),
+                      PopupMenuItem(value: 'save', child: Text('Save video')),
+                    ],
+                  ),
                 ),
               ),
-          ],
+              if (_error case final error?)
+                Positioned(
+                  left: 3,
+                  right: 3,
+                  bottom: 2,
+                  child: Text(
+                    error,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 8),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _InlineAudio extends StatefulWidget {

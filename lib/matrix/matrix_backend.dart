@@ -289,6 +289,8 @@ class MatrixBackend extends ChatBackend {
       caption: caption,
       hasThumbnail: event.hasThumbnail,
       animated: event.attachmentMimetype == 'image/gif',
+      width: event.infoMap.tryGet<int>('w'),
+      height: event.infoMap.tryGet<int>('h'),
     );
   }
 
