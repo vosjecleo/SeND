@@ -4,6 +4,68 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 
+class MatrixPlainText extends StatefulWidget {
+  const MatrixPlainText({required this.text, this.style, super.key});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  State<MatrixPlainText> createState() => _MatrixPlainTextState();
+}
+
+class _MatrixPlainTextState extends State<MatrixPlainText> {
+  static final _urlPattern = RegExp(r'https?://[^\s<>]+');
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  @override
+  void dispose() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <InlineSpan>[];
+    var offset = 0;
+    for (final match in _urlPattern.allMatches(widget.text)) {
+      if (match.start > offset) {
+        spans.add(TextSpan(text: widget.text.substring(offset, match.start)));
+      }
+      final matched = match.group(0)!;
+      final trailing =
+          RegExp(r'[.,;:!?]+$').firstMatch(matched)?.group(0) ?? '';
+      final linkText = trailing.isEmpty
+          ? matched
+          : matched.substring(0, matched.length - trailing.length);
+      final uri = Uri.tryParse(linkText);
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () {
+          if (uri != null) launchUrl(uri);
+        };
+      _recognizers.add(recognizer);
+      spans.add(
+        TextSpan(
+          text: linkText,
+          style: const TextStyle(
+            color: Color(0xffaeb7ff),
+            decoration: TextDecoration.underline,
+          ),
+          recognizer: recognizer,
+        ),
+      );
+      if (trailing.isNotEmpty) spans.add(TextSpan(text: trailing));
+      offset = match.end;
+    }
+    if (offset < widget.text.length) {
+      spans.add(TextSpan(text: widget.text.substring(offset)));
+    }
+    return SelectableText.rich(TextSpan(style: widget.style, children: spans));
+  }
+}
+
 /// Compact renderer for Matrix's sanitized `org.matrix.custom.html` subset.
 /// Unsupported elements degrade to their text children instead of creating
 /// arbitrary widgets or executing external content.

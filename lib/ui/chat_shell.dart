@@ -2208,8 +2208,8 @@ class _MessageRowState extends State<_MessageRow> {
                                     html: message.formattedBody!,
                                     fallback: message.body,
                                   )
-                                : SelectableText(
-                                    message.body,
+                                : MatrixPlainText(
+                                    text: message.body,
                                     style: TextStyle(
                                       height: 1.16,
                                       fontStyle: message.redacted

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:html/parser.dart' as html_parser;
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
@@ -52,6 +54,8 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
   final Map<String, LinkPreview?> _linkPreviews = {};
+  final HttpClient _previewHttpClient = HttpClient()
+    ..userAgent = 'Deltiecord/0.3 link preview';
   final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
   bool _roomMetadataRefreshRequested = false;
@@ -1677,16 +1681,8 @@ class MatrixBackend extends ChatBackend {
         final properties = preview.additionalProperties;
         Uint8List? imageBytes;
         final image = preview.ogImage;
-        if (image != null && image.isScheme('mxc')) {
-          final thumbnail = await _matrix.getContentThumbnail(
-            image.host,
-            image.pathSegments.join('/'),
-            640,
-            360,
-            method: Method.scale,
-            animated: true,
-          );
-          imageBytes = thumbnail.data;
+        if (image != null) {
+          imageBytes = await _previewImageBytes(image);
         }
         Uri? propertyUri(String key) {
           final value = properties[key];
@@ -1700,7 +1696,7 @@ class MatrixBackend extends ChatBackend {
               : null;
         }
 
-        _linkPreviews[event.eventId] = LinkPreview(
+        final result = LinkPreview(
           url: url,
           title: propertyString('og:title'),
           description: propertyString('og:description'),
@@ -1708,10 +1704,178 @@ class MatrixBackend extends ChatBackend {
           imageBytes: imageBytes,
           videoUrl: propertyUri('og:video') ?? propertyUri('og:video:url'),
         );
+        _linkPreviews[event.eventId] =
+            result.title == null &&
+                result.description == null &&
+                result.imageBytes == null &&
+                result.videoUrl == null
+            ? await _directLinkPreview(url)
+            : result;
       } catch (_) {
-        _linkPreviews[event.eventId] = null;
+        _linkPreviews[event.eventId] = await _directLinkPreview(url);
       }
     }
+  }
+
+  Future<LinkPreview?> _directLinkPreview(Uri url) async {
+    try {
+      final fxPreview = await _fxTwitterPreview(url);
+      if (fxPreview != null) return fxPreview;
+      if (!await _isPublicWebUrl(url)) return null;
+      final request = await _previewHttpClient.getUrl(url);
+      request.headers.set(HttpHeaders.acceptHeader, 'text/html');
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok ||
+          response.contentLength > 2 * 1024 * 1024) {
+        await response.drain<void>();
+        return null;
+      }
+      final source = await utf8.decodeStream(response);
+      final document = html_parser.parse(source);
+      String? meta(String property) {
+        final element =
+            document.querySelector('meta[property="$property"]') ??
+            document.querySelector('meta[name="$property"]');
+        final content = element?.attributes['content']?.trim();
+        return content == null || content.isEmpty ? null : content;
+      }
+
+      Uri? resolved(String? value) {
+        if (value == null) return null;
+        return url.resolve(value);
+      }
+
+      final imageUrl = resolved(meta('og:image') ?? meta('twitter:image'));
+      final videoUrl = resolved(
+        meta('og:video:secure_url') ?? meta('og:video:url') ?? meta('og:video'),
+      );
+      final pageTitle = document.querySelector('title')?.text.trim();
+      final title =
+          meta('og:title') ??
+          meta('twitter:title') ??
+          (pageTitle?.isNotEmpty == true ? pageTitle : null);
+      final description =
+          meta('og:description') ??
+          meta('twitter:description') ??
+          meta('description');
+      if (title == null &&
+          description == null &&
+          imageUrl == null &&
+          videoUrl == null) {
+        return null;
+      }
+      return LinkPreview(
+        url: url,
+        title: title,
+        description: description,
+        siteName: meta('og:site_name') ?? url.host,
+        imageBytes: imageUrl == null
+            ? null
+            : await _previewImageBytes(imageUrl),
+        videoUrl: videoUrl,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<LinkPreview?> _fxTwitterPreview(Uri url) async {
+    if (!{
+      'fxtwitter.com',
+      'www.fxtwitter.com',
+      'fixupx.com',
+    }.contains(url.host)) {
+      return null;
+    }
+    final match = RegExp(r'/status/(\d+)').firstMatch(url.path);
+    final statusId = match?.group(1);
+    if (statusId == null) return null;
+    final apiUrl = Uri.https('api.fxtwitter.com', '/status/$statusId');
+    final request = await _previewHttpClient.getUrl(apiUrl);
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok) return null;
+    final json = jsonDecode(await utf8.decodeStream(response));
+    if (json is! Map) return null;
+    final tweet = json['tweet'];
+    if (tweet is! Map) return null;
+    final media = tweet['media'];
+    final all = media is Map ? media['all'] : null;
+    final firstMedia = all is List && all.isNotEmpty ? all.first : null;
+    final mediaMap = firstMedia is Map ? firstMedia : null;
+    final thumbnail = Uri.tryParse(
+      mediaMap?['thumbnail_url']?.toString() ?? '',
+    );
+    final mediaUrl = Uri.tryParse(mediaMap?['url']?.toString() ?? '');
+    final author = tweet['author'];
+    final authorName = author is Map ? author['name']?.toString() : null;
+    return LinkPreview(
+      url: url,
+      title: authorName == null ? 'Post on X' : '$authorName on X',
+      description: tweet['text']?.toString(),
+      siteName: 'X via FxTwitter',
+      imageBytes: thumbnail?.hasScheme == true
+          ? await _previewImageBytes(thumbnail!)
+          : null,
+      videoUrl: mediaMap?['type'] == 'video' && mediaUrl?.hasScheme == true
+          ? mediaUrl
+          : null,
+    );
+  }
+
+  Future<Uint8List?> _previewImageBytes(Uri uri) async {
+    if (uri.isScheme('mxc')) {
+      final thumbnail = await _matrix.getContentThumbnail(
+        uri.host,
+        uri.pathSegments.join('/'),
+        640,
+        360,
+        method: Method.scale,
+        animated: true,
+      );
+      return thumbnail.data;
+    }
+    if (!await _isPublicWebUrl(uri)) return null;
+    final request = await _previewHttpClient.getUrl(uri);
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok ||
+        response.contentLength > 8 * 1024 * 1024) {
+      await response.drain<void>();
+      return null;
+    }
+    final bytes = await response.fold<List<int>>(<int>[], (all, chunk) {
+      if (all.length + chunk.length > 8 * 1024 * 1024) {
+        throw const HttpException('Preview image is too large.');
+      }
+      return all..addAll(chunk);
+    });
+    return Uint8List.fromList(bytes);
+  }
+
+  Future<bool> _isPublicWebUrl(Uri uri) async {
+    if (!{'http', 'https'}.contains(uri.scheme) || uri.host.isEmpty) {
+      return false;
+    }
+    if (uri.host == 'localhost' || uri.host.endsWith('.localhost')) {
+      return false;
+    }
+    final addresses = await InternetAddress.lookup(uri.host);
+    return addresses.isNotEmpty &&
+        addresses.every((address) {
+          if (address.isLoopback ||
+              address.isLinkLocal ||
+              address.isMulticast) {
+            return false;
+          }
+          final raw = address.rawAddress;
+          if (address.type == InternetAddressType.IPv4) {
+            return !(raw[0] == 10 ||
+                raw[0] == 127 ||
+                (raw[0] == 169 && raw[1] == 254) ||
+                (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) ||
+                (raw[0] == 192 && raw[1] == 168));
+          }
+          return !(raw[0] == 0xfc || raw[0] == 0xfd);
+        });
   }
 
   Future<void> _hydrateSenderAvatars(Timeline timeline) async {
@@ -1786,6 +1950,7 @@ class MatrixBackend extends ChatBackend {
     _loginSubscription?.cancel();
     _client?.dispose();
     unawaited(_mediaRangeProxy.close());
+    _previewHttpClient.close(force: true);
     super.dispose();
   }
 }
