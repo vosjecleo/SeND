@@ -88,7 +88,7 @@ class _ChatShellState extends State<ChatShell> {
     if (start == null) return;
     MentionSuggestion? suggestion;
     for (final candidate in _mentionSuggestions) {
-      if (candidate.userId == targetId) {
+      if (candidate.matrixId == targetId) {
         suggestion = candidate;
         break;
       }
@@ -96,7 +96,7 @@ class _ChatShellState extends State<ChatShell> {
     if (suggestion == null) return;
     final mentionText = suggestion.isRoom
         ? '#${suggestion.displayName}'
-        : suggestion.userId;
+        : suggestion.matrixId;
     final end = _message.selection.extentOffset;
     _message.replaceText(
       start,
@@ -107,7 +107,7 @@ class _ChatShellState extends State<ChatShell> {
     _message.formatText(
       start,
       mentionText.length,
-      LinkAttribute('https://matrix.to/#/${suggestion.userId}'),
+      LinkAttribute('https://matrix.to/#/${suggestion.matrixId}'),
     );
     setState(() {
       _mentionQuery = null;
@@ -345,7 +345,7 @@ class _ChatShellState extends State<ChatShell> {
         .where(
           (suggestion) =>
               suggestion.displayName.toLowerCase().contains(query) ||
-              suggestion.userId.toLowerCase().contains(query),
+              suggestion.matrixId.toLowerCase().contains(query),
         )
         .take(6)
         .toList(growable: false);
@@ -1013,8 +1013,8 @@ class _MentionPicker extends StatelessWidget {
               selected: index == selectedIndex,
               selectedTileColor: const Color(0xff34374b),
               title: Text(suggestion.displayName),
-              subtitle: Text(suggestion.isRoom ? 'Room' : suggestion.userId),
-              onTap: () => onSelected(suggestion.userId),
+              subtitle: Text(suggestion.isRoom ? 'Room' : suggestion.matrixId),
+              onTap: () => onSelected(suggestion.matrixId),
             );
           },
         ),
@@ -1110,7 +1110,7 @@ class _RichComposerState extends State<_RichComposer> {
                         widget.onMentionSelected(
                           widget
                               .mentionSuggestions[widget.mentionSelectionIndex]
-                              .userId,
+                              .matrixId,
                         );
                         return KeyEventResult.handled;
                       }
@@ -1410,26 +1410,23 @@ class _MessageRowState extends State<_MessageRow> {
                               ),
                             ),
                           if (message.body.isNotEmpty)
-                            Padding(
-                              padding: EdgeInsets.zero,
-                              child: message.formattedBody != null
-                                  ? MatrixHtmlText(
-                                      html: message.formattedBody!,
-                                      fallback: message.body,
-                                    )
-                                  : SelectableText(
-                                      message.body,
-                                      style: TextStyle(
-                                        height: 1.16,
-                                        fontStyle: message.redacted
-                                            ? FontStyle.italic
-                                            : FontStyle.normal,
-                                        color: message.redacted
-                                            ? const Color(0xff989aa5)
-                                            : null,
-                                      ),
+                            message.formattedBody != null
+                                ? MatrixHtmlText(
+                                    html: message.formattedBody!,
+                                    fallback: message.body,
+                                  )
+                                : SelectableText(
+                                    message.body,
+                                    style: TextStyle(
+                                      height: 1.16,
+                                      fontStyle: message.redacted
+                                          ? FontStyle.italic
+                                          : FontStyle.normal,
+                                      color: message.redacted
+                                          ? const Color(0xff989aa5)
+                                          : null,
                                     ),
-                            ),
+                                  ),
                           if (message.attachment case final attachment?)
                             Padding(
                               padding: const EdgeInsets.only(top: 6),

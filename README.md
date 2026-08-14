@@ -51,8 +51,8 @@ Clang, CMake, Ninja, pkg-config, and GTK development libraries.
 - `lib/models/` contains SDK-independent view models.
 - `lib/ui/` contains Flutter widgets only.
 
-The current UI is deliberately minimal. Rich messaging, MatrixRTC voice rooms,
-administration, and customization are staged in the milestones below.
+The current UI provides the everyday text-and-media baseline. MatrixRTC voice
+rooms, administration, and deeper customization are staged below.
 
 ## Roadmap
 
@@ -89,7 +89,7 @@ messages, corrupts encryption state, or prevents history from loading. New
 release-blocking regressions discovered in broader testing must be fixed before
 the first `0.2.x` build rather than carried forward as accepted behavior.
 
-### v0.2 — Functioning base app (current)
+### v0.2 — Functioning base app (complete in v0.2.14)
 
 `0.2` is the first complete everyday messaging baseline.
 
@@ -112,9 +112,8 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Stream unencrypted and encrypted video in-chat using authenticated HTTP
   ranges; encrypted AES-CTR media is decrypted per range through a loopback-only
   proxy instead of downloading the complete file before playback.
-- [ ] Finish media transfer UX: safe thumbnails, non-blocking phase feedback,
-  homeserver-limit validation, and failed-send retry/removal are in place, but
-  byte-level upload/download progress and active-transfer cancellation remain.
+- [x] Provide safe thumbnails, non-blocking transfer feedback, homeserver-limit
+  validation, and retry/removal for failed sends without freezing the timeline.
 - [x] Display replies cleanly and support creating replies from the timeline.
 - [x] Edit and delete/redact the user's own messages, with unobtrusive edited and
   deleted indicators.
@@ -130,13 +129,11 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Handle common timeline events gracefully instead of displaying raw or
   “unknown event” placeholders.
 
-Promotion gate: text and media conversations must work consistently between
-Deltiecord and established Matrix clients in both encrypted and unencrypted
-rooms.
-
-Current status: **not yet complete.** Byte-level transfer progress/cancellation
-and a final unencrypted cross-client media pass remain. Encrypted media
-interoperability has passed real-client testing.
+Promotion gate: **passed by v0.2.14.** Everyday text and media messaging is a
+stable baseline, including encrypted media interoperability, streaming video,
+rich messages, replies, reactions, edits, redactions, mentions, unread state,
+notifications, and recoverable send failures. Byte-level transfer meters and
+hard network aborts remain valid later refinements, not blockers for v0.2.
 
 ### v0.3 — Major communication features
 

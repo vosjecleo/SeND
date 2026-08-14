@@ -1,7 +1,7 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.2.13+24
+version: 0.2.14+25
 
 environment:
   sdk: ^3.13.0
@@ -10,11 +10,12 @@ dependencies:
   file_picker: ^11.0.2
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^22.3.0
   flutter_localizations:
     sdk: flutter
   flutter_quill: ^11.5.1
-  html: ^0.15.6
   flutter_vodozemac: ^0.7.1
+  html: ^0.15.6
   matrix: ^10.0.1
   markdown: ^7.3.1
   media_kit: ^1.2.6
@@ -27,7 +28,6 @@ dependencies:
   sqflite_common_ffi: ^2.4.2
   vodozemac: ^0.7.0
   vsc_quill_delta_to_html: ^1.0.5
-  flutter_local_notifications: ^22.3.0
   url_launcher: ^6.3.2
 
 dev_dependencies:

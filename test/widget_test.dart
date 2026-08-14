@@ -287,7 +287,7 @@ void main() {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
       ..mentionList = const [
-        MentionSuggestion(userId: '@alice:example.org', displayName: 'Alice'),
+        MentionSuggestion(matrixId: '@alice:example.org', displayName: 'Alice'),
       ]
       ..roomList = const [
         RoomSummary(
@@ -317,7 +317,7 @@ void main() {
       ..currentStatus = SessionStatus.signedIn
       ..mentionList = const [
         MentionSuggestion(
-          userId: '!general:example.org',
+          matrixId: '!general:example.org',
           displayName: 'general',
           isRoom: true,
         ),

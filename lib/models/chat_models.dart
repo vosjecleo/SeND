@@ -153,13 +153,13 @@ class MediaPlaybackSource {
 
 class MentionSuggestion {
   const MentionSuggestion({
-    required this.userId,
+    required this.matrixId,
     required this.displayName,
     this.isRoom = false,
   });
 
   /// Matrix user ID or room ID targeted by the generated matrix.to link.
-  final String userId;
+  final String matrixId;
   final String displayName;
   final bool isRoom;
 }

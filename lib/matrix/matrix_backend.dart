@@ -91,7 +91,7 @@ class MatrixBackend extends ChatBackend {
         .getParticipants()
         .map(
           (user) => MentionSuggestion(
-            userId: user.id,
+            matrixId: user.id,
             displayName: user.calcDisplayname(),
           ),
         )
@@ -101,7 +101,7 @@ class MatrixBackend extends ChatBackend {
           .where((room) => !room.isSpace)
           .map(
             (room) => MentionSuggestion(
-              userId: room.id,
+              matrixId: room.id,
               displayName: room.getLocalizedDisplayname(),
               isRoom: true,
             ),
