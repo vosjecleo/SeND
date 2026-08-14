@@ -16,6 +16,7 @@ abstract class ChatBackend extends ChangeNotifier {
   List<RoomSummary> get rooms;
   RoomSummary? get selectedRoom;
   List<ChatMessage> get messages;
+  List<MentionSuggestion> get mentionSuggestions;
   bool get timelineLoading;
   bool get historyLoading;
   bool get canLoadMoreHistory;
@@ -36,6 +37,7 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> loadMoreHistory();
   Future<void> sendMessage(
     String text, {
+    String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   });

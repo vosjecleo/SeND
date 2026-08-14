@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/ui/matrix_html_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -131,7 +133,7 @@ void main() {
     await tester.tap(find.byTooltip('Reply'));
     await tester.pump();
     expect(find.text('Replying to Alice'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'A second reply');
+    await _enterComposer(tester, 'A second reply');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
     expect(backend.lastReplyToMessageId, r'$reply');
@@ -177,7 +179,7 @@ void main() {
     await tester.tap(find.text('Edit message'));
     await tester.pump();
     expect(find.text('Editing message'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'Changed');
+    await _enterComposer(tester, 'Changed');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
     expect(backend.lastEditMessageId, r'$own');
@@ -238,9 +240,9 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.text('general'));
     await tester.pump();
-    final composer = tester.widget<EditableText>(find.byType(EditableText));
+    final composer = tester.widget<QuillEditor>(find.byType(QuillEditor));
     expect(composer.focusNode.hasFocus, isTrue);
-    await tester.enterText(find.byType(TextField), 'hello from Deltiecord');
+    await _enterComposer(tester, 'hello from Deltiecord');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
@@ -248,6 +250,95 @@ void main() {
     expect(find.text('hello from Deltiecord'), findsNothing);
     expect(composer.focusNode.hasFocus, isTrue);
   });
+
+  testWidgets('autocompletes Matrix user mentions into the composer', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..mentionList = const [
+        MentionSuggestion(userId: '@alice:example.org', displayName: 'Alice'),
+      ]
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Hello',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+    await _enterComposer(tester, '@ali');
+
+    expect(find.text('Alice'), findsOneWidget);
+    await tester.tap(find.text('Alice'));
+    await tester.pump();
+    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    expect(editor.controller.document.toPlainText(), '@alice:example.org \n');
+  });
+
+  testWidgets('renders Matrix rich text and revealable spoilers', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Hello secret',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$rich',
+          sender: 'Alice',
+          body: 'Hello secret',
+          formattedBody:
+              '<strong>Hello</strong> <span data-mx-spoiler>secret</span>',
+          timestamp: DateTime(2026, 8, 13, 12),
+          pending: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+
+    final richMessage = find.byType(MatrixHtmlText);
+    final spoiler = find.descendant(
+      of: richMessage,
+      matching: find.textContaining('SPOILER'),
+    );
+    expect(spoiler, findsOneWidget);
+    expect(
+      find.descendant(of: richMessage, matching: find.textContaining('secret')),
+      findsNothing,
+    );
+    await tester.tap(spoiler);
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: richMessage,
+        matching: find.textContaining('Hello secret'),
+      ),
+      findsOneWidget,
+    );
+  });
+}
+
+Future<void> _enterComposer(WidgetTester tester, String text) async {
+  final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+  editor.controller.document = Document()..insert(0, text);
+  editor.controller.updateSelection(
+    TextSelection.collapsed(offset: text.length),
+    ChangeSource.local,
+  );
+  await tester.pump();
 }
 
 class FakeBackend extends ChatBackend {
@@ -257,6 +348,7 @@ class FakeBackend extends ChatBackend {
   List<SpaceSummary> spaceList = const [];
   String? currentSpaceId;
   List<ChatMessage> messageList = const [];
+  List<MentionSuggestion> mentionList = const [];
   bool moreHistory = false;
   int historyRequests = 0;
   final List<String> sentMessages = [];
@@ -277,6 +369,8 @@ class FakeBackend extends ChatBackend {
   EncryptionSetupState get encryptionSetup => security;
   @override
   List<ChatMessage> get messages => messageList;
+  @override
+  List<MentionSuggestion> get mentionSuggestions => mentionList;
   @override
   List<RoomSummary> get rooms => roomList;
   @override
@@ -335,6 +429,7 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> sendMessage(
     String text, {
+    String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   }) async {

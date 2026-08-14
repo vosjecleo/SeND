@@ -1,8 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:mime/mime.dart';
@@ -10,6 +11,8 @@ import 'package:mime/mime.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'security_center.dart';
+import 'rich_message.dart';
+import 'matrix_html_text.dart';
 
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});
@@ -21,31 +24,73 @@ class ChatShell extends StatefulWidget {
 }
 
 class _ChatShellState extends State<ChatShell> {
-  final _message = TextEditingController();
+  final _message = QuillController.basic();
   final _composerFocus = FocusNode(debugLabel: 'message composer');
   bool _sending = false;
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
+  String? _mentionQuery;
+  int? _mentionStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _message.addListener(_updateMentionQuery);
+  }
+
+  void _updateMentionQuery() {
+    final text = _message.document.toPlainText();
+    final cursor = _message.selection.extentOffset.clamp(0, text.length);
+    final beforeCursor = text.substring(0, cursor);
+    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(beforeCursor);
+    final query = match?.group(1);
+    final start = match == null ? null : beforeCursor.lastIndexOf('@');
+    if (query == _mentionQuery && start == _mentionStart) return;
+    setState(() {
+      _mentionQuery = query;
+      _mentionStart = start;
+    });
+  }
+
+  void _insertMention(String userId) {
+    final start = _mentionStart;
+    if (start == null) return;
+    final end = _message.selection.extentOffset;
+    _message.replaceText(
+      start,
+      end - start,
+      '$userId ',
+      TextSelection.collapsed(offset: start + userId.length + 1),
+    );
+    setState(() {
+      _mentionQuery = null;
+      _mentionStart = null;
+    });
+    _composerFocus.requestFocus();
+  }
 
   Future<void> _send() async {
-    final text = _message.text.trim();
+    final serialized = serializeRichMessage(_message.document);
+    final text = serialized.plainText.trim();
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _message.clear();
     try {
       await widget.backend.sendMessage(
         text,
+        formattedBody: serialized.html,
         replyToMessageId: _replyingTo?.id,
         editMessageId: _editingMessage?.id,
       );
       if (mounted) {
+        _message.clear();
         setState(() {
           _replyingTo = null;
           _editingMessage = null;
         });
       }
     } catch (_) {
-      if (mounted) _message.text = text;
+      // Leave the document intact so a failed send can be retried.
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -60,12 +105,11 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   void _edit(ChatMessage message) {
-    _message
-      ..text = message.body
-      ..selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: message.body.length,
-      );
+    _message.document = Document()..insert(0, message.body);
+    _message.updateSelection(
+      TextSelection(baseOffset: 0, extentOffset: message.body.length),
+      ChangeSource.local,
+    );
     setState(() {
       _editingMessage = message;
       _replyingTo = null;
@@ -145,6 +189,7 @@ class _ChatShellState extends State<ChatShell> {
 
   @override
   void dispose() {
+    _message.removeListener(_updateMentionQuery);
     _message.dispose();
     _composerFocus.dispose();
     super.dispose();
@@ -182,6 +227,8 @@ class _ChatShellState extends State<ChatShell> {
                           onEdit: _edit,
                           onCancelComposerAction: _cancelComposerAction,
                           onAttach: _attachFile,
+                          mentionSuggestions: _mentionSuggestions,
+                          onMentionSelected: _insertMention,
                         ),
                 ),
               ],
@@ -190,6 +237,19 @@ class _ChatShellState extends State<ChatShell> {
         ],
       ),
     );
+  }
+
+  List<MentionSuggestion> get _mentionSuggestions {
+    final query = _mentionQuery?.toLowerCase();
+    if (query == null) return const [];
+    return widget.backend.mentionSuggestions
+        .where(
+          (suggestion) =>
+              suggestion.displayName.toLowerCase().contains(query) ||
+              suggestion.userId.toLowerCase().contains(query),
+        )
+        .take(6)
+        .toList(growable: false);
   }
 }
 
@@ -464,10 +524,12 @@ class _Conversation extends StatefulWidget {
     required this.onEdit,
     required this.onCancelComposerAction,
     required this.onAttach,
+    required this.mentionSuggestions,
+    required this.onMentionSelected,
   });
 
   final ChatBackend backend;
-  final TextEditingController controller;
+  final QuillController controller;
   final FocusNode composerFocus;
   final bool sending;
   final ChatMessage? replyingTo;
@@ -477,6 +539,8 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<ChatMessage> onEdit;
   final VoidCallback onCancelComposerAction;
   final VoidCallback onAttach;
+  final List<MentionSuggestion> mentionSuggestions;
+  final ValueChanged<String> onMentionSelected;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -683,34 +747,257 @@ class _ConversationState extends State<_Conversation> {
             body: message.body,
             onCancel: widget.onCancelComposerAction,
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
-          child: TextField(
-            controller: widget.controller,
-            focusNode: widget.composerFocus,
-            autofocus: true,
-            enabled: !widget.sending,
-            onSubmitted: (_) => widget.onSend(),
-            decoration: InputDecoration(
-              hintText: 'Message #${room.name}',
-              border: const OutlineInputBorder(),
-              isDense: true,
-              prefixIcon: IconButton(
-                tooltip: 'Attach file',
-                onPressed: widget.sending ? null : widget.onAttach,
-                icon: const Icon(Icons.add_circle_outline, size: 20),
-              ),
-              suffixIcon: IconButton(
-                tooltip: 'Send',
-                onPressed: widget.sending ? null : widget.onSend,
-                icon: const Icon(Icons.send, size: 20),
-              ),
-            ),
+        if (widget.mentionSuggestions.isNotEmpty)
+          _MentionPicker(
+            suggestions: widget.mentionSuggestions,
+            onSelected: widget.onMentionSelected,
           ),
+        _RichComposer(
+          controller: widget.controller,
+          focusNode: widget.composerFocus,
+          roomName: room.name,
+          enabled: !widget.sending,
+          onSend: widget.onSend,
+          onAttach: widget.onAttach,
         ),
       ],
     );
   }
+}
+
+class _RichComposer extends StatefulWidget {
+  const _RichComposer({
+    required this.controller,
+    required this.focusNode,
+    required this.roomName,
+    required this.enabled,
+    required this.onSend,
+    required this.onAttach,
+  });
+
+  final QuillController controller;
+  final FocusNode focusNode;
+  final String roomName;
+  final bool enabled;
+  final VoidCallback onSend;
+  final VoidCallback onAttach;
+
+  @override
+  State<_RichComposer> createState() => _RichComposerState();
+}
+
+class _MentionPicker extends StatelessWidget {
+  const _MentionPicker({required this.suggestions, required this.onSelected});
+
+  final List<MentionSuggestion> suggestions;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    child: Material(
+      color: const Color(0xff202126),
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: Color(0xff4a4c56)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 210),
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: suggestions.length,
+          itemBuilder: (context, index) {
+            final suggestion = suggestions[index];
+            return ListTile(
+              dense: true,
+              title: Text(suggestion.displayName),
+              subtitle: Text(suggestion.userId),
+              onTap: () => onSelected(suggestion.userId),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+class _RichComposerState extends State<_RichComposer> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.fromLTRB(14, 8, 10, 12),
+    decoration: BoxDecoration(
+      border: Border.all(color: const Color(0xff777985)),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 34,
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Attach file',
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.enabled ? widget.onAttach : null,
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.bold,
+                        tooltip: 'Bold',
+                        icon: Icons.format_bold,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.italic,
+                        tooltip: 'Italic',
+                        icon: Icons.format_italic,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.underline,
+                        tooltip: 'Underline',
+                        icon: Icons.format_underlined,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.strikeThrough,
+                        tooltip: 'Strikethrough',
+                        icon: Icons.format_strikethrough,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.inlineCode,
+                        tooltip: 'Inline code',
+                        icon: Icons.code,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.blockQuote,
+                        tooltip: 'Quote',
+                        icon: Icons.format_quote,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.ul,
+                        tooltip: 'Bulleted list',
+                        icon: Icons.format_list_bulleted,
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Spoiler',
+                        icon: const Icon(
+                          Icons.visibility_off_outlined,
+                          size: 17,
+                        ),
+                        onPressed: () {
+                          final current = widget.controller
+                              .getSelectionStyle()
+                              .attributes[Attribute.background.key]
+                              ?.value;
+                          widget.controller.formatSelection(
+                            BackgroundAttribute(
+                              current == spoilerEditorColor
+                                  ? null
+                                  : spoilerEditorColor,
+                            ),
+                          );
+                          widget.focusNode.requestFocus();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Send',
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.enabled ? widget.onSend : null,
+                icon: const Icon(Icons.send, size: 18),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        QuillEditor(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          scrollController: _scrollController,
+          config: QuillEditorConfig(
+            autoFocus: false,
+            minHeight: 38,
+            maxHeight: 150,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            placeholder: 'Message #${widget.roomName}',
+            // ignore: experimental_member_use
+            onKeyPressed: (event, _) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.enter &&
+                  !HardwareKeyboard.instance.isShiftPressed) {
+                widget.onSend();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _QuillFormatButton extends StatelessWidget {
+  const _QuillFormatButton({
+    required this.controller,
+    required this.focusNode,
+    required this.attribute,
+    required this.tooltip,
+    required this.icon,
+  });
+
+  final QuillController controller;
+  final FocusNode focusNode;
+  final Attribute attribute;
+  final String tooltip;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    visualDensity: VisualDensity.compact,
+    tooltip: tooltip,
+    icon: Icon(icon, size: 17),
+    onPressed: () {
+      final selected = controller.getSelectionStyle().attributes.containsKey(
+        attribute.key,
+      );
+      controller.formatSelection(
+        selected ? Attribute.clone(attribute, null) : attribute,
+      );
+      focusNode.requestFocus();
+    },
+  );
 }
 
 class _MessageRow extends StatelessWidget {
@@ -835,18 +1122,23 @@ class _MessageRow extends StatelessWidget {
                     ),
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
-                    child: SelectableText(
-                      message.body,
-                      style: TextStyle(
-                        height: 1.28,
-                        fontStyle: message.redacted
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                        color: message.redacted
-                            ? const Color(0xff989aa5)
-                            : null,
-                      ),
-                    ),
+                    child: message.formattedBody != null
+                        ? MatrixHtmlText(
+                            html: message.formattedBody!,
+                            fallback: message.body,
+                          )
+                        : SelectableText(
+                            message.body,
+                            style: TextStyle(
+                              height: 1.28,
+                              fontStyle: message.redacted
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                              color: message.redacted
+                                  ? const Color(0xff989aa5)
+                                  : null,
+                            ),
+                          ),
                   ),
                   if (message.attachment case final attachment?)
                     Padding(

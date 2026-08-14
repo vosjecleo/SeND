@@ -99,8 +99,12 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - Compose plain text and rich text with a compact WYSIWYG editor: bold, italic,
   underline, strikethrough, inline code, code blocks, quotes, links, lists, and
   spoilers, while preserving a plain-text fallback.
+- [x] Send and render interoperable `org.matrix.custom.html` with a plaintext
+  fallback, including revealable standard `data-mx-spoiler` content.
 - Matrix-native user and room mentions with autocomplete, keyboard navigation,
   pills/highlighting, and correct notification semantics.
+- [x] Autocomplete room members to full Matrix user IDs and emit `m.mentions`
+  notification metadata, including reply and `@room` semantics.
 - Send, receive, preview, download, save, and open images, video, audio, and
   general files. Images and videos may be marked as spoilers before sending.
 - [x] Stream unencrypted and encrypted video in-chat using authenticated HTTP

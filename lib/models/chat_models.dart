@@ -72,6 +72,7 @@ class ChatMessage {
     this.redacted = false,
     this.reactions = const [],
     this.attachment,
+    this.formattedBody,
     this.reply,
     this.avatarBytes,
   });
@@ -88,6 +89,7 @@ class ChatMessage {
   final bool redacted;
   final List<ReactionSummary> reactions;
   final ChatAttachment? attachment;
+  final String? formattedBody;
   final ReplyPreview? reply;
   final Uint8List? avatarBytes;
 }
@@ -131,6 +133,13 @@ class MediaPlaybackSource {
 
   final Uri uri;
   final Map<String, String> headers;
+}
+
+class MentionSuggestion {
+  const MentionSuggestion({required this.userId, required this.displayName});
+
+  final String userId;
+  final String displayName;
 }
 
 class ReactionSummary {

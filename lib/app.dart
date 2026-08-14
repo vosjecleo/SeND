@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 
 import 'backend/chat_backend.dart';
 import 'models/chat_models.dart';
@@ -15,6 +17,12 @@ class DeltiecordApp extends StatelessWidget {
     return MaterialApp(
       title: 'Deltiecord',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
       theme: ThemeData(
         brightness: Brightness.dark,
         colorSchemeSeed: const Color(0xff6975d9),

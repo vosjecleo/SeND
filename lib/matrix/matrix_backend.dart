@@ -69,6 +69,25 @@ class MatrixBackend extends ChatBackend {
   bool get historyLoading => _historyLoading;
   @override
   bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
+  @override
+  List<MentionSuggestion> get mentionSuggestions {
+    final room = _client?.getRoomById(_selectedRoomId ?? '');
+    if (room == null) return const [];
+    final suggestions = room
+        .getParticipants()
+        .map(
+          (user) => MentionSuggestion(
+            userId: user.id,
+            displayName: user.calcDisplayname(),
+          ),
+        )
+        .toList(growable: false);
+    suggestions.sort(
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
+    return suggestions;
+  }
 
   @override
   List<RoomSummary> get rooms {
@@ -152,6 +171,9 @@ class MatrixBackend extends ChatBackend {
             redacted: event.redacted,
             reactions: _reactionSummaries(event, timeline),
             attachment: _attachmentFor(displayEvent),
+            formattedBody: displayEvent.isRichMessage
+                ? displayEvent.formattedText
+                : null,
             reply: _replyPreviews[event.eventId],
             avatarBytes: _senderAvatarBytes[event.senderId],
           );
@@ -497,6 +519,7 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> sendMessage(
     String text, {
+    String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   }) async {
@@ -509,16 +532,49 @@ class MatrixBackend extends ChatBackend {
       final replyEvent = replyToMessageId == null
           ? null
           : _eventById(replyToMessageId);
-      await room.sendTextEvent(
-        value,
-        inReplyTo: replyEvent,
-        editEventId: editMessageId,
-      );
+      if (formattedBody == null || formattedBody.isEmpty) {
+        await room.sendTextEvent(
+          value,
+          inReplyTo: replyEvent,
+          editEventId: editMessageId,
+        );
+      } else {
+        await room.sendEvent(
+          {
+            'msgtype': MessageTypes.Text,
+            'body': value,
+            'format': 'org.matrix.custom.html',
+            'formatted_body': formattedBody,
+            ..._mentionsFor(value, replyEvent),
+          },
+          inReplyTo: replyEvent,
+          editEventId: editMessageId,
+        );
+      }
     } catch (exception) {
       _error = _friendlyError(exception);
       notifyListeners();
       rethrow;
     }
+  }
+
+  Map<String, Object> _mentionsFor(String text, Event? replyEvent) {
+    final userIds = RegExp(r'@[A-Za-z0-9._=\-/]+:[^\s<>()]+')
+        .allMatches(text)
+        .map((match) => match.group(0)!)
+        .where((userId) => userId != _matrix.userID)
+        .toSet();
+    if (replyEvent != null && replyEvent.senderId != _matrix.userID) {
+      userIds.add(replyEvent.senderId);
+    }
+    final room = RegExp(r'(^|\s)@room(?=\s|$)').hasMatch(text);
+    if (userIds.isEmpty && !room) return const {};
+    return {
+      'm.mentions': {
+        if (userIds.isNotEmpty) 'user_ids': userIds.toList(growable: false),
+        if (room) 'room': true,
+      },
+    };
   }
 
   Event? _eventById(String eventId) {
