@@ -1,0 +1,143 @@
+part of 'matrix_backend.dart';
+
+extension _MatrixMedia on MatrixBackend {
+  Future<void> _sendAttachment(
+    AttachmentDraft attachment, {
+    String? replyToMessageId,
+  }) async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null) throw StateError('The selected room is unavailable.');
+    try {
+      await _validateUploadSize(attachment.bytes.length);
+      await _prepareEncryptedSend(room);
+      final replyEvent = replyToMessageId == null
+          ? null
+          : _eventById(replyToMessageId);
+      final file = MatrixFile.fromMimeType(
+        bytes: attachment.bytes,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+      );
+      await room.sendFileEvent(
+        file,
+        inReplyTo: replyEvent,
+        // Re-encoding large images here is CPU-heavy and stalls Flutter's UI
+        // isolate. The SDK still generates a thumbnail, but uploads the
+        // original image without a redundant full-resolution shrink pass.
+        shrinkImageMaxDimension: null,
+        extraContent:
+            attachment.spoiler || attachment.caption?.trim().isNotEmpty == true
+            ? {
+                if (attachment.caption?.trim().isNotEmpty == true) ...{
+                  'body': attachment.caption!.trim(),
+                  'filename': attachment.name,
+                },
+                // MSC4193's unstable key is used by existing clients. Keep the
+                // stable-looking key too so migration does not require a resend.
+                if (attachment.spoiler) ...{
+                  'page.codeberg.everypizza.msc4193.spoiler': true,
+                  'm.spoiler': true,
+                },
+              }
+            : null,
+      );
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> _refreshMediaConfig() async {
+    try {
+      _maximumUploadBytes = (await _matrix.getConfig()).mUploadSize;
+    } catch (_) {
+      // The endpoint is advisory and not exposed by every homeserver. The
+      // upload request itself remains the authoritative fallback.
+    }
+  }
+
+  Future<void> _validateUploadSize(int byteLength) async {
+    if (_maximumUploadBytes == null) await _refreshMediaConfig();
+    final limit = _maximumUploadBytes;
+    if (limit == null || byteLength <= limit) return;
+    throw StateError(
+      'This file is ${_formatByteSize(byteLength)}, but the homeserver allows '
+      'uploads up to ${_formatByteSize(limit)}.',
+    );
+  }
+
+  String _formatByteSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kib = bytes / 1024;
+    if (kib < 1024) return '${kib.toStringAsFixed(1)} KiB';
+    final mib = kib / 1024;
+    if (mib < 1024) return '${mib.toStringAsFixed(1)} MiB';
+    return '${(mib / 1024).toStringAsFixed(1)} GiB';
+  }
+
+  Future<Uint8List> _downloadAttachment(
+    String messageId, {
+    bool thumbnail = false,
+  }) async {
+    final event = _eventById(messageId);
+    if (event == null || !event.hasAttachment) {
+      throw StateError('That attachment is no longer available.');
+    }
+    final file = await event.downloadAndDecryptAttachment(
+      getThumbnail: thumbnail && event.hasThumbnail,
+    );
+    return file.bytes;
+  }
+
+  Future<MediaPlaybackSource?> _getMediaPlaybackSource(String messageId) async {
+    final event = _eventById(messageId);
+    if (event == null || !event.hasAttachment) {
+      return null;
+    }
+    final cached = _mediaPlaybackSources[messageId];
+    if (cached != null) return cached;
+    if (event.isAttachmentEncrypted) {
+      final file = event.content.tryGetMap<String, Object?>('file');
+      final mxc = Uri.tryParse(file?.tryGet<String>('url') ?? '');
+      final keyText = file
+          ?.tryGetMap<String, Object?>('key')
+          ?.tryGet<String>('k');
+      final ivText = file?.tryGet<String>('iv');
+      final size = event.infoMap.tryGet<int>('size');
+      final accessToken = _matrix.accessToken;
+      if (mxc == null ||
+          !mxc.isScheme('mxc') ||
+          keyText == null ||
+          ivText == null ||
+          size == null ||
+          size <= 0 ||
+          accessToken == null) {
+        return null;
+      }
+      final upstream = await mxc.getDownloadUri(_matrix, skipScanner: true);
+      final localUri = await _mediaRangeProxy.register(
+        upstream: upstream,
+        accessToken: accessToken,
+        key: base64Url.decode(base64.normalize(keyText)),
+        iv: base64.decode(base64.normalize(ivText)),
+        size: size,
+        mimeType: event.attachmentMimetype,
+      );
+      final source = MediaPlaybackSource(uri: localUri, headers: const {});
+      _mediaPlaybackSources[messageId] = source;
+      return source;
+    }
+    final uri = await event.getAttachmentUri(skipScanner: false);
+    if (uri == null) return null;
+    final source = MediaPlaybackSource(
+      uri: uri,
+      headers: {
+        if (_matrix.accessToken case final token?)
+          'Authorization': 'Bearer $token',
+      },
+    );
+    _mediaPlaybackSources[messageId] = source;
+    return source;
+  }
+}
