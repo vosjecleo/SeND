@@ -103,8 +103,8 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
   fallback, including revealable standard `data-mx-spoiler` content.
 - [x] Matrix-native user mentions with autocomplete, keyboard navigation,
   pills/highlighting, and correct notification semantics.
-- [ ] Add room-name mention autocomplete; typed `@room` already emits the
-  correct Matrix notification metadata.
+- [x] Add room-name mention autocomplete as interoperable Matrix room links;
+  typed `@room` emits the correct room-wide notification metadata.
 - [x] Autocomplete room members to full Matrix user IDs and emit `m.mentions`
   notification metadata, including reply and `@room` semantics.
 - [x] Send, receive, preview, download, save, and open images, video, audio, and
@@ -112,9 +112,9 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Stream unencrypted and encrypted video in-chat using authenticated HTTP
   ranges; encrypted AES-CTR media is decrypted per range through a loopback-only
   proxy instead of downloading the complete file before playback.
-- [ ] Finish media transfer UX: safe thumbnails and non-blocking upload are in
-  place, but determinate upload/download progress, preflight homeserver-limit
-  validation, and transfer retry/cancel controls are still required.
+- [ ] Finish media transfer UX: safe thumbnails, non-blocking phase feedback,
+  homeserver-limit validation, and failed-send retry/removal are in place, but
+  byte-level upload/download progress and active-transfer cancellation remain.
 - [x] Display replies cleanly and support creating replies from the timeline.
 - [x] Edit and delete/redact the user's own messages, with unobtrusive edited and
   deleted indicators.
@@ -125,8 +125,8 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
   events without duplicating messages.
 - [x] Provide useful desktop notifications containing decrypted message content,
   with per-room muting.
-- [ ] Add a notification-preview privacy preference and suppress plaintext when
-  previews are disabled.
+- [x] Add a synced notification-preview privacy preference and suppress
+  plaintext when previews are disabled.
 - [x] Handle common timeline events gracefully instead of displaying raw or
   “unknown event” placeholders.
 
@@ -134,9 +134,9 @@ Promotion gate: text and media conversations must work consistently between
 Deltiecord and established Matrix clients in both encrypted and unencrypted
 rooms.
 
-Current status: **not yet complete.** The unchecked items above and a final
-cross-client encrypted/unencrypted media interoperability pass remain before
-the `0.2` promotion gate can be signed off.
+Current status: **not yet complete.** Byte-level transfer progress/cancellation
+and a final unencrypted cross-client media pass remain. Encrypted media
+interoperability has passed real-client testing.
 
 ### v0.3 — Major communication features
 

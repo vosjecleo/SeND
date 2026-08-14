@@ -179,6 +179,19 @@ void main() {
     await _revealMessageActions(tester, find.text('Original').last);
     await tester.tap(find.byTooltip('Message actions'));
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 1100));
+    await tester.tap(find.text('Add reaction'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('🎉'));
+    await tester.pumpAndSettle();
+    expect(backend.toggledReactions, [(r'$own', '👍'), (r'$own', '🎉')]);
+
+    await _revealMessageActions(tester, find.text('Original').last);
+    await tester.tap(find.byTooltip('Message actions'));
+    await tester.pumpAndSettle();
+    // Moving from the row into the popup used to dismiss the owning overlay
+    // before the selected callback could run.
+    await tester.pump(const Duration(milliseconds: 1100));
     await tester.tap(find.text('Edit message'));
     await tester.pump();
     expect(find.text('Editing message'), findsOneWidget);
@@ -190,6 +203,7 @@ void main() {
     await _revealMessageActions(tester, find.text('Original').last);
     await tester.tap(find.byTooltip('Message actions'));
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 1100));
     await tester.tap(find.text('Delete message'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
@@ -282,6 +296,39 @@ void main() {
     await tester.pump();
     final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
     expect(editor.controller.document.toPlainText(), '@alice:example.org \n');
+  });
+
+  testWidgets('autocompletes room links with a readable room name', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..mentionList = const [
+        MentionSuggestion(
+          userId: '!general:example.org',
+          displayName: 'general',
+          isRoom: true,
+        ),
+      ]
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: 'Hello',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+    await _enterComposer(tester, '@gen');
+
+    expect(find.text('Room'), findsOneWidget);
+    await tester.tap(find.text('general').last);
+    await tester.pump();
+    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    expect(editor.controller.document.toPlainText(), '#general \n');
   });
 
   testWidgets('renders Matrix rich text and revealable spoilers', (
@@ -394,6 +441,8 @@ class FakeBackend extends ChatBackend {
   @override
   bool get selectedRoomMuted => false;
   @override
+  bool get notificationPreviewsEnabled => true;
+  @override
   SessionStatus get status => currentStatus;
   @override
   bool get timelineLoading => false;
@@ -439,6 +488,8 @@ class FakeBackend extends ChatBackend {
 
   @override
   Future<void> setSelectedRoomMuted(bool muted) async {}
+  @override
+  Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
 
   @override
   Future<void> loadMoreHistory() async {

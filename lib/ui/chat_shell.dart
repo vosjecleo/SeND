@@ -82,20 +82,31 @@ class _ChatShellState extends State<ChatShell> {
     });
   }
 
-  void _insertMention(String userId) {
+  void _insertMention(String targetId) {
     final start = _mentionStart;
     if (start == null) return;
+    MentionSuggestion? suggestion;
+    for (final candidate in _mentionSuggestions) {
+      if (candidate.userId == targetId) {
+        suggestion = candidate;
+        break;
+      }
+    }
+    if (suggestion == null) return;
+    final mentionText = suggestion.isRoom
+        ? '#${suggestion.displayName}'
+        : suggestion.userId;
     final end = _message.selection.extentOffset;
     _message.replaceText(
       start,
       end - start,
-      '$userId ',
-      TextSelection.collapsed(offset: start + userId.length + 1),
+      '$mentionText ',
+      TextSelection.collapsed(offset: start + mentionText.length + 1),
     );
     _message.formatText(
       start,
-      userId.length,
-      LinkAttribute('https://matrix.to/#/$userId'),
+      mentionText.length,
+      LinkAttribute('https://matrix.to/#/${suggestion.userId}'),
     );
     setState(() {
       _mentionQuery = null;
@@ -779,18 +790,39 @@ class _ConversationState extends State<_Conversation> {
                   onPressed: _jumpToFirstUnread,
                   icon: const Icon(Icons.mark_chat_unread_outlined, size: 19),
                 ),
-              IconButton(
-                tooltip: backend.selectedRoomMuted
-                    ? 'Unmute room notifications'
-                    : 'Mute room notifications',
-                onPressed: () =>
-                    backend.setSelectedRoomMuted(!backend.selectedRoomMuted),
+              PopupMenuButton<String>(
+                tooltip: 'Notification options',
                 icon: Icon(
                   backend.selectedRoomMuted
                       ? Icons.notifications_off_outlined
                       : Icons.notifications_none,
                   size: 19,
                 ),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'mute':
+                      backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
+                    case 'previews':
+                      backend.setNotificationPreviewsEnabled(
+                        !backend.notificationPreviewsEnabled,
+                      );
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'mute',
+                    child: Text(
+                      backend.selectedRoomMuted
+                          ? 'Unmute this room'
+                          : 'Mute this room',
+                    ),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: 'previews',
+                    checked: backend.notificationPreviewsEnabled,
+                    child: const Text('Show message previews'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -980,7 +1012,7 @@ class _MentionPicker extends StatelessWidget {
               selected: index == selectedIndex,
               selectedTileColor: const Color(0xff34374b),
               title: Text(suggestion.displayName),
-              subtitle: Text(suggestion.userId),
+              subtitle: Text(suggestion.isRoom ? 'Room' : suggestion.userId),
               onTap: () => onSelected(suggestion.userId),
             );
           },
@@ -1050,9 +1082,9 @@ class _RichComposerState extends State<_RichComposer> {
                       null,
                     ),
                   ),
-                  // Keep the compact 32 px composer while seating its text one
-                  // pixel lower alongside the attachment and send controls.
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+                  // Keep the compact 32 px composer while seating its text
+                  // cleanly alongside the attachment and send controls.
+                  padding: const EdgeInsets.fromLTRB(12, 7, 12, 3),
                   placeholder: 'Message #${widget.roomName}',
                   // ignore: experimental_member_use
                   onKeyPressed: (event, _) {
@@ -1143,6 +1175,7 @@ class _MessageRowState extends State<_MessageRow> {
   final _actionsOverlay = OverlayPortalController();
   final _actionsAnchor = LayerLink();
   bool _hovered = false;
+  bool _actionsMenuOpen = false;
 
   ChatMessage get message => widget.message;
 
@@ -1160,10 +1193,20 @@ class _MessageRowState extends State<_MessageRow> {
     _hoverTimer?.cancel();
     setState(() => _hovered = false);
     _hoverTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && !_hovered) {
+      if (mounted && !_hovered && !_actionsMenuOpen) {
         _actionsOverlay.hide();
       }
     });
+  }
+
+  void _actionsMenuOpened() {
+    _hoverTimer?.cancel();
+    _actionsMenuOpen = true;
+  }
+
+  void _actionsMenuClosed() {
+    _actionsMenuOpen = false;
+    if (!_hovered) _actionsOverlay.hide();
   }
 
   @override
@@ -1222,6 +1265,8 @@ class _MessageRowState extends State<_MessageRow> {
                 onReact: widget.onReact,
                 onRetry: widget.onRetry,
                 onCancel: widget.onCancel,
+                onMenuOpened: _actionsMenuOpened,
+                onMenuClosed: _actionsMenuClosed,
               ),
             ),
           ),
@@ -1465,6 +1510,8 @@ class _MessageActions extends StatelessWidget {
     required this.onReact,
     required this.onRetry,
     required this.onCancel,
+    required this.onMenuOpened,
+    required this.onMenuClosed,
   });
 
   final VoidCallback onReply;
@@ -1473,6 +1520,8 @@ class _MessageActions extends StatelessWidget {
   final VoidCallback? onReact;
   final VoidCallback? onRetry;
   final VoidCallback? onCancel;
+  final VoidCallback onMenuOpened;
+  final VoidCallback onMenuClosed;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1487,13 +1536,22 @@ class _MessageActions extends StatelessWidget {
       PopupMenuButton<String>(
         tooltip: 'Message actions',
         iconSize: 17,
-        onSelected: (action) => switch (action) {
-          'react' => onReact?.call(),
-          'edit' => onEdit?.call(),
-          'delete' => onDelete?.call(),
-          'retry' => onRetry?.call(),
-          'cancel' => onCancel?.call(),
-          _ => null,
+        onOpened: onMenuOpened,
+        onCanceled: onMenuClosed,
+        onSelected: (action) {
+          switch (action) {
+            case 'react':
+              onReact?.call();
+            case 'edit':
+              onEdit?.call();
+            case 'delete':
+              onDelete?.call();
+            case 'retry':
+              onRetry?.call();
+            case 'cancel':
+              onCancel?.call();
+          }
+          onMenuClosed();
         },
         itemBuilder: (context) => [
           if (onReact != null)

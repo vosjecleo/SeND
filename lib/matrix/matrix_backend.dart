@@ -12,6 +12,8 @@ import 'matrix_client_factory.dart';
 import 'media_range_proxy.dart';
 
 class MatrixBackend extends ChatBackend {
+  static const _settingsAccountDataType = 'net.deltiecord.settings';
+
   MatrixBackend({ChatNotificationSink? notifications})
     : _notifications = notifications ?? const SilentChatNotificationSink();
 
@@ -42,6 +44,8 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String?> _firstUnreadEventIds = {};
   final Map<String, String> _lastNotificationEventIds = {};
   bool _notificationsPrimed = false;
+  bool _notificationPreviewsEnabled = true;
+  int? _maximumUploadBytes;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -91,13 +95,27 @@ class MatrixBackend extends ChatBackend {
             displayName: user.calcDisplayname(),
           ),
         )
-        .toList(growable: false);
+        .toList();
+    suggestions.addAll(
+      _joinedRooms
+          .where((room) => !room.isSpace)
+          .map(
+            (room) => MentionSuggestion(
+              userId: room.id,
+              displayName: room.getLocalizedDisplayname(),
+              isRoom: true,
+            ),
+          ),
+    );
     suggestions.sort(
       (a, b) =>
           a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
     return suggestions;
   }
+
+  @override
+  bool get notificationPreviewsEnabled => _notificationPreviewsEnabled;
 
   @override
   List<RoomSummary> get rooms {
@@ -330,6 +348,7 @@ class MatrixBackend extends ChatBackend {
       _client?.dispose();
       _client = await createMatrixClient();
       _syncSubscription = _matrix.onSync.stream.listen((_) {
+        _loadSettings();
         notifyListeners();
         unawaited(_refreshRoomMetadata());
         unawaited(_notifyNewMessages());
@@ -341,6 +360,7 @@ class MatrixBackend extends ChatBackend {
         notifyListeners();
       });
       await _matrix.init();
+      _loadSettings();
       await _notifications.initialize();
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
@@ -349,6 +369,7 @@ class MatrixBackend extends ChatBackend {
       if (_matrix.isLogged()) {
         unawaited(refreshEncryptionSetup());
         unawaited(_refreshRoomMetadata());
+        unawaited(_refreshMediaConfig());
       }
     } catch (exception) {
       _status = SessionStatus.failed;
@@ -375,6 +396,7 @@ class MatrixBackend extends ChatBackend {
         initialDeviceDisplayName: 'Deltiecord Desktop',
       );
       _status = SessionStatus.signedIn;
+      unawaited(_refreshMediaConfig());
       await refreshEncryptionSetup();
     } catch (exception) {
       _status = SessionStatus.signedOut;
@@ -404,6 +426,7 @@ class MatrixBackend extends ChatBackend {
       _firstUnreadEventIds.clear();
       _lastNotificationEventIds.clear();
       _notificationsPrimed = false;
+      _maximumUploadBytes = null;
       _mediaPlaybackSources.clear();
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
@@ -451,7 +474,9 @@ class MatrixBackend extends ChatBackend {
         }
       }
       final sender = event.senderFromMemoryOrFallback.calcDisplayname();
-      final notificationBody = displayEvent.type == EventTypes.Message
+      final notificationBody = !_notificationPreviewsEnabled
+          ? 'New message'
+          : displayEvent.type == EventTypes.Message
           ? displayEvent.calcUnlocalizedBody(
               hideReply: true,
               hideEdit: true,
@@ -462,6 +487,29 @@ class MatrixBackend extends ChatBackend {
         title: '$sender in ${room.getLocalizedDisplayname()}',
         body: notificationBody,
       );
+    }
+  }
+
+  void _loadSettings() {
+    final content = _matrix.accountData[_settingsAccountDataType]?.content;
+    _notificationPreviewsEnabled =
+        content?.tryGet<bool>('notification_previews') ?? true;
+  }
+
+  @override
+  Future<void> setNotificationPreviewsEnabled(bool enabled) async {
+    if (_matrix.userID == null) return;
+    final existing = _matrix.accountData[_settingsAccountDataType]?.content;
+    try {
+      await _matrix.setAccountData(_matrix.userID!, _settingsAccountDataType, {
+        ...?existing,
+        'notification_previews': enabled,
+      });
+      _notificationPreviewsEnabled = enabled;
+      notifyListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
     }
   }
 
@@ -848,6 +896,7 @@ class MatrixBackend extends ChatBackend {
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
     try {
+      await _validateUploadSize(attachment.bytes.length);
       await _prepareEncryptedSend(room);
       final replyEvent = replyToMessageId == null
           ? null
@@ -885,6 +934,34 @@ class MatrixBackend extends ChatBackend {
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<void> _refreshMediaConfig() async {
+    try {
+      _maximumUploadBytes = (await _matrix.getConfig()).mUploadSize;
+    } catch (_) {
+      // The endpoint is advisory and not exposed by every homeserver. The
+      // upload request itself remains the authoritative fallback.
+    }
+  }
+
+  Future<void> _validateUploadSize(int byteLength) async {
+    if (_maximumUploadBytes == null) await _refreshMediaConfig();
+    final limit = _maximumUploadBytes;
+    if (limit == null || byteLength <= limit) return;
+    throw StateError(
+      'This file is ${_formatByteSize(byteLength)}, but the homeserver allows '
+      'uploads up to ${_formatByteSize(limit)}.',
+    );
+  }
+
+  String _formatByteSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kib = bytes / 1024;
+    if (kib < 1024) return '${kib.toStringAsFixed(1)} KiB';
+    final mib = kib / 1024;
+    if (mib < 1024) return '${mib.toStringAsFixed(1)} MiB';
+    return '${(mib / 1024).toStringAsFixed(1)} GiB';
   }
 
   @override
