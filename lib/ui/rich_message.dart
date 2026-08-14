@@ -42,7 +42,7 @@ const spoilerEditorColor = '#010101';
 
 String? _typedMarkupToHtml(String text) {
   final hasMarkup = RegExp(
-    r'(^|\n)\s*(?:>|[-*+]\s|\d+\.\s|```)|\*\*?\S|_\S|`\S|~~\S|\|\|\S|\[[^\]]+\]\(',
+    r'(^|\n)\s*(?:>|[-*+]\s|\d+\.\s|```)|(^|[\s(])(?:\*\*?\S|_\S|`\S|~~\S|\|\|\S)|\[[^\]]+\]\(',
   ).hasMatch(text);
   if (!hasMarkup) return null;
 

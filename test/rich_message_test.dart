@@ -1,4 +1,6 @@
 import 'package:deltiecord/ui/rich_message.dart';
+import 'package:deltiecord/ui/matrix_html_text.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,11 +30,36 @@ void main() {
   });
 
   test('keeps filesystem paths as literal plain text', () {
-    final document = Document()..insert(0, '/home/user/project/file.txt');
+    final document = Document()
+      ..insert(0, 'sudo apt install /path/to/deltiecord_0.3.6_amd64.deb');
 
     final message = serializeRichMessage(document);
 
-    expect(message.plainText, '/home/user/project/file.txt');
+    expect(
+      message.plainText,
+      'sudo apt install /path/to/deltiecord_0.3.6_amd64.deb',
+    );
     expect(message.html, isNull);
+  });
+
+  testWidgets('rich paragraphs do not retain an empty trailing row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: MatrixHtmlText(
+              html: '<p>sudo apt install /path/to/file_name.deb</p>',
+              fallback: 'sudo apt install /path/to/file_name.deb',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final height = tester.getSize(find.byType(SelectableText)).height;
+    expect(height, lessThan(30));
   });
 }

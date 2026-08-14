@@ -13,11 +13,20 @@ extension _MatrixMedia on MatrixBackend {
       final replyEvent = replyToMessageId == null
           ? null
           : _eventById(replyToMessageId);
-      final file = MatrixFile.fromMimeType(
-        bytes: attachment.bytes,
-        name: attachment.name,
-        mimeType: attachment.mimeType,
-      );
+      // MatrixFile still derives m.image from the GIF MIME type, while
+      // deliberately avoiding MatrixImageFile's synchronous GIF decode and
+      // thumbnail generation on Flutter's UI isolate.
+      final file = attachment.mimeType == 'image/gif'
+          ? MatrixFile(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+            )
+          : MatrixFile.fromMimeType(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+            );
       await room.sendFileEvent(
         file,
         inReplyTo: replyEvent,

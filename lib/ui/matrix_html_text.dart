@@ -100,7 +100,16 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
   @override
   Widget build(BuildContext context) {
     final document = html_parser.parseFragment(widget.html);
-    final spans = _nodes(document.nodes, const TextStyle(height: 1.28));
+    final spans = List<InlineSpan>.of(
+      _nodes(document.nodes, const TextStyle(height: 1.28)),
+    );
+    // Block elements need separators between one another, but the final block
+    // newline is layout metadata rather than visible message content. Keeping
+    // it creates an empty row below rich messages such as underscored paths.
+    if (spans.isNotEmpty) {
+      final lastSpan = spans.last;
+      if (lastSpan is TextSpan && lastSpan.text == '\n') spans.removeLast();
+    }
     if (spans.isEmpty) {
       return SelectableText(
         widget.fallback,
