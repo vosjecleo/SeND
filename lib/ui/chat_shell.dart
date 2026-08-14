@@ -932,11 +932,14 @@ class _RichComposerState extends State<_RichComposer> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        IconButton(
-          tooltip: 'Add media or file',
-          visualDensity: VisualDensity.compact,
-          onPressed: widget.enabled ? widget.onAttach : null,
-          icon: const Icon(Icons.add_circle_outline, size: 25),
+        Transform.translate(
+          offset: const Offset(0, -1),
+          child: IconButton(
+            tooltip: 'Add media or file',
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.enabled ? widget.onAttach : null,
+            icon: const Icon(Icons.add_circle_outline, size: 25),
+          ),
         ),
         Expanded(
           child: Container(
@@ -954,6 +957,26 @@ class _RichComposerState extends State<_RichComposer> {
                   autoFocus: false,
                   minHeight: 32,
                   maxHeight: 132,
+                  customStyles: const DefaultStyles(
+                    paragraph: DefaultTextBlockStyle(
+                      TextStyle(fontSize: 15, height: 1.2),
+                      HorizontalSpacing.zero,
+                      VerticalSpacing.zero,
+                      VerticalSpacing.zero,
+                      null,
+                    ),
+                    placeHolder: DefaultTextBlockStyle(
+                      TextStyle(
+                        fontSize: 15,
+                        height: 1.2,
+                        color: Color(0x99989aa5),
+                      ),
+                      HorizontalSpacing.zero,
+                      VerticalSpacing.zero,
+                      VerticalSpacing.zero,
+                      null,
+                    ),
+                  ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 5,
@@ -1000,11 +1023,14 @@ class _RichComposerState extends State<_RichComposer> {
             ),
           ),
         ),
-        IconButton(
-          tooltip: 'Send',
-          visualDensity: VisualDensity.compact,
-          onPressed: widget.enabled ? widget.onSend : null,
-          icon: const Icon(Icons.send, size: 25),
+        Transform.translate(
+          offset: const Offset(0, -1),
+          child: IconButton(
+            tooltip: 'Send',
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.enabled ? widget.onSend : null,
+            icon: const Icon(Icons.send, size: 25),
+          ),
         ),
       ],
     ),
