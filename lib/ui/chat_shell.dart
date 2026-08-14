@@ -2010,9 +2010,14 @@ class _PendingAttachmentTile extends StatelessWidget {
   final VoidCallback onToggleSpoiler;
 
   Future<void> _showMenu(BuildContext context, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final localPosition = overlay.globalToLocal(position);
     final action = await showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, 0, 0),
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(localPosition.dx, localPosition.dy, 1, 1),
+        Offset.zero & overlay.size,
+      ),
       items: [
         PopupMenuItem(
           value: 'spoiler',
@@ -2288,193 +2293,209 @@ class _MessageRowState extends State<_MessageRow> {
             color: _hovered ? const Color(0xff292a30) : Colors.transparent,
             child: Opacity(
               opacity: message.pending ? 0.55 : 1,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  widget.startsGroup ? 8 : 1,
-                  20,
-                  1,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (widget.startsGroup)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: CircleAvatar(
-                          radius: 17,
-                          backgroundColor: const Color(0xff3a3c46),
-                          backgroundImage: message.avatarBytes == null
-                              ? null
-                              : MemoryImage(message.avatarBytes!),
-                          child: message.avatarBytes == null
-                              ? Text(
-                                  message.sender.trim().isEmpty
-                                      ? '?'
-                                      : message.sender.characters.first
-                                            .toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : null,
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 34),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (widget.startsGroup)
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    message.sender,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.05,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  time,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: const Color(0xff989aa5),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      widget.startsGroup ? 8 : 1,
+                      20,
+                      1,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(width: 34),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (widget.startsGroup)
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        message.sender,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.05,
+                                        ),
                                       ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      time,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: const Color(0xff989aa5),
+                                          ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          if (message.reply case final reply?)
-                            Container(
-                              margin: const EdgeInsets.only(top: 3, bottom: 2),
-                              padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
-                              decoration: const BoxDecoration(
-                                color: Color(0xff292a30),
-                                border: Border(
-                                  left: BorderSide(
-                                    color: Color(0xff747fdb),
-                                    width: 3,
+                              if (message.reply case final reply?)
+                                Container(
+                                  margin: const EdgeInsets.only(
+                                    top: 3,
+                                    bottom: 2,
                                   ),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    reply.sender,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xffb8bfff),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    9,
+                                    5,
+                                    9,
+                                    6,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xff292a30),
+                                    border: Border(
+                                      left: BorderSide(
+                                        color: Color(0xff747fdb),
+                                        width: 3,
+                                      ),
                                     ),
                                   ),
-                                  Text(
-                                    reply.body.replaceAll('\n', ' '),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        reply.sender,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xffb8bfff),
+                                        ),
+                                      ),
+                                      Text(
+                                        reply.body.replaceAll('\n', ' '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          if (message.body.isNotEmpty)
-                            message.formattedBody != null
-                                ? MatrixHtmlText(
-                                    html: message.formattedBody!,
-                                    fallback: message.body,
-                                  )
-                                : MatrixPlainText(
-                                    text: message.body,
-                                    style: TextStyle(
-                                      height: 1.16,
-                                      fontStyle: message.redacted
-                                          ? FontStyle.italic
-                                          : FontStyle.normal,
-                                      color: message.redacted
-                                          ? const Color(0xff989aa5)
-                                          : null,
-                                    ),
+                                ),
+                              if (message.body.isNotEmpty)
+                                message.formattedBody != null
+                                    ? MatrixHtmlText(
+                                        html: message.formattedBody!,
+                                        fallback: message.body,
+                                      )
+                                    : MatrixPlainText(
+                                        text: message.body,
+                                        style: TextStyle(
+                                          height: 1.16,
+                                          fontStyle: message.redacted
+                                              ? FontStyle.italic
+                                              : FontStyle.normal,
+                                          color: message.redacted
+                                              ? const Color(0xff989aa5)
+                                              : null,
+                                        ),
+                                      ),
+                              if (message.attachment case final attachment?)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: _AttachmentView(
+                                    backend: widget.backend,
+                                    messageId: message.id,
+                                    attachment: attachment,
                                   ),
-                          if (message.attachment case final attachment?)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: _AttachmentView(
-                                backend: widget.backend,
-                                messageId: message.id,
-                                attachment: attachment,
-                              ),
-                            ),
-                          if (message.linkPreview case final preview?)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: _LinkPreviewCard(preview: preview),
-                            ),
-                          if (message.edited)
-                            const Text(
-                              '(edited)',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xff989aa5),
-                              ),
-                            ),
-                          if (message.failed)
-                            Row(
-                              children: [
+                                ),
+                              if (message.linkPreview case final preview?)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: _LinkPreviewCard(preview: preview),
+                                ),
+                              if (message.edited)
                                 const Text(
-                                  'Failed to send',
+                                  '(edited)',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.redAccent,
+                                    color: Color(0xff989aa5),
                                   ),
                                 ),
-                                TextButton(
-                                  onPressed: widget.onRetry,
-                                  child: const Text('Retry'),
-                                ),
-                              ],
-                            ),
-                          if (message.transferStatus case final status?)
-                            Text(
-                              status,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xffb8bfff),
-                              ),
-                            ),
-                          if (message.reactions.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: [
-                                  for (final reaction in message.reactions)
-                                    ActionChip(
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: reaction.reactedByMe
-                                          ? const Color(0xff424a78)
-                                          : const Color(0xff303139),
-                                      label: Text(
-                                        '${reaction.key} ${reaction.count}',
+                              if (message.failed)
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Failed to send',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.redAccent,
                                       ),
-                                      onPressed: () =>
-                                          widget.onToggleReaction(reaction.key),
                                     ),
-                                ],
-                              ),
-                            ),
-                        ],
+                                    TextButton(
+                                      onPressed: widget.onRetry,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              if (message.transferStatus case final status?)
+                                Text(
+                                  status,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xffb8bfff),
+                                  ),
+                                ),
+                              if (message.reactions.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: [
+                                      for (final reaction in message.reactions)
+                                        ActionChip(
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor: reaction.reactedByMe
+                                              ? const Color(0xff424a78)
+                                              : const Color(0xff303139),
+                                          label: Text(
+                                            '${reaction.key} ${reaction.count}',
+                                          ),
+                                          onPressed: () => widget
+                                              .onToggleReaction(reaction.key),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.startsGroup)
+                    Positioned(
+                      left: 20,
+                      top: 10,
+                      child: CircleAvatar(
+                        radius: 17,
+                        backgroundColor: const Color(0xff3a3c46),
+                        backgroundImage: message.avatarBytes == null
+                            ? null
+                            : MemoryImage(message.avatarBytes!),
+                        child: message.avatarBytes == null
+                            ? Text(
+                                message.sender.trim().isEmpty
+                                    ? '?'
+                                    : message.sender.characters.first
+                                          .toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              )
+                            : null,
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           ),
