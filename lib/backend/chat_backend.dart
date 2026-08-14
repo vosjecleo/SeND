@@ -19,6 +19,9 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get notificationPreviewsEnabled;
   List<ChatMessage> get messages;
   List<MentionSuggestion> get mentionSuggestions;
+  List<String> get typingUserNames;
+  List<RoomMemberSummary> get selectedRoomMembers;
+  List<ChatMessage> get pinnedMessages;
   bool get timelineLoading;
   bool get historyLoading;
   bool get canLoadMoreHistory;
@@ -52,6 +55,8 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> joinVoiceRoom(String roomId);
   Future<void> leaveVoiceRoom();
   Future<void> setVoiceMuted(bool muted);
+  Future<void> setComposerTyping(bool typing);
+  List<ChatMessage> searchMessages(String query);
   Future<void> setSelectedRoomMuted(bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
   Future<void> loadMoreHistory();

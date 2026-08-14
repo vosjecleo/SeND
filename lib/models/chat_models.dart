@@ -57,6 +57,22 @@ class AudioInputSummary {
   final String label;
 }
 
+enum UserPresence { online, away, offline }
+
+class RoomMemberSummary {
+  const RoomMemberSummary({
+    required this.userId,
+    required this.displayName,
+    this.avatarBytes,
+    this.presence = UserPresence.offline,
+  });
+
+  final String userId;
+  final String displayName;
+  final Uint8List? avatarBytes;
+  final UserPresence presence;
+}
+
 class VoiceParticipantSummary {
   const VoiceParticipantSummary({
     required this.userId,

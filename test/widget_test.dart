@@ -479,6 +479,12 @@ class FakeBackend extends ChatBackend {
   @override
   List<MentionSuggestion> get mentionSuggestions => mentionList;
   @override
+  List<String> get typingUserNames => const [];
+  @override
+  List<RoomMemberSummary> get selectedRoomMembers => const [];
+  @override
+  List<ChatMessage> get pinnedMessages => const [];
+  @override
   List<RoomSummary> get rooms => roomList;
   @override
   List<SpaceSummary> get spaces => spaceList;
@@ -566,6 +572,10 @@ class FakeBackend extends ChatBackend {
   Future<void> leaveVoiceRoom() async {}
   @override
   Future<void> setVoiceMuted(bool muted) async {}
+  @override
+  Future<void> setComposerTyping(bool typing) async {}
+  @override
+  List<ChatMessage> searchMessages(String query) => const [];
 
   @override
   Future<void> loadMoreHistory() async {

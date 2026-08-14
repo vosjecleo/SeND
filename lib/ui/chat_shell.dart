@@ -38,6 +38,7 @@ class _ChatShellState extends State<ChatShell> {
   String? _mentionQuery;
   int? _mentionStart;
   int _mentionSelectionIndex = 0;
+  bool _wasTyping = false;
 
   @override
   void initState() {
@@ -70,6 +71,11 @@ class _ChatShellState extends State<ChatShell> {
 
   void _updateMentionQuery() {
     final text = _message.document.toPlainText();
+    final typing = text.trim().isNotEmpty;
+    if (typing != _wasTyping) {
+      _wasTyping = typing;
+      unawaited(widget.backend.setComposerTyping(typing));
+    }
     final cursor = _message.selection.extentOffset.clamp(0, text.length);
     final beforeCursor = text.substring(0, cursor);
     final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(beforeCursor);
@@ -999,6 +1005,132 @@ class _ConversationState extends State<_Conversation> {
     if (emoji != null) await widget.backend.toggleReaction(message.id, emoji);
   }
 
+  Future<void> _showSearch() async {
+    final controller = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final results = widget.backend.searchMessages(controller.text);
+          return AlertDialog(
+            title: const Text('Search this room'),
+            content: SizedBox(
+              width: 520,
+              height: 430,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search messages',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: results.length,
+                      itemBuilder: (context, index) {
+                        final message = results[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(message.sender),
+                          subtitle: Text(
+                            message.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: Navigator.of(context).pop,
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    controller.dispose();
+  }
+
+  void _showPins() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Pinned messages'),
+      content: SizedBox(
+        width: 460,
+        child: widget.backend.pinnedMessages.isEmpty
+            ? const Text('No loaded pinned messages')
+            : ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final message in widget.backend.pinnedMessages)
+                    ListTile(
+                      dense: true,
+                      title: Text(message.sender),
+                      subtitle: Text(message.body),
+                    ),
+                ],
+              ),
+      ),
+    ),
+  );
+
+  void _showMembers() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('${widget.backend.selectedRoomMembers.length} members'),
+      content: SizedBox(
+        width: 360,
+        height: 480,
+        child: ListView(
+          children: [
+            for (final member in widget.backend.selectedRoomMembers)
+              ListTile(
+                dense: true,
+                leading: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 15,
+                      backgroundImage: member.avatarBytes == null
+                          ? null
+                          : MemoryImage(member.avatarBytes!),
+                      child: member.avatarBytes == null
+                          ? Text(member.displayName.characters.first)
+                          : null,
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: CircleAvatar(
+                        radius: 4,
+                        backgroundColor: switch (member.presence) {
+                          UserPresence.online => const Color(0xff76d49b),
+                          UserPresence.away => const Color(0xffffc857),
+                          UserPresence.offline => const Color(0xff686a73),
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                title: Text(member.displayName),
+                subtitle: Text(member.userId),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final backend = widget.backend;
@@ -1031,6 +1163,21 @@ class _ConversationState extends State<_Conversation> {
                   onPressed: _jumpToFirstUnread,
                   icon: const Icon(Icons.mark_chat_unread_outlined, size: 19),
                 ),
+              IconButton(
+                tooltip: 'Search',
+                onPressed: _showSearch,
+                icon: const Icon(Icons.search, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Pinned messages',
+                onPressed: _showPins,
+                icon: const Icon(Icons.push_pin_outlined, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Members',
+                onPressed: _showMembers,
+                icon: const Icon(Icons.people_outline, size: 20),
+              ),
               PopupMenuButton<String>(
                 tooltip: 'Notification options',
                 icon: Icon(
@@ -1174,6 +1321,14 @@ class _ConversationState extends State<_Conversation> {
             selectedIndex: widget.mentionSelectionIndex,
             onSelected: widget.onMentionSelected,
           ),
+        if (backend.typingUserNames.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(68, 2, 12, 0),
+            child: Text(
+              _typingLabel(backend.typingUserNames),
+              style: const TextStyle(fontSize: 11, color: Color(0xffa7a9b4)),
+            ),
+          ),
         _RichComposer(
           controller: widget.controller,
           focusNode: widget.composerFocus,
@@ -1188,6 +1343,14 @@ class _ConversationState extends State<_Conversation> {
         ),
       ],
     );
+  }
+
+  String _typingLabel(List<String> names) {
+    if (names.length == 1) return '${names.first} is typing…';
+    if (names.length == 2) {
+      return '${names.first} and ${names.last} are typing…';
+    }
+    return '${names.first}, ${names[1]} and ${names.length - 2} others are typing…';
   }
 }
 

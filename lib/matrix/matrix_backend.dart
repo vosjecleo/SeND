@@ -33,6 +33,8 @@ class MatrixBackend extends ChatBackend {
   String? _activeSpeakerUserId;
   List<AudioInputSummary> _audioInputs = const [];
   String? _selectedAudioInputId;
+  Timer? _typingStopTimer;
+  String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
   SessionStatus _status = SessionStatus.starting;
@@ -139,6 +141,71 @@ class MatrixBackend extends ChatBackend {
           a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
     return suggestions;
+  }
+
+  @override
+  List<String> get typingUserNames {
+    final room = _client?.getRoomById(_selectedRoomId ?? '');
+    if (room == null) return const [];
+    return room.typingUsers
+        .where((user) => user.id != _matrix.userID)
+        .map((user) => user.calcDisplayname())
+        .toList(growable: false);
+  }
+
+  @override
+  List<RoomMemberSummary> get selectedRoomMembers {
+    final room = _client?.getRoomById(_selectedRoomId ?? '');
+    if (room == null) return const [];
+    final members = room
+        .getParticipants()
+        .map((user) {
+          // The SDK's synchronous cache is required while building this getter;
+          // network refreshes arrive through sync and notify the UI separately.
+          // ignore: deprecated_member_use
+          final presence = _matrix.presences[user.id]?.presence;
+          return RoomMemberSummary(
+            userId: user.id,
+            displayName: user.calcDisplayname(),
+            avatarBytes:
+                _senderAvatarBytes['${room.id}|${user.id}'] ??
+                _senderAvatarBytes[user.id],
+            presence: switch (presence) {
+              PresenceType.online => UserPresence.online,
+              PresenceType.unavailable => UserPresence.away,
+              _ => UserPresence.offline,
+            },
+          );
+        })
+        .toList(growable: false);
+    members.sort((a, b) {
+      final presenceOrder = a.presence.index.compareTo(b.presence.index);
+      return presenceOrder != 0
+          ? presenceOrder
+          : a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
+    return members;
+  }
+
+  @override
+  List<ChatMessage> get pinnedMessages {
+    final room = _client?.getRoomById(_selectedRoomId ?? '');
+    if (room == null) return const [];
+    final pinned = room.pinnedEventIds.toSet();
+    return messages.where((message) => pinned.contains(message.id)).toList();
+  }
+
+  @override
+  List<ChatMessage> searchMessages(String query) {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return const [];
+    return messages
+        .where(
+          (message) =>
+              message.body.toLowerCase().contains(normalized) ||
+              message.sender.toLowerCase().contains(normalized),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -634,6 +701,27 @@ class MatrixBackend extends ChatBackend {
       _voiceMuted = false;
       _voiceConnectionStatus = VoiceConnectionStatus.disconnected;
       notifyListeners();
+    }
+  }
+
+  @override
+  Future<void> setComposerTyping(bool typing) async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null || room.isSpace) return;
+    _typingStopTimer?.cancel();
+    if (typing) {
+      if (_typingRoomId != room.id) {
+        final oldRoom = _matrix.getRoomById(_typingRoomId ?? '');
+        if (oldRoom != null) unawaited(oldRoom.setTyping(false));
+      }
+      _typingRoomId = room.id;
+      await room.setTyping(true, timeout: 5000);
+      _typingStopTimer = Timer(const Duration(seconds: 4), () {
+        unawaited(setComposerTyping(false));
+      });
+    } else {
+      if (_typingRoomId == room.id) await room.setTyping(false);
+      _typingRoomId = null;
     }
   }
 
@@ -1651,6 +1739,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _typingStopTimer?.cancel();
     unawaited(leaveVoiceRoom());
     _timeline?.cancelSubscriptions();
     _syncSubscription?.cancel();
