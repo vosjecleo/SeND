@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -1171,47 +1172,75 @@ class _MessageRow extends StatefulWidget {
 }
 
 class _MessageRowState extends State<_MessageRow> {
-  Timer? _hoverTimer;
+  Timer? _dismissActionsTimer;
   final _actionsOverlay = OverlayPortalController();
-  final _actionsAnchor = LayerLink();
   bool _hovered = false;
+  bool _actionsHovered = false;
   bool _actionsMenuOpen = false;
+  Offset _actionsPosition = Offset.zero;
 
   ChatMessage get message => widget.message;
 
   void _enter(PointerEnterEvent _) {
-    _hoverTimer?.cancel();
     setState(() => _hovered = true);
-    _hoverTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && _hovered) {
-        _actionsOverlay.show();
-      }
-    });
   }
 
   void _exit(PointerExitEvent _) {
-    _hoverTimer?.cancel();
     setState(() => _hovered = false);
-    _hoverTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && !_hovered && !_actionsMenuOpen) {
+  }
+
+  void _showActions(Offset globalPosition) {
+    _dismissActionsTimer?.cancel();
+    final viewport = MediaQuery.sizeOf(context);
+    setState(() {
+      _actionsHovered = false;
+      _actionsPosition = Offset(
+        globalPosition.dx.clamp(0, viewport.width - 96),
+        globalPosition.dy.clamp(0, viewport.height - 48),
+      );
+    });
+    _actionsOverlay.show();
+    _scheduleActionsDismissal();
+  }
+
+  void _actionsEnter(PointerEnterEvent _) {
+    _dismissActionsTimer?.cancel();
+    _actionsHovered = true;
+  }
+
+  void _actionsExit(PointerExitEvent _) {
+    _actionsHovered = false;
+    _scheduleActionsDismissal();
+  }
+
+  void _scheduleActionsDismissal() {
+    _dismissActionsTimer?.cancel();
+    if (_actionsMenuOpen) return;
+    _dismissActionsTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted && !_actionsHovered && !_actionsMenuOpen) {
         _actionsOverlay.hide();
       }
     });
   }
 
   void _actionsMenuOpened() {
-    _hoverTimer?.cancel();
+    _dismissActionsTimer?.cancel();
     _actionsMenuOpen = true;
   }
 
   void _actionsMenuClosed() {
     _actionsMenuOpen = false;
-    if (!_hovered) _actionsOverlay.hide();
+    if (!_actionsHovered) _scheduleActionsDismissal();
+  }
+
+  void _reply() {
+    _actionsOverlay.hide();
+    widget.onReply();
   }
 
   @override
   void dispose() {
-    _hoverTimer?.cancel();
+    _dismissActionsTimer?.cancel();
     super.dispose();
   }
 
@@ -1241,15 +1270,12 @@ class _MessageRowState extends State<_MessageRow> {
     }
     return OverlayPortal(
       controller: _actionsOverlay,
-      overlayChildBuilder: (context) => CompositedTransformFollower(
-        link: _actionsAnchor,
-        targetAnchor: Alignment.topRight,
-        followerAnchor: Alignment.topRight,
-        showWhenUnlinked: false,
-        child: Align(
-          alignment: Alignment.topRight,
-          widthFactor: 1,
-          heightFactor: 1,
+      overlayChildBuilder: (context) => Positioned(
+        left: _actionsPosition.dx,
+        top: _actionsPosition.dy,
+        child: MouseRegion(
+          onEnter: _actionsEnter,
+          onExit: _actionsExit,
           child: Material(
             type: MaterialType.transparency,
             child: DecoratedBox(
@@ -1259,7 +1285,7 @@ class _MessageRowState extends State<_MessageRow> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: _MessageActions(
-                onReply: widget.onReply,
+                onReply: _reply,
                 onEdit: widget.onEdit,
                 onDelete: widget.onDelete,
                 onReact: widget.onReact,
@@ -1272,8 +1298,13 @@ class _MessageRowState extends State<_MessageRow> {
           ),
         ),
       ),
-      child: CompositedTransformTarget(
-        link: _actionsAnchor,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          if (event.buttons == kSecondaryMouseButton) {
+            _showActions(event.position);
+          }
+        },
         child: MouseRegion(
           onEnter: _enter,
           onExit: _exit,

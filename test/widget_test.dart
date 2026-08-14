@@ -1,10 +1,10 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -175,6 +175,18 @@ void main() {
 
     await tester.tap(find.text('👍 2'));
     expect(backend.toggledReactions, [(r'$own', '👍')]);
+
+    final hoverOnly = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await hoverOnly.addPointer();
+    await hoverOnly.moveTo(tester.getCenter(find.text('Original').last));
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(find.byTooltip('Reply'), findsNothing);
+    await hoverOnly.removePointer();
+
+    await _revealMessageActions(tester, find.text('Original').last);
+    expect(find.byTooltip('Reply'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(find.byTooltip('Reply'), findsNothing);
 
     await _revealMessageActions(tester, find.text('Original').last);
     await tester.tap(find.byTooltip('Message actions'));
@@ -393,10 +405,18 @@ Future<void> _enterComposer(WidgetTester tester, String text) async {
 }
 
 Future<void> _revealMessageActions(WidgetTester tester, Finder message) async {
-  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  final mouse = await tester.createGesture(
+    buttons: kSecondaryButton,
+    kind: PointerDeviceKind.mouse,
+  );
   await mouse.addPointer();
-  await mouse.moveTo(tester.getCenter(message));
-  await tester.pump(const Duration(milliseconds: 1100));
+  final position = tester.getCenter(message);
+  await mouse.moveTo(position);
+  await mouse.down(position);
+  await mouse.up();
+  await tester.pump();
+  await mouse.moveTo(Offset.zero);
+  await tester.pump();
   await mouse.removePointer();
 }
 
