@@ -228,46 +228,29 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<void> _showGifPicker() async {
-    var key = await _giphy.readApiKey();
-    if (!mounted) return;
-    if (key == null || key.isEmpty) {
-      final keyController = TextEditingController();
-      key = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Connect Giphy'),
-          content: TextField(
-            controller: keyController,
-            autofocus: true,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Giphy API key',
-              helperText: 'Stored only in this device’s system keyring.',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: Navigator.of(context).pop,
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(keyController.text),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      keyController.dispose();
-      if (key == null || key.trim().isEmpty) return;
-      await _giphy.saveApiKey(key);
-    }
-    if (!mounted) return;
     final gif = await showDialog<GifSearchResult>(
       context: context,
       builder: (context) => GiphyDialog(service: _giphy),
     );
-    if (gif != null) {
-      await widget.backend.sendMessage(gif.shareUrl.toString());
+    if (gif == null || !mounted) {
+      _composerFocus.requestFocus();
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      final bytes = await _giphy.download(gif);
+      await widget.backend.sendAttachment(
+        AttachmentDraft(
+          bytes: bytes,
+          name: 'giphy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          mimeType: 'image/gif',
+          spoiler: false,
+        ),
+        replyToMessageId: _replyingTo?.id,
+      );
+      if (mounted) setState(() => _replyingTo = null);
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
     _composerFocus.requestFocus();
   }

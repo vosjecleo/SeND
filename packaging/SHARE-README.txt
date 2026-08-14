@@ -1,12 +1,12 @@
-Deltiecord v0.3.7 test bundle
+Deltiecord v0.3.8 test bundle
 ================================
 
 Linux AppImage:
-  chmod +x Deltiecord-0.3.7-x86_64.AppImage
-  ./Deltiecord-0.3.7-x86_64.AppImage
+  chmod +x Deltiecord-0.3.8-x86_64.AppImage
+  ./Deltiecord-0.3.8-x86_64.AppImage
 
 Debian/Ubuntu package:
-  sudo apt install ./deltiecord_0.3.7_amd64.deb
+  sudo apt install ./deltiecord_0.3.8_amd64.deb
 
 Verify files:
   sha256sum -c SHA256SUMS

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:typed_data';
 
 class GifSearchResult {
   const GifSearchResult({
@@ -16,28 +15,20 @@ class GifSearchResult {
 }
 
 /// Small client for GIPHY's public API (not adapted from a third-party picker).
-/// The API key lives in the OS keyring, never Matrix account data or the repo.
-/// See CREDITS.md for service attribution.
+/// The application key is injected into release binaries with a Dart define;
+/// it is intentionally absent from source control. See CREDITS.md.
 class GiphyService {
-  GiphyService({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+  GiphyService();
 
-  static const _keyName = 'deltiecord.giphy_api_key';
-  final FlutterSecureStorage _storage;
+  static const _apiKey = String.fromEnvironment('GIPHY_API_KEY');
   final HttpClient _http = HttpClient();
 
-  Future<String?> readApiKey() => _storage.read(key: _keyName);
-
-  Future<void> saveApiKey(String key) =>
-      _storage.write(key: _keyName, value: key.trim());
-
   Future<List<GifSearchResult>> search(String query) async {
-    final key = await readApiKey();
-    if (key == null || key.isEmpty) {
-      throw StateError('A Giphy API key is required.');
+    if (_apiKey.isEmpty) {
+      throw StateError('GIPHY is not configured in this build.');
     }
     final uri = Uri.https('api.giphy.com', '/v1/gifs/search', {
-      'api_key': key,
+      'api_key': _apiKey,
       'q': query,
       'limit': '24',
       'rating': 'pg-13',
@@ -66,6 +57,25 @@ class GiphyService {
         })
         .where((gif) => gif.previewUrl.hasScheme && gif.shareUrl.hasScheme)
         .toList();
+  }
+
+  Future<Uint8List> download(GifSearchResult gif) async {
+    final uri = gif.shareUrl;
+    if (uri.scheme != 'https' ||
+        !(uri.host == 'giphy.com' || uri.host.endsWith('.giphy.com'))) {
+      throw StateError('GIPHY returned an unexpected media URL.');
+    }
+    final request = await _http.getUrl(uri);
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok) {
+      await response.drain<void>();
+      throw HttpException('GIPHY media returned ${response.statusCode}.');
+    }
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response) {
+      bytes.add(chunk);
+    }
+    return bytes.takeBytes();
   }
 
   void dispose() => _http.close(force: true);

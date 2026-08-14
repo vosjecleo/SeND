@@ -1,16 +1,20 @@
 # Linux release packaging
 
-Run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from the repository root.
+Place the shared GIPHY application key in `.secrets/giphy-api-key` with mode
+`0600`, then run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from
+the repository root. Set `GIPHY_API_KEY_FILE` to use a different secret-file
+location. The key is compiled into release binaries but is never added to Git
+or copied into source archives.
 The script creates the Debian package, AppImage, checksums, and build metadata in
 `dist/`. Generated artifacts and downloaded packaging tools are intentionally
 ignored by Git.
 
-Install the Debian package with `sudo apt install ./dist/deltiecord_0.3.7_amd64.deb`.
+Install the Debian package with `sudo apt install ./dist/deltiecord_0.3.8_amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
 remains in the user's normal XDG application-data and Secret Service stores.
 
-Run the AppImage with `chmod +x dist/Deltiecord-0.3.7-x86_64.AppImage` followed by
-`./dist/Deltiecord-0.3.7-x86_64.AppImage`. A working desktop Secret Service is
+Run the AppImage with `chmod +x dist/Deltiecord-0.3.8-x86_64.AppImage` followed by
+`./dist/Deltiecord-0.3.8-x86_64.AppImage`. A working desktop Secret Service is
 required for persisted login and E2EE keys. Audio requires a reachable PulseAudio
 or PipeWire-Pulse service. The AppImage is assembled with linuxdeploy; build it on
 the oldest supported Linux distribution for the widest glibc compatibility.
