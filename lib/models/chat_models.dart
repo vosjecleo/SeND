@@ -114,6 +114,7 @@ class ChatMessage {
     this.formattedBody,
     this.reply,
     this.avatarBytes,
+    this.linkPreview,
   });
 
   final String id;
@@ -133,6 +134,25 @@ class ChatMessage {
   final String? formattedBody;
   final ReplyPreview? reply;
   final Uint8List? avatarBytes;
+  final LinkPreview? linkPreview;
+}
+
+class LinkPreview {
+  const LinkPreview({
+    required this.url,
+    this.title,
+    this.description,
+    this.siteName,
+    this.imageBytes,
+    this.videoUrl,
+  });
+
+  final Uri url;
+  final String? title;
+  final String? description;
+  final String? siteName;
+  final Uint8List? imageBytes;
+  final Uri? videoUrl;
 }
 
 enum AttachmentKind { image, video, audio, file }

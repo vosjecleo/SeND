@@ -49,6 +49,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, Uri?> _senderAvatarUris = {};
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
+  final Map<String, LinkPreview?> _linkPreviews = {};
   final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
   bool _roomMetadataRefreshRequested = false;
@@ -250,6 +251,7 @@ class MatrixBackend extends ChatBackend {
                 : null,
             reply: _replyPreviews[event.eventId],
             avatarBytes: _senderAvatarBytes[event.senderId],
+            linkPreview: _linkPreviews[event.eventId],
           );
         })
         .toList(growable: false);
@@ -449,6 +451,7 @@ class MatrixBackend extends ChatBackend {
       _senderAvatarUris.clear();
       _decryptedPreviews.clear();
       _replyPreviews.clear();
+      _linkPreviews.clear();
       _outboundSessionsReset.clear();
       _roomsMarkingRead.clear();
       _lastMarkedReadEventIds.clear();
@@ -1510,7 +1513,77 @@ class MatrixBackend extends ChatBackend {
   Future<void> _hydrateTimelineMetadata(Timeline timeline) async {
     await _hydrateSenderAvatars(timeline);
     await _hydrateReplies(timeline);
+    await _hydrateLinkPreviews(timeline);
     notifyListeners();
+  }
+
+  static final _webUrlPattern = RegExp(r'https?://[^\s<>]+');
+
+  Future<void> _hydrateLinkPreviews(Timeline timeline) async {
+    for (final event in timeline.events) {
+      if (_linkPreviews.containsKey(event.eventId) ||
+          event.type != EventTypes.Message ||
+          event.hasAttachment) {
+        continue;
+      }
+      final match = _webUrlPattern.firstMatch(
+        event.calcUnlocalizedBody(
+          hideReply: true,
+          hideEdit: true,
+          plaintextBody: true,
+        ),
+      );
+      final rawUrl = match?.group(0)?.replaceFirst(RegExp(r'[.,;:!?]+$'), '');
+      final url = rawUrl == null ? null : Uri.tryParse(rawUrl);
+      if (url == null) {
+        _linkPreviews[event.eventId] = null;
+        continue;
+      }
+      // The standard endpoint lets the homeserver apply its SSRF protections
+      // and cache metadata consistently with other Matrix clients.
+      try {
+        final preview = await _matrix.getUrlPreview(
+          url,
+          ts: event.originServerTs.millisecondsSinceEpoch,
+        );
+        final properties = preview.additionalProperties;
+        Uint8List? imageBytes;
+        final image = preview.ogImage;
+        if (image != null && image.isScheme('mxc')) {
+          final thumbnail = await _matrix.getContentThumbnail(
+            image.host,
+            image.pathSegments.join('/'),
+            640,
+            360,
+            method: Method.scale,
+            animated: true,
+          );
+          imageBytes = thumbnail.data;
+        }
+        Uri? propertyUri(String key) {
+          final value = properties[key];
+          return value is String ? Uri.tryParse(value) : null;
+        }
+
+        String? propertyString(String key) {
+          final value = properties[key];
+          return value is String && value.trim().isNotEmpty
+              ? value.trim()
+              : null;
+        }
+
+        _linkPreviews[event.eventId] = LinkPreview(
+          url: url,
+          title: propertyString('og:title'),
+          description: propertyString('og:description'),
+          siteName: propertyString('og:site_name'),
+          imageBytes: imageBytes,
+          videoUrl: propertyUri('og:video') ?? propertyUri('og:video:url'),
+        );
+      } catch (_) {
+        _linkPreviews[event.eventId] = null;
+      }
+    }
   }
 
   Future<void> _hydrateSenderAvatars(Timeline timeline) async {

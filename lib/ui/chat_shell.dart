@@ -1676,6 +1676,11 @@ class _MessageRowState extends State<_MessageRow> {
                                 attachment: attachment,
                               ),
                             ),
+                          if (message.linkPreview case final preview?)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: _LinkPreviewCard(preview: preview),
+                            ),
                           if (message.edited)
                             const Text(
                               '(edited)',
@@ -1838,6 +1843,131 @@ class _MessageActions extends StatelessWidget {
         ],
       ),
     ],
+  );
+}
+
+class _LinkPreviewCard extends StatelessWidget {
+  const _LinkPreviewCard({required this.preview});
+
+  final LinkPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = preview.videoUrl;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 430),
+      child: InkWell(
+        onTap: () => launchUrl(preview.url),
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xff292a30),
+            border: Border.all(color: const Color(0xff3b3d46)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (video != null)
+                _LinkVideoPlayer(uri: video)
+              else if (preview.imageBytes case final image?)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: Image.memory(image, fit: BoxFit.cover),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      preview.siteName ?? preview.url.host,
+                      style: const TextStyle(
+                        color: Color(0xffa7a9b4),
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (preview.title case final title?) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xffb8bfff),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (preview.description case final description?) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, height: 1.25),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LinkVideoPlayer extends StatefulWidget {
+  const _LinkVideoPlayer({required this.uri});
+
+  final Uri uri;
+
+  @override
+  State<_LinkVideoPlayer> createState() => _LinkVideoPlayerState();
+}
+
+class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
+  late final Player _player = Player();
+  late final VideoController _controller = VideoController(_player);
+  bool _opened = false;
+
+  Future<void> _toggle() async {
+    if (!_opened) {
+      await _player.open(Media(widget.uri.toString()), play: true);
+      _opened = true;
+    } else {
+      await _player.playOrPause();
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AspectRatio(
+    aspectRatio: 16 / 9,
+    child: ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Video(controller: _controller),
+          if (!_player.state.playing)
+            IconButton.filled(
+              tooltip: 'Play embedded video',
+              onPressed: _toggle,
+              icon: const Icon(Icons.play_arrow),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
