@@ -161,6 +161,8 @@ class LinkPreview {
     this.siteName,
     this.imageBytes,
     this.videoUrl,
+    this.width,
+    this.height,
   });
 
   final Uri url;
@@ -169,6 +171,8 @@ class LinkPreview {
   final String? siteName;
   final Uint8List? imageBytes;
   final Uri? videoUrl;
+  final int? width;
+  final int? height;
 }
 
 enum AttachmentKind { image, video, audio, file }

@@ -2407,8 +2407,20 @@ class _LinkPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final video = preview.videoUrl;
+    final screen = MediaQuery.sizeOf(context);
+    final maxWidth = screen.width * 0.5;
+    final maxHeight = screen.height * 0.5;
+    final sourceWidth = preview.width?.toDouble() ?? 16;
+    final sourceHeight = preview.height?.toDouble() ?? 9;
+    final aspectRatio = sourceWidth > 0 && sourceHeight > 0
+        ? sourceWidth / sourceHeight
+        : 16 / 9;
+    final mediaWidth = maxWidth / maxHeight > aspectRatio
+        ? maxHeight * aspectRatio
+        : maxWidth;
+    final mediaHeight = mediaWidth / aspectRatio;
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 430),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       child: InkWell(
         onTap: () => launchUrl(preview.url),
         borderRadius: BorderRadius.circular(4),
@@ -2423,11 +2435,21 @@ class _LinkPreviewCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (video != null)
-                _LinkVideoPlayer(uri: video)
+                SizedBox(
+                  width: mediaWidth,
+                  height: mediaHeight,
+                  child: _LinkVideoPlayer(
+                    uri: video,
+                    thumbnail: preview.imageBytes,
+                  ),
+                )
               else if (preview.imageBytes case final image?)
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: Image.memory(image, fit: BoxFit.cover),
+                  constraints: BoxConstraints(
+                    maxWidth: maxWidth,
+                    maxHeight: maxHeight,
+                  ),
+                  child: Image.memory(image, fit: BoxFit.contain),
                 ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
@@ -2474,9 +2496,10 @@ class _LinkPreviewCard extends StatelessWidget {
 }
 
 class _LinkVideoPlayer extends StatefulWidget {
-  const _LinkVideoPlayer({required this.uri});
+  const _LinkVideoPlayer({required this.uri, this.thumbnail});
 
   final Uri uri;
+  final Uint8List? thumbnail;
 
   @override
   State<_LinkVideoPlayer> createState() => _LinkVideoPlayerState();
@@ -2511,7 +2534,12 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Video(controller: _controller),
+          if (!_opened)
+            if (widget.thumbnail case final thumbnail?)
+              Positioned.fill(
+                child: Image.memory(thumbnail, fit: BoxFit.cover),
+              ),
+          if (_opened) Video(controller: _controller),
           if (!_player.state.playing)
             IconButton.filled(
               tooltip: 'Play embedded video',

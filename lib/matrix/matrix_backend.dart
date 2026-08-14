@@ -1696,6 +1696,11 @@ class MatrixBackend extends ChatBackend {
               : null;
         }
 
+        int? propertyInt(String key) {
+          final value = properties[key];
+          return value is int ? value : int.tryParse(value?.toString() ?? '');
+        }
+
         final result = LinkPreview(
           url: url,
           title: propertyString('og:title'),
@@ -1703,6 +1708,9 @@ class MatrixBackend extends ChatBackend {
           siteName: propertyString('og:site_name'),
           imageBytes: imageBytes,
           videoUrl: propertyUri('og:video') ?? propertyUri('og:video:url'),
+          width: propertyInt('og:video:width') ?? propertyInt('og:image:width'),
+          height:
+              propertyInt('og:video:height') ?? propertyInt('og:image:height'),
         );
         _linkPreviews[event.eventId] =
             result.title == null &&
@@ -1773,6 +1781,12 @@ class MatrixBackend extends ChatBackend {
             ? null
             : await _previewImageBytes(imageUrl),
         videoUrl: videoUrl,
+        width: int.tryParse(
+          meta('og:video:width') ?? meta('og:image:width') ?? '',
+        ),
+        height: int.tryParse(
+          meta('og:video:height') ?? meta('og:image:height') ?? '',
+        ),
       );
     } catch (_) {
       return null;
@@ -1819,6 +1833,8 @@ class MatrixBackend extends ChatBackend {
       videoUrl: mediaMap?['type'] == 'video' && mediaUrl?.hasScheme == true
           ? mediaUrl
           : null,
+      width: int.tryParse(mediaMap?['width']?.toString() ?? ''),
+      height: int.tryParse(mediaMap?['height']?.toString() ?? ''),
     );
   }
 
