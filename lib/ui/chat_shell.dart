@@ -1050,10 +1050,9 @@ class _RichComposerState extends State<_RichComposer> {
                       null,
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
+                  // Keep the compact 32 px composer while seating its text one
+                  // pixel lower alongside the attachment and send controls.
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
                   placeholder: 'Message #${widget.roomName}',
                   // ignore: experimental_member_use
                   onKeyPressed: (event, _) {
