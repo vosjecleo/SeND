@@ -501,6 +501,19 @@ class FakeBackend extends ChatBackend {
   @override
   String? get firstUnreadMessageId => null;
   @override
+  VoiceConnectionStatus get voiceConnectionStatus =>
+      VoiceConnectionStatus.disconnected;
+  @override
+  String? get activeVoiceRoomId => null;
+  @override
+  bool get voiceMuted => false;
+  @override
+  String? get voiceError => null;
+  @override
+  List<AudioInputSummary> get audioInputs => const [];
+  @override
+  String? get selectedAudioInputId => null;
+  @override
   String? get userId => '@deltie:example.org';
 
   @override
@@ -543,6 +556,16 @@ class FakeBackend extends ChatBackend {
   ) async {}
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
+  @override
+  Future<void> refreshAudioInputs() async {}
+  @override
+  Future<void> selectAudioInput(String? deviceId) async {}
+  @override
+  Future<void> joinVoiceRoom(String roomId) async {}
+  @override
+  Future<void> leaveVoiceRoom() async {}
+  @override
+  Future<void> setVoiceMuted(bool muted) async {}
 
   @override
   Future<void> loadMoreHistory() async {

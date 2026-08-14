@@ -4,11 +4,13 @@ import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
 import 'matrix_client_factory.dart';
+import 'deltiecord_webrtc_delegate.dart';
 import 'media_range_proxy.dart';
 
 class MatrixBackend extends ChatBackend {
@@ -21,6 +23,16 @@ class MatrixBackend extends ChatBackend {
   final ChatNotificationSink _notifications;
   Client? _client;
   Timeline? _timeline;
+  VoIP? _voip;
+  GroupCallSession? _activeVoiceCall;
+  StreamSubscription<MatrixRTCCallEvent>? _voiceCallSubscription;
+  VoiceConnectionStatus _voiceConnectionStatus =
+      VoiceConnectionStatus.disconnected;
+  bool _voiceMuted = false;
+  String? _voiceError;
+  String? _activeSpeakerUserId;
+  List<AudioInputSummary> _audioInputs = const [];
+  String? _selectedAudioInputId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
   SessionStatus _status = SessionStatus.starting;
@@ -85,6 +97,18 @@ class MatrixBackend extends ChatBackend {
   bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
   @override
   String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
+  @override
+  VoiceConnectionStatus get voiceConnectionStatus => _voiceConnectionStatus;
+  @override
+  String? get activeVoiceRoomId => _activeVoiceCall?.room.id;
+  @override
+  bool get voiceMuted => _voiceMuted;
+  @override
+  String? get voiceError => _voiceError;
+  @override
+  List<AudioInputSummary> get audioInputs => _audioInputs;
+  @override
+  String? get selectedAudioInputId => _selectedAudioInputId;
   @override
   List<MentionSuggestion> get mentionSuggestions {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
@@ -362,6 +386,7 @@ class MatrixBackend extends ChatBackend {
         notifyListeners();
       });
       await _matrix.init();
+      _initializeVoip();
       _loadSettings();
       await _notifications.initialize();
       _status = _matrix.isLogged()
@@ -397,6 +422,7 @@ class MatrixBackend extends ChatBackend {
         password: password,
         initialDeviceDisplayName: 'Deltiecord Desktop',
       );
+      _initializeVoip();
       _status = SessionStatus.signedIn;
       unawaited(_refreshMediaConfig());
       await refreshEncryptionSetup();
@@ -411,6 +437,7 @@ class MatrixBackend extends ChatBackend {
   Future<void> logout() async {
     _error = null;
     try {
+      await leaveVoiceRoom();
       await _closeTimeline();
       await _matrix.logout();
       _selectedRoomId = null;
@@ -440,6 +467,171 @@ class MatrixBackend extends ChatBackend {
       _error = _friendlyError(exception);
     }
     notifyListeners();
+  }
+
+  void _initializeVoip() {
+    if (!_matrix.isLogged() || _voip != null) return;
+    _voip = VoIP(
+      _matrix,
+      DeltiecordWebRtcDelegate(
+        isCallActive: () =>
+            _voiceConnectionStatus == VoiceConnectionStatus.connecting ||
+            _voiceConnectionStatus == VoiceConnectionStatus.connected,
+      ),
+    );
+    unawaited(refreshAudioInputs());
+  }
+
+  @override
+  Future<void> refreshAudioInputs() async {
+    try {
+      final devices = await flutter_webrtc.navigator.mediaDevices
+          .enumerateDevices();
+      _audioInputs = devices
+          .where((device) => device.kind == 'audioinput')
+          .map(
+            (device) => AudioInputSummary(
+              id: device.deviceId,
+              label: device.label.isEmpty ? 'Microphone' : device.label,
+            ),
+          )
+          .toList(growable: false);
+      if (_selectedAudioInputId != null &&
+          !_audioInputs.any((input) => input.id == _selectedAudioInputId)) {
+        _selectedAudioInputId = null;
+      }
+    } catch (_) {
+      _audioInputs = const [];
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> selectAudioInput(String? deviceId) async {
+    if (_selectedAudioInputId == deviceId) return;
+    final reconnectRoomId = activeVoiceRoomId;
+    _selectedAudioInputId = deviceId;
+    notifyListeners();
+    if (reconnectRoomId != null) {
+      await leaveVoiceRoom();
+      await joinVoiceRoom(reconnectRoomId);
+    }
+  }
+
+  @override
+  Future<void> joinVoiceRoom(String roomId) async {
+    if (activeVoiceRoomId == roomId &&
+        _voiceConnectionStatus == VoiceConnectionStatus.connected) {
+      return;
+    }
+    if (_activeVoiceCall != null) await leaveVoiceRoom();
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) return;
+    _initializeVoip();
+    final voip = _voip;
+    if (voip == null) return;
+    _voiceConnectionStatus = VoiceConnectionStatus.connecting;
+    _voiceError = null;
+    notifyListeners();
+    try {
+      final call = await voip.fetchOrCreateGroupCall(
+        room.id,
+        room,
+        MeshBackend(),
+        'm.call',
+        'm.room',
+      );
+      _activeVoiceCall = call;
+      await _voiceCallSubscription?.cancel();
+      _voiceCallSubscription = call.matrixRTCEventStream.stream.listen(
+        _handleVoiceCallEvent,
+      );
+      final audioConstraints = <String, dynamic>{
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
+        if (_selectedAudioInputId != null)
+          'deviceId': {'exact': _selectedAudioInputId},
+      };
+      final stream = await flutter_webrtc.navigator.mediaDevices.getUserMedia({
+        'audio': audioConstraints,
+        'video': false,
+      });
+      final wrappedStream = WrappedMediaStream(
+        stream: stream,
+        participant: call.localParticipant!,
+        room: room,
+        client: _matrix,
+        purpose: SDPStreamMetadataPurpose.Usermedia,
+        audioMuted: false,
+        videoMuted: true,
+        isGroupCall: true,
+        voip: voip,
+      );
+      await call.enter(stream: wrappedStream);
+      _voiceConnectionStatus = VoiceConnectionStatus.connected;
+    } catch (exception) {
+      _voiceConnectionStatus = VoiceConnectionStatus.error;
+      _voiceError = _friendlyError(exception);
+      _activeVoiceCall = null;
+    }
+    notifyListeners();
+  }
+
+  void _handleVoiceCallEvent(MatrixRTCCallEvent event) {
+    switch (event) {
+      case GroupCallStateChanged(:final state):
+        _voiceConnectionStatus = switch (state) {
+          GroupCallState.entered => VoiceConnectionStatus.connected,
+          GroupCallState.entering ||
+          GroupCallState.initializingLocalCallFeed ||
+          GroupCallState.localCallFeedInitialized =>
+            VoiceConnectionStatus.connecting,
+          GroupCallState.leaving => VoiceConnectionStatus.disconnecting,
+          GroupCallState.ended || GroupCallState.localCallFeedUninitialized =>
+            VoiceConnectionStatus.disconnected,
+        };
+      case GroupCallStateError(:final msg):
+        _voiceConnectionStatus = VoiceConnectionStatus.error;
+        _voiceError = msg;
+      case GroupCallLocalMutedChanged(:final muted, :final kind):
+        if (kind == MediaInputKind.audioinput) _voiceMuted = muted;
+      case GroupCallActiveSpeakerChanged(:final participant):
+        _activeSpeakerUserId = participant.userId;
+      case ParticipantsChangeEvent():
+        break;
+      default:
+        break;
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setVoiceMuted(bool muted) async {
+    final call = _activeVoiceCall;
+    if (call == null) return;
+    await call.backend.setDeviceMuted(call, muted, MediaInputKind.audioinput);
+    _voiceMuted = muted;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> leaveVoiceRoom() async {
+    final call = _activeVoiceCall;
+    if (call == null) return;
+    _voiceConnectionStatus = VoiceConnectionStatus.disconnecting;
+    notifyListeners();
+    try {
+      await call.leave();
+    } finally {
+      await _voiceCallSubscription?.cancel();
+      _voiceCallSubscription = null;
+      _activeVoiceCall = null;
+      _activeSpeakerUserId = null;
+      _voiceMuted = false;
+      _voiceConnectionStatus = VoiceConnectionStatus.disconnected;
+      notifyListeners();
+    }
   }
 
   Future<void> _notifyNewMessages() async {
@@ -1181,6 +1373,7 @@ class MatrixBackend extends ChatBackend {
         userId: userId,
         displayName: user.calcDisplayname(),
         avatarBytes: _senderAvatarBytes['${room.id}|$userId'],
+        speaking: userId == _activeSpeakerUserId,
       );
     }
     final result = participants.values.toList(growable: false);
@@ -1385,6 +1578,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    unawaited(leaveVoiceRoom());
     _timeline?.cancelSubscriptions();
     _syncSubscription?.cancel();
     _loginSubscription?.cancel();

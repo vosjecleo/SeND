@@ -42,6 +42,21 @@ class SpaceSummary {
 
 enum RoomPresentation { text, voice }
 
+enum VoiceConnectionStatus {
+  disconnected,
+  connecting,
+  connected,
+  disconnecting,
+  error,
+}
+
+class AudioInputSummary {
+  const AudioInputSummary({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
 class VoiceParticipantSummary {
   const VoiceParticipantSummary({
     required this.userId,

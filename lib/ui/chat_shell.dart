@@ -312,7 +312,10 @@ class _ChatShellState extends State<ChatShell> {
                   child: widget.backend.selectedRoom == null
                       ? const _EmptyConversation()
                       : widget.backend.selectedRoom!.isVoice
-                      ? _VoiceRoomView(room: widget.backend.selectedRoom!)
+                      ? _VoiceRoomView(
+                          backend: widget.backend,
+                          room: widget.backend.selectedRoom!,
+                        )
                       : _Conversation(
                           backend: widget.backend,
                           controller: _message,
@@ -678,10 +681,22 @@ class _RoomIcon extends StatelessWidget {
   }
 }
 
-class _VoiceRoomView extends StatelessWidget {
-  const _VoiceRoomView({required this.room});
+class _VoiceRoomView extends StatefulWidget {
+  const _VoiceRoomView({required this.backend, required this.room});
 
+  final ChatBackend backend;
   final RoomSummary room;
+
+  @override
+  State<_VoiceRoomView> createState() => _VoiceRoomViewState();
+}
+
+class _VoiceRoomViewState extends State<_VoiceRoomView> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.backend.refreshAudioInputs());
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -698,7 +713,7 @@ class _VoiceRoomView extends StatelessWidget {
             const Icon(Icons.volume_up_outlined, size: 20),
             const SizedBox(width: 9),
             Text(
-              room.name,
+              widget.room.name,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ],
@@ -715,9 +730,9 @@ class _VoiceRoomView extends StatelessWidget {
                 const Icon(Icons.headset_mic_outlined, size: 42),
                 const SizedBox(height: 12),
                 Text(
-                  room.voiceParticipants.isEmpty
+                  widget.room.voiceParticipants.isEmpty
                       ? 'Nobody is connected'
-                      : '${room.voiceParticipants.length} connected',
+                      : '${widget.room.voiceParticipants.length} connected',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 18,
@@ -725,7 +740,7 @@ class _VoiceRoomView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                for (final participant in room.voiceParticipants)
+                for (final participant in widget.room.voiceParticipants)
                   ListTile(
                     dense: true,
                     leading: CircleAvatar(
@@ -742,6 +757,42 @@ class _VoiceRoomView extends StatelessWidget {
                         ? const Icon(Icons.graphic_eq, color: Color(0xff76d49b))
                         : null,
                   ),
+                if (widget.backend.voiceError case final error?) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    error,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xffff9b9b)),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                if (widget.backend.audioInputs.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    initialValue: widget.backend.selectedAudioInputId ?? '',
+                    decoration: const InputDecoration(
+                      labelText: 'Microphone',
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('System default'),
+                      ),
+                      for (final input in widget.backend.audioInputs)
+                        DropdownMenuItem(
+                          value: input.id,
+                          child: Text(
+                            input.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (id) => widget.backend.selectAudioInput(
+                      id?.isEmpty == true ? null : id,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                _VoiceControls(backend: widget.backend, room: widget.room),
               ],
             ),
           ),
@@ -749,6 +800,54 @@ class _VoiceRoomView extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _VoiceControls extends StatelessWidget {
+  const _VoiceControls({required this.backend, required this.room});
+
+  final ChatBackend backend;
+  final RoomSummary room;
+
+  @override
+  Widget build(BuildContext context) {
+    final connectedHere = backend.activeVoiceRoomId == room.id;
+    final busy =
+        backend.voiceConnectionStatus == VoiceConnectionStatus.connecting ||
+        backend.voiceConnectionStatus == VoiceConnectionStatus.disconnecting;
+    if (!connectedHere) {
+      return FilledButton.icon(
+        onPressed: busy ? null : () => backend.joinVoiceRoom(room.id),
+        icon: busy
+            ? const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.headset),
+        label: const Text('Join voice'),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: busy
+                ? null
+                : () => backend.setVoiceMuted(!backend.voiceMuted),
+            icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
+            label: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: busy ? null : backend.leaveVoiceRoom,
+            icon: const Icon(Icons.call_end),
+            label: const Text('Disconnect'),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Conversation extends StatefulWidget {

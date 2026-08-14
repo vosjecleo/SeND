@@ -23,6 +23,12 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get historyLoading;
   bool get canLoadMoreHistory;
   String? get firstUnreadMessageId;
+  VoiceConnectionStatus get voiceConnectionStatus;
+  String? get activeVoiceRoomId;
+  bool get voiceMuted;
+  String? get voiceError;
+  List<AudioInputSummary> get audioInputs;
+  String? get selectedAudioInputId;
 
   Future<void> initialize();
   Future<void> login({
@@ -41,6 +47,11 @@ abstract class ChatBackend extends ChangeNotifier {
     String roomId,
     RoomPresentation presentation,
   );
+  Future<void> refreshAudioInputs();
+  Future<void> selectAudioInput(String? deviceId);
+  Future<void> joinVoiceRoom(String roomId);
+  Future<void> leaveVoiceRoom();
+  Future<void> setVoiceMuted(bool muted);
   Future<void> setSelectedRoomMuted(bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
   Future<void> loadMoreHistory();
