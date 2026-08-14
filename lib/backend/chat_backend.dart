@@ -50,6 +50,11 @@ abstract class ChatBackend extends ChangeNotifier {
     String roomId,
     RoomPresentation presentation,
   );
+  Future<void> createRoom({
+    required String name,
+    required RoomPresentation presentation,
+  });
+  Future<void> renameRoom(String roomId, String name);
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);
   Future<void> joinVoiceRoom(String roomId);

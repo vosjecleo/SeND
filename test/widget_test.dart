@@ -561,6 +561,13 @@ class FakeBackend extends ChatBackend {
     RoomPresentation presentation,
   ) async {}
   @override
+  Future<void> createRoom({
+    required String name,
+    required RoomPresentation presentation,
+  }) async {}
+  @override
+  Future<void> renameRoom(String roomId, String name) async {}
+  @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
   @override
   Future<void> refreshAudioInputs() async {}

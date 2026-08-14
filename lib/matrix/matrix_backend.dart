@@ -1008,6 +1008,46 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
+  Future<void> createRoom({
+    required String name,
+    required RoomPresentation presentation,
+  }) async {
+    _error = null;
+    try {
+      final roomId = await _matrix.createRoom(
+        name: name.trim(),
+        preset: CreateRoomPreset.privateChat,
+        visibility: Visibility.private,
+      );
+      await _matrix.waitForRoomInSync(roomId, join: true);
+      final room = _matrix.getRoomById(roomId);
+      if (room == null) {
+        throw StateError('The new room did not arrive in sync.');
+      }
+      if (_selectedSpaceId case final spaceId?) {
+        await _matrix.getRoomById(spaceId)?.setSpaceChild(roomId);
+      }
+      await setRoomPresentation(roomId, presentation);
+      await selectRoom(roomId);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+    }
+  }
+
+  @override
+  Future<void> renameRoom(String roomId, String name) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null || name.trim().isEmpty) return;
+    try {
+      await room.setName(name.trim());
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    }
+    notifyListeners();
+  }
+
+  @override
   Future<void> setSelectedRoomMuted(bool muted) async {
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (room == null) return;

@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../services/giphy_service.dart';
 import 'security_center.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
@@ -39,6 +40,7 @@ class _ChatShellState extends State<ChatShell> {
   int? _mentionStart;
   int _mentionSelectionIndex = 0;
   bool _wasTyping = false;
+  final GiphyService _giphy = GiphyService();
 
   @override
   void initState() {
@@ -194,6 +196,51 @@ class _ChatShellState extends State<ChatShell> {
     );
   }
 
+  Future<void> _showGifPicker() async {
+    var key = await _giphy.readApiKey();
+    if (!mounted) return;
+    if (key == null || key.isEmpty) {
+      final keyController = TextEditingController();
+      key = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Connect Giphy'),
+          content: TextField(
+            controller: keyController,
+            autofocus: true,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Giphy API key',
+              helperText: 'Stored only in this device’s system keyring.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: Navigator.of(context).pop,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(keyController.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      keyController.dispose();
+      if (key == null || key.trim().isEmpty) return;
+      await _giphy.saveApiKey(key);
+    }
+    if (!mounted) return;
+    final gif = await showDialog<GifSearchResult>(
+      context: context,
+      builder: (context) => _GiphyDialog(service: _giphy),
+    );
+    if (gif != null) {
+      await widget.backend.sendMessage(gif.shareUrl.toString());
+    }
+    _composerFocus.requestFocus();
+  }
+
   Future<void> _attachClipboardImage(Uint8List bytes) async {
     final mimeType = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
     final extension = switch (mimeType) {
@@ -294,6 +341,7 @@ class _ChatShellState extends State<ChatShell> {
     _message.removeListener(_updateMentionQuery);
     _message.dispose();
     _composerFocus.dispose();
+    _giphy.dispose();
     super.dispose();
   }
 
@@ -334,6 +382,7 @@ class _ChatShellState extends State<ChatShell> {
                           onEdit: _edit,
                           onCancelComposerAction: _cancelComposerAction,
                           onAttach: _attachFile,
+                          onGif: _showGifPicker,
                           mentionSuggestions: _mentionSuggestions,
                           mentionSelectionIndex: _mentionSelectionIndex,
                           onMentionSelected: _insertMention,
@@ -495,6 +544,66 @@ class _RoomPanel extends StatelessWidget {
 
   final ChatBackend backend;
 
+  Future<void> _createRoom(BuildContext context) async {
+    final name = TextEditingController();
+    var presentation = RoomPresentation.text;
+    final create = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            backend.selectedSpaceId == null
+                ? 'Create chat room'
+                : 'Create channel',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Room name'),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<RoomPresentation>(
+                segments: const [
+                  ButtonSegment(
+                    value: RoomPresentation.text,
+                    icon: Icon(Icons.tag),
+                    label: Text('Text'),
+                  ),
+                  ButtonSegment(
+                    value: RoomPresentation.voice,
+                    icon: Icon(Icons.volume_up_outlined),
+                    label: Text('Voice'),
+                  ),
+                ],
+                selected: {presentation},
+                onSelectionChanged: (selection) =>
+                    setDialogState(() => presentation = selection.first),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: Navigator.of(context).pop,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final roomName = name.text.trim();
+    name.dispose();
+    if (create == true && roomName.isNotEmpty) {
+      await backend.createRoom(name: roomName, presentation: presentation);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textRooms = backend.rooms.where((room) => !room.isVoice).toList();
@@ -510,17 +619,32 @@ class _RoomPanel extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Color(0xff35363d))),
             ),
-            child: Text(
-              backend.selectedSpaceId == null
-                  ? 'Home'
-                  : backend.spaces
-                            .where(
-                              (space) => space.id == backend.selectedSpaceId,
-                            )
-                            .map((space) => space.name)
-                            .firstOrNull ??
-                        'Space',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    backend.selectedSpaceId == null
+                        ? 'Home'
+                        : backend.spaces
+                                  .where(
+                                    (space) =>
+                                        space.id == backend.selectedSpaceId,
+                                  )
+                                  .map((space) => space.name)
+                                  .firstOrNull ??
+                              'Space',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Create room',
+                  onPressed: () => _createRoom(context),
+                  icon: const Icon(Icons.add, size: 20),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -601,6 +725,29 @@ class _RoomListTile extends StatelessWidget {
   final ChatBackend backend;
   final RoomSummary room;
 
+  Future<void> _rename(BuildContext context) async {
+    final controller = TextEditingController(text: room.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename room'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name != null) await backend.renameRoom(room.id, name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final participantCount = room.voiceParticipants.length;
@@ -622,21 +769,37 @@ class _RoomListTile extends StatelessWidget {
           ? room.unreadCount > 0
                 ? Badge(label: Text('${room.unreadCount}'))
                 : null
-          : PopupMenuButton<RoomPresentation>(
-              tooltip: 'Room presentation',
+          : PopupMenuButton<String>(
+              tooltip: 'Edit room',
               iconSize: 17,
-              onSelected: (presentation) =>
-                  backend.setRoomPresentation(room.id, presentation),
+              onSelected: (action) {
+                switch (action) {
+                  case 'rename':
+                    _rename(context);
+                  case 'text':
+                    backend.setRoomPresentation(room.id, RoomPresentation.text);
+                  case 'voice':
+                    backend.setRoomPresentation(
+                      room.id,
+                      RoomPresentation.voice,
+                    );
+                }
+              },
               itemBuilder: (context) => [
                 CheckedPopupMenuItem(
-                  value: RoomPresentation.text,
+                  value: 'text',
                   checked: !room.isVoice,
                   child: const Text('Text room'),
                 ),
                 CheckedPopupMenuItem(
-                  value: RoomPresentation.voice,
+                  value: 'voice',
                   checked: room.isVoice,
                   child: const Text('Voice room'),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'rename',
+                  child: Text('Rename room'),
                 ),
               ],
             ),
@@ -869,6 +1032,7 @@ class _Conversation extends StatefulWidget {
     required this.onEdit,
     required this.onCancelComposerAction,
     required this.onAttach,
+    required this.onGif,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
@@ -886,6 +1050,7 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<ChatMessage> onEdit;
   final VoidCallback onCancelComposerAction;
   final VoidCallback onAttach;
+  final VoidCallback onGif;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
@@ -1336,6 +1501,7 @@ class _ConversationState extends State<_Conversation> {
           enabled: !widget.sending,
           onSend: widget.onSend,
           onAttach: widget.onAttach,
+          onGif: widget.onGif,
           mentionSuggestions: widget.mentionSuggestions,
           mentionSelectionIndex: widget.mentionSelectionIndex,
           onMentionSelected: widget.onMentionSelected,
@@ -1362,6 +1528,7 @@ class _RichComposer extends StatefulWidget {
     required this.enabled,
     required this.onSend,
     required this.onAttach,
+    required this.onGif,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
@@ -1374,6 +1541,7 @@ class _RichComposer extends StatefulWidget {
   final bool enabled;
   final VoidCallback onSend;
   final VoidCallback onAttach;
+  final VoidCallback onGif;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
@@ -1421,6 +1589,117 @@ class _MentionPicker extends StatelessWidget {
             );
           },
         ),
+      ),
+    ),
+  );
+}
+
+class _GiphyDialog extends StatefulWidget {
+  const _GiphyDialog({required this.service});
+
+  final GiphyService service;
+
+  @override
+  State<_GiphyDialog> createState() => _GiphyDialogState();
+}
+
+class _GiphyDialogState extends State<_GiphyDialog> {
+  final _query = TextEditingController();
+  List<GifSearchResult> _results = const [];
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _search() async {
+    final query = _query.text.trim();
+    if (query.isEmpty || _loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.service.search(query);
+      if (mounted) setState(() => _results = results);
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Sticker / GIF'),
+    content: SizedBox(
+      width: 620,
+      height: 500,
+      child: Column(
+        children: [
+          TextField(
+            controller: _query,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _search(),
+            decoration: InputDecoration(
+              hintText: 'Search Giphy',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                onPressed: _loading ? null : _search,
+                icon: const Icon(Icons.arrow_forward),
+              ),
+            ),
+          ),
+          if (_error case final error?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                error,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: _loading && _results.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 6,
+                          mainAxisSpacing: 6,
+                        ),
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                      final gif = _results[index];
+                      return Tooltip(
+                        message: gif.title,
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).pop(gif),
+                          child: Image.network(
+                            gif.previewUrl.toString(),
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, _, _) =>
+                                const ColoredBox(color: Color(0xff292a30)),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Powered by GIPHY',
+              style: TextStyle(fontSize: 10, color: Color(0xff989aa5)),
+            ),
+          ),
+        ],
       ),
     ),
   );
@@ -1519,11 +1798,46 @@ class _RichComposerState extends State<_RichComposer> {
       children: [
         Transform.translate(
           offset: const Offset(0, -1),
-          child: IconButton(
-            tooltip: 'Add media or file',
-            visualDensity: VisualDensity.compact,
-            onPressed: widget.enabled ? widget.onAttach : null,
+          child: PopupMenuButton<String>(
+            tooltip: 'Add content',
+            enabled: widget.enabled,
             icon: const Icon(Icons.add_circle_outline, size: 25),
+            onSelected: (action) {
+              switch (action) {
+                case 'file':
+                  widget.onAttach();
+                case 'emoji':
+                  _showEmojiPicker();
+                case 'gif':
+                  widget.onGif();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'file',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.insert_drive_file_outlined),
+                  title: Text('Add file'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'emoji',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.emoji_emotions_outlined),
+                  title: Text('Emoji'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'gif',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.gif_box_outlined),
+                  title: Text('Sticker / GIF'),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -1605,15 +1919,6 @@ class _RichComposerState extends State<_RichComposer> {
                 ),
               ),
             ),
-          ),
-        ),
-        Transform.translate(
-          offset: const Offset(0, -1),
-          child: IconButton(
-            tooltip: 'Emoji',
-            visualDensity: VisualDensity.compact,
-            onPressed: widget.enabled ? _showEmojiPicker : null,
-            icon: const Icon(Icons.emoji_emotions_outlined, size: 23),
           ),
         ),
         Transform.translate(
