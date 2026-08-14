@@ -860,13 +860,23 @@ class MatrixBackend extends ChatBackend {
       await room.sendFileEvent(
         file,
         inReplyTo: replyEvent,
-        shrinkImageMaxDimension: file is MatrixImageFile ? 2000 : null,
-        extraContent: attachment.spoiler
+        // Re-encoding large images here is CPU-heavy and stalls Flutter's UI
+        // isolate. The SDK still generates a thumbnail, but uploads the
+        // original image without a redundant full-resolution shrink pass.
+        shrinkImageMaxDimension: null,
+        extraContent:
+            attachment.spoiler || attachment.caption?.trim().isNotEmpty == true
             ? {
+                if (attachment.caption?.trim().isNotEmpty == true) ...{
+                  'body': attachment.caption!.trim(),
+                  'filename': attachment.name,
+                },
                 // MSC4193's unstable key is used by existing clients. Keep the
                 // stable-looking key too so migration does not require a resend.
-                'page.codeberg.everypizza.msc4193.spoiler': true,
-                'm.spoiler': true,
+                if (attachment.spoiler) ...{
+                  'page.codeberg.everypizza.msc4193.spoiler': true,
+                  'm.spoiler': true,
+                },
               }
             : null,
       );

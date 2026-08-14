@@ -28,9 +28,10 @@ class ChatShell extends StatefulWidget {
 }
 
 class _ChatShellState extends State<ChatShell> {
-  final _message = QuillController.basic();
+  late final QuillController _message;
   final _composerFocus = FocusNode(debugLabel: 'message composer');
   bool _sending = false;
+  bool _uploadingAttachment = false;
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
   String? _mentionQuery;
@@ -40,6 +41,29 @@ class _ChatShellState extends State<ChatShell> {
   @override
   void initState() {
     super.initState();
+    _message = QuillController.basic(
+      config: QuillControllerConfig(
+        // Flutter Quill exposes native clipboard images through this API.
+        // ignore: experimental_member_use
+        clipboardConfig: QuillClipboardConfig(
+          onImagePaste: (bytes) async {
+            await _attachClipboardImage(bytes);
+            // Deltiecord sends pasted images as Matrix attachments instead of
+            // inserting a local-only image embed into the text document.
+            return null;
+          },
+          // ignore: experimental_member_use
+          onGifPaste: (bytes) async {
+            await _confirmAndSendAttachment(
+              bytes: bytes,
+              name: 'clipboard-${DateTime.now().millisecondsSinceEpoch}.gif',
+              mimeType: 'image/gif',
+            );
+            return null;
+          },
+        ),
+      ),
+    );
     _message.addListener(_updateMentionQuery);
   }
 
@@ -137,13 +161,44 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<void> _attachFile() async {
-    if (_sending) return;
-    final result = await FilePicker.pickFiles(withData: true);
+    if (_sending || _uploadingAttachment) return;
+    final result = await FilePicker.pickFiles(withData: false);
     if (!mounted || result == null || result.files.isEmpty) return;
     final picked = result.files.single;
     final bytes = picked.bytes ?? await result.xFiles.single.readAsBytes();
     if (!mounted) return;
+    await _confirmAndSendAttachment(
+      bytes: bytes,
+      name: picked.name,
+      mimeType:
+          lookupMimeType(picked.name, headerBytes: bytes) ??
+          'application/octet-stream',
+    );
+  }
+
+  Future<void> _attachClipboardImage(Uint8List bytes) async {
+    final mimeType = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
+    final extension = switch (mimeType) {
+      'image/gif' => 'gif',
+      'image/jpeg' => 'jpg',
+      'image/webp' => 'webp',
+      _ => 'png',
+    };
+    await _confirmAndSendAttachment(
+      bytes: bytes,
+      name: 'clipboard-${DateTime.now().millisecondsSinceEpoch}.$extension',
+      mimeType: mimeType,
+    );
+  }
+
+  Future<void> _confirmAndSendAttachment({
+    required Uint8List bytes,
+    required String name,
+    required String mimeType,
+  }) async {
+    if (_uploadingAttachment || !mounted) return;
     var spoiler = false;
+    final captionController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -153,8 +208,19 @@ class _ChatShellState extends State<ChatShell> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(picked.name, overflow: TextOverflow.ellipsis),
+              Text(name, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 10),
+              TextField(
+                controller: captionController,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Caption (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: spoiler,
@@ -178,23 +244,30 @@ class _ChatShellState extends State<ChatShell> {
         ),
       ),
     );
-    if (confirmed != true || !mounted) return;
-    setState(() => _sending = true);
+    final caption = captionController.text.trim();
+    captionController.dispose();
+    if (confirmed != true || !mounted) {
+      _composerFocus.requestFocus();
+      return;
+    }
+    setState(() => _uploadingAttachment = true);
     try {
       await widget.backend.sendAttachment(
         AttachmentDraft(
           bytes: bytes,
-          name: picked.name,
-          mimeType:
-              lookupMimeType(picked.name, headerBytes: bytes) ??
-              'application/octet-stream',
+          name: name,
+          mimeType: mimeType,
           spoiler: spoiler,
+          caption: caption.isEmpty ? null : caption,
         ),
         replyToMessageId: _replyingTo?.id,
       );
       if (mounted) setState(() => _replyingTo = null);
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _uploadingAttachment = false);
+        _composerFocus.requestFocus();
+      }
     }
   }
 
@@ -1487,6 +1560,46 @@ class _AttachmentViewState extends State<_AttachmentView> {
     }
   }
 
+  void _showImage() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FutureBuilder<Uint8List>(
+                future: widget.backend.downloadAttachment(widget.messageId),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Center(child: Text('Image unavailable'));
+                  }
+                  if (snapshot.data case final bytes?) {
+                    return InteractiveViewer(
+                      minScale: 0.25,
+                      maxScale: 8,
+                      child: Center(child: Image.memory(bytes)),
+                    );
+                  }
+                  return const Center(child: CircularProgressIndicator());
+                },
+              ),
+            ),
+            Positioned(
+              right: 12,
+              top: 12,
+              child: IconButton.filledTonal(
+                tooltip: 'Close image',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.attachment.spoiler && !_revealed) {
@@ -1571,7 +1684,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
               maxHeight: screen.height * 0.5,
             ),
             child: InkWell(
-              onTap: _open,
+              onTap: _showImage,
               child: Image.memory(
                 bytes,
                 fit: BoxFit.contain,
@@ -1754,6 +1867,16 @@ class _InlineVideoState extends State<_InlineVideo> {
     }
   }
 
+  void _showFullscreen() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => _FullscreenVideo(
+        backend: widget.backend,
+        messageId: widget.messageId,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _player.dispose();
@@ -1784,7 +1907,11 @@ class _InlineVideoState extends State<_InlineVideo> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Video(controller: _controller),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onDoubleTap: _showFullscreen,
+                child: Video(controller: _controller),
+              ),
               if (!_player.state.playing)
                 IconButton.filled(
                   tooltip: 'Stream video',
@@ -1836,6 +1963,72 @@ class _InlineVideoState extends State<_InlineVideo> {
       ),
     );
   }
+}
+
+class _FullscreenVideo extends StatefulWidget {
+  const _FullscreenVideo({required this.backend, required this.messageId});
+
+  final ChatBackend backend;
+  final String messageId;
+
+  @override
+  State<_FullscreenVideo> createState() => _FullscreenVideoState();
+}
+
+class _FullscreenVideoState extends State<_FullscreenVideo> {
+  late final Player _player = Player();
+  late final VideoController _controller = VideoController(_player);
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_open());
+  }
+
+  Future<void> _open() async {
+    try {
+      final source = await widget.backend.getMediaPlaybackSource(
+        widget.messageId,
+      );
+      if (source == null) throw StateError('Video playback is unavailable.');
+      await _player.open(
+        Media(source.uri.toString(), httpHeaders: source.headers),
+        play: true,
+      );
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    backgroundColor: Colors.black,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: _error == null
+              ? Video(controller: _controller, fit: BoxFit.contain)
+              : Center(child: Text(_error!)),
+        ),
+        Positioned(
+          right: 12,
+          top: 12,
+          child: IconButton.filledTonal(
+            tooltip: 'Close video',
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _InlineAudio extends StatefulWidget {

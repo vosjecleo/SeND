@@ -134,12 +134,14 @@ class AttachmentDraft {
     required this.name,
     required this.mimeType,
     required this.spoiler,
+    this.caption,
   });
 
   final Uint8List bytes;
   final String name;
   final String mimeType;
   final bool spoiler;
+  final String? caption;
 }
 
 class MediaPlaybackSource {
