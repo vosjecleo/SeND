@@ -1,6 +1,8 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixLinkPreviews on MatrixBackend {
+  // Matrix URL previews are preferred. FxTwitter's public API is only a
+  // provider fallback for X links; no FxTwitter source is included or copied.
   Future<void> _hydrateLinkPreviews(Timeline timeline) async {
     for (final event in timeline.events) {
       if (_linkPreviews.containsKey(event.eventId) ||

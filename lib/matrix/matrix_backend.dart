@@ -26,6 +26,9 @@ part 'matrix_media.dart';
 
 final _webUrlPattern = RegExp(r'https?://[^\s<>]+');
 
+/// Matrix integration built on matrix-dart-sdk. Element and FluffyChat were
+/// consulted as behavioral references; no source from either client is copied.
+/// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
   static const _settingsAccountDataType = 'net.deltiecord.settings';
   static const _roomPresentationEventType = 'net.deltiecord.room.presentation';

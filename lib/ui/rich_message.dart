@@ -6,6 +6,8 @@ import 'package:vsc_quill_delta_to_html/vsc_quill_delta_to_html.dart';
 
 const spoilerEditorColor = '#010101';
 
+// Serialization composes flutter_quill, vsc_quill_delta_to_html, and the Dart
+// markdown package. No editor implementation is vendored; see CREDITS.md.
 ({String plainText, String? html}) serializeRichMessage(Document document) {
   final plainText = document.toPlainText().trimRight();
   final operations = document

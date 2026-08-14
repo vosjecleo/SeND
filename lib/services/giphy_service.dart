@@ -15,8 +15,9 @@ class GifSearchResult {
   final Uri shareUrl;
 }
 
-/// Small Giphy API client. The API key lives in the OS keyring, never Matrix
-/// account data or the repository.
+/// Small client for GIPHY's public API (not adapted from a third-party picker).
+/// The API key lives in the OS keyring, never Matrix account data or the repo.
+/// See CREDITS.md for service attribution.
 class GiphyService {
   GiphyService({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();

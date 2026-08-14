@@ -1,5 +1,7 @@
 part of 'chat_shell.dart';
 
+// Inline playback is implemented with media_kit rather than adapted player
+// source. Attribution and upstream license details are in CREDITS.md.
 class _LinkPreviewCard extends StatelessWidget {
   const _LinkPreviewCard({required this.preview});
 

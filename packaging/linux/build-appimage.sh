@@ -11,6 +11,8 @@ linuxdeploy="$tools_dir/linuxdeploy-x86_64.AppImage"
 plugin="$tools_dir/linuxdeploy-plugin-appimage-x86_64.AppImage"
 mkdir -p "$tools_dir" "$repo_root/dist"
 
+# Release assembly uses the upstream linuxdeploy/AppImage tools verbatim.
+# Project and license attribution is recorded in ../../CREDITS.md.
 download() { test -x "$1" || { curl -fL --retry 3 "$2" -o "$1"; chmod +x "$1"; }; }
 download "$linuxdeploy" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
 download "$plugin" "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"

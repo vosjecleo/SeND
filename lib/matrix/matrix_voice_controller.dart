@@ -8,7 +8,8 @@ import '../models/chat_models.dart';
 import 'deltiecord_webrtc_delegate.dart';
 
 /// Owns MatrixRTC/WebRTC resources independently from session and timeline
-/// state. Exactly one room call may be active for a client at a time.
+/// state. This uses matrix-dart-sdk's MatrixRTC model and flutter-webrtc's
+/// native bindings; see CREDITS.md. Exactly one call may be active at a time.
 class MatrixVoiceController extends ChangeNotifier {
   MatrixVoiceController(this._client, {required this.friendlyError});
 
