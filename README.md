@@ -101,11 +101,11 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
   spoilers, while preserving a plain-text fallback.
 - [x] Send and render interoperable `org.matrix.custom.html` with a plaintext
   fallback, including revealable standard `data-mx-spoiler` content.
-- Matrix-native user and room mentions with autocomplete, keyboard navigation,
+- [x] Matrix-native user and room mentions with autocomplete, keyboard navigation,
   pills/highlighting, and correct notification semantics.
 - [x] Autocomplete room members to full Matrix user IDs and emit `m.mentions`
   notification metadata, including reply and `@room` semantics.
-- Send, receive, preview, download, save, and open images, video, audio, and
+- [x] Send, receive, preview, download, save, and open images, video, audio, and
   general files. Images and videos may be marked as spoilers before sending.
 - [x] Stream unencrypted and encrypted video in-chat using authenticated HTTP
   ranges; encrypted AES-CTR media is decrypted per range through a loopback-only
@@ -116,11 +116,11 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Edit and delete/redact the user's own messages, with unobtrusive edited and
   deleted indicators.
 - [x] Add, remove, and summarize emoji reactions.
-- Maintain accurate unread counts, highlights, read markers, receipts, and a
+- [x] Maintain accurate unread counts, highlights, read markers, receipts, and a
   jump-to-first-unread affordance.
 - [x] Queue sending state visibly and distinguish pending, sent, failed, and retrying
   events without duplicating messages.
-- Provide basic desktop notifications with per-room muting and no sensitive
+- [x] Provide basic desktop notifications with per-room muting and no sensitive
   plaintext leakage when notification previews are disabled.
 - [x] Handle common timeline events gracefully instead of displaying raw or
   “unknown event” placeholders.

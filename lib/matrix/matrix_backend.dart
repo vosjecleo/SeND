@@ -7,10 +7,15 @@ import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../services/chat_notifications.dart';
 import 'matrix_client_factory.dart';
 import 'media_range_proxy.dart';
 
 class MatrixBackend extends ChatBackend {
+  MatrixBackend({ChatNotificationSink? notifications})
+    : _notifications = notifications ?? const SilentChatNotificationSink();
+
+  final ChatNotificationSink _notifications;
   Client? _client;
   Timeline? _timeline;
   StreamSubscription<Object?>? _syncSubscription;
@@ -35,6 +40,8 @@ class MatrixBackend extends ChatBackend {
   final Set<String> _roomsMarkingRead = {};
   final Map<String, String> _lastMarkedReadEventIds = {};
   final Map<String, String?> _firstUnreadEventIds = {};
+  final Map<String, String> _lastNotificationEventIds = {};
+  bool _notificationsPrimed = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -137,6 +144,11 @@ class MatrixBackend extends ChatBackend {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
     return room == null ? null : _roomSummary(room);
   }
+
+  @override
+  bool get selectedRoomMuted =>
+      _client?.getRoomById(_selectedRoomId ?? '')?.pushRuleState ==
+      PushRuleState.dontNotify;
 
   @override
   List<ChatMessage> get messages {
@@ -260,6 +272,7 @@ class MatrixBackend extends ChatBackend {
       _syncSubscription = _matrix.onSync.stream.listen((_) {
         notifyListeners();
         unawaited(_refreshRoomMetadata());
+        unawaited(_notifyNewMessages());
       });
       _loginSubscription = _matrix.onLoginStateChanged.stream.listen((_) {
         _status = _matrix.isLogged()
@@ -268,6 +281,7 @@ class MatrixBackend extends ChatBackend {
         notifyListeners();
       });
       await _matrix.init();
+      await _notifications.initialize();
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;
@@ -328,6 +342,8 @@ class MatrixBackend extends ChatBackend {
       _roomsMarkingRead.clear();
       _lastMarkedReadEventIds.clear();
       _firstUnreadEventIds.clear();
+      _lastNotificationEventIds.clear();
+      _notificationsPrimed = false;
       _mediaPlaybackSources.clear();
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
@@ -338,6 +354,41 @@ class MatrixBackend extends ChatBackend {
       _error = _friendlyError(exception);
     }
     notifyListeners();
+  }
+
+  Future<void> _notifyNewMessages() async {
+    if (!_matrix.isLogged()) return;
+    final rooms = _joinedRooms.where((room) => !room.isSpace);
+    if (!_notificationsPrimed) {
+      for (final room in rooms) {
+        final eventId = room.lastEvent?.eventId;
+        if (eventId != null) _lastNotificationEventIds[room.id] = eventId;
+      }
+      _notificationsPrimed = true;
+      return;
+    }
+    for (final room in rooms) {
+      final event = room.lastEvent;
+      if (event == null ||
+          _lastNotificationEventIds[room.id] == event.eventId) {
+        continue;
+      }
+      _lastNotificationEventIds[room.id] = event.eventId;
+      if (room.id == _selectedRoomId ||
+          event.senderId == _matrix.userID ||
+          room.pushRuleState == PushRuleState.dontNotify ||
+          (room.pushRuleState == PushRuleState.mentionsOnly &&
+              room.highlightCount == 0)) {
+        continue;
+      }
+      final sender = event.senderFromMemoryOrFallback.calcDisplayname();
+      await _notifications.show(
+        title: '$sender in ${room.getLocalizedDisplayname()}',
+        // Message previews remain private until the settings pass can expose
+        // an explicit opt-in preference.
+        body: event.hasAttachment ? 'Sent an attachment' : 'New message',
+      );
+    }
   }
 
   @override
@@ -511,6 +562,21 @@ class MatrixBackend extends ChatBackend {
         _timelineLoading = false;
         notifyListeners();
       }
+    }
+  }
+
+  @override
+  Future<void> setSelectedRoomMuted(bool muted) async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null) return;
+    try {
+      await room.setPushRuleState(
+        muted ? PushRuleState.dontNotify : PushRuleState.notify,
+      );
+      notifyListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
     }
   }
 

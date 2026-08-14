@@ -380,6 +380,8 @@ class FakeBackend extends ChatBackend {
   @override
   RoomSummary? get selectedRoom => currentRoom;
   @override
+  bool get selectedRoomMuted => false;
+  @override
   SessionStatus get status => currentStatus;
   @override
   bool get timelineLoading => false;
@@ -422,6 +424,9 @@ class FakeBackend extends ChatBackend {
     currentRoom = roomList.firstWhere((room) => room.id == roomId);
     notifyListeners();
   }
+
+  @override
+  Future<void> setSelectedRoomMuted(bool muted) async {}
 
   @override
   Future<void> loadMoreHistory() async {

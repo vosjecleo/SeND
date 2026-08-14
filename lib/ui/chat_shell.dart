@@ -7,6 +7,9 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:mime/mime.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
@@ -31,6 +34,7 @@ class _ChatShellState extends State<ChatShell> {
   ChatMessage? _editingMessage;
   String? _mentionQuery;
   int? _mentionStart;
+  int _mentionSelectionIndex = 0;
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _ChatShellState extends State<ChatShell> {
     setState(() {
       _mentionQuery = query;
       _mentionStart = start;
+      _mentionSelectionIndex = 0;
     });
   }
 
@@ -61,6 +66,11 @@ class _ChatShellState extends State<ChatShell> {
       end - start,
       '$userId ',
       TextSelection.collapsed(offset: start + userId.length + 1),
+    );
+    _message.formatText(
+      start,
+      userId.length,
+      LinkAttribute('https://matrix.to/#/$userId'),
     );
     setState(() {
       _mentionQuery = null;
@@ -228,7 +238,10 @@ class _ChatShellState extends State<ChatShell> {
                           onCancelComposerAction: _cancelComposerAction,
                           onAttach: _attachFile,
                           mentionSuggestions: _mentionSuggestions,
+                          mentionSelectionIndex: _mentionSelectionIndex,
                           onMentionSelected: _insertMention,
+                          onMentionSelectionChanged: (index) =>
+                              setState(() => _mentionSelectionIndex = index),
                         ),
                 ),
               ],
@@ -525,7 +538,9 @@ class _Conversation extends StatefulWidget {
     required this.onCancelComposerAction,
     required this.onAttach,
     required this.mentionSuggestions,
+    required this.mentionSelectionIndex,
     required this.onMentionSelected,
+    required this.onMentionSelectionChanged,
   });
 
   final ChatBackend backend;
@@ -540,7 +555,9 @@ class _Conversation extends StatefulWidget {
   final VoidCallback onCancelComposerAction;
   final VoidCallback onAttach;
   final List<MentionSuggestion> mentionSuggestions;
+  final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
+  final ValueChanged<int> onMentionSelectionChanged;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -548,6 +565,7 @@ class _Conversation extends StatefulWidget {
 
 class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
+  final Map<String, GlobalKey> _messageKeys = {};
   String? _roomId;
 
   @override
@@ -569,6 +587,30 @@ class _ConversationState extends State<_Conversation> {
         _scrollController.position.maxScrollExtent - 240) {
       widget.backend.loadMoreHistory();
     }
+  }
+
+  void _jumpToFirstUnread() {
+    final eventId = widget.backend.firstUnreadMessageId;
+    if (eventId == null || !_scrollController.hasClients) return;
+    final index = widget.backend.messages.indexWhere(
+      (message) => message.id == eventId,
+    );
+    if (index < 0) return;
+    final estimated = (index * 64.0).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
+    _scrollController.jumpTo(estimated);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _messageKeys[eventId]?.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 180),
+          alignment: 0.5,
+        );
+      }
+    });
   }
 
   @override
@@ -657,6 +699,25 @@ class _ConversationState extends State<_Conversation> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
+              if (backend.firstUnreadMessageId != null)
+                IconButton(
+                  tooltip: 'Jump to first unread',
+                  onPressed: _jumpToFirstUnread,
+                  icon: const Icon(Icons.mark_chat_unread_outlined, size: 19),
+                ),
+              IconButton(
+                tooltip: backend.selectedRoomMuted
+                    ? 'Unmute room notifications'
+                    : 'Mute room notifications',
+                onPressed: () =>
+                    backend.setSelectedRoomMuted(!backend.selectedRoomMuted),
+                icon: Icon(
+                  backend.selectedRoomMuted
+                      ? Icons.notifications_off_outlined
+                      : Icons.notifications_none,
+                  size: 19,
+                ),
+              ),
             ],
           ),
         ),
@@ -715,6 +776,7 @@ class _ConversationState extends State<_Conversation> {
                             const Duration(minutes: 7) ||
                         message.reply != null;
                     return Column(
+                      key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
                       children: [
                         if (message.id == backend.firstUnreadMessageId)
                           const _UnreadDivider(),
@@ -762,6 +824,7 @@ class _ConversationState extends State<_Conversation> {
         if (widget.mentionSuggestions.isNotEmpty)
           _MentionPicker(
             suggestions: widget.mentionSuggestions,
+            selectedIndex: widget.mentionSelectionIndex,
             onSelected: widget.onMentionSelected,
           ),
         _RichComposer(
@@ -771,6 +834,10 @@ class _ConversationState extends State<_Conversation> {
           enabled: !widget.sending,
           onSend: widget.onSend,
           onAttach: widget.onAttach,
+          mentionSuggestions: widget.mentionSuggestions,
+          mentionSelectionIndex: widget.mentionSelectionIndex,
+          onMentionSelected: widget.onMentionSelected,
+          onMentionSelectionChanged: widget.onMentionSelectionChanged,
         ),
       ],
     );
@@ -785,6 +852,10 @@ class _RichComposer extends StatefulWidget {
     required this.enabled,
     required this.onSend,
     required this.onAttach,
+    required this.mentionSuggestions,
+    required this.mentionSelectionIndex,
+    required this.onMentionSelected,
+    required this.onMentionSelectionChanged,
   });
 
   final QuillController controller;
@@ -793,15 +864,24 @@ class _RichComposer extends StatefulWidget {
   final bool enabled;
   final VoidCallback onSend;
   final VoidCallback onAttach;
+  final List<MentionSuggestion> mentionSuggestions;
+  final int mentionSelectionIndex;
+  final ValueChanged<String> onMentionSelected;
+  final ValueChanged<int> onMentionSelectionChanged;
 
   @override
   State<_RichComposer> createState() => _RichComposerState();
 }
 
 class _MentionPicker extends StatelessWidget {
-  const _MentionPicker({required this.suggestions, required this.onSelected});
+  const _MentionPicker({
+    required this.suggestions,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final List<MentionSuggestion> suggestions;
+  final int selectedIndex;
   final ValueChanged<String> onSelected;
 
   @override
@@ -823,6 +903,8 @@ class _MentionPicker extends StatelessWidget {
             final suggestion = suggestions[index];
             return ListTile(
               dense: true,
+              selected: index == selectedIndex,
+              selectedTileColor: const Color(0xff34374b),
               title: Text(suggestion.displayName),
               subtitle: Text(suggestion.userId),
               onTap: () => onSelected(suggestion.userId),
@@ -986,6 +1068,32 @@ class _RichComposerState extends State<_RichComposer> {
             placeholder: 'Message #${widget.roomName}',
             // ignore: experimental_member_use
             onKeyPressed: (event, _) {
+              if (event is KeyDownEvent &&
+                  widget.mentionSuggestions.isNotEmpty) {
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  widget.onMentionSelectionChanged(
+                    (widget.mentionSelectionIndex + 1) %
+                        widget.mentionSuggestions.length,
+                  );
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                  widget.onMentionSelectionChanged(
+                    (widget.mentionSelectionIndex - 1) %
+                        widget.mentionSuggestions.length,
+                  );
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.enter &&
+                    !HardwareKeyboard.instance.isShiftPressed) {
+                  widget.onMentionSelected(
+                    widget
+                        .mentionSuggestions[widget.mentionSelectionIndex]
+                        .userId,
+                  );
+                  return KeyEventResult.handled;
+                }
+              }
               if (event is KeyDownEvent &&
                   event.logicalKey == LogicalKeyboardKey.enter &&
                   !HardwareKeyboard.instance.isShiftPressed) {
@@ -1362,6 +1470,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
   Future<Uint8List>? _imageBytes;
   bool _revealed = false;
   bool _saving = false;
+  bool _opening = false;
 
   Future<void> _save() async {
     if (_saving) return;
@@ -1376,6 +1485,34 @@ class _AttachmentViewState extends State<_AttachmentView> {
       await File(path).writeAsBytes(bytes, flush: true);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _open() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    try {
+      final bytes = await widget.backend.downloadAttachment(widget.messageId);
+      final directory = await getTemporaryDirectory();
+      final name = path.basename(widget.attachment.name);
+      final file = File(
+        path.join(
+          directory.path,
+          '${widget.messageId.hashCode}_${name.isEmpty ? 'attachment' : name}',
+        ),
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      if (!await launchUrl(Uri.file(file.path))) {
+        throw StateError('No application is available to open this file.');
+      }
+    } catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open attachment: $exception')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
     }
   }
 
@@ -1412,12 +1549,14 @@ class _AttachmentViewState extends State<_AttachmentView> {
         messageId: widget.messageId,
         attachment: widget.attachment,
         onSave: _save,
+        onOpen: _open,
       ),
       AttachmentKind.audio => _InlineAudio(
         backend: widget.backend,
         messageId: widget.messageId,
         attachment: widget.attachment,
         onSave: _save,
+        onOpen: _open,
       ),
       AttachmentKind.file => _buildFile(),
     };
@@ -1436,6 +1575,8 @@ class _AttachmentViewState extends State<_AttachmentView> {
             attachment: widget.attachment,
             saving: _saving,
             onSave: _save,
+            opening: _opening,
+            onOpen: _open,
             error: 'Preview unavailable',
           );
         }
@@ -1458,8 +1599,13 @@ class _AttachmentViewState extends State<_AttachmentView> {
     );
   }
 
-  Widget _buildFile() =>
-      _FileTile(attachment: widget.attachment, saving: _saving, onSave: _save);
+  Widget _buildFile() => _FileTile(
+    attachment: widget.attachment,
+    saving: _saving,
+    onSave: _save,
+    opening: _opening,
+    onOpen: _open,
+  );
 }
 
 class _FileTile extends StatelessWidget {
@@ -1467,12 +1613,16 @@ class _FileTile extends StatelessWidget {
     required this.attachment,
     required this.saving,
     required this.onSave,
+    required this.opening,
+    required this.onOpen,
     this.error,
   });
 
   final ChatAttachment attachment;
   final bool saving;
   final VoidCallback onSave;
+  final bool opening;
+  final VoidCallback onOpen;
   final String? error;
 
   @override
@@ -1505,6 +1655,16 @@ class _FileTile extends StatelessWidget {
           ),
         ),
         IconButton(
+          tooltip: 'Open attachment',
+          onPressed: opening ? null : onOpen,
+          icon: opening
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.open_in_new, size: 18),
+        ),
+        IconButton(
           tooltip: 'Save attachment',
           onPressed: saving ? null : onSave,
           icon: saving
@@ -1534,12 +1694,14 @@ class _InlineVideo extends StatefulWidget {
     required this.messageId,
     required this.attachment,
     required this.onSave,
+    required this.onOpen,
   });
 
   final ChatBackend backend;
   final String messageId;
   final ChatAttachment attachment;
   final VoidCallback onSave;
+  final VoidCallback onOpen;
 
   @override
   State<_InlineVideo> createState() => _InlineVideoState();
@@ -1603,6 +1765,15 @@ class _InlineVideoState extends State<_InlineVideo> {
                   : const Icon(Icons.play_arrow),
             ),
           Positioned(
+            right: 44,
+            top: 4,
+            child: IconButton.filledTonal(
+              tooltip: 'Open video externally',
+              onPressed: widget.onOpen,
+              icon: const Icon(Icons.open_in_new, size: 18),
+            ),
+          ),
+          Positioned(
             right: 4,
             top: 4,
             child: IconButton.filledTonal(
@@ -1636,12 +1807,14 @@ class _InlineAudio extends StatefulWidget {
     required this.messageId,
     required this.attachment,
     required this.onSave,
+    required this.onOpen,
   });
 
   final ChatBackend backend;
   final String messageId;
   final ChatAttachment attachment;
   final VoidCallback onSave;
+  final VoidCallback onOpen;
 
   @override
   State<_InlineAudio> createState() => _InlineAudioState();
@@ -1724,6 +1897,11 @@ class _InlineAudioState extends State<_InlineAudio> {
                   ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Open audio externally',
+            onPressed: widget.onOpen,
+            icon: const Icon(Icons.open_in_new, size: 18),
           ),
           IconButton(
             tooltip: 'Save audio',

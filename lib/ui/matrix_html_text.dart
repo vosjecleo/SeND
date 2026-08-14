@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:url_launcher/url_launcher.dart';
 
 /// Compact renderer for Matrix's sanitized `org.matrix.custom.html` subset.
 /// Unsupported elements degrade to their text children instead of creating
@@ -19,11 +20,15 @@ class MatrixHtmlText extends StatefulWidget {
 class _MatrixHtmlTextState extends State<MatrixHtmlText> {
   late final TapGestureRecognizer _spoilerTap = TapGestureRecognizer()
     ..onTap = () => setState(() => _spoilersRevealed = true);
+  final List<TapGestureRecognizer> _linkRecognizers = [];
   bool _spoilersRevealed = false;
 
   @override
   void dispose() {
     _spoilerTap.dispose();
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
     super.dispose();
   }
 
@@ -84,6 +89,33 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     }
 
     final children = _nodes(node.nodes, childStyle);
+    if (tag == 'a') {
+      final href = node.attributes['href'];
+      final isMention =
+          href?.contains('/#/user/@') == true ||
+          node.text.trimLeft().startsWith('@');
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () {
+          final uri = href == null ? null : Uri.tryParse(href);
+          if (uri != null && {'http', 'https'}.contains(uri.scheme)) {
+            launchUrl(uri);
+          }
+        };
+      _linkRecognizers.add(recognizer);
+      return [
+        TextSpan(
+          children: children,
+          style: isMention
+              ? childStyle.copyWith(
+                  backgroundColor: const Color(0xff3f456c),
+                  decoration: TextDecoration.none,
+                  fontWeight: FontWeight.w600,
+                )
+              : childStyle,
+          recognizer: recognizer,
+        ),
+      ];
+    }
     if (tag == 'blockquote') {
       return [
         const TextSpan(
