@@ -1,0 +1,29 @@
+pkgname=deltiecord
+pkgver=0.3.6
+pkgrel=1
+pkgdesc='Compact Matrix desktop client'
+arch=('x86_64')
+url='https://example.invalid/deltiecord'
+license=('custom')
+depends=('gtk3' 'libsecret' 'libpulse' 'mpv')
+makedepends=('flutter' 'cmake' 'clang' 'ninja')
+source=()
+sha256sums=()
+
+build() {
+  cd "$startdir/../.."
+  flutter pub get
+  flutter build linux --release
+}
+
+package() {
+  cd "$startdir/../.."
+  local bundle='build/linux/x64/release/bundle'
+  install -d "$pkgdir/usr/lib/deltiecord" "$pkgdir/usr/bin"
+  cp -a "$bundle/." "$pkgdir/usr/lib/deltiecord/"
+  ln -s ../lib/deltiecord/deltiecord "$pkgdir/usr/bin/deltiecord"
+  install -Dm644 packaging/linux/net.deltie.deltiecord.desktop \
+    "$pkgdir/usr/share/applications/net.deltie.deltiecord.desktop"
+  install -Dm644 packaging/linux/net.deltie.deltiecord.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/net.deltie.deltiecord.svg"
+}
