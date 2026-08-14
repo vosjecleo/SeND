@@ -1428,6 +1428,82 @@ class _MentionPicker extends StatelessWidget {
 
 class _RichComposerState extends State<_RichComposer> {
   final _scrollController = ScrollController();
+  static const _emoji = [
+    '😀',
+    '😄',
+    '😂',
+    '🥹',
+    '😍',
+    '😎',
+    '😭',
+    '😡',
+    '👍',
+    '👎',
+    '❤️',
+    '💜',
+    '🔥',
+    '🎉',
+    '👀',
+    '✨',
+    '🤔',
+    '🫡',
+    '🙏',
+    '💀',
+    '✅',
+    '❌',
+    '⭐',
+    '🍕',
+  ];
+
+  void _insertEmoji(String emoji) {
+    final selection = widget.controller.selection;
+    final start = selection.start < 0
+        ? widget.controller.document.length - 1
+        : selection.start;
+    final length = selection.isValid ? selection.end - selection.start : 0;
+    widget.controller.replaceText(
+      start,
+      length,
+      emoji,
+      TextSelection.collapsed(offset: start + emoji.length),
+    );
+    widget.focusNode.requestFocus();
+  }
+
+  Future<void> _showEmojiPicker() async {
+    final box = context.findRenderObject() as RenderBox;
+    final origin = box.localToGlobal(Offset.zero);
+    final emoji = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        origin.dx + box.size.width - 250,
+        origin.dy - 180,
+        10,
+        0,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: SizedBox(
+            width: 210,
+            child: Wrap(
+              children: [
+                for (final item in _emoji)
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(item),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(item, style: const TextStyle(fontSize: 21)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+    if (emoji != null) _insertEmoji(emoji);
+  }
 
   @override
   void dispose() {
@@ -1529,6 +1605,15 @@ class _RichComposerState extends State<_RichComposer> {
                 ),
               ),
             ),
+          ),
+        ),
+        Transform.translate(
+          offset: const Offset(0, -1),
+          child: IconButton(
+            tooltip: 'Emoji',
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.enabled ? _showEmojiPicker : null,
+            icon: const Icon(Icons.emoji_emotions_outlined, size: 23),
           ),
         ),
         Transform.translate(
