@@ -388,6 +388,8 @@ class FakeBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => moreHistory;
   @override
+  String? get firstUnreadMessageId => null;
+  @override
   String? get userId => '@deltie:example.org';
 
   @override
@@ -442,6 +444,11 @@ class FakeBackend extends ChatBackend {
   Future<void> redactMessage(String messageId) async {
     redactedMessageIds.add(messageId);
   }
+
+  @override
+  Future<void> retryMessage(String messageId) async {}
+  @override
+  Future<void> cancelPendingMessage(String messageId) async {}
 
   @override
   Future<void> toggleReaction(String messageId, String key) async {

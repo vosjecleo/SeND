@@ -714,22 +714,34 @@ class _ConversationState extends State<_Conversation> {
                         message.timestamp.difference(older.timestamp) >
                             const Duration(minutes: 7) ||
                         message.reply != null;
-                    return _MessageRow(
-                      message: message,
-                      startsGroup: startsGroup,
-                      onReply: () => widget.onReply(message),
-                      onEdit: message.own && !message.redacted
-                          ? () => widget.onEdit(message)
-                          : null,
-                      onDelete: message.canRedact
-                          ? () => _deleteMessage(message)
-                          : null,
-                      onReact: message.redacted
-                          ? null
-                          : () => _pickReaction(message),
-                      onToggleReaction: (key) =>
-                          backend.toggleReaction(message.id, key),
-                      backend: backend,
+                    return Column(
+                      children: [
+                        if (message.id == backend.firstUnreadMessageId)
+                          const _UnreadDivider(),
+                        _MessageRow(
+                          message: message,
+                          startsGroup: startsGroup,
+                          onReply: () => widget.onReply(message),
+                          onEdit: message.own && !message.redacted
+                              ? () => widget.onEdit(message)
+                              : null,
+                          onDelete: message.canRedact
+                              ? () => _deleteMessage(message)
+                              : null,
+                          onReact: message.redacted || message.system
+                              ? null
+                              : () => _pickReaction(message),
+                          onRetry: message.failed
+                              ? () => backend.retryMessage(message.id)
+                              : null,
+                          onCancel: message.pending || message.failed
+                              ? () => backend.cancelPendingMessage(message.id)
+                              : null,
+                          onToggleReaction: (key) =>
+                              backend.toggleReaction(message.id, key),
+                          backend: backend,
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -894,6 +906,13 @@ class _RichComposerState extends State<_RichComposer> {
                       _QuillFormatButton(
                         controller: widget.controller,
                         focusNode: widget.focusNode,
+                        attribute: Attribute.codeBlock,
+                        tooltip: 'Code block',
+                        icon: Icons.data_object,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
                         attribute: Attribute.blockQuote,
                         tooltip: 'Quote',
                         icon: Icons.format_quote,
@@ -904,6 +923,20 @@ class _RichComposerState extends State<_RichComposer> {
                         attribute: Attribute.ul,
                         tooltip: 'Bulleted list',
                         icon: Icons.format_list_bulleted,
+                      ),
+                      _QuillFormatButton(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        attribute: Attribute.ol,
+                        tooltip: 'Numbered list',
+                        icon: Icons.format_list_numbered,
+                      ),
+                      QuillToolbarLinkStyleButton(
+                        controller: widget.controller,
+                        baseOptions: QuillToolbarBaseButtonOptions(
+                          iconSize: 17,
+                          afterButtonPressed: widget.focusNode.requestFocus,
+                        ),
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
@@ -1008,6 +1041,8 @@ class _MessageRow extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onReact,
+    required this.onRetry,
+    required this.onCancel,
     required this.onToggleReaction,
     required this.backend,
   });
@@ -1018,6 +1053,8 @@ class _MessageRow extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onReact;
+  final VoidCallback? onRetry;
+  final VoidCallback? onCancel;
   final ValueChanged<String> onToggleReaction;
   final ChatBackend backend;
 
@@ -1032,6 +1069,19 @@ class _MessageRow extends StatelessWidget {
             local.day == now.day
         ? clock
         : '${local.day}/${local.month}/${local.year} $clock';
+    if (message.system) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
+        child: Text(
+          message.body,
+          style: const TextStyle(
+            color: Color(0xff989aa5),
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
     return Opacity(
       opacity: message.pending ? 0.55 : 1,
       child: Padding(
@@ -1117,6 +1167,8 @@ class _MessageRow extends StatelessWidget {
                           onEdit: onEdit,
                           onDelete: onDelete,
                           onReact: onReact,
+                          onRetry: onRetry,
+                          onCancel: onCancel,
                         ),
                       ],
                     ),
@@ -1155,9 +1207,28 @@ class _MessageRow extends StatelessWidget {
                       style: TextStyle(fontSize: 11, color: Color(0xff989aa5)),
                     ),
                   if (message.failed)
-                    const Text(
-                      'Failed to send',
-                      style: TextStyle(fontSize: 11, color: Colors.redAccent),
+                    Row(
+                      children: [
+                        const Text(
+                          'Failed to send',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: onRetry,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  if (message.transferStatus case final status?)
+                    Text(
+                      status,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xffb8bfff),
+                      ),
                     ),
                   if (message.reactions.isNotEmpty)
                     Padding(
@@ -1188,18 +1259,48 @@ class _MessageRow extends StatelessWidget {
   }
 }
 
+class _UnreadDivider extends StatelessWidget {
+  const _UnreadDivider();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        Expanded(child: Divider(color: Color(0xffff6f77), thickness: 1)),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 9),
+          child: Text(
+            'NEW',
+            style: TextStyle(
+              color: Color(0xffff8b91),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Expanded(child: Divider(color: Color(0xffff6f77), thickness: 1)),
+      ],
+    ),
+  );
+}
+
 class _MessageActions extends StatelessWidget {
   const _MessageActions({
     required this.onReply,
     required this.onEdit,
     required this.onDelete,
     required this.onReact,
+    required this.onRetry,
+    required this.onCancel,
   });
 
   final VoidCallback onReply;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onReact;
+  final VoidCallback? onRetry;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1218,6 +1319,8 @@ class _MessageActions extends StatelessWidget {
           'react' => onReact?.call(),
           'edit' => onEdit?.call(),
           'delete' => onDelete?.call(),
+          'retry' => onRetry?.call(),
+          'cancel' => onCancel?.call(),
           _ => null,
         },
         itemBuilder: (context) => [
@@ -1227,6 +1330,13 @@ class _MessageActions extends StatelessWidget {
             const PopupMenuItem(value: 'edit', child: Text('Edit message')),
           if (onDelete != null)
             const PopupMenuItem(value: 'delete', child: Text('Delete message')),
+          if (onRetry != null)
+            const PopupMenuItem(value: 'retry', child: Text('Retry send')),
+          if (onCancel != null)
+            const PopupMenuItem(
+              value: 'cancel',
+              child: Text('Remove failed send'),
+            ),
         ],
       ),
     ],
@@ -1303,7 +1413,13 @@ class _AttachmentViewState extends State<_AttachmentView> {
         attachment: widget.attachment,
         onSave: _save,
       ),
-      AttachmentKind.audio || AttachmentKind.file => _buildFile(),
+      AttachmentKind.audio => _InlineAudio(
+        backend: widget.backend,
+        messageId: widget.messageId,
+        attachment: widget.attachment,
+        onSave: _save,
+      ),
+      AttachmentKind.file => _buildFile(),
     };
   }
 
@@ -1508,6 +1624,112 @@ class _InlineVideoState extends State<_InlineVideo> {
                 style: const TextStyle(color: Colors.white70, fontSize: 11),
               ),
             ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _InlineAudio extends StatefulWidget {
+  const _InlineAudio({
+    required this.backend,
+    required this.messageId,
+    required this.attachment,
+    required this.onSave,
+  });
+
+  final ChatBackend backend;
+  final String messageId;
+  final ChatAttachment attachment;
+  final VoidCallback onSave;
+
+  @override
+  State<_InlineAudio> createState() => _InlineAudioState();
+}
+
+class _InlineAudioState extends State<_InlineAudio> {
+  late final Player _player = Player();
+  bool _opening = false;
+  bool _opened = false;
+  String? _error;
+
+  Future<void> _toggle() async {
+    if (_opening) return;
+    if (_opened) {
+      await _player.playOrPause();
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      final source = await widget.backend.getMediaPlaybackSource(
+        widget.messageId,
+      );
+      if (source == null) throw StateError('Audio playback is unavailable.');
+      await _player.open(
+        Media(source.uri.toString(), httpHeaders: source.headers),
+        play: true,
+      );
+      _opened = true;
+    } catch (exception) {
+      _error = exception.toString();
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 460),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: const Color(0xff292a30),
+      border: Border.all(color: const Color(0xff3b3d45)),
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: StreamBuilder<bool>(
+      stream: _player.stream.playing,
+      initialData: _player.state.playing,
+      builder: (context, snapshot) => Row(
+        children: [
+          IconButton(
+            tooltip: snapshot.data == true ? 'Pause' : 'Play audio',
+            onPressed: _toggle,
+            icon: _opening
+                ? const SizedBox.square(
+                    dimension: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(snapshot.data == true ? Icons.pause : Icons.play_arrow),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.attachment.name, overflow: TextOverflow.ellipsis),
+                if (_error case final error?)
+                  Text(
+                    error,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Save audio',
+            onPressed: widget.onSave,
+            icon: const Icon(Icons.download, size: 19),
+          ),
         ],
       ),
     ),

@@ -96,7 +96,7 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Keep keyboard focus in the message composer when opening or changing a
   conversation and after sending, so typing can begin immediately.
 
-- Compose plain text and rich text with a compact WYSIWYG editor: bold, italic,
+- [x] Compose plain text and rich text with a compact WYSIWYG editor: bold, italic,
   underline, strikethrough, inline code, code blocks, quotes, links, lists, and
   spoilers, while preserving a plain-text fallback.
 - [x] Send and render interoperable `org.matrix.custom.html` with a plaintext
@@ -118,11 +118,11 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
 - [x] Add, remove, and summarize emoji reactions.
 - Maintain accurate unread counts, highlights, read markers, receipts, and a
   jump-to-first-unread affordance.
-- Queue sending state visibly and distinguish pending, sent, failed, and retrying
+- [x] Queue sending state visibly and distinguish pending, sent, failed, and retrying
   events without duplicating messages.
 - Provide basic desktop notifications with per-room muting and no sensitive
   plaintext leakage when notification previews are disabled.
-- Handle common timeline events gracefully instead of displaying raw or
+- [x] Handle common timeline events gracefully instead of displaying raw or
   “unknown event” placeholders.
 
 Promotion gate: text and media conversations must work consistently between

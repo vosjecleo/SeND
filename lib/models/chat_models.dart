@@ -66,6 +66,8 @@ class ChatMessage {
     required this.timestamp,
     required this.pending,
     this.failed = false,
+    this.transferStatus,
+    this.system = false,
     this.own = false,
     this.canRedact = false,
     this.edited = false,
@@ -83,6 +85,8 @@ class ChatMessage {
   final DateTime timestamp;
   final bool pending;
   final bool failed;
+  final String? transferStatus;
+  final bool system;
   final bool own;
   final bool canRedact;
   final bool edited;

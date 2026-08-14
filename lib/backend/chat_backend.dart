@@ -20,6 +20,7 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get timelineLoading;
   bool get historyLoading;
   bool get canLoadMoreHistory;
+  String? get firstUnreadMessageId;
 
   Future<void> initialize();
   Future<void> login({
@@ -42,6 +43,8 @@ abstract class ChatBackend extends ChangeNotifier {
     String? editMessageId,
   });
   Future<void> redactMessage(String messageId);
+  Future<void> retryMessage(String messageId);
+  Future<void> cancelPendingMessage(String messageId);
   Future<void> toggleReaction(String messageId, String key);
   Future<void> sendAttachment(
     AttachmentDraft attachment, {

@@ -34,6 +34,7 @@ class MatrixBackend extends ChatBackend {
   bool _roomMetadataRefreshRequested = false;
   final Set<String> _roomsMarkingRead = {};
   final Map<String, String> _lastMarkedReadEventIds = {};
+  final Map<String, String?> _firstUnreadEventIds = {};
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -69,6 +70,8 @@ class MatrixBackend extends ChatBackend {
   bool get historyLoading => _historyLoading;
   @override
   bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
+  @override
+  String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
   @override
   List<MentionSuggestion> get mentionSuggestions {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
@@ -140,16 +143,15 @@ class MatrixBackend extends ChatBackend {
     final timeline = _timeline;
     if (timeline == null) return const [];
     return timeline.events
-        .where(
-          (event) =>
-              event.type == EventTypes.Message ||
-              event.type == EventTypes.Encrypted,
-        )
+        .where((event) => _isVisibleTimelineEvent(event))
         .where((event) => event.relationshipType != RelationshipTypes.edit)
         .map((event) {
           final displayEvent = event.type == EventTypes.Message
               ? event.getDisplayEvent(timeline)
               : event;
+          final isMessage =
+              displayEvent.type == EventTypes.Message ||
+              displayEvent.type == EventTypes.Encrypted;
           return ChatMessage(
             id: event.eventId,
             sender: event.senderFromMemoryOrFallback.calcDisplayname(),
@@ -165,6 +167,13 @@ class MatrixBackend extends ChatBackend {
             timestamp: event.originServerTs,
             pending: event.status.isSending,
             failed: event.status.isError,
+            transferStatus: switch (event.fileSendingStatus) {
+              FileSendingStatus.generatingThumbnail => 'Preparing preview…',
+              FileSendingStatus.encrypting => 'Encrypting…',
+              FileSendingStatus.uploading => 'Uploading…',
+              null => null,
+            },
+            system: !isMessage,
             own: event.senderId == _matrix.userID,
             canRedact: event.canRedact && !event.redacted,
             edited: displayEvent.eventId != event.eventId,
@@ -180,6 +189,15 @@ class MatrixBackend extends ChatBackend {
         })
         .toList(growable: false);
   }
+
+  bool _isVisibleTimelineEvent(Event event) =>
+      event.type == EventTypes.Message ||
+      event.type == EventTypes.Encrypted ||
+      event.type == EventTypes.RoomMember ||
+      event.type == EventTypes.RoomName ||
+      event.type == EventTypes.RoomTopic ||
+      event.type == EventTypes.RoomAvatar ||
+      event.type == EventTypes.Encryption;
 
   ChatAttachment? _attachmentFor(Event event) {
     if (!event.hasAttachment) return null;
@@ -309,6 +327,7 @@ class MatrixBackend extends ChatBackend {
       _outboundSessionsReset.clear();
       _roomsMarkingRead.clear();
       _lastMarkedReadEventIds.clear();
+      _firstUnreadEventIds.clear();
       _mediaPlaybackSources.clear();
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
@@ -476,6 +495,7 @@ class MatrixBackend extends ChatBackend {
         return;
       }
       _timeline = timeline;
+      _captureFirstUnread(room, timeline);
       await _decryptTimelineEvents(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
       await _hydrateTimelineMetadata(timeline);
@@ -492,6 +512,27 @@ class MatrixBackend extends ChatBackend {
         notifyListeners();
       }
     }
+  }
+
+  void _captureFirstUnread(Room room, Timeline timeline) {
+    if (!room.hasNewMessages) {
+      _firstUnreadEventIds[room.id] = null;
+      return;
+    }
+    final markerId =
+        room.receiptState.global.latestOwnReceipt?.eventId ??
+        (room.fullyRead.isEmpty ? null : room.fullyRead);
+    final markerIndex = markerId == null
+        ? timeline.events.length
+        : timeline.events.indexWhere((event) => event.eventId == markerId);
+    final oldestUnreadIndex = markerIndex <= 0
+        ? null
+        : markerIndex > timeline.events.length
+        ? timeline.events.length - 1
+        : markerIndex - 1;
+    _firstUnreadEventIds[room.id] = oldestUnreadIndex == null
+        ? null
+        : timeline.events[oldestUnreadIndex].eventId;
   }
 
   @override
@@ -598,6 +639,30 @@ class MatrixBackend extends ChatBackend {
       notifyListeners();
       rethrow;
     }
+  }
+
+  @override
+  Future<void> retryMessage(String messageId) async {
+    final event = _eventById(messageId);
+    if (event == null || !event.status.isError) {
+      throw StateError('That failed message is no longer available.');
+    }
+    try {
+      await _prepareEncryptedSend(event.room);
+      await event.sendAgain();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> cancelPendingMessage(String messageId) async {
+    final event = _eventById(messageId);
+    if (event == null || event.status.isSent) return;
+    await event.cancelSend();
+    notifyListeners();
   }
 
   @override
