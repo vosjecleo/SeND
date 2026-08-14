@@ -17,9 +17,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/giphy_service.dart';
+import 'giphy_dialog.dart';
 import 'security_center.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
+import 'voice_room_view.dart';
 
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});
@@ -256,7 +258,7 @@ class _ChatShellState extends State<ChatShell> {
     if (!mounted) return;
     final gif = await showDialog<GifSearchResult>(
       context: context,
-      builder: (context) => _GiphyDialog(service: _giphy),
+      builder: (context) => GiphyDialog(service: _giphy),
     );
     if (gif != null) {
       await widget.backend.sendMessage(gif.shareUrl.toString());
@@ -362,7 +364,7 @@ class _ChatShellState extends State<ChatShell> {
                   child: widget.backend.selectedRoom == null
                       ? const _EmptyConversation()
                       : widget.backend.selectedRoom!.isVoice
-                      ? _VoiceRoomView(
+                      ? VoiceRoomView(
                           backend: widget.backend,
                           room: widget.backend.selectedRoom!,
                         )
@@ -846,175 +848,6 @@ class _RoomIcon extends StatelessWidget {
               ),
             )
           : null,
-    );
-  }
-}
-
-class _VoiceRoomView extends StatefulWidget {
-  const _VoiceRoomView({required this.backend, required this.room});
-
-  final ChatBackend backend;
-  final RoomSummary room;
-
-  @override
-  State<_VoiceRoomView> createState() => _VoiceRoomViewState();
-}
-
-class _VoiceRoomViewState extends State<_VoiceRoomView> {
-  @override
-  void initState() {
-    super.initState();
-    unawaited(widget.backend.refreshAudioInputs());
-  }
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: const BoxDecoration(
-          color: Color(0xff292a30),
-          border: Border(bottom: BorderSide(color: Color(0xff35363d))),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.volume_up_outlined, size: 20),
-            const SizedBox(width: 9),
-            Text(
-              widget.room.name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-      Expanded(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(Icons.headset_mic_outlined, size: 42),
-                const SizedBox(height: 12),
-                Text(
-                  widget.room.voiceParticipants.isEmpty
-                      ? 'Nobody is connected'
-                      : '${widget.room.voiceParticipants.length} connected',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final participant in widget.room.voiceParticipants)
-                  ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      radius: 14,
-                      backgroundImage: participant.avatarBytes == null
-                          ? null
-                          : MemoryImage(participant.avatarBytes!),
-                      child: participant.avatarBytes == null
-                          ? Text(participant.displayName.characters.first)
-                          : null,
-                    ),
-                    title: Text(participant.displayName),
-                    trailing: participant.speaking
-                        ? const Icon(Icons.graphic_eq, color: Color(0xff76d49b))
-                        : null,
-                  ),
-                if (widget.backend.voiceError case final error?) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    error,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Color(0xffff9b9b)),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                if (widget.backend.audioInputs.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    initialValue: widget.backend.selectedAudioInputId ?? '',
-                    decoration: const InputDecoration(
-                      labelText: 'Microphone',
-                      isDense: true,
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: '',
-                        child: Text('System default'),
-                      ),
-                      for (final input in widget.backend.audioInputs)
-                        DropdownMenuItem(
-                          value: input.id,
-                          child: Text(
-                            input.label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: (id) => widget.backend.selectAudioInput(
-                      id?.isEmpty == true ? null : id,
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                _VoiceControls(backend: widget.backend, room: widget.room),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _VoiceControls extends StatelessWidget {
-  const _VoiceControls({required this.backend, required this.room});
-
-  final ChatBackend backend;
-  final RoomSummary room;
-
-  @override
-  Widget build(BuildContext context) {
-    final connectedHere = backend.activeVoiceRoomId == room.id;
-    final busy =
-        backend.voiceConnectionStatus == VoiceConnectionStatus.connecting ||
-        backend.voiceConnectionStatus == VoiceConnectionStatus.disconnecting;
-    if (!connectedHere) {
-      return FilledButton.icon(
-        onPressed: busy ? null : () => backend.joinVoiceRoom(room.id),
-        icon: busy
-            ? const SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.headset),
-        label: const Text('Join voice'),
-      );
-    }
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: busy
-                ? null
-                : () => backend.setVoiceMuted(!backend.voiceMuted),
-            icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
-            label: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: busy ? null : backend.leaveVoiceRoom,
-            icon: const Icon(Icons.call_end),
-            label: const Text('Disconnect'),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1609,117 +1442,6 @@ class _MentionPicker extends StatelessWidget {
             );
           },
         ),
-      ),
-    ),
-  );
-}
-
-class _GiphyDialog extends StatefulWidget {
-  const _GiphyDialog({required this.service});
-
-  final GiphyService service;
-
-  @override
-  State<_GiphyDialog> createState() => _GiphyDialogState();
-}
-
-class _GiphyDialogState extends State<_GiphyDialog> {
-  final _query = TextEditingController();
-  List<GifSearchResult> _results = const [];
-  bool _loading = false;
-  String? _error;
-
-  Future<void> _search() async {
-    final query = _query.text.trim();
-    if (query.isEmpty || _loading) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final results = await widget.service.search(query);
-      if (mounted) setState(() => _results = results);
-    } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _query.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Sticker / GIF'),
-    content: SizedBox(
-      width: 620,
-      height: 500,
-      child: Column(
-        children: [
-          TextField(
-            controller: _query,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _search(),
-            decoration: InputDecoration(
-              hintText: 'Search Giphy',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                onPressed: _loading ? null : _search,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ),
-          ),
-          if (_error case final error?)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                error,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
-            ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: _loading && _results.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 6,
-                          mainAxisSpacing: 6,
-                        ),
-                    itemCount: _results.length,
-                    itemBuilder: (context, index) {
-                      final gif = _results[index];
-                      return Tooltip(
-                        message: gif.title,
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).pop(gif),
-                          child: Image.network(
-                            gif.previewUrl.toString(),
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            errorBuilder: (_, _, _) =>
-                                const ColoredBox(color: Color(0xff292a30)),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'Powered by GIPHY',
-              style: TextStyle(fontSize: 10, color: Color(0xff989aa5)),
-            ),
-          ),
-        ],
       ),
     ),
   );
