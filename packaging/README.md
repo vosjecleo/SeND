@@ -5,12 +5,12 @@ The script creates the Debian package, AppImage, checksums, and build metadata i
 `dist/`. Generated artifacts and downloaded packaging tools are intentionally
 ignored by Git.
 
-Install the Debian package with `sudo apt install ./dist/deltiecord_0.3.6_amd64.deb`.
+Install the Debian package with `sudo apt install ./dist/deltiecord_0.3.7_amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
 remains in the user's normal XDG application-data and Secret Service stores.
 
-Run the AppImage with `chmod +x dist/Deltiecord-0.3.6-x86_64.AppImage` followed by
-`./dist/Deltiecord-0.3.6-x86_64.AppImage`. A working desktop Secret Service is
+Run the AppImage with `chmod +x dist/Deltiecord-0.3.7-x86_64.AppImage` followed by
+`./dist/Deltiecord-0.3.7-x86_64.AppImage`. A working desktop Secret Service is
 required for persisted login and E2EE keys. Audio requires a reachable PulseAudio
 or PipeWire-Pulse service. The AppImage is assembled with linuxdeploy; build it on
 the oldest supported Linux distribution for the widest glibc compatibility.
