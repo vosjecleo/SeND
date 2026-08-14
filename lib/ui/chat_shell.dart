@@ -11,6 +11,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
@@ -33,7 +34,7 @@ class _ChatShellState extends State<ChatShell> {
   late final QuillController _message;
   final _composerFocus = FocusNode(debugLabel: 'message composer');
   bool _sending = false;
-  bool _uploadingAttachment = false;
+  final List<AttachmentDraft> _pendingAttachments = [];
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
   String? _mentionQuery;
@@ -51,14 +52,14 @@ class _ChatShellState extends State<ChatShell> {
         // ignore: experimental_member_use
         clipboardConfig: QuillClipboardConfig(
           onImagePaste: (bytes) async {
-            await _attachClipboardImage(bytes);
+            _queueClipboardImage(bytes);
             // Deltiecord sends pasted images as Matrix attachments instead of
             // inserting a local-only image embed into the text document.
             return null;
           },
           // ignore: experimental_member_use
           onGifPaste: (bytes) async {
-            await _confirmAndSendAttachment(
+            _queueAttachment(
               bytes: bytes,
               name: 'clipboard-${DateTime.now().millisecondsSinceEpoch}.gif',
               mimeType: 'image/gif',
@@ -127,19 +128,36 @@ class _ChatShellState extends State<ChatShell> {
   Future<void> _send() async {
     final serialized = serializeRichMessage(_message.document);
     final text = serialized.plainText.trim();
-    if (text.isEmpty || _sending) return;
+    if ((text.isEmpty && _pendingAttachments.isEmpty) || _sending) return;
+    final attachments = List<AttachmentDraft>.from(_pendingAttachments);
     setState(() => _sending = true);
-    _message.clear();
     try {
-      await widget.backend.sendMessage(
-        text,
-        formattedBody: serialized.html,
-        replyToMessageId: _replyingTo?.id,
-        editMessageId: _editingMessage?.id,
-      );
+      if (attachments.isEmpty) {
+        await widget.backend.sendMessage(
+          text,
+          formattedBody: serialized.html,
+          replyToMessageId: _replyingTo?.id,
+          editMessageId: _editingMessage?.id,
+        );
+      } else {
+        for (var index = 0; index < attachments.length; index++) {
+          final attachment = attachments[index];
+          await widget.backend.sendAttachment(
+            AttachmentDraft(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+              spoiler: attachment.spoiler,
+              caption: index == 0 && text.isNotEmpty ? text : null,
+            ),
+            replyToMessageId: index == 0 ? _replyingTo?.id : null,
+          );
+        }
+      }
       if (mounted) {
         _message.clear();
         setState(() {
+          _pendingAttachments.clear();
           _replyingTo = null;
           _editingMessage = null;
         });
@@ -181,19 +199,24 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<void> _attachFile() async {
-    if (_sending || _uploadingAttachment) return;
-    final result = await FilePicker.pickFiles(withData: false);
-    if (!mounted || result == null || result.files.isEmpty) return;
-    final picked = result.files.single;
-    final bytes = picked.bytes ?? await result.xFiles.single.readAsBytes();
-    if (!mounted) return;
-    await _confirmAndSendAttachment(
-      bytes: bytes,
-      name: picked.name,
-      mimeType:
-          lookupMimeType(picked.name, headerBytes: bytes) ??
-          'application/octet-stream',
+    if (_sending) return;
+    final result = await FilePicker.pickFiles(
+      withData: false,
+      allowMultiple: true,
     );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    for (var index = 0; index < result.files.length; index++) {
+      final picked = result.files[index];
+      final bytes = picked.bytes ?? await result.xFiles[index].readAsBytes();
+      if (!mounted) return;
+      _queueAttachment(
+        bytes: bytes,
+        name: picked.name,
+        mimeType:
+            lookupMimeType(picked.name, headerBytes: bytes) ??
+            'application/octet-stream',
+      );
+    }
   }
 
   Future<void> _showGifPicker() async {
@@ -241,7 +264,7 @@ class _ChatShellState extends State<ChatShell> {
     _composerFocus.requestFocus();
   }
 
-  Future<void> _attachClipboardImage(Uint8List bytes) async {
+  void _queueClipboardImage(Uint8List bytes) {
     final mimeType = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
     final extension = switch (mimeType) {
       'image/gif' => 'gif',
@@ -249,91 +272,64 @@ class _ChatShellState extends State<ChatShell> {
       'image/webp' => 'webp',
       _ => 'png',
     };
-    await _confirmAndSendAttachment(
+    _queueAttachment(
       bytes: bytes,
       name: 'clipboard-${DateTime.now().millisecondsSinceEpoch}.$extension',
       mimeType: mimeType,
     );
   }
 
-  Future<void> _confirmAndSendAttachment({
+  void _queueAttachment({
     required Uint8List bytes,
     required String name,
     required String mimeType,
   }) async {
-    if (_uploadingAttachment || !mounted) return;
-    var spoiler = false;
-    final captionController = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Send attachment'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(name, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 10),
-              TextField(
-                controller: captionController,
-                autofocus: true,
-                minLines: 1,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Caption (optional)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: spoiler,
-                onChanged: (value) =>
-                    setDialogState(() => spoiler = value ?? false),
-                title: const Text('Mark as spoiler'),
-                subtitle: const Text('Hidden until the recipient reveals it.'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Send'),
-            ),
-          ],
-        ),
-      ),
-    );
-    final caption = captionController.text.trim();
-    captionController.dispose();
-    if (confirmed != true || !mounted) {
-      _composerFocus.requestFocus();
-      return;
-    }
-    setState(() => _uploadingAttachment = true);
-    try {
-      await widget.backend.sendAttachment(
+    if (!mounted) return;
+    setState(
+      () => _pendingAttachments.add(
         AttachmentDraft(
           bytes: bytes,
           name: name,
           mimeType: mimeType,
-          spoiler: spoiler,
-          caption: caption.isEmpty ? null : caption,
+          spoiler: false,
         ),
-        replyToMessageId: _replyingTo?.id,
+      ),
+    );
+    _composerFocus.requestFocus();
+  }
+
+  Future<bool> _pasteClipboardImage() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) return false;
+    final reader = await clipboard.read();
+    if (!reader.canProvide(Formats.png)) return false;
+    final completed = Completer<Uint8List?>();
+    final progress = reader.getFile(
+      Formats.png,
+      (file) async => completed.complete(await file.readAll()),
+      onError: (_) => completed.complete(null),
+    );
+    if (progress == null) return false;
+    final bytes = await completed.future;
+    if (bytes == null || bytes.isEmpty) return false;
+    _queueClipboardImage(bytes);
+    return true;
+  }
+
+  void _removePendingAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
+  }
+
+  void _togglePendingSpoiler(int index) {
+    final attachment = _pendingAttachments[index];
+    setState(() {
+      _pendingAttachments[index] = AttachmentDraft(
+        bytes: attachment.bytes,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        spoiler: !attachment.spoiler,
       );
-      if (mounted) setState(() => _replyingTo = null);
-    } finally {
-      if (mounted) {
-        setState(() => _uploadingAttachment = false);
-        _composerFocus.requestFocus();
-      }
-    }
+    });
   }
 
   @override
@@ -383,6 +379,10 @@ class _ChatShellState extends State<ChatShell> {
                           onCancelComposerAction: _cancelComposerAction,
                           onAttach: _attachFile,
                           onGif: _showGifPicker,
+                          onPasteImage: _pasteClipboardImage,
+                          pendingAttachments: _pendingAttachments,
+                          onRemoveAttachment: _removePendingAttachment,
+                          onToggleAttachmentSpoiler: _togglePendingSpoiler,
                           mentionSuggestions: _mentionSuggestions,
                           mentionSelectionIndex: _mentionSelectionIndex,
                           onMentionSelected: _insertMention,
@@ -1033,6 +1033,10 @@ class _Conversation extends StatefulWidget {
     required this.onCancelComposerAction,
     required this.onAttach,
     required this.onGif,
+    required this.onPasteImage,
+    required this.pendingAttachments,
+    required this.onRemoveAttachment,
+    required this.onToggleAttachmentSpoiler,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
@@ -1051,6 +1055,10 @@ class _Conversation extends StatefulWidget {
   final VoidCallback onCancelComposerAction;
   final VoidCallback onAttach;
   final VoidCallback onGif;
+  final Future<bool> Function() onPasteImage;
+  final List<AttachmentDraft> pendingAttachments;
+  final ValueChanged<int> onRemoveAttachment;
+  final ValueChanged<int> onToggleAttachmentSpoiler;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
@@ -1502,6 +1510,10 @@ class _ConversationState extends State<_Conversation> {
           onSend: widget.onSend,
           onAttach: widget.onAttach,
           onGif: widget.onGif,
+          onPasteImage: widget.onPasteImage,
+          pendingAttachments: widget.pendingAttachments,
+          onRemoveAttachment: widget.onRemoveAttachment,
+          onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
           mentionSuggestions: widget.mentionSuggestions,
           mentionSelectionIndex: widget.mentionSelectionIndex,
           onMentionSelected: widget.onMentionSelected,
@@ -1529,6 +1541,10 @@ class _RichComposer extends StatefulWidget {
     required this.onSend,
     required this.onAttach,
     required this.onGif,
+    required this.onPasteImage,
+    required this.pendingAttachments,
+    required this.onRemoveAttachment,
+    required this.onToggleAttachmentSpoiler,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
@@ -1542,6 +1558,10 @@ class _RichComposer extends StatefulWidget {
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onGif;
+  final Future<bool> Function() onPasteImage;
+  final List<AttachmentDraft> pendingAttachments;
+  final ValueChanged<int> onRemoveAttachment;
+  final ValueChanged<int> onToggleAttachmentSpoiler;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
@@ -1796,12 +1816,18 @@ class _RichComposerState extends State<_RichComposer> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Transform.translate(
-          offset: const Offset(0, -1),
+        SizedBox(
+          width: 40,
+          height: 34,
           child: PopupMenuButton<String>(
             tooltip: 'Add content',
             enabled: widget.enabled,
-            icon: const Icon(Icons.add_circle_outline, size: 25),
+            padding: EdgeInsets.zero,
+            icon: const Icon(
+              Icons.add_circle_outline,
+              size: 25,
+              color: Color(0xffc7c8d0),
+            ),
             onSelected: (action) {
               switch (action) {
                 case 'file':
@@ -1846,93 +1872,249 @@ class _RichComposerState extends State<_RichComposer> {
               border: Border.all(color: const Color(0xff777985)),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: DefaultTextStyle.merge(
-              style: const TextStyle(fontSize: 15),
-              child: QuillEditor(
-                controller: widget.controller,
-                focusNode: widget.focusNode,
-                scrollController: _scrollController,
-                config: QuillEditorConfig(
-                  autoFocus: false,
-                  minHeight: 32,
-                  maxHeight: 132,
-                  customStyles: const DefaultStyles(
-                    paragraph: DefaultTextBlockStyle(
-                      TextStyle(fontSize: 15, height: 1.2),
-                      HorizontalSpacing.zero,
-                      VerticalSpacing.zero,
-                      VerticalSpacing.zero,
-                      null,
-                    ),
-                    placeHolder: DefaultTextBlockStyle(
-                      TextStyle(
-                        fontSize: 15,
-                        height: 1.2,
-                        color: Color(0x99989aa5),
-                      ),
-                      HorizontalSpacing.zero,
-                      VerticalSpacing.zero,
-                      VerticalSpacing.zero,
-                      null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.pendingAttachments.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (
+                          var index = 0;
+                          index < widget.pendingAttachments.length;
+                          index++
+                        )
+                          _PendingAttachmentTile(
+                            attachment: widget.pendingAttachments[index],
+                            onRemove: () => widget.onRemoveAttachment(index),
+                            onToggleSpoiler: () =>
+                                widget.onToggleAttachmentSpoiler(index),
+                          ),
+                      ],
                     ),
                   ),
-                  // Keep the compact 32 px composer while seating its text
-                  // cleanly alongside the attachment and send controls.
-                  padding: const EdgeInsets.fromLTRB(12, 7, 12, 3),
-                  placeholder: 'Message #${widget.roomName}',
-                  // ignore: experimental_member_use
-                  onKeyPressed: (event, _) {
-                    if (event is KeyDownEvent &&
-                        widget.mentionSuggestions.isNotEmpty) {
-                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                        widget.onMentionSelectionChanged(
-                          (widget.mentionSelectionIndex + 1) %
-                              widget.mentionSuggestions.length,
-                        );
-                        return KeyEventResult.handled;
-                      }
-                      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                        widget.onMentionSelectionChanged(
-                          (widget.mentionSelectionIndex - 1) %
-                              widget.mentionSuggestions.length,
-                        );
-                        return KeyEventResult.handled;
-                      }
-                      if (event.logicalKey == LogicalKeyboardKey.enter &&
-                          !HardwareKeyboard.instance.isShiftPressed) {
-                        widget.onMentionSelected(
-                          widget
-                              .mentionSuggestions[widget.mentionSelectionIndex]
-                              .matrixId,
-                        );
-                        return KeyEventResult.handled;
-                      }
-                    }
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.enter &&
-                        !HardwareKeyboard.instance.isShiftPressed) {
-                      widget.onSend();
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
+                DefaultTextStyle.merge(
+                  style: const TextStyle(fontSize: 15),
+                  child: QuillEditor(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    scrollController: _scrollController,
+                    config: QuillEditorConfig(
+                      autoFocus: false,
+                      minHeight: 32,
+                      maxHeight: 132,
+                      customStyles: const DefaultStyles(
+                        paragraph: DefaultTextBlockStyle(
+                          TextStyle(fontSize: 15, height: 1.2),
+                          HorizontalSpacing.zero,
+                          VerticalSpacing.zero,
+                          VerticalSpacing.zero,
+                          null,
+                        ),
+                        placeHolder: DefaultTextBlockStyle(
+                          TextStyle(
+                            fontSize: 15,
+                            height: 1.2,
+                            color: Color(0x99989aa5),
+                          ),
+                          HorizontalSpacing.zero,
+                          VerticalSpacing.zero,
+                          VerticalSpacing.zero,
+                          null,
+                        ),
+                      ),
+                      // Keep the compact 32 px composer while seating its text
+                      // cleanly alongside the attachment and send controls.
+                      padding: const EdgeInsets.fromLTRB(12, 7, 12, 3),
+                      placeholder: 'Message #${widget.roomName}',
+                      // ignore: experimental_member_use
+                      onKeyPressed: (event, _) {
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.keyV &&
+                            (HardwareKeyboard.instance.isControlPressed ||
+                                HardwareKeyboard.instance.isMetaPressed)) {
+                          unawaited(widget.onPasteImage());
+                          return KeyEventResult.ignored;
+                        }
+                        if (event is KeyDownEvent &&
+                            widget.mentionSuggestions.isNotEmpty) {
+                          if (event.logicalKey ==
+                              LogicalKeyboardKey.arrowDown) {
+                            widget.onMentionSelectionChanged(
+                              (widget.mentionSelectionIndex + 1) %
+                                  widget.mentionSuggestions.length,
+                            );
+                            return KeyEventResult.handled;
+                          }
+                          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                            widget.onMentionSelectionChanged(
+                              (widget.mentionSelectionIndex - 1) %
+                                  widget.mentionSuggestions.length,
+                            );
+                            return KeyEventResult.handled;
+                          }
+                          if (event.logicalKey == LogicalKeyboardKey.enter &&
+                              !HardwareKeyboard.instance.isShiftPressed) {
+                            widget.onMentionSelected(
+                              widget
+                                  .mentionSuggestions[widget
+                                      .mentionSelectionIndex]
+                                  .matrixId,
+                            );
+                            return KeyEventResult.handled;
+                          }
+                        }
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.enter &&
+                            !HardwareKeyboard.instance.isShiftPressed) {
+                          widget.onSend();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
-        Transform.translate(
-          offset: const Offset(0, -1),
+        SizedBox(
+          width: 40,
+          height: 34,
           child: IconButton(
             tooltip: 'Send',
-            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
             onPressed: widget.enabled ? widget.onSend : null,
-            icon: const Icon(Icons.send, size: 25),
+            icon: const Icon(Icons.send, size: 25, color: Color(0xffc7c8d0)),
           ),
         ),
       ],
     ),
   );
+}
+
+class _PendingAttachmentTile extends StatelessWidget {
+  const _PendingAttachmentTile({
+    required this.attachment,
+    required this.onRemove,
+    required this.onToggleSpoiler,
+  });
+
+  final AttachmentDraft attachment;
+  final VoidCallback onRemove;
+  final VoidCallback onToggleSpoiler;
+
+  Future<void> _showMenu(BuildContext context, Offset position) async {
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, 0, 0),
+      items: [
+        PopupMenuItem(
+          value: 'spoiler',
+          child: ListTile(
+            dense: true,
+            leading: Icon(
+              attachment.spoiler
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            title: Text(attachment.spoiler ? 'Remove spoiler' : 'Spoiler'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'remove',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.close),
+            title: Text('Remove attachment'),
+          ),
+        ),
+      ],
+    );
+    if (action == 'spoiler') onToggleSpoiler();
+    if (action == 'remove') onRemove();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isImage = attachment.mimeType.startsWith('image/');
+    final isVideo = attachment.mimeType.startsWith('video/');
+    return GestureDetector(
+      onSecondaryTapDown: (details) =>
+          _showMenu(context, details.globalPosition),
+      child: Tooltip(
+        message: '${attachment.name}\nRight-click for options',
+        child: Container(
+          width: 92,
+          height: 68,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xff292a30),
+            border: Border.all(
+              color: attachment.spoiler
+                  ? const Color(0xff747fdb)
+                  : const Color(0xff484a53),
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (isImage)
+                Image.memory(attachment.bytes, fit: BoxFit.cover)
+              else
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isVideo
+                          ? Icons.video_file_outlined
+                          : Icons.insert_drive_file_outlined,
+                      size: 23,
+                    ),
+                    const SizedBox(height: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        attachment.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9),
+                      ),
+                    ),
+                  ],
+                ),
+              if (attachment.spoiler)
+                const ColoredBox(
+                  color: Color(0xcc17181c),
+                  child: Center(
+                    child: Icon(Icons.visibility_off_outlined, size: 20),
+                  ),
+                ),
+              Positioned(
+                right: 1,
+                top: 1,
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: IconButton.filledTonal(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Remove',
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.close, size: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _MessageRow extends StatefulWidget {
