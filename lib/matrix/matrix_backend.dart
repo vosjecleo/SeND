@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
@@ -7,6 +8,7 @@ import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'matrix_client_factory.dart';
+import 'media_range_proxy.dart';
 
 class MatrixBackend extends ChatBackend {
   Client? _client;
@@ -32,6 +34,8 @@ class MatrixBackend extends ChatBackend {
   bool _roomMetadataRefreshRequested = false;
   final Set<String> _roomsMarkingRead = {};
   final Map<String, String> _lastMarkedReadEventIds = {};
+  final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
+  final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
   );
@@ -147,11 +151,35 @@ class MatrixBackend extends ChatBackend {
             edited: displayEvent.eventId != event.eventId,
             redacted: event.redacted,
             reactions: _reactionSummaries(event, timeline),
+            attachment: _attachmentFor(displayEvent),
             reply: _replyPreviews[event.eventId],
             avatarBytes: _senderAvatarBytes[event.senderId],
           );
         })
         .toList(growable: false);
+  }
+
+  ChatAttachment? _attachmentFor(Event event) {
+    if (!event.hasAttachment) return null;
+    final kind = switch (event.messageType) {
+      MessageTypes.Image => AttachmentKind.image,
+      MessageTypes.Video => AttachmentKind.video,
+      MessageTypes.Audio => AttachmentKind.audio,
+      _ => AttachmentKind.file,
+    };
+    return ChatAttachment(
+      kind: kind,
+      name: event.content.tryGet<String>('filename') ?? event.body,
+      mimeType: event.attachmentMimetype,
+      size: event.infoMap.tryGet<int>('size'),
+      encrypted: event.isAttachmentEncrypted,
+      spoiler:
+          event.content.tryGet<bool>(
+                'page.codeberg.everypizza.msc4193.spoiler',
+              ) ==
+              true ||
+          event.content.tryGet<bool>('m.spoiler') == true,
+    );
   }
 
   List<ReactionSummary> _reactionSummaries(Event event, Timeline timeline) {
@@ -259,6 +287,8 @@ class MatrixBackend extends ChatBackend {
       _outboundSessionsReset.clear();
       _roomsMarkingRead.clear();
       _lastMarkedReadEventIds.clear();
+      _mediaPlaybackSources.clear();
+      _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
       );
@@ -549,6 +579,110 @@ class MatrixBackend extends ChatBackend {
     }
   }
 
+  @override
+  Future<void> sendAttachment(
+    AttachmentDraft attachment, {
+    String? replyToMessageId,
+  }) async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null) throw StateError('The selected room is unavailable.');
+    try {
+      await _prepareEncryptedSend(room);
+      final replyEvent = replyToMessageId == null
+          ? null
+          : _eventById(replyToMessageId);
+      final file = MatrixFile.fromMimeType(
+        bytes: attachment.bytes,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+      );
+      await room.sendFileEvent(
+        file,
+        inReplyTo: replyEvent,
+        shrinkImageMaxDimension: file is MatrixImageFile ? 2000 : null,
+        extraContent: attachment.spoiler
+            ? {
+                // MSC4193's unstable key is used by existing clients. Keep the
+                // stable-looking key too so migration does not require a resend.
+                'page.codeberg.everypizza.msc4193.spoiler': true,
+                'm.spoiler': true,
+              }
+            : null,
+      );
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Uint8List> downloadAttachment(
+    String messageId, {
+    bool thumbnail = false,
+  }) async {
+    final event = _eventById(messageId);
+    if (event == null || !event.hasAttachment) {
+      throw StateError('That attachment is no longer available.');
+    }
+    final file = await event.downloadAndDecryptAttachment(
+      getThumbnail: thumbnail && event.hasThumbnail,
+    );
+    return file.bytes;
+  }
+
+  @override
+  Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) async {
+    final event = _eventById(messageId);
+    if (event == null || !event.hasAttachment) {
+      return null;
+    }
+    final cached = _mediaPlaybackSources[messageId];
+    if (cached != null) return cached;
+    if (event.isAttachmentEncrypted) {
+      final file = event.content.tryGetMap<String, Object?>('file');
+      final mxc = Uri.tryParse(file?.tryGet<String>('url') ?? '');
+      final keyText = file
+          ?.tryGetMap<String, Object?>('key')
+          ?.tryGet<String>('k');
+      final ivText = file?.tryGet<String>('iv');
+      final size = event.infoMap.tryGet<int>('size');
+      final accessToken = _matrix.accessToken;
+      if (mxc == null ||
+          !mxc.isScheme('mxc') ||
+          keyText == null ||
+          ivText == null ||
+          size == null ||
+          size <= 0 ||
+          accessToken == null) {
+        return null;
+      }
+      final upstream = await mxc.getDownloadUri(_matrix, skipScanner: true);
+      final localUri = await _mediaRangeProxy.register(
+        upstream: upstream,
+        accessToken: accessToken,
+        key: base64Url.decode(base64.normalize(keyText)),
+        iv: base64.decode(base64.normalize(ivText)),
+        size: size,
+        mimeType: event.attachmentMimetype,
+      );
+      final source = MediaPlaybackSource(uri: localUri, headers: const {});
+      _mediaPlaybackSources[messageId] = source;
+      return source;
+    }
+    final uri = await event.getAttachmentUri(skipScanner: false);
+    if (uri == null) return null;
+    final source = MediaPlaybackSource(
+      uri: uri,
+      headers: {
+        if (_matrix.accessToken case final token?)
+          'Authorization': 'Bearer $token',
+      },
+    );
+    _mediaPlaybackSources[messageId] = source;
+    return source;
+  }
+
   Future<void> _prepareEncryptedSend(Room room) async {
     if (!room.encrypted || _outboundSessionsReset.contains(room.id)) return;
     final keyManager = _matrix.encryption?.keyManager;
@@ -830,6 +964,7 @@ class MatrixBackend extends ChatBackend {
     _syncSubscription?.cancel();
     _loginSubscription?.cancel();
     _client?.dispose();
+    unawaited(_mediaRangeProxy.close());
     super.dispose();
   }
 }

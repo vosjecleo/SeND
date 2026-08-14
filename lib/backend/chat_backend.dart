@@ -41,4 +41,13 @@ abstract class ChatBackend extends ChangeNotifier {
   });
   Future<void> redactMessage(String messageId);
   Future<void> toggleReaction(String messageId, String key);
+  Future<void> sendAttachment(
+    AttachmentDraft attachment, {
+    String? replyToMessageId,
+  });
+  Future<Uint8List> downloadAttachment(
+    String messageId, {
+    bool thumbnail = false,
+  });
+  Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId);
 }

@@ -1,4 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:mime/mime.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
@@ -74,6 +81,68 @@ class _ChatShellState extends State<ChatShell> {
     _composerFocus.requestFocus();
   }
 
+  Future<void> _attachFile() async {
+    if (_sending) return;
+    final result = await FilePicker.pickFiles(withData: true);
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final picked = result.files.single;
+    final bytes = picked.bytes ?? await result.xFiles.single.readAsBytes();
+    if (!mounted) return;
+    var spoiler = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Send attachment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(picked.name, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 10),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: spoiler,
+                onChanged: (value) =>
+                    setDialogState(() => spoiler = value ?? false),
+                title: const Text('Mark as spoiler'),
+                subtitle: const Text('Hidden until the recipient reveals it.'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Send'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _sending = true);
+    try {
+      await widget.backend.sendAttachment(
+        AttachmentDraft(
+          bytes: bytes,
+          name: picked.name,
+          mimeType:
+              lookupMimeType(picked.name, headerBytes: bytes) ??
+              'application/octet-stream',
+          spoiler: spoiler,
+        ),
+        replyToMessageId: _replyingTo?.id,
+      );
+      if (mounted) setState(() => _replyingTo = null);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   @override
   void dispose() {
     _message.dispose();
@@ -112,6 +181,7 @@ class _ChatShellState extends State<ChatShell> {
                           onReply: _replyTo,
                           onEdit: _edit,
                           onCancelComposerAction: _cancelComposerAction,
+                          onAttach: _attachFile,
                         ),
                 ),
               ],
@@ -393,6 +463,7 @@ class _Conversation extends StatefulWidget {
     required this.onReply,
     required this.onEdit,
     required this.onCancelComposerAction,
+    required this.onAttach,
   });
 
   final ChatBackend backend;
@@ -405,6 +476,7 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<ChatMessage> onReply;
   final ValueChanged<ChatMessage> onEdit;
   final VoidCallback onCancelComposerAction;
+  final VoidCallback onAttach;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -593,6 +665,7 @@ class _ConversationState extends State<_Conversation> {
                           : () => _pickReaction(message),
                       onToggleReaction: (key) =>
                           backend.toggleReaction(message.id, key),
+                      backend: backend,
                     );
                   },
                 ),
@@ -622,6 +695,11 @@ class _ConversationState extends State<_Conversation> {
               hintText: 'Message #${room.name}',
               border: const OutlineInputBorder(),
               isDense: true,
+              prefixIcon: IconButton(
+                tooltip: 'Attach file',
+                onPressed: widget.sending ? null : widget.onAttach,
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+              ),
               suffixIcon: IconButton(
                 tooltip: 'Send',
                 onPressed: widget.sending ? null : widget.onSend,
@@ -644,6 +722,7 @@ class _MessageRow extends StatelessWidget {
     required this.onDelete,
     required this.onReact,
     required this.onToggleReaction,
+    required this.backend,
   });
 
   final ChatMessage message;
@@ -653,6 +732,7 @@ class _MessageRow extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onReact;
   final ValueChanged<String> onToggleReaction;
+  final ChatBackend backend;
 
   @override
   Widget build(BuildContext context) {
@@ -768,6 +848,15 @@ class _MessageRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (message.attachment case final attachment?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: _AttachmentView(
+                        backend: backend,
+                        messageId: message.id,
+                        attachment: attachment,
+                      ),
+                    ),
                   if (message.edited)
                     const Text(
                       '(edited)',
@@ -849,6 +938,287 @@ class _MessageActions extends StatelessWidget {
         ],
       ),
     ],
+  );
+}
+
+class _AttachmentView extends StatefulWidget {
+  const _AttachmentView({
+    required this.backend,
+    required this.messageId,
+    required this.attachment,
+  });
+
+  final ChatBackend backend;
+  final String messageId;
+  final ChatAttachment attachment;
+
+  @override
+  State<_AttachmentView> createState() => _AttachmentViewState();
+}
+
+class _AttachmentViewState extends State<_AttachmentView> {
+  Future<Uint8List>? _imageBytes;
+  bool _revealed = false;
+  bool _saving = false;
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final path = await FilePicker.saveFile(
+      dialogTitle: 'Save attachment',
+      fileName: widget.attachment.name,
+    );
+    if (path == null || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      final bytes = await widget.backend.downloadAttachment(widget.messageId);
+      await File(path).writeAsBytes(bytes, flush: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.attachment.spoiler && !_revealed) {
+      return SizedBox(
+        width: 360,
+        height: 120,
+        child: Material(
+          color: const Color(0xff17181c),
+          borderRadius: BorderRadius.circular(5),
+          child: InkWell(
+            onTap: () => setState(() => _revealed = true),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.visibility_off_outlined),
+                  SizedBox(height: 5),
+                  Text('Spoiler — click to reveal'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return switch (widget.attachment.kind) {
+      AttachmentKind.image => _buildImage(),
+      AttachmentKind.video => _InlineVideo(
+        backend: widget.backend,
+        messageId: widget.messageId,
+        attachment: widget.attachment,
+        onSave: _save,
+      ),
+      AttachmentKind.audio || AttachmentKind.file => _buildFile(),
+    };
+  }
+
+  Widget _buildImage() {
+    _imageBytes ??= widget.backend.downloadAttachment(
+      widget.messageId,
+      thumbnail: true,
+    );
+    return FutureBuilder<Uint8List>(
+      future: _imageBytes,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _FileTile(
+            attachment: widget.attachment,
+            saving: _saving,
+            onSave: _save,
+            error: 'Preview unavailable',
+          );
+        }
+        final bytes = snapshot.data;
+        if (bytes == null) {
+          return const SizedBox(
+            width: 360,
+            height: 160,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460, maxHeight: 360),
+          child: InkWell(
+            onTap: _save,
+            child: Image.memory(bytes, fit: BoxFit.contain),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFile() =>
+      _FileTile(attachment: widget.attachment, saving: _saving, onSave: _save);
+}
+
+class _FileTile extends StatelessWidget {
+  const _FileTile({
+    required this.attachment,
+    required this.saving,
+    required this.onSave,
+    this.error,
+  });
+
+  final ChatAttachment attachment;
+  final bool saving;
+  final VoidCallback onSave;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 460),
+    padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+    decoration: BoxDecoration(
+      color: const Color(0xff292a30),
+      border: Border.all(color: const Color(0xff3b3d45)),
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          attachment.kind == AttachmentKind.audio
+              ? Icons.audio_file_outlined
+              : Icons.insert_drive_file_outlined,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(attachment.name, overflow: TextOverflow.ellipsis),
+              Text(
+                error ?? _fileDetails(attachment),
+                style: const TextStyle(fontSize: 11, color: Color(0xff989aa5)),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Save attachment',
+          onPressed: saving ? null : onSave,
+          icon: saving
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download, size: 19),
+        ),
+      ],
+    ),
+  );
+
+  String _fileDetails(ChatAttachment attachment) {
+    final size = attachment.size;
+    if (size == null) return attachment.mimeType;
+    final amount = size >= 1024 * 1024
+        ? '${(size / (1024 * 1024)).toStringAsFixed(1)} MB'
+        : '${(size / 1024).toStringAsFixed(0)} KB';
+    return '${attachment.mimeType} · $amount';
+  }
+}
+
+class _InlineVideo extends StatefulWidget {
+  const _InlineVideo({
+    required this.backend,
+    required this.messageId,
+    required this.attachment,
+    required this.onSave,
+  });
+
+  final ChatBackend backend;
+  final String messageId;
+  final ChatAttachment attachment;
+  final VoidCallback onSave;
+
+  @override
+  State<_InlineVideo> createState() => _InlineVideoState();
+}
+
+class _InlineVideoState extends State<_InlineVideo> {
+  late final Player _player = Player();
+  late final VideoController _controller = VideoController(_player);
+  bool _opening = false;
+  String? _error;
+
+  Future<void> _play() async {
+    if (_opening) return;
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    try {
+      final source = await widget.backend.getMediaPlaybackSource(
+        widget.messageId,
+      );
+      if (source == null) {
+        throw StateError('Encrypted streaming is still being prepared.');
+      }
+      await _player.open(
+        Media(source.uri.toString(), httpHeaders: source.headers),
+        play: true,
+      );
+    } catch (exception) {
+      if (mounted) setState(() => _error = exception.toString());
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 520),
+    color: Colors.black,
+    child: AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Video(controller: _controller),
+          if (!_player.state.playing)
+            IconButton.filled(
+              tooltip: 'Stream video',
+              onPressed: _opening ? null : _play,
+              icon: _opening
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow),
+            ),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: IconButton.filledTonal(
+              tooltip: 'Save video',
+              onPressed: widget.onSave,
+              icon: const Icon(Icons.download, size: 18),
+            ),
+          ),
+          if (_error case final error?)
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Text(
+                error,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ),
+        ],
+      ),
+    ),
   );
 }
 

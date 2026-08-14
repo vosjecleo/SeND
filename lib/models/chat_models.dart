@@ -71,6 +71,7 @@ class ChatMessage {
     this.edited = false,
     this.redacted = false,
     this.reactions = const [],
+    this.attachment,
     this.reply,
     this.avatarBytes,
   });
@@ -86,8 +87,50 @@ class ChatMessage {
   final bool edited;
   final bool redacted;
   final List<ReactionSummary> reactions;
+  final ChatAttachment? attachment;
   final ReplyPreview? reply;
   final Uint8List? avatarBytes;
+}
+
+enum AttachmentKind { image, video, audio, file }
+
+class ChatAttachment {
+  const ChatAttachment({
+    required this.kind,
+    required this.name,
+    required this.mimeType,
+    required this.size,
+    required this.encrypted,
+    required this.spoiler,
+  });
+
+  final AttachmentKind kind;
+  final String name;
+  final String mimeType;
+  final int? size;
+  final bool encrypted;
+  final bool spoiler;
+}
+
+class AttachmentDraft {
+  const AttachmentDraft({
+    required this.bytes,
+    required this.name,
+    required this.mimeType,
+    required this.spoiler,
+  });
+
+  final Uint8List bytes;
+  final String name;
+  final String mimeType;
+  final bool spoiler;
+}
+
+class MediaPlaybackSource {
+  const MediaPlaybackSource({required this.uri, required this.headers});
+
+  final Uri uri;
+  final Map<String, String> headers;
 }
 
 class ReactionSummary {

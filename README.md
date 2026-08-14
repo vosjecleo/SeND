@@ -103,6 +103,9 @@ the first `0.2.x` build rather than carried forward as accepted behavior.
   pills/highlighting, and correct notification semantics.
 - Send, receive, preview, download, save, and open images, video, audio, and
   general files. Images and videos may be marked as spoilers before sending.
+- [x] Stream unencrypted and encrypted video in-chat using authenticated HTTP
+  ranges; encrypted AES-CTR media is decrypted per range through a loopback-only
+  proxy instead of downloading the complete file before playback.
 - Generate safe thumbnails, expose upload/download progress, validate file
   limits, and provide retry/cancel behavior without freezing the timeline.
 - [x] Display replies cleanly and support creating replies from the timeline.

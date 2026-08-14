@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
@@ -350,4 +352,20 @@ class FakeBackend extends ChatBackend {
   Future<void> toggleReaction(String messageId, String key) async {
     toggledReactions.add((messageId, key));
   }
+
+  @override
+  Future<void> sendAttachment(
+    AttachmentDraft attachment, {
+    String? replyToMessageId,
+  }) async {}
+
+  @override
+  Future<Uint8List> downloadAttachment(
+    String messageId, {
+    bool thumbnail = false,
+  }) async => Uint8List(0);
+
+  @override
+  Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) async =>
+      null;
 }
