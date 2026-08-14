@@ -1140,8 +1140,9 @@ class _MessageRow extends StatefulWidget {
 
 class _MessageRowState extends State<_MessageRow> {
   Timer? _hoverTimer;
+  final _actionsOverlay = OverlayPortalController();
+  final _actionsAnchor = LayerLink();
   bool _hovered = false;
-  bool _showActions = false;
 
   ChatMessage get message => widget.message;
 
@@ -1149,7 +1150,9 @@ class _MessageRowState extends State<_MessageRow> {
     _hoverTimer?.cancel();
     setState(() => _hovered = true);
     _hoverTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && _hovered) setState(() => _showActions = true);
+      if (mounted && _hovered) {
+        _actionsOverlay.show();
+      }
     });
   }
 
@@ -1157,7 +1160,9 @@ class _MessageRowState extends State<_MessageRow> {
     _hoverTimer?.cancel();
     setState(() => _hovered = false);
     _hoverTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && !_hovered) setState(() => _showActions = false);
+      if (mounted && !_hovered) {
+        _actionsOverlay.hide();
+      }
     });
   }
 
@@ -1191,19 +1196,55 @@ class _MessageRowState extends State<_MessageRow> {
         ),
       );
     }
-    return MouseRegion(
-      onEnter: _enter,
-      onExit: _exit,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
-        color: _hovered ? const Color(0xff292a30) : Colors.transparent,
-        child: Opacity(
-          opacity: message.pending ? 0.55 : 1,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, widget.startsGroup ? 8 : 1, 20, 1),
-            child: Stack(
-              children: [
-                Row(
+    return OverlayPortal(
+      controller: _actionsOverlay,
+      overlayChildBuilder: (context) => CompositedTransformFollower(
+        link: _actionsAnchor,
+        targetAnchor: Alignment.topRight,
+        followerAnchor: Alignment.topRight,
+        showWhenUnlinked: false,
+        child: Align(
+          alignment: Alignment.topRight,
+          widthFactor: 1,
+          heightFactor: 1,
+          child: Material(
+            type: MaterialType.transparency,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xff202126),
+                border: Border.all(color: const Color(0xff41434c)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: _MessageActions(
+                onReply: widget.onReply,
+                onEdit: widget.onEdit,
+                onDelete: widget.onDelete,
+                onReact: widget.onReact,
+                onRetry: widget.onRetry,
+                onCancel: widget.onCancel,
+              ),
+            ),
+          ),
+        ),
+      ),
+      child: CompositedTransformTarget(
+        link: _actionsAnchor,
+        child: MouseRegion(
+          onEnter: _enter,
+          onExit: _exit,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 110),
+            color: _hovered ? const Color(0xff292a30) : Colors.transparent,
+            child: Opacity(
+              opacity: message.pending ? 0.55 : 1,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  widget.startsGroup ? 8 : 1,
+                  20,
+                  1,
+                ),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (widget.startsGroup)
@@ -1381,27 +1422,7 @@ class _MessageRowState extends State<_MessageRow> {
                     ),
                   ],
                 ),
-                if (_showActions)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: const Color(0xff202126),
-                        border: Border.all(color: const Color(0xff41434c)),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: _MessageActions(
-                        onReply: widget.onReply,
-                        onEdit: widget.onEdit,
-                        onDelete: widget.onDelete,
-                        onReact: widget.onReact,
-                        onRetry: widget.onRetry,
-                        onCancel: widget.onCancel,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
