@@ -21,6 +21,7 @@ import '../services/giphy_service.dart';
 import 'giphy_dialog.dart';
 import 'security_center.dart';
 import 'settings_screen.dart';
+import 'profile_dialog.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
@@ -336,10 +337,26 @@ class _ChatShellState extends State<ChatShell> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsShortcut =
+        switch (widget.backend.preferences.settingsShortcut) {
+          SettingsShortcut.controlComma => const SingleActivator(
+            LogicalKeyboardKey.comma,
+            control: true,
+          ),
+          SettingsShortcut.controlShiftS => const SingleActivator(
+            LogicalKeyboardKey.keyS,
+            control: true,
+            shift: true,
+          ),
+          SettingsShortcut.controlAltS => const SingleActivator(
+            LogicalKeyboardKey.keyS,
+            control: true,
+            alt: true,
+          ),
+        };
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.comma, control: true): () =>
-            showDeltiecordSettings(context, widget.backend),
+        settingsShortcut: () => showDeltiecordSettings(context, widget.backend),
       },
       child: Focus(
         autofocus: true,

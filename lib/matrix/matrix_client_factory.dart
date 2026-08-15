@@ -14,8 +14,7 @@ const deltiecordRoomPresentationEventType = 'net.deltiecord.room.presentation';
 /// directory rather than the repository. Desktop SQLite uses the FFI factory;
 /// Android can use the native sqflite plugin through the same SDK database.
 Future<Client> createMatrixClient() async {
-  final supportDirectory = await getApplicationSupportDirectory();
-  final dataDirectory = Directory(p.join(supportDirectory.path, 'deltiecord'));
+  final dataDirectory = await getDeltiecordDataDirectory();
   await dataDirectory.create(recursive: true);
   await _restrictPermissions(dataDirectory.path, '700');
 
@@ -49,6 +48,11 @@ Future<Client> createMatrixClient() async {
     // device here would create ciphertext its owner cannot decrypt.
     shareKeysWith: ShareKeysWith.all,
   );
+}
+
+Future<Directory> getDeltiecordDataDirectory() async {
+  final supportDirectory = await getApplicationSupportDirectory();
+  return Directory(p.join(supportDirectory.path, 'deltiecord'));
 }
 
 Future<void> _restrictPermissions(String path, String mode) async {

@@ -6,6 +6,8 @@ enum ConnectionStatus { connecting, online, reconnecting, offline }
 
 enum InterfaceDensity { compact, cozy }
 
+enum SettingsShortcut { controlComma, controlShiftS, controlAltS }
+
 class AppPreferences {
   const AppPreferences({
     this.density = InterfaceDensity.compact,
@@ -23,6 +25,8 @@ class AppPreferences {
     this.fontFamily = 'System',
     this.showNativeTitleBar = true,
     this.rememberWindowState = true,
+    this.settingsShortcut = SettingsShortcut.controlComma,
+    this.sendWithCtrlEnter = false,
   });
 
   final InterfaceDensity density;
@@ -40,6 +44,8 @@ class AppPreferences {
   final String fontFamily;
   final bool showNativeTitleBar;
   final bool rememberWindowState;
+  final SettingsShortcut settingsShortcut;
+  final bool sendWithCtrlEnter;
 
   AppPreferences copyWith({
     InterfaceDensity? density,
@@ -57,6 +63,8 @@ class AppPreferences {
     String? fontFamily,
     bool? showNativeTitleBar,
     bool? rememberWindowState,
+    SettingsShortcut? settingsShortcut,
+    bool? sendWithCtrlEnter,
   }) => AppPreferences(
     density: density ?? this.density,
     fontScale: fontScale ?? this.fontScale,
@@ -74,6 +82,8 @@ class AppPreferences {
     fontFamily: fontFamily ?? this.fontFamily,
     showNativeTitleBar: showNativeTitleBar ?? this.showNativeTitleBar,
     rememberWindowState: rememberWindowState ?? this.rememberWindowState,
+    settingsShortcut: settingsShortcut ?? this.settingsShortcut,
+    sendWithCtrlEnter: sendWithCtrlEnter ?? this.sendWithCtrlEnter,
   );
 }
 
@@ -156,12 +166,18 @@ class RoomMemberSummary {
     required this.displayName,
     this.avatarBytes,
     this.presence = UserPresence.offline,
+    this.powerLevel = 0,
+    this.canChangePowerLevel = false,
+    this.maxAssignablePowerLevel = 0,
   });
 
   final String userId;
   final String displayName;
   final Uint8List? avatarBytes;
   final UserPresence presence;
+  final int powerLevel;
+  final bool canChangePowerLevel;
+  final int maxAssignablePowerLevel;
 }
 
 class VoiceParticipantSummary {
@@ -188,6 +204,7 @@ class RoomSummary {
     this.presentation = RoomPresentation.text,
     this.voiceParticipants = const [],
     this.avatarBytes,
+    this.topic = '',
   });
 
   final String id;
@@ -198,6 +215,7 @@ class RoomSummary {
   final RoomPresentation presentation;
   final List<VoiceParticipantSummary> voiceParticipants;
   final Uint8List? avatarBytes;
+  final String topic;
 
   bool get isVoice => presentation == RoomPresentation.voice;
 }

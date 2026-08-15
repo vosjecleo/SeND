@@ -134,7 +134,9 @@ class _RoomPanel extends StatelessWidget {
 
   Future<void> _createRoom(BuildContext context) async {
     final name = TextEditingController();
+    final topic = TextEditingController();
     var presentation = RoomPresentation.text;
+    var encrypted = true;
     final create = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -151,6 +153,13 @@ class _RoomPanel extends StatelessWidget {
                 controller: name,
                 autofocus: true,
                 decoration: const InputDecoration(labelText: 'Room name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: topic,
+                decoration: const InputDecoration(
+                  labelText: 'Topic (optional)',
+                ),
               ),
               const SizedBox(height: 12),
               SegmentedButton<RoomPresentation>(
@@ -170,6 +179,13 @@ class _RoomPanel extends StatelessWidget {
                 onSelectionChanged: (selection) =>
                     setDialogState(() => presentation = selection.first),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('End-to-end encryption'),
+                subtitle: const Text('Cannot be disabled after creation.'),
+                value: encrypted,
+                onChanged: (value) => setDialogState(() => encrypted = value),
+              ),
             ],
           ),
           actions: [
@@ -186,9 +202,16 @@ class _RoomPanel extends StatelessWidget {
       ),
     );
     final roomName = name.text.trim();
+    final roomTopic = topic.text.trim();
     name.dispose();
+    topic.dispose();
     if (create == true && roomName.isNotEmpty) {
-      await backend.createRoom(name: roomName, presentation: presentation);
+      await backend.createRoom(
+        name: roomName,
+        presentation: presentation,
+        topic: roomTopic,
+        encrypted: encrypted,
+      );
     }
   }
 
@@ -256,8 +279,24 @@ class _RoomPanel extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             dense: true,
+            leading: ClipOval(
+              child: SizedBox.square(
+                dimension: 34,
+                child: backend.profileAvatarBytes == null
+                    ? const ColoredBox(
+                        color: Color(0xff3a3c46),
+                        child: Icon(Icons.person, size: 19),
+                      )
+                    : Image.memory(
+                        backend.profileAvatarBytes!,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
             title: Text(
-              backend.userId ?? 'Matrix account',
+              backend.profileDisplayName ??
+                  backend.userId?.split(':').first.replaceFirst('@', '') ??
+                  'Matrix account',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -282,14 +321,7 @@ class _RoomPanel extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          SizedBox(
-            height: 34,
-            child: TextButton.icon(
-              onPressed: backend.logout,
-              icon: const Icon(Icons.logout, size: 16),
-              label: const Text('Log out'),
-            ),
+            onTap: () => showOwnProfile(context, backend),
           ),
           const SizedBox(height: 4),
         ],
@@ -324,27 +356,115 @@ class _RoomListTile extends StatelessWidget {
   final ChatBackend backend;
   final RoomSummary room;
 
-  Future<void> _rename(BuildContext context) async {
+  Future<void> _edit(BuildContext context) async {
     final controller = TextEditingController(text: room.name);
-    final name = await showDialog<String>(
+    final topic = TextEditingController(text: room.topic);
+    var presentation = room.presentation;
+    Uint8List? avatar;
+    var removeAvatar = false;
+    final save = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename room'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: Navigator.of(context).pop,
-            child: const Text('Cancel'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Room settings'),
+          content: SizedBox(
+            width: 430,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: topic,
+                  decoration: const InputDecoration(labelText: 'Topic'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<RoomPresentation>(
+                  segments: const [
+                    ButtonSegment(
+                      value: RoomPresentation.text,
+                      icon: Icon(Icons.tag),
+                      label: Text('Text'),
+                    ),
+                    ButtonSegment(
+                      value: RoomPresentation.voice,
+                      icon: Icon(Icons.volume_up_outlined),
+                      label: Text('Voice'),
+                    ),
+                  ],
+                  selected: {presentation},
+                  onSelectionChanged: (value) =>
+                      setDialogState(() => presentation = value.first),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.image_outlined),
+                      label: const Text('Choose picture'),
+                      onPressed: () async {
+                        final result = await FilePicker.pickFiles(
+                          type: FileType.image,
+                          withData: true,
+                        );
+                        final bytes = result?.files.single.bytes;
+                        if (bytes != null) {
+                          setDialogState(() {
+                            avatar = bytes;
+                            removeAvatar = false;
+                          });
+                        }
+                      },
+                    ),
+                    if (room.avatarBytes != null || avatar != null)
+                      TextButton(
+                        onPressed: () => setDialogState(() {
+                          avatar = null;
+                          removeAvatar = true;
+                        }),
+                        child: const Text('Remove picture'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Save'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: Navigator.of(context).pop,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
+    final name = controller.text.trim();
+    final roomTopic = topic.text.trim();
     controller.dispose();
-    if (name != null) await backend.renameRoom(room.id, name);
+    topic.dispose();
+    if (save != true) return;
+    if (name.isNotEmpty && name != room.name) {
+      await backend.renameRoom(room.id, name);
+    }
+    if (roomTopic != room.topic) {
+      await backend.setRoomTopic(room.id, roomTopic);
+    }
+    if (presentation != room.presentation) {
+      await backend.setRoomPresentation(room.id, presentation);
+    }
+    if (avatar != null || removeAvatar) {
+      await backend.setRoomAvatar(room.id, avatar);
+    }
   }
 
   @override
@@ -352,18 +472,21 @@ class _RoomListTile extends StatelessWidget {
     final participantCount = room.voiceParticipants.length;
     return ListTile(
       dense: true,
+      visualDensity: const VisualDensity(vertical: -3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+      minVerticalPadding: 0,
       selected: backend.selectedRoom?.id == room.id,
-      leading: _RoomIcon(room: room, size: 30),
+      leading: _RoomIcon(room: room, size: 26),
       title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        room.isVoice
-            ? participantCount == 0
+      subtitle: room.isVoice
+          ? Text(
+              participantCount == 0
                   ? 'Nobody connected'
-                  : '$participantCount connected'
-            : room.lastMessage,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+                  : '$participantCount connected',
+            )
+          : backend.selectedSpaceId == null
+          ? Text(room.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : null,
       trailing: backend.selectedSpaceId == null
           ? room.unreadCount > 0
                 ? Badge(label: Text('${room.unreadCount}'))
@@ -374,7 +497,7 @@ class _RoomListTile extends StatelessWidget {
               onSelected: (action) {
                 switch (action) {
                   case 'rename':
-                    _rename(context);
+                    _edit(context);
                   case 'text':
                     backend.setRoomPresentation(room.id, RoomPresentation.text);
                   case 'voice':
@@ -398,7 +521,7 @@ class _RoomListTile extends StatelessWidget {
                 const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'rename',
-                  child: Text('Rename room'),
+                  child: Text('Room settings'),
                 ),
               ],
             ),

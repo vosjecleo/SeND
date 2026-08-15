@@ -35,10 +35,14 @@ static void load_window_state(MyApplication* self) {
   g_autofree gchar* path = window_state_path();
   g_autoptr(GKeyFile) state = g_key_file_new();
   if (!g_key_file_load_from_file(state, path, G_KEY_FILE_NONE, nullptr)) return;
-  self->remember_window_state =
-      g_key_file_get_boolean(state, "window", "remember", nullptr);
-  self->show_native_title_bar =
-      g_key_file_get_boolean(state, "window", "native_title_bar", nullptr);
+  if (g_key_file_has_key(state, "window", "remember", nullptr)) {
+    self->remember_window_state =
+        g_key_file_get_boolean(state, "window", "remember", nullptr);
+  }
+  if (g_key_file_has_key(state, "window", "native_title_bar", nullptr)) {
+    self->show_native_title_bar =
+        g_key_file_get_boolean(state, "window", "native_title_bar", nullptr);
+  }
   if (!self->remember_window_state) return;
   self->window_width = g_key_file_get_integer(state, "window", "width", nullptr);
   self->window_height =
@@ -65,20 +69,6 @@ static void save_window_state(MyApplication* self) {
   g_autofree gchar* data = g_key_file_to_data(state, &length, nullptr);
   g_autofree gchar* path = window_state_path();
   g_file_set_contents(path, data, length, nullptr);
-}
-
-static void apply_title_bar(MyApplication* self) {
-  if (self->show_native_title_bar) {
-    gtk_window_set_decorated(self->window, TRUE);
-    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
-    gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "deltiecord");
-    gtk_header_bar_set_show_close_button(header_bar, TRUE);
-    gtk_window_set_titlebar(self->window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_titlebar(self->window, nullptr);
-    gtk_window_set_decorated(self->window, FALSE);
-  }
 }
 
 static gboolean window_configure_cb(GtkWidget*, GdkEventConfigure* event,
@@ -111,7 +101,6 @@ static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
   if (title != nullptr) self->show_native_title_bar = fl_value_get_bool(title);
   if (remember != nullptr)
     self->remember_window_state = fl_value_get_bool(remember);
-  apply_title_bar(self);
   save_window_state(self);
   g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
       fl_method_success_response_new(nullptr));
@@ -154,8 +143,11 @@ static void my_application_activate(GApplication* application) {
     gtk_header_bar_set_title(header_bar, "deltiecord");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
+  } else if (self->show_native_title_bar) {
     gtk_window_set_title(window, "deltiecord");
+  } else {
+    gtk_window_set_titlebar(window, nullptr);
+    gtk_window_set_decorated(window, FALSE);
   }
 
   gtk_window_set_default_size(

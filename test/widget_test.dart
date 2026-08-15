@@ -582,6 +582,10 @@ class FakeBackend extends ChatBackend {
   @override
   List<RoomMemberSummary> get selectedRoomMembers => const [];
   @override
+  int get storageUsageBytes => 0;
+  @override
+  bool get storageLoading => false;
+  @override
   List<ChatMessage> get pinnedMessages => const [];
   @override
   List<RoomSummary> get rooms => roomList;
@@ -669,9 +673,21 @@ class FakeBackend extends ChatBackend {
   Future<void> createRoom({
     required String name,
     required RoomPresentation presentation,
+    String topic = '',
+    bool encrypted = true,
   }) async {}
   @override
   Future<void> renameRoom(String roomId, String name) async {}
+  @override
+  Future<void> setRoomTopic(String roomId, String topic) async {}
+  @override
+  Future<void> setRoomAvatar(String roomId, Uint8List? bytes) async {}
+  @override
+  Future<void> setMemberPowerLevel(String userId, int powerLevel) async {}
+  @override
+  Future<void> refreshStorageUsage() async {}
+  @override
+  Future<void> clearMediaCache() async {}
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
   @override

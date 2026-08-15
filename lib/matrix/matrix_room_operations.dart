@@ -85,6 +85,8 @@ extension _MatrixRoomOperations on MatrixBackend {
   Future<void> _createRoom({
     required String name,
     required RoomPresentation presentation,
+    required String topic,
+    required bool encrypted,
   }) async {
     _error = null;
     try {
@@ -92,6 +94,16 @@ extension _MatrixRoomOperations on MatrixBackend {
         name: name.trim(),
         preset: CreateRoomPreset.privateChat,
         visibility: Visibility.private,
+        topic: topic.trim().isEmpty ? null : topic.trim(),
+        initialState: encrypted
+            ? [
+                StateEvent(
+                  type: EventTypes.Encryption,
+                  stateKey: '',
+                  content: {'algorithm': 'm.megolm.v1.aes-sha2'},
+                ),
+              ]
+            : null,
       );
       await _matrix.waitForRoomInSync(roomId, join: true);
       final room = _matrix.getRoomById(roomId);
@@ -118,6 +130,58 @@ extension _MatrixRoomOperations on MatrixBackend {
       _error = _friendlyError(exception);
     }
     _notifyBackendListeners();
+  }
+
+  Future<void> _setRoomTopic(String roomId, String topic) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) throw StateError('That room is no longer available.');
+    try {
+      await room.setDescription(topic.trim());
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      rethrow;
+    } finally {
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _setRoomAvatar(String roomId, Uint8List? bytes) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) throw StateError('That room is no longer available.');
+    try {
+      await room.setAvatar(
+        bytes == null
+            ? null
+            : MatrixFile(bytes: bytes, name: 'room-avatar.png'),
+      );
+      _avatarUris.remove(roomId);
+      await _refreshAvatar(room);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      rethrow;
+    } finally {
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _setMemberPowerLevel(String userId, int powerLevel) async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null) throw StateError('No room is selected.');
+    final member = room.unsafeGetUserFromMemoryOrFallback(userId);
+    if (!room.canChangePowerLevel || member.powerLevel >= room.ownPowerLevel) {
+      throw StateError('You do not have permission to change this member.');
+    }
+    if (powerLevel > room.ownPowerLevel.level) {
+      throw StateError('You cannot grant a power level above your own.');
+    }
+    try {
+      await room.setPower(userId, powerLevel.clamp(0, 100));
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      rethrow;
+    } finally {
+      _notifyBackendListeners();
+    }
   }
 
   Future<void> _setSelectedRoomMuted(bool muted) async {

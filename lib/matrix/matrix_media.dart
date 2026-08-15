@@ -1,6 +1,32 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  Future<void> _refreshStorageUsage() async {
+    _storageLoading = true;
+    _notifyBackendListeners();
+    try {
+      final directory = await getDeltiecordDataDirectory();
+      var total = 0;
+      if (await directory.exists()) {
+        await for (final entity in directory.list(recursive: true)) {
+          if (entity is File) total += await entity.length();
+        }
+      }
+      _storageUsageBytes = total;
+    } finally {
+      _storageLoading = false;
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _clearMediaCache() async {
+    _mediaPlaybackSources.clear();
+    _mediaRangeProxy.clear();
+    _linkPreviews.clear();
+    _notifyBackendListeners();
+    await _refreshStorageUsage();
+  }
+
   Future<void> _sendAttachment(
     AttachmentDraft attachment, {
     String? replyToMessageId,

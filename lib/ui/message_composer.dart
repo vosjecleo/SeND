@@ -17,6 +17,7 @@ class _RichComposer extends StatefulWidget {
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
     required this.onMentionSelectionChanged,
+    required this.sendWithCtrlEnter,
   });
 
   final QuillController controller;
@@ -34,6 +35,7 @@ class _RichComposer extends StatefulWidget {
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
   final ValueChanged<int> onMentionSelectionChanged;
+  final bool sendWithCtrlEnter;
 
   @override
   State<_RichComposer> createState() => _RichComposerState();
@@ -327,7 +329,9 @@ class _RichComposerState extends State<_RichComposer> {
                         }
                         if (event is KeyDownEvent &&
                             event.logicalKey == LogicalKeyboardKey.enter &&
-                            !HardwareKeyboard.instance.isShiftPressed) {
+                            !HardwareKeyboard.instance.isShiftPressed &&
+                            (widget.sendWithCtrlEnter ==
+                                HardwareKeyboard.instance.isControlPressed)) {
                           widget.onSend();
                           return KeyEventResult.handled;
                         }

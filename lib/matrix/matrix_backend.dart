@@ -82,6 +82,8 @@ class MatrixBackend extends ChatBackend {
   String? _profileDisplayName;
   Uint8List? _profileAvatarBytes;
   bool _profileLoading = false;
+  int _storageUsageBytes = 0;
+  bool _storageLoading = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -151,6 +153,10 @@ class MatrixBackend extends ChatBackend {
   @override
   bool get devicesLoading => _devicesLoading;
   @override
+  int get storageUsageBytes => _storageUsageBytes;
+  @override
+  bool get storageLoading => _storageLoading;
+  @override
   List<MentionSuggestion> get mentionSuggestions {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
     if (room == null) return const [];
@@ -213,6 +219,12 @@ class MatrixBackend extends ChatBackend {
               PresenceType.unavailable => UserPresence.away,
               _ => UserPresence.offline,
             },
+            powerLevel: user.powerLevel.level,
+            canChangePowerLevel:
+                room.canChangePowerLevel &&
+                user.id != _matrix.userID &&
+                user.powerLevel < room.ownPowerLevel,
+            maxAssignablePowerLevel: room.ownPowerLevel.level,
           );
         })
         .toList(growable: false);
@@ -385,11 +397,36 @@ class MatrixBackend extends ChatBackend {
   Future<void> createRoom({
     required String name,
     required RoomPresentation presentation,
-  }) => _createRoom(name: name, presentation: presentation);
+    String topic = '',
+    bool encrypted = true,
+  }) => _createRoom(
+    name: name,
+    presentation: presentation,
+    topic: topic,
+    encrypted: encrypted,
+  );
 
   @override
   Future<void> renameRoom(String roomId, String name) =>
       _renameRoom(roomId, name);
+
+  @override
+  Future<void> setRoomTopic(String roomId, String topic) =>
+      _setRoomTopic(roomId, topic);
+
+  @override
+  Future<void> setRoomAvatar(String roomId, Uint8List? bytes) =>
+      _setRoomAvatar(roomId, bytes);
+
+  @override
+  Future<void> setMemberPowerLevel(String userId, int powerLevel) =>
+      _setMemberPowerLevel(userId, powerLevel);
+
+  @override
+  Future<void> refreshStorageUsage() => _refreshStorageUsage();
+
+  @override
+  Future<void> clearMediaCache() => _clearMediaCache();
 
   @override
   Future<void> setSelectedRoomMuted(bool muted) => _setSelectedRoomMuted(muted);

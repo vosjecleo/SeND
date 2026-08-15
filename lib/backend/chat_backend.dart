@@ -41,6 +41,8 @@ abstract class ChatBackend extends ChangeNotifier {
   String? get selectedAudioInputId;
   List<DeviceSessionSummary> get deviceSessions;
   bool get devicesLoading;
+  int get storageUsageBytes;
+  bool get storageLoading;
 
   Future<void> initialize();
   Future<void> login({
@@ -62,8 +64,13 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> createRoom({
     required String name,
     required RoomPresentation presentation,
+    String topic,
+    bool encrypted,
   });
   Future<void> renameRoom(String roomId, String name);
+  Future<void> setRoomTopic(String roomId, String topic);
+  Future<void> setRoomAvatar(String roomId, Uint8List? bytes);
+  Future<void> setMemberPowerLevel(String userId, int powerLevel);
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);
   Future<void> refreshDevices();
@@ -76,6 +83,8 @@ abstract class ChatBackend extends ChangeNotifier {
   });
   Future<void> removeDevice(String deviceId, String password);
   Future<void> deleteAccount(String password);
+  Future<void> refreshStorageUsage();
+  Future<void> clearMediaCache();
   Future<void> joinVoiceRoom(String roomId);
   Future<void> leaveVoiceRoom();
   Future<void> setVoiceMuted(bool muted);

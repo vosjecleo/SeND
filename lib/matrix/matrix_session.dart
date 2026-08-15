@@ -410,6 +410,12 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<bool>('show_native_title_bar') ?? true,
       rememberWindowState:
           content?.tryGet<bool>('remember_window_state') ?? true,
+      settingsShortcut: switch (content?.tryGet<String>('settings_shortcut')) {
+        'controlShiftS' => SettingsShortcut.controlShiftS,
+        'controlAltS' => SettingsShortcut.controlAltS,
+        _ => SettingsShortcut.controlComma,
+      },
+      sendWithCtrlEnter: content?.tryGet<bool>('send_with_ctrl_enter') ?? false,
     );
   }
 
@@ -462,6 +468,8 @@ extension _MatrixSession on MatrixBackend {
           'font_family': preferences.fontFamily,
           'show_native_title_bar': preferences.showNativeTitleBar,
           'remember_window_state': preferences.rememberWindowState,
+          'settings_shortcut': preferences.settingsShortcut.name,
+          'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
         },
       );
       if (identical(_pendingPreferences, preferences)) {

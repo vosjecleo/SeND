@@ -278,6 +278,10 @@ class _ConversationState extends State<_Conversation> {
                 ),
                 title: Text(member.displayName),
                 subtitle: Text(member.userId),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showMemberProfile(this.context, widget.backend, member);
+                },
               ),
           ],
         ),
@@ -488,6 +492,7 @@ class _ConversationState extends State<_Conversation> {
           focusNode: widget.composerFocus,
           roomName: room.name,
           enabled: !widget.sending,
+          sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
           onSend: widget.onSend,
           onAttach: widget.onAttach,
           onGif: widget.onGif,

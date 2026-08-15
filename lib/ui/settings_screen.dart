@@ -5,6 +5,7 @@ import 'package:mime/mime.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../version.dart';
 import 'security_center.dart';
 
 enum _SettingsPage {
@@ -52,6 +53,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     backend.refreshAudioInputs();
     backend.refreshDevices();
     backend.refreshProfile();
+    backend.refreshStorageUsage();
   }
 
   @override
@@ -70,17 +72,31 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         children: [
           SizedBox(
             width: 220,
-            child: ListView(
-              padding: const EdgeInsets.all(10),
+            child: Column(
               children: [
-                for (final page in _SettingsPage.values)
-                  ListTile(
-                    dense: true,
-                    selected: _page == page,
-                    leading: Icon(_iconFor(page), size: 19),
-                    title: Text(_labelFor(page)),
-                    onTap: () => setState(() => _page = page),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(10),
+                    children: [
+                      for (final page in _SettingsPage.values)
+                        ListTile(
+                          dense: true,
+                          selected: _page == page,
+                          leading: Icon(_iconFor(page), size: 19),
+                          title: Text(_labelFor(page)),
+                          onTap: () => setState(() => _page = page),
+                        ),
+                    ],
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.logout, size: 19),
+                  title: const Text('Log out'),
+                  onTap: backend.logout,
+                ),
+                const SizedBox(height: 6),
               ],
             ),
           ),
@@ -194,21 +210,89 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         'stored in Deltiecord’s private per-user application-data directory.',
       ),
       const SizedBox(height: 12),
+      _value('Application data', _formatBytes(backend.storageUsageBytes)),
       const Text(
-        'Cache inspection and selective cleanup are being hardened before '
-        'destructive controls are exposed.',
+        'This includes the encrypted Matrix database and locally cached media. '
+        'Clearing media cache does not remove room keys or your signed-in session.',
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          OutlinedButton.icon(
+            onPressed: backend.storageLoading
+                ? null
+                : backend.refreshStorageUsage,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Recalculate'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: backend.storageLoading ? null : backend.clearMediaCache,
+            icon: const Icon(Icons.cleaning_services_outlined),
+            label: const Text('Clear media cache'),
+          ),
+        ],
       ),
     ]),
     _SettingsPage.shortcuts => _section('Keyboard shortcuts', [
       _shortcut('Focus message composer', 'Any printable key'),
-      _shortcut('Send message', 'Enter'),
-      _shortcut('New line', 'Shift + Enter'),
+      DropdownButtonFormField<bool>(
+        initialValue: backend.preferences.sendWithCtrlEnter,
+        decoration: const InputDecoration(
+          labelText: 'Send message',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(value: false, child: Text('Enter')),
+          DropdownMenuItem(value: true, child: Text('Ctrl + Enter')),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            backend.updatePreferences(
+              backend.preferences.copyWith(sendWithCtrlEnter: value),
+            );
+          }
+        },
+      ),
+      const SizedBox(height: 12),
+      _shortcut(
+        'New line',
+        backend.preferences.sendWithCtrlEnter ? 'Enter' : 'Shift + Enter',
+      ),
       _shortcut('Paste attachment', 'Ctrl + V'),
-      _shortcut('Open settings', 'Ctrl + ,'),
+      DropdownButtonFormField<SettingsShortcut>(
+        initialValue: backend.preferences.settingsShortcut,
+        decoration: const InputDecoration(
+          labelText: 'Open settings',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: SettingsShortcut.controlComma,
+            child: Text('Ctrl + ,'),
+          ),
+          DropdownMenuItem(
+            value: SettingsShortcut.controlShiftS,
+            child: Text('Ctrl + Shift + S'),
+          ),
+          DropdownMenuItem(
+            value: SettingsShortcut.controlAltS,
+            child: Text('Ctrl + Alt + S'),
+          ),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            backend.updatePreferences(
+              backend.preferences.copyWith(settingsShortcut: value),
+            );
+          }
+        },
+      ),
+      const SizedBox(height: 12),
       _shortcut('Close dialog / menu', 'Escape'),
     ]),
     _SettingsPage.advanced => _section('Advanced diagnostics', [
-      _value('Deltiecord', 'v0.4.0'),
+      _value('Deltiecord', 'v$deltiecordVersion ($deltiecordBuildNumber)'),
       _value('Session', backend.status.name),
       _value('Connection', backend.connectionStatus.name),
       _value('Voice', backend.voiceConnectionStatus.name),
@@ -217,7 +301,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       OutlinedButton.icon(
         onPressed: () {
           final report = [
-            'Deltiecord v0.4.0',
+            'Deltiecord v$deltiecordVersion ($deltiecordBuildNumber)',
             'session=${backend.status.name}',
             'homeserver=${backend.homeserver}',
             'device=${backend.deviceId}',
@@ -239,7 +323,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]),
     _SettingsPage.about => _section('About Deltiecord', [
       const Text(
-        'Deltiecord v0.4.1\n'
+        'Deltiecord v$deltiecordVersion\n'
         'A compact, old-school desktop Matrix client built with Flutter.',
       ),
       const SizedBox(height: 12),
@@ -313,12 +397,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     const Divider(height: 28),
     _value('Homeserver', backend.homeserver?.toString() ?? 'Unavailable'),
     _value('Device ID', backend.deviceId ?? 'Unavailable'),
-    const SizedBox(height: 12),
-    OutlinedButton.icon(
-      onPressed: backend.logout,
-      icon: const Icon(Icons.logout),
-      label: const Text('Log out'),
-    ),
     const SizedBox(height: 28),
     Text(
       'Danger zone',
@@ -449,7 +527,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Native title bar'),
-        subtitle: const Text('Show GTK window decorations on Linux.'),
+        subtitle: const Text(
+          'Show GTK window decorations on Linux. Applies after restart.',
+        ),
         value: preferences.showNativeTitleBar,
         onChanged: (value) => backend.updatePreferences(
           preferences.copyWith(showNativeTitleBar: value),
@@ -817,4 +897,13 @@ String _formatDeviceTime(DateTime value) {
   String two(int number) => number.toString().padLeft(2, '0');
   return '${local.year}-${two(local.month)}-${two(local.day)} '
       '${two(local.hour)}:${two(local.minute)}';
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KiB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GiB';
 }

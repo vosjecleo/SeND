@@ -10,6 +10,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
     presentation: _presentationFor(room),
     voiceParticipants: _voiceParticipants(room),
     avatarBytes: _avatarBytes[room.id],
+    topic: room.topic,
   );
 
   RoomPresentation _presentationFor(Room room) {

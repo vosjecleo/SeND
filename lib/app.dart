@@ -19,9 +19,11 @@ class DeltiecordApp extends StatelessWidget {
       listenable: backend,
       builder: (context, _) {
         final preferences = backend.preferences;
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => DesktopWindowService.apply(preferences),
-        );
+        if (backend.status == SessionStatus.signedIn) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => DesktopWindowService.apply(preferences),
+          );
+        }
         final contrast = preferences.highContrast;
         return MaterialApp(
           title: 'Deltiecord',

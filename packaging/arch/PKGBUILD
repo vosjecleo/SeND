@@ -1,5 +1,5 @@
 pkgname=deltiecord
-pkgver=0.4.1
+pkgver=0.4.2
 pkgrel=1
 pkgdesc='Compact Matrix desktop client'
 arch=('x86_64')
