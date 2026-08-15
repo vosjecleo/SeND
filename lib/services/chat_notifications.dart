@@ -3,7 +3,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 /// Platform boundary for notifications emitted by the Matrix backend.
 abstract interface class ChatNotificationSink {
   Future<void> initialize();
-  Future<void> show({required String title, required String body});
+  Future<void> show({
+    required String title,
+    required String body,
+    bool sound = true,
+  });
 }
 
 class DesktopChatNotificationSink implements ChatNotificationSink {
@@ -19,18 +23,22 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
   );
 
   @override
-  Future<void> show({required String title, required String body}) =>
-      _plugin.show(
-        id: _nextId++,
-        title: title,
-        body: body,
-        notificationDetails: const NotificationDetails(
-          linux: LinuxNotificationDetails(
-            category: LinuxNotificationCategory.imReceived,
-            urgency: LinuxNotificationUrgency.normal,
-          ),
-        ),
-      );
+  Future<void> show({
+    required String title,
+    required String body,
+    bool sound = true,
+  }) => _plugin.show(
+    id: _nextId++,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      linux: LinuxNotificationDetails(
+        category: LinuxNotificationCategory.imReceived,
+        urgency: LinuxNotificationUrgency.normal,
+        suppressSound: !sound,
+      ),
+    ),
+  );
 }
 
 class SilentChatNotificationSink implements ChatNotificationSink {
@@ -40,5 +48,9 @@ class SilentChatNotificationSink implements ChatNotificationSink {
   Future<void> initialize() async {}
 
   @override
-  Future<void> show({required String title, required String body}) async {}
+  Future<void> show({
+    required String title,
+    required String body,
+    bool sound = true,
+  }) async {}
 }

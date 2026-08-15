@@ -1,5 +1,7 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mime/mime.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
@@ -11,11 +13,13 @@ enum _SettingsPage {
   encryption,
   audioVideo,
   notifications,
+  privacy,
   appearance,
   accessibility,
   storage,
   shortcuts,
   advanced,
+  about,
 }
 
 Future<void> showDeltiecordSettings(
@@ -47,6 +51,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     super.initState();
     backend.refreshAudioInputs();
     backend.refreshDevices();
+    backend.refreshProfile();
   }
 
   @override
@@ -98,16 +103,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   );
 
   Widget _pageBody() => switch (_page) {
-    _SettingsPage.account => _section('Account', [
-      _value('Matrix ID', backend.userId ?? 'Unavailable'),
-      _value('Homeserver', backend.homeserver?.toString() ?? 'Unavailable'),
-      const SizedBox(height: 16),
-      OutlinedButton.icon(
-        onPressed: backend.logout,
-        icon: const Icon(Icons.logout),
-        label: const Text('Log out'),
-      ),
-    ]),
+    _SettingsPage.account => _account(),
     _SettingsPage.devices => _devices(),
     _SettingsPage.encryption => _section('Encryption & recovery', [
       _value('Status', _encryptionLabel(backend.encryptionSetup.status)),
@@ -161,6 +157,15 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     _SettingsPage.notifications => _section('Notifications', [
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
+        title: const Text('Desktop notifications'),
+        subtitle: const Text('Notify for new Matrix messages.'),
+        value: backend.preferences.notificationsEnabled,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(notificationsEnabled: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
         title: const Text('Show message content'),
         subtitle: const Text(
           'Include decrypted message previews in notifications.',
@@ -168,7 +173,19 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         value: backend.notificationPreviewsEnabled,
         onChanged: backend.setNotificationPreviewsEnabled,
       ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Notification sound'),
+        subtitle: const Text(
+          'Allow the desktop notification service to play sound.',
+        ),
+        value: backend.preferences.notificationSound,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(notificationSound: value),
+        ),
+      ),
     ]),
+    _SettingsPage.privacy => _privacy(),
     _SettingsPage.appearance => _appearance(),
     _SettingsPage.accessibility => _accessibility(),
     _SettingsPage.storage => _section('Storage', [
@@ -220,7 +237,102 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         'decrypted messages, and media encryption keys.',
       ),
     ]),
+    _SettingsPage.about => _section('About Deltiecord', [
+      const Text(
+        'Deltiecord v0.4.1\n'
+        'A compact, old-school desktop Matrix client built with Flutter.',
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'Matrix connectivity and encryption use matrix-dart-sdk. MatrixRTC, '
+        'media_kit, Flutter WebRTC, Flutter Quill, GIPHY, Element, and '
+        'FluffyChat informed or support parts of the implementation.',
+      ),
+      const SizedBox(height: 12),
+      const SelectableText(
+        'Full acknowledgements and upstream license links are in CREDITS.md.',
+      ),
+      const SizedBox(height: 20),
+      const Text(
+        'Made for dense desktops, strange little computers, and friends.',
+      ),
+    ]),
   };
+
+  Widget _account() => _section('Account', [
+    Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 38,
+          backgroundImage: backend.profileAvatarBytes == null
+              ? null
+              : MemoryImage(backend.profileAvatarBytes!),
+          child: backend.profileAvatarBytes == null
+              ? const Icon(Icons.person, size: 34)
+              : null,
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                backend.profileDisplayName ??
+                    backend.userId ??
+                    'Matrix account',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(backend.userId ?? 'Unavailable'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: _editDisplayName,
+                    child: const Text('Change display name'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _pickAvatar,
+                    child: const Text('Change picture'),
+                  ),
+                  if (backend.profileAvatarBytes != null)
+                    TextButton(
+                      onPressed: () => _runSettingAction(
+                        () => backend.setProfileAvatar(null),
+                      ),
+                      child: const Text('Remove picture'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+    const Divider(height: 28),
+    _value('Homeserver', backend.homeserver?.toString() ?? 'Unavailable'),
+    _value('Device ID', backend.deviceId ?? 'Unavailable'),
+    const SizedBox(height: 12),
+    OutlinedButton.icon(
+      onPressed: backend.logout,
+      icon: const Icon(Icons.logout),
+      label: const Text('Log out'),
+    ),
+    const SizedBox(height: 28),
+    Text(
+      'Danger zone',
+      style: TextStyle(color: Theme.of(context).colorScheme.error),
+    ),
+    const Text(
+      'Permanently deactivate this Matrix account and request data erasure.',
+    ),
+    OutlinedButton.icon(
+      onPressed: _confirmDeleteAccount,
+      icon: const Icon(Icons.delete_forever_outlined),
+      label: const Text('Delete account'),
+    ),
+  ]);
 
   Widget _appearance() {
     final preferences = backend.preferences;
@@ -267,6 +379,73 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           preferences.copyWith(autoplayGifs: value),
         ),
       ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        initialValue: preferences.fontFamily,
+        decoration: const InputDecoration(
+          labelText: 'Interface font',
+          border: OutlineInputBorder(),
+        ),
+        items:
+            const [
+                  'System',
+                  'Noto Sans',
+                  'DejaVu Sans',
+                  'Liberation Sans',
+                  'monospace',
+                ]
+                .map((font) => DropdownMenuItem(value: font, child: Text(font)))
+                .toList(growable: false),
+        onChanged: (font) {
+          if (font != null) {
+            backend.updatePreferences(preferences.copyWith(fontFamily: font));
+          }
+        },
+      ),
+      const SizedBox(height: 16),
+      const Text('Accent colour'),
+      Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        children:
+            const [
+                  0xff6975d9,
+                  0xff9b6bd3,
+                  0xff3f94a8,
+                  0xff4f9b68,
+                  0xffc47a45,
+                  0xffba6074,
+                ]
+                .map((color) {
+                  final selected = preferences.accentColor == color;
+                  return Tooltip(
+                    message:
+                        '#${color.toRadixString(16).substring(2).toUpperCase()}',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => backend.updatePreferences(
+                        preferences.copyWith(accentColor: color),
+                      ),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: Color(color),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected ? Colors.white : Colors.transparent,
+                            width: 3,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(Icons.check, size: 17)
+                            : null,
+                      ),
+                    ),
+                  );
+                })
+                .toList(growable: false),
+      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Native title bar'),
@@ -282,6 +461,40 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         value: preferences.rememberWindowState,
         onChanged: (value) => backend.updatePreferences(
           preferences.copyWith(rememberWindowState: value),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _privacy() {
+    final preferences = backend.preferences;
+    return _section('Privacy & presence', [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Send read receipts'),
+        subtitle: const Text('Let rooms know which messages you have read.'),
+        value: preferences.sendReadReceipts,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(sendReadReceipts: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Send typing notifications'),
+        value: preferences.sendTypingNotifications,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(sendTypingNotifications: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Share online presence'),
+        subtitle: const Text(
+          'Turning this off reports this device as offline.',
+        ),
+        value: preferences.sharePresence,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(sharePresence: value),
         ),
       ),
     ]);
@@ -327,6 +540,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                 if (device.lastSeenIp != null) device.lastSeenIp!,
               ].join(' · '),
             ),
+            trailing: device.current
+                ? null
+                : IconButton(
+                    tooltip: 'Remove device',
+                    onPressed: () => _confirmRemoveDevice(device),
+                    icon: const Icon(Icons.logout),
+                  ),
           ),
         ),
     const Text(
@@ -385,6 +605,171 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   );
 
   Widget _shortcut(String action, String keys) => _value(action, keys);
+
+  Future<void> _editDisplayName() async {
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          _DisplayNameDialog(initialValue: backend.profileDisplayName ?? ''),
+    );
+    if (value?.isNotEmpty == true) {
+      await _runSettingAction(() => backend.setProfileDisplayName(value!));
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final bytes = file.bytes ?? await result.xFiles.single.readAsBytes();
+    await _runSettingAction(
+      () => backend.setProfileAvatar(
+        bytes,
+        fileName: file.name,
+        mimeType: lookupMimeType(file.name, headerBytes: bytes) ?? 'image/png',
+      ),
+    );
+  }
+
+  Future<String?> _askForPassword(String title, String warning) async {
+    final password = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          _PasswordPromptDialog(title: title, warning: warning),
+    );
+    return password?.isNotEmpty == true ? password : null;
+  }
+
+  Future<void> _confirmRemoveDevice(DeviceSessionSummary device) async {
+    final password = await _askForPassword(
+      'Remove ${device.displayName}?',
+      'This signs that device out and removes its Matrix device keys. '
+          'Encrypted history stored only on that device may become unavailable.',
+    );
+    if (password != null) {
+      await _runSettingAction(() => backend.removeDevice(device.id, password));
+    }
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final password = await _askForPassword(
+      'Permanently delete account?',
+      'This deactivates ${backend.userId}, signs out all devices, and requests '
+          'server-side data erasure. This cannot be undone.',
+    );
+    if (password != null) {
+      await _runSettingAction(() => backend.deleteAccount(password));
+    }
+  }
+
+  Future<void> _runSettingAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(exception.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+}
+
+class _DisplayNameDialog extends StatefulWidget {
+  const _DisplayNameDialog({required this.initialValue});
+
+  final String initialValue;
+
+  @override
+  State<_DisplayNameDialog> createState() => _DisplayNameDialogState();
+}
+
+class _DisplayNameDialogState extends State<_DisplayNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Change display name'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      decoration: const InputDecoration(labelText: 'Display name'),
+    ),
+    actions: [
+      TextButton(
+        onPressed: Navigator.of(context).pop,
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+        child: const Text('Save'),
+      ),
+    ],
+  );
+}
+
+class _PasswordPromptDialog extends StatefulWidget {
+  const _PasswordPromptDialog({required this.title, required this.warning});
+
+  final String title;
+  final String warning;
+
+  @override
+  State<_PasswordPromptDialog> createState() => _PasswordPromptDialogState();
+}
+
+class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.warning),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Matrix account password',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: Navigator.of(context).pop,
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.of(context).pop(_controller.text),
+        child: const Text('Confirm'),
+      ),
+    ],
+  );
 }
 
 IconData _iconFor(_SettingsPage page) => switch (page) {
@@ -393,11 +778,13 @@ IconData _iconFor(_SettingsPage page) => switch (page) {
   _SettingsPage.encryption => Icons.shield_outlined,
   _SettingsPage.audioVideo => Icons.headset_mic_outlined,
   _SettingsPage.notifications => Icons.notifications_outlined,
+  _SettingsPage.privacy => Icons.visibility_outlined,
   _SettingsPage.appearance => Icons.palette_outlined,
   _SettingsPage.accessibility => Icons.accessibility_new,
   _SettingsPage.storage => Icons.storage_outlined,
   _SettingsPage.shortcuts => Icons.keyboard_outlined,
   _SettingsPage.advanced => Icons.terminal,
+  _SettingsPage.about => Icons.info_outline,
 };
 
 String _labelFor(_SettingsPage page) => switch (page) {
@@ -406,11 +793,13 @@ String _labelFor(_SettingsPage page) => switch (page) {
   _SettingsPage.encryption => 'Encryption',
   _SettingsPage.audioVideo => 'Audio & video',
   _SettingsPage.notifications => 'Notifications',
+  _SettingsPage.privacy => 'Privacy',
   _SettingsPage.appearance => 'Appearance',
   _SettingsPage.accessibility => 'Accessibility',
   _SettingsPage.storage => 'Storage',
   _SettingsPage.shortcuts => 'Shortcuts',
   _SettingsPage.advanced => 'Advanced',
+  _SettingsPage.about => 'About',
 };
 
 String _encryptionLabel(EncryptionSetupStatus status) => switch (status) {

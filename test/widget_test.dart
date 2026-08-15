@@ -74,7 +74,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Matrix ID'), findsOneWidget);
+    expect(find.text('Homeserver'), findsOneWidget);
   });
 
   testWidgets('shows SDK-independent Matrix device sessions', (tester) async {
@@ -95,6 +95,33 @@ void main() {
 
     expect(find.text('Deltiecord Desktop (this device)'), findsOneWidget);
     expect(find.textContaining('TESTDEVICE'), findsOneWidget);
+  });
+
+  testWidgets('removes another device only after password confirmation', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..deviceList = const [
+        DeviceSessionSummary(
+          id: 'OLDDEVICE',
+          displayName: 'Old laptop',
+          current: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Devices'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Remove device'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'secret');
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(backend.removedDeviceId, 'OLDDEVICE');
+    expect(backend.removalPassword, 'secret');
   });
 
   testWidgets('selects a Matrix Space from the server bar', (tester) async {
@@ -521,6 +548,8 @@ class FakeBackend extends ChatBackend {
   final List<(String, String)> toggledReactions = [];
   String? lastReplyToMessageId;
   String? lastEditMessageId;
+  String? removedDeviceId;
+  String? removalPassword;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
     keyBackupEnabled: true,
@@ -534,6 +563,12 @@ class FakeBackend extends ChatBackend {
   String? get deviceId => 'TESTDEVICE';
   @override
   Uri? get homeserver => Uri.parse('https://matrix.example.org');
+  @override
+  String? get profileDisplayName => 'Deltie';
+  @override
+  Uint8List? get profileAvatarBytes => null;
+  @override
+  bool get profileLoading => false;
   @override
   AppPreferences get preferences => const AppPreferences();
   @override
@@ -647,6 +682,24 @@ class FakeBackend extends ChatBackend {
   Future<void> selectAudioInput(String? deviceId) async {}
   @override
   Future<void> refreshDevices() async {}
+  @override
+  Future<void> refreshProfile() async {}
+  @override
+  Future<void> setProfileDisplayName(String displayName) async {}
+  @override
+  Future<void> setProfileAvatar(
+    Uint8List? bytes, {
+    String fileName = 'avatar.png',
+    String mimeType = 'image/png',
+  }) async {}
+  @override
+  Future<void> removeDevice(String deviceId, String password) async {
+    removedDeviceId = deviceId;
+    removalPassword = password;
+  }
+
+  @override
+  Future<void> deleteAccount(String password) async {}
   @override
   Future<void> joinVoiceRoom(String roomId) async {}
   @override

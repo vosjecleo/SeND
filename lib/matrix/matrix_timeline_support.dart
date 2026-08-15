@@ -129,6 +129,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _markSelectedRoomRead() async {
+    if (!_preferences.sendReadReceipts) return;
     final initialTimeline = _timeline;
     if (initialTimeline == null || initialTimeline.room.id != _selectedRoomId) {
       return;

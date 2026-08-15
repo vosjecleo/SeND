@@ -43,6 +43,7 @@ extension _MatrixSession on MatrixBackend {
       _error = null;
       if (_matrix.isLogged()) {
         unawaited(refreshEncryptionSetup());
+        unawaited(_refreshProfile());
         unawaited(_refreshRoomMetadata());
         unawaited(_refreshMediaConfig());
       }
@@ -109,6 +110,8 @@ extension _MatrixSession on MatrixBackend {
       _maximumUploadBytes = null;
       _mediaPlaybackSources.clear();
       _deviceSessions = const [];
+      _profileDisplayName = null;
+      _profileAvatarBytes = null;
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
@@ -179,6 +182,121 @@ extension _MatrixSession on MatrixBackend {
     }
   }
 
+  Future<void> _refreshProfile() async {
+    final userId = _matrix.userID;
+    if (userId == null || _profileLoading) return;
+    _profileLoading = true;
+    _notifyBackendListeners();
+    try {
+      final profile = await _matrix.getUserProfile(
+        userId,
+        maxCacheAge: Duration.zero,
+      );
+      _profileDisplayName = profile.displayname ?? userId;
+      final avatar = profile.avatarUrl;
+      if (avatar == null || !avatar.isScheme('mxc')) {
+        _profileAvatarBytes = null;
+      } else {
+        final mediaId = avatar.pathSegments.join('/');
+        final response = await _matrix.getContentThumbnail(
+          avatar.host,
+          mediaId,
+          192,
+          192,
+          method: Method.crop,
+          animated: false,
+        );
+        _profileAvatarBytes = response.data;
+      }
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    } finally {
+      _profileLoading = false;
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _setProfileDisplayName(String displayName) async {
+    final userId = _matrix.userID;
+    if (userId == null || displayName.trim().isEmpty) return;
+    try {
+      await _matrix.setProfileField(userId, 'displayname', {
+        'displayname': displayName.trim(),
+      });
+      _profileDisplayName = displayName.trim();
+      _notifyBackendListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> _setProfileAvatar(
+    Uint8List? bytes, {
+    required String fileName,
+    required String mimeType,
+  }) async {
+    try {
+      await _matrix.setAvatar(
+        bytes == null
+            ? null
+            : MatrixFile(bytes: bytes, name: fileName, mimeType: mimeType),
+      );
+      _profileAvatarBytes = bytes;
+      _notifyBackendListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> _removeDevice(String targetDeviceId, String password) async {
+    if (targetDeviceId == _matrix.deviceID) {
+      throw StateError('Log out to remove the device currently in use.');
+    }
+    await _runPasswordUia(
+      password,
+      (auth) => _matrix.deleteDevice(targetDeviceId, auth: auth),
+    );
+    await _refreshDevices();
+  }
+
+  Future<void> _deleteAccount(String password) async {
+    await _runPasswordUia(
+      password,
+      (auth) => _matrix.deactivateAccount(auth: auth, erase: true),
+    );
+    try {
+      await _matrix.logout();
+    } catch (_) {
+      // Deactivation commonly invalidates the token before logout can run.
+    }
+    _status = SessionStatus.signedOut;
+    _connectionStatus = ConnectionStatus.offline;
+    _notifyBackendListeners();
+  }
+
+  Future<T> _runPasswordUia<T>(
+    String password,
+    Future<T> Function(AuthenticationData? auth) request,
+  ) async {
+    if (password.isEmpty) throw ArgumentError('Enter your account password.');
+    try {
+      return await request(null);
+    } on MatrixException catch (exception) {
+      if (!exception.requireAdditionalAuthentication) rethrow;
+      return request(
+        AuthenticationPassword(
+          session: exception.session,
+          password: password,
+          identifier: AuthenticationUserIdentifier(user: _matrix.userID!),
+        ),
+      );
+    }
+  }
+
   Future<void> _joinVoiceRoom(String roomId) async {
     _initializeVoice();
     await _voice?.join(roomId);
@@ -189,6 +307,7 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _leaveVoiceRoom() async => _voice?.leave();
 
   Future<void> _setComposerTyping(bool typing) async {
+    if (!_preferences.sendTypingNotifications) return;
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (room == null || room.isSpace) return;
     _typingStopTimer?.cancel();
@@ -209,7 +328,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _notifyNewMessages() async {
-    if (!_matrix.isLogged()) return;
+    if (!_matrix.isLogged() || !_preferences.notificationsEnabled) return;
     final rooms = _joinedRooms.where((room) => !room.isSpace);
     if (!_notificationsPrimed) {
       for (final room in rooms) {
@@ -255,6 +374,7 @@ extension _MatrixSession on MatrixBackend {
       await _notifications.show(
         title: '$sender in ${room.getLocalizedDisplayname()}',
         body: notificationBody,
+        sound: _preferences.notificationSound,
       );
     }
   }
@@ -277,6 +397,15 @@ extension _MatrixSession on MatrixBackend {
       reducedMotion: content?.tryGet<bool>('reduced_motion') ?? false,
       highContrast: content?.tryGet<bool>('high_contrast') ?? false,
       autoplayGifs: content?.tryGet<bool>('autoplay_gifs') ?? true,
+      notificationsEnabled:
+          content?.tryGet<bool>('notifications_enabled') ?? true,
+      notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
+      sendReadReceipts: content?.tryGet<bool>('send_read_receipts') ?? true,
+      sendTypingNotifications:
+          content?.tryGet<bool>('send_typing_notifications') ?? true,
+      sharePresence: content?.tryGet<bool>('share_presence') ?? true,
+      accentColor: content?.tryGet<int>('accent_color') ?? 0xff6975d9,
+      fontFamily: content?.tryGet<String>('font_family') ?? 'System',
       showNativeTitleBar:
           content?.tryGet<bool>('show_native_title_bar') ?? true,
       rememberWindowState:
@@ -286,6 +415,18 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
     if (_matrix.userID == null) return;
+    if (preferences.sharePresence != _preferences.sharePresence) {
+      unawaited(
+        _matrix
+            .setPresence(
+              _matrix.userID!,
+              preferences.sharePresence
+                  ? PresenceType.online
+                  : PresenceType.offline,
+            )
+            .catchError((_) {}),
+      );
+    }
     _preferences = preferences;
     _pendingPreferences = preferences;
     _settingsSaveTimer?.cancel();
@@ -312,6 +453,13 @@ extension _MatrixSession on MatrixBackend {
           'reduced_motion': preferences.reducedMotion,
           'high_contrast': preferences.highContrast,
           'autoplay_gifs': preferences.autoplayGifs,
+          'notifications_enabled': preferences.notificationsEnabled,
+          'notification_sound': preferences.notificationSound,
+          'send_read_receipts': preferences.sendReadReceipts,
+          'send_typing_notifications': preferences.sendTypingNotifications,
+          'share_presence': preferences.sharePresence,
+          'accent_color': preferences.accentColor,
+          'font_family': preferences.fontFamily,
           'show_native_title_bar': preferences.showNativeTitleBar,
           'remember_window_state': preferences.rememberWindowState,
         },

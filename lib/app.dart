@@ -35,11 +35,14 @@ class DeltiecordApp extends StatelessWidget {
           theme: ThemeData(
             brightness: Brightness.dark,
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xff6975d9),
+              seedColor: Color(preferences.accentColor),
               brightness: Brightness.dark,
               contrastLevel: contrast ? 1 : 0,
             ),
             scaffoldBackgroundColor: const Color(0xff25262c),
+            fontFamily: preferences.fontFamily == 'System'
+                ? null
+                : preferences.fontFamily,
             visualDensity: preferences.density == InterfaceDensity.compact
                 ? VisualDensity.compact
                 : VisualDensity.standard,

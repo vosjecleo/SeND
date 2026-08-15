@@ -79,6 +79,9 @@ class MatrixBackend extends ChatBackend {
   int? _maximumUploadBytes;
   List<DeviceSessionSummary> _deviceSessions = const [];
   bool _devicesLoading = false;
+  String? _profileDisplayName;
+  Uint8List? _profileAvatarBytes;
+  bool _profileLoading = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -99,6 +102,12 @@ class MatrixBackend extends ChatBackend {
   String? get deviceId => _client?.deviceID;
   @override
   Uri? get homeserver => _client?.homeserver;
+  @override
+  String? get profileDisplayName => _profileDisplayName;
+  @override
+  Uint8List? get profileAvatarBytes => _profileAvatarBytes;
+  @override
+  bool get profileLoading => _profileLoading;
   @override
   AppPreferences get preferences => _preferences;
   @override
@@ -307,6 +316,27 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> refreshDevices() => _refreshDevices();
+
+  @override
+  Future<void> refreshProfile() => _refreshProfile();
+
+  @override
+  Future<void> setProfileDisplayName(String displayName) =>
+      _setProfileDisplayName(displayName);
+
+  @override
+  Future<void> setProfileAvatar(
+    Uint8List? bytes, {
+    String fileName = 'avatar.png',
+    String mimeType = 'image/png',
+  }) => _setProfileAvatar(bytes, fileName: fileName, mimeType: mimeType);
+
+  @override
+  Future<void> removeDevice(String deviceId, String password) =>
+      _removeDevice(deviceId, password);
+
+  @override
+  Future<void> deleteAccount(String password) => _deleteAccount(password);
 
   @override
   Future<void> joinVoiceRoom(String roomId) => _joinVoiceRoom(roomId);

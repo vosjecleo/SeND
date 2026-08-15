@@ -13,6 +13,9 @@ abstract class ChatBackend extends ChangeNotifier {
   String? get userId;
   String? get deviceId;
   Uri? get homeserver;
+  String? get profileDisplayName;
+  Uint8List? get profileAvatarBytes;
+  bool get profileLoading;
   AppPreferences get preferences;
   EncryptionSetupState get encryptionSetup;
   List<SpaceSummary> get spaces;
@@ -64,6 +67,15 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);
   Future<void> refreshDevices();
+  Future<void> refreshProfile();
+  Future<void> setProfileDisplayName(String displayName);
+  Future<void> setProfileAvatar(
+    Uint8List? bytes, {
+    String fileName = 'avatar.png',
+    String mimeType = 'image/png',
+  });
+  Future<void> removeDevice(String deviceId, String password);
+  Future<void> deleteAccount(String password);
   Future<void> joinVoiceRoom(String roomId);
   Future<void> leaveVoiceRoom();
   Future<void> setVoiceMuted(bool muted);

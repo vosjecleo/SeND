@@ -14,6 +14,13 @@ class AppPreferences {
     this.reducedMotion = false,
     this.highContrast = false,
     this.autoplayGifs = true,
+    this.notificationsEnabled = true,
+    this.notificationSound = true,
+    this.sendReadReceipts = true,
+    this.sendTypingNotifications = true,
+    this.sharePresence = true,
+    this.accentColor = 0xff6975d9,
+    this.fontFamily = 'System',
     this.showNativeTitleBar = true,
     this.rememberWindowState = true,
   });
@@ -24,6 +31,13 @@ class AppPreferences {
   final bool reducedMotion;
   final bool highContrast;
   final bool autoplayGifs;
+  final bool notificationsEnabled;
+  final bool notificationSound;
+  final bool sendReadReceipts;
+  final bool sendTypingNotifications;
+  final bool sharePresence;
+  final int accentColor;
+  final String fontFamily;
   final bool showNativeTitleBar;
   final bool rememberWindowState;
 
@@ -34,6 +48,13 @@ class AppPreferences {
     bool? reducedMotion,
     bool? highContrast,
     bool? autoplayGifs,
+    bool? notificationsEnabled,
+    bool? notificationSound,
+    bool? sendReadReceipts,
+    bool? sendTypingNotifications,
+    bool? sharePresence,
+    int? accentColor,
+    String? fontFamily,
     bool? showNativeTitleBar,
     bool? rememberWindowState,
   }) => AppPreferences(
@@ -43,6 +64,14 @@ class AppPreferences {
     reducedMotion: reducedMotion ?? this.reducedMotion,
     highContrast: highContrast ?? this.highContrast,
     autoplayGifs: autoplayGifs ?? this.autoplayGifs,
+    notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    notificationSound: notificationSound ?? this.notificationSound,
+    sendReadReceipts: sendReadReceipts ?? this.sendReadReceipts,
+    sendTypingNotifications:
+        sendTypingNotifications ?? this.sendTypingNotifications,
+    sharePresence: sharePresence ?? this.sharePresence,
+    accentColor: accentColor ?? this.accentColor,
+    fontFamily: fontFamily ?? this.fontFamily,
     showNativeTitleBar: showNativeTitleBar ?? this.showNativeTitleBar,
     rememberWindowState: rememberWindowState ?? this.rememberWindowState,
   );
