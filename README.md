@@ -159,7 +159,7 @@ Promotion gate: every major planned communication feature exists and has a
 usable end-to-end flow; remaining work is primarily UX depth, administration,
 and hardening.
 
-### v0.4 — UI, UX, and customization
+### v0.4 — UI, UX, customization, and management
 
 `0.4` gives all implemented features coherent desktop workflows and their first
 complete design pass.
@@ -177,11 +177,11 @@ complete design pass.
 - Complete the original Deltiecord visual identity: old desktop-software/Y2K
   character, restrained animation, dense typography, and no copied Discord
   branding or assets.
-
-### v0.5 — Roles, permissions, and room management
-
-`0.5` makes server and room administration understandable without hiding Matrix
-power levels behind misleading Discord terminology.
+- Beginning with **v0.4.1**, fold the former v0.5 administration roadmap into
+  this series: richer account/profile, device, privacy, notification, colour,
+  font, title-bar, and About settings alongside permission-aware management.
+- Make server and room administration understandable without hiding Matrix
+  power levels behind misleading Discord terminology.
 
 - Present practical member/moderator/admin roles derived from Matrix power levels
   while retaining accurate permission details where needed.
@@ -196,6 +196,9 @@ power levels behind misleading Discord terminology.
   non-interoperable state.
 - Add safety rails and confirmations for encryption changes, room upgrades,
   destructive moderation, ownership transfer, and leaving the last-admin role.
+
+There is no separate v0.5 milestone. These capabilities now ship incrementally
+as v0.4.x so the design and management workflows evolve together.
 
 ### Later v0.x — Hardening and platform work
 
