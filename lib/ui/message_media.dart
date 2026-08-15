@@ -346,10 +346,26 @@ class _AttachmentViewState extends State<_AttachmentView> {
             Positioned(
               right: 12,
               top: 12,
-              child: IconButton.filledTonal(
-                tooltip: 'Close image',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
+              child: Row(
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: 'Save image',
+                    onPressed: _save,
+                    icon: const Icon(Icons.download),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: 'Open externally',
+                    onPressed: _open,
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: 'Close image',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
             ),
           ],

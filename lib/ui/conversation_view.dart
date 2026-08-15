@@ -65,7 +65,7 @@ class _ConversationState extends State<_Conversation> {
   void initState() {
     super.initState();
     _roomId = widget.backend.selectedRoom?.id;
-    _scrollController.addListener(_loadHistoryNearTop);
+    _scrollController.addListener(_loadTimelineNearEdges);
     _focusComposerAfterBuild();
   }
 
@@ -75,63 +75,79 @@ class _ConversationState extends State<_Conversation> {
     });
   }
 
-  void _loadHistoryNearTop() {
+  void _loadTimelineNearEdges() {
+    if (!_scrollController.hasClients) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 240) {
       _loadOlderAnchored();
+    } else if (_scrollController.position.pixels <= 240 &&
+        widget.backend.canLoadMoreFuture) {
+      _loadNewerAnchored();
     }
   }
 
-  Future<void> _loadOlderAnchored() async {
-    if (_loadingAnchoredHistory || !_scrollController.hasClients) return;
-    _loadingAnchoredHistory = true;
-    final position = _scrollController.position;
-    final oldPixels = position.pixels;
-    final oldExtent = position.maxScrollExtent;
-    final preferences = widget.backend.preferences;
-    final atCap =
-        widget.backend.messages.length >=
-        min(120, preferences.timelineChunkSize * preferences.timelineChunkCap);
-    await widget.backend.loadMoreHistory();
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      if (atCap) {
-        final extentDelta =
-            _scrollController.position.maxScrollExtent - oldExtent;
-        _scrollController.jumpTo(
-          (oldPixels + extentDelta).clamp(
-            0,
-            _scrollController.position.maxScrollExtent,
-          ),
-        );
+  (String, double)? _captureVisibleAnchor() {
+    final viewportCenter = MediaQuery.sizeOf(context).height / 2;
+    (String, double)? closest;
+    var closestDistance = double.infinity;
+    for (final entry in _messageKeys.entries) {
+      final renderObject = entry.value.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.attached) continue;
+      final offset = renderObject.localToGlobal(Offset.zero);
+      final bottom = offset.dy + renderObject.size.height;
+      if (bottom < 56 || offset.dy > MediaQuery.sizeOf(context).height - 56) {
+        continue;
       }
-      _loadingAnchoredHistory = false;
-    });
+      final distance = (offset.dy - viewportCenter).abs();
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = (entry.key, offset.dy);
+      }
+    }
+    return closest;
   }
 
-  void _jumpToFirstUnread() {
+  void _restoreVisibleAnchor((String, double)? anchor) {
+    if (anchor == null || !_scrollController.hasClients) return;
+    final renderObject = _messageKeys[anchor.$1]?.currentContext
+        ?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) return;
+    final newOffset = renderObject.localToGlobal(Offset.zero).dy;
+    final corrected =
+        (_scrollController.position.pixels + newOffset - anchor.$2).clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+    _scrollController.jumpTo(corrected);
+  }
+
+  Future<void> _loadPageAnchored(Future<void> Function() load) async {
+    if (_loadingAnchoredHistory || !_scrollController.hasClients) return;
+    _loadingAnchoredHistory = true;
+    final anchor = _captureVisibleAnchor();
+    try {
+      await load();
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _restoreVisibleAnchor(anchor);
+        _loadingAnchoredHistory = false;
+      });
+    } catch (_) {
+      _loadingAnchoredHistory = false;
+    }
+  }
+
+  Future<void> _loadOlderAnchored() =>
+      _loadPageAnchored(widget.backend.loadMoreHistory);
+
+  Future<void> _loadNewerAnchored() =>
+      _loadPageAnchored(widget.backend.loadMoreFuture);
+
+  Future<void> _jumpToFirstUnread() async {
     final eventId = widget.backend.firstUnreadMessageId;
     if (eventId == null || !_scrollController.hasClients) return;
-    final index = widget.backend.messages.indexWhere(
-      (message) => message.id == eventId,
-    );
-    if (index < 0) return;
-    final estimated = (index * 64.0).clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-    _scrollController.jumpTo(estimated);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final context = _messageKeys[eventId]?.currentContext;
-      if (context != null) {
-        Scrollable.ensureVisible(
-          context,
-          duration: const Duration(milliseconds: 180),
-          alignment: 0.5,
-        );
-      }
-    });
+    await _jumpToEvent(eventId);
   }
 
   @override
@@ -202,32 +218,36 @@ class _ConversationState extends State<_Conversation> {
     );
   }
 
-  void _showPins() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Pinned messages'),
-      content: SizedBox(
-        width: 460,
-        child: widget.backend.pinnedMessages.isEmpty
-            ? const Text('No loaded pinned messages')
-            : ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final message in widget.backend.pinnedMessages)
-                    ListTile(
-                      dense: true,
-                      title: Text(message.sender),
-                      subtitle: Text(message.body),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _jumpToEvent(message.id);
-                      },
-                    ),
-                ],
-              ),
+  Future<void> _showPins() async {
+    final messages = await widget.backend.loadPinnedMessages();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pinned messages'),
+        content: SizedBox(
+          width: 460,
+          child: messages.isEmpty
+              ? const Text('No pinned messages')
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final message in messages)
+                      ListTile(
+                        dense: true,
+                        title: Text(message.sender),
+                        subtitle: Text(message.body),
+                        onTap: () {
+                          Navigator.of(dialogContext).pop();
+                          _jumpToEvent(message.id);
+                        },
+                      ),
+                  ],
+                ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> _jumpToEvent(String eventId) async {
     await widget.backend.jumpToEvent(eventId);
@@ -584,6 +604,7 @@ class _ConversationState extends State<_Conversation> {
                                             : null,
                                         onToggleReaction: (key) => backend
                                             .toggleReaction(message.id, key),
+                                        onJumpToReply: _jumpToEvent,
                                         backend: backend,
                                       ),
                                     ],
@@ -601,7 +622,11 @@ class _ConversationState extends State<_Conversation> {
                               Icons.vertical_align_bottom,
                               size: 17,
                             ),
-                            label: const Text('Jump to present'),
+                            label: Text(
+                              room.unreadCount > 0
+                                  ? 'Jump to present (${room.unreadCount})'
+                                  : 'Jump to present',
+                            ),
                           ),
                         ),
                     ],

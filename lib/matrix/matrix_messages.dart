@@ -1,6 +1,30 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMessages on MatrixBackend {
+  Future<List<ChatMessage>> _loadPinnedMessages() async {
+    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    if (room == null || room.pinnedEventIds.isEmpty) return const [];
+    final roomId = room.id;
+    final results = <ChatMessage>[];
+    for (final eventId in room.pinnedEventIds) {
+      try {
+        var event = await room.getEventById(eventId);
+        if (_selectedRoomId != roomId) return const [];
+        if (event == null) continue;
+        if (event.type == EventTypes.Encrypted && _matrix.encryption != null) {
+          event = await _matrix.encryption!.decryptRoomEvent(event);
+        }
+        if (event.type == EventTypes.Message) {
+          results.add(_searchResultFromEvent(event));
+        }
+      } catch (_) {
+        // A redacted or inaccessible pin must not prevent other pins loading.
+      }
+    }
+    results.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return results;
+  }
+
   Future<List<ChatMessage>> _searchRoomHistory(String query) async {
     final normalized = query.trim();
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
@@ -58,6 +82,36 @@ extension _MatrixMessages on MatrixBackend {
       );
       if (timeline.events.length > hardCap) {
         timeline.events.removeRange(0, timeline.events.length - hardCap);
+      }
+      await _decryptTimelineEvents(timeline);
+      if (!identical(timeline, _timeline)) return;
+      await _hydrateTimelineMetadata(timeline);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    } finally {
+      _historyLoading = false;
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _loadMoreFuture() async {
+    final timeline = _timeline;
+    if (timeline == null || _historyLoading || !timeline.canRequestFuture) {
+      return;
+    }
+    _historyLoading = true;
+    _notifyBackendListeners();
+    try {
+      await timeline.requestFuture(
+        historyCount: _preferences.timelineChunkSize,
+      );
+      if (!identical(timeline, _timeline)) return;
+      final hardCap = min(
+        120,
+        _preferences.timelineChunkSize * _preferences.timelineChunkCap,
+      );
+      if (timeline.events.length > hardCap) {
+        timeline.events.removeRange(hardCap, timeline.events.length);
       }
       await _decryptTimelineEvents(timeline);
       if (!identical(timeline, _timeline)) return;

@@ -239,7 +239,7 @@ class _RichComposerState extends State<_RichComposer> {
           ),
         ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 13),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [

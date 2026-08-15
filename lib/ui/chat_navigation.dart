@@ -178,11 +178,11 @@ class _SpaceButton extends StatelessWidget {
           color: selected
               ? Theme.of(context).colorScheme.primaryContainer
               : const Color(0xff2b2d34),
-          borderRadius: BorderRadius.circular(selected ? 13 : 24),
+          borderRadius: BorderRadius.circular(4),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(selected ? 13 : 24),
+            borderRadius: BorderRadius.circular(4),
             child: Center(child: child),
           ),
         ),
@@ -341,53 +341,56 @@ class _RoomPanel extends StatelessWidget {
                   ),
           ),
           const Divider(height: 1),
-          ListTile(
-            dense: true,
-            leading: ClipOval(
-              child: SizedBox.square(
-                dimension: 34,
-                child: backend.profileAvatarBytes == null
-                    ? const ColoredBox(
-                        color: Color(0xff3a3c46),
-                        child: Icon(Icons.person, size: 19),
-                      )
-                    : Image.memory(
-                        backend.profileAvatarBytes!,
-                        fit: BoxFit.cover,
-                      ),
+          SizedBox(
+            height: 56,
+            child: ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              leading: ClipOval(
+                child: SizedBox.square(
+                  dimension: 34,
+                  child: backend.profileAvatarBytes == null
+                      ? const ColoredBox(
+                          color: Color(0xff3a3c46),
+                          child: Icon(Icons.person, size: 19),
+                        )
+                      : Image.memory(
+                          backend.profileAvatarBytes!,
+                          fit: BoxFit.cover,
+                        ),
+                ),
               ),
-            ),
-            title: Text(
-              backend.profileDisplayName ??
-                  backend.userId?.split(':').first.replaceFirst('@', '') ??
-                  'Matrix account',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Encryption & recovery',
-                  icon: Icon(
-                    backend.encryptionSetup.status ==
-                            EncryptionSetupStatus.ready
-                        ? Icons.verified_user
-                        : Icons.gpp_maybe,
-                    size: 19,
+              title: Text(
+                backend.profileDisplayName ??
+                    backend.userId?.split(':').first.replaceFirst('@', '') ??
+                    'Matrix account',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Encryption & recovery',
+                    icon: Icon(
+                      backend.encryptionSetup.status ==
+                              EncryptionSetupStatus.ready
+                          ? Icons.verified_user
+                          : Icons.gpp_maybe,
+                      size: 19,
+                    ),
+                    onPressed: () => showSecurityCenter(context, backend),
                   ),
-                  onPressed: () => showSecurityCenter(context, backend),
-                ),
-                IconButton(
-                  tooltip: 'Settings',
-                  onPressed: () => showDeltiecordSettings(context, backend),
-                  icon: const Icon(Icons.settings_outlined, size: 19),
-                ),
-              ],
+                  IconButton(
+                    tooltip: 'Settings',
+                    onPressed: () => showDeltiecordSettings(context, backend),
+                    icon: const Icon(Icons.settings_outlined, size: 19),
+                  ),
+                ],
+              ),
+              onTap: () => showOwnProfile(context, backend),
             ),
-            onTap: () => showOwnProfile(context, backend),
           ),
-          const SizedBox(height: 4),
         ],
       ),
     );

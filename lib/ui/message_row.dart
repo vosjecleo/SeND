@@ -11,6 +11,7 @@ class _MessageRow extends StatefulWidget {
     required this.onRetry,
     required this.onCancel,
     required this.onToggleReaction,
+    required this.onJumpToReply,
     required this.backend,
   });
 
@@ -23,6 +24,7 @@ class _MessageRow extends StatefulWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onCancel;
   final ValueChanged<String> onToggleReaction;
+  final ValueChanged<String> onJumpToReply;
   final ChatBackend backend;
 
   @override
@@ -245,45 +247,49 @@ class _MessageRowState extends State<_MessageRow> {
                                   ],
                                 ),
                               if (message.reply case final reply?)
-                                Container(
-                                  margin: const EdgeInsets.only(
-                                    top: 3,
-                                    bottom: 2,
-                                  ),
-                                  padding: const EdgeInsets.fromLTRB(
-                                    9,
-                                    5,
-                                    9,
-                                    6,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xff292a30),
-                                    border: Border(
-                                      left: BorderSide(
-                                        color: Color(0xff747fdb),
-                                        width: 3,
-                                      ),
+                                InkWell(
+                                  onTap: () =>
+                                      widget.onJumpToReply(reply.eventId),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(
+                                      top: 3,
+                                      bottom: 2,
                                     ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        reply.sender,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xffb8bfff),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      9,
+                                      5,
+                                      9,
+                                      6,
+                                    ),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xff292a30),
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: Color(0xff747fdb),
+                                          width: 3,
                                         ),
                                       ),
-                                      Text(
-                                        reply.body.replaceAll('\n', ' '),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          reply.sender,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xffb8bfff),
+                                          ),
+                                        ),
+                                        Text(
+                                          reply.body.replaceAll('\n', ' '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               if (message.body.isNotEmpty)

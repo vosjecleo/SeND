@@ -491,8 +491,13 @@ class ReactionSummary {
 }
 
 class ReplyPreview {
-  const ReplyPreview({required this.sender, required this.body});
+  const ReplyPreview({
+    required this.eventId,
+    required this.sender,
+    required this.body,
+  });
 
+  final String eventId;
   final String sender;
   final String body;
 }

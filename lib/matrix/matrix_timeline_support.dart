@@ -43,6 +43,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
       }
       if (repliedTo.type != EventTypes.Message) continue;
       _replyPreviews[event.eventId] = ReplyPreview(
+        eventId: repliedTo.eventId,
         sender: repliedTo.senderFromMemoryOrFallback.calcDisplayname(),
         body: repliedTo.calcUnlocalizedBody(
           hideReply: true,

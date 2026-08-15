@@ -260,7 +260,11 @@ void main() {
           body: 'My actual reply',
           timestamp: DateTime(2026, 8, 13, 12),
           pending: false,
-          reply: const ReplyPreview(sender: 'Bob', body: 'Original message'),
+          reply: const ReplyPreview(
+            eventId: r'$reply',
+            sender: 'Bob',
+            body: 'Original message',
+          ),
         ),
       ];
     await tester.pumpWidget(DeltiecordApp(backend: backend));
@@ -644,6 +648,8 @@ class FakeBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => moreHistory;
   @override
+  bool get canLoadMoreFuture => false;
+  @override
   bool get atTimelinePresent => true;
   @override
   String? get firstUnreadMessageId => null;
@@ -760,6 +766,10 @@ class FakeBackend extends ChatBackend {
   Future<void> clearMediaCache() async {}
   @override
   Future<void> jumpToPresent() async {}
+  @override
+  Future<void> loadMoreFuture() async {}
+  @override
+  Future<List<ChatMessage>> loadPinnedMessages() async => pinnedMessages;
   @override
   Future<void> jumpToEvent(String eventId) async {}
   @override

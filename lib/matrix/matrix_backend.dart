@@ -139,6 +139,8 @@ class MatrixBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
   @override
+  bool get canLoadMoreFuture => _timeline?.canRequestFuture ?? false;
+  @override
   bool get atTimelinePresent => !(_timeline?.canRequestFuture ?? false);
   @override
   String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
@@ -522,6 +524,10 @@ class MatrixBackend extends ChatBackend {
   Future<void> setSelectedRoomMuted(bool muted) => _setSelectedRoomMuted(muted);
   @override
   Future<void> loadMoreHistory() => _loadMoreHistory();
+  @override
+  Future<void> loadMoreFuture() => _loadMoreFuture();
+  @override
+  Future<List<ChatMessage>> loadPinnedMessages() => _loadPinnedMessages();
   @override
   Future<void> jumpToPresent() => _jumpToPresent();
   @override
