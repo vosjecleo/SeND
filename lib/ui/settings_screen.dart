@@ -191,7 +191,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       _shortcut('Close dialog / menu', 'Escape'),
     ]),
     _SettingsPage.advanced => _section('Advanced diagnostics', [
-      _value('Deltiecord', 'v0.4 development'),
+      _value('Deltiecord', 'v0.4.0'),
       _value('Session', backend.status.name),
       _value('Connection', backend.connectionStatus.name),
       _value('Voice', backend.voiceConnectionStatus.name),
@@ -200,7 +200,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       OutlinedButton.icon(
         onPressed: () {
           final report = [
-            'Deltiecord v0.4 development',
+            'Deltiecord v0.4.0',
             'session=${backend.status.name}',
             'homeserver=${backend.homeserver}',
             'device=${backend.deviceId}',
