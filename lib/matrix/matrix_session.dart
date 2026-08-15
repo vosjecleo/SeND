@@ -209,6 +209,51 @@ extension _MatrixSession on MatrixBackend {
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     _notificationPreviewsEnabled =
         content?.tryGet<bool>('notification_previews') ?? true;
+    _preferences = AppPreferences(
+      density: content?.tryGet<String>('density') == 'cozy'
+          ? InterfaceDensity.cozy
+          : InterfaceDensity.compact,
+      fontScale:
+          (content?['font_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ?? 1,
+      roomPanelWidth:
+          (content?['room_panel_width'] as num?)?.toDouble().clamp(220, 420) ??
+          280,
+      reducedMotion: content?.tryGet<bool>('reduced_motion') ?? false,
+      highContrast: content?.tryGet<bool>('high_contrast') ?? false,
+      autoplayGifs: content?.tryGet<bool>('autoplay_gifs') ?? true,
+      showNativeTitleBar:
+          content?.tryGet<bool>('show_native_title_bar') ?? true,
+      rememberWindowState:
+          content?.tryGet<bool>('remember_window_state') ?? true,
+    );
+  }
+
+  Future<void> _updatePreferences(AppPreferences preferences) async {
+    if (_matrix.userID == null) return;
+    final existing =
+        _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
+    try {
+      await _matrix.setAccountData(
+        _matrix.userID!,
+        MatrixBackend._settingsAccountDataType,
+        {
+          ...?existing,
+          'density': preferences.density.name,
+          'font_scale': preferences.fontScale,
+          'room_panel_width': preferences.roomPanelWidth,
+          'reduced_motion': preferences.reducedMotion,
+          'high_contrast': preferences.highContrast,
+          'autoplay_gifs': preferences.autoplayGifs,
+          'show_native_title_bar': preferences.showNativeTitleBar,
+          'remember_window_state': preferences.rememberWindowState,
+        },
+      );
+      _preferences = preferences;
+      _notifyBackendListeners();
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+    }
   }
 
   Future<void> _setNotificationPreviewsEnabled(bool enabled) async {

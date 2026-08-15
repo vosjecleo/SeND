@@ -14,36 +14,79 @@ class DeltiecordApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Deltiecord',
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorSchemeSeed: const Color(0xff6975d9),
-        scaffoldBackgroundColor: const Color(0xff25262c),
-        useMaterial3: true,
-      ),
-      home: ListenableBuilder(
-        listenable: backend,
-        builder: (context, _) => switch (backend.status) {
-          SessionStatus.starting => const _StartupScreen(),
-          SessionStatus.failed => _StartupFailure(
-            message: backend.error ?? 'Deltiecord could not start.',
-            onRetry: backend.initialize,
+    return ListenableBuilder(
+      listenable: backend,
+      builder: (context, _) {
+        final preferences = backend.preferences;
+        final contrast = preferences.highContrast;
+        return MaterialApp(
+          title: 'Deltiecord',
+          debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            FlutterQuillLocalizations.delegate,
+          ],
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xff6975d9),
+              brightness: Brightness.dark,
+              contrastLevel: contrast ? 1 : 0,
+            ),
+            scaffoldBackgroundColor: const Color(0xff25262c),
+            visualDensity: preferences.density == InterfaceDensity.compact
+                ? VisualDensity.compact
+                : VisualDensity.standard,
+            pageTransitionsTheme: preferences.reducedMotion
+                ? const PageTransitionsTheme(
+                    builders: {
+                      TargetPlatform.linux: _NoMotionPageTransitionsBuilder(),
+                      TargetPlatform.android: _NoMotionPageTransitionsBuilder(),
+                    },
+                  )
+                : const PageTransitionsTheme(),
+            useMaterial3: true,
           ),
-          SessionStatus.signedIn => ChatShell(backend: backend),
-          SessionStatus.signedOut ||
-          SessionStatus.signingIn => LoginScreen(backend: backend),
-        },
-      ),
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            return MediaQuery(
+              data: media.copyWith(
+                textScaler: TextScaler.linear(preferences.fontScale),
+                disableAnimations: preferences.reducedMotion,
+                highContrast: preferences.highContrast,
+              ),
+              child: child!,
+            );
+          },
+          home: switch (backend.status) {
+            SessionStatus.starting => const _StartupScreen(),
+            SessionStatus.failed => _StartupFailure(
+              message: backend.error ?? 'Deltiecord could not start.',
+              onRetry: backend.initialize,
+            ),
+            SessionStatus.signedIn => ChatShell(backend: backend),
+            SessionStatus.signedOut ||
+            SessionStatus.signingIn => LoginScreen(backend: backend),
+          },
+        );
+      },
     );
   }
+}
+
+class _NoMotionPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _NoMotionPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => child;
 }
 
 class _StartupScreen extends StatelessWidget {

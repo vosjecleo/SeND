@@ -6,6 +6,7 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +40,33 @@ void main() {
 
     expect(backend.selectedRoom?.id, '!general:example.org');
     expect(find.text('No messages yet'), findsOneWidget);
+  });
+
+  testWidgets('opens the v0.4 settings workspace', (tester) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Accessibility'), findsOneWidget);
+    expect(find.text('Advanced'), findsOneWidget);
+    expect(find.text('@deltie:example.org'), findsOneWidget);
+  });
+
+  testWidgets('opens settings with the control-comma shortcut', (tester) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Matrix ID'), findsOneWidget);
   });
 
   testWidgets('selects a Matrix Space from the server bar', (tester) async {
@@ -473,6 +501,12 @@ class FakeBackend extends ChatBackend {
   @override
   String? get error => null;
   @override
+  String? get deviceId => 'TESTDEVICE';
+  @override
+  Uri? get homeserver => Uri.parse('https://matrix.example.org');
+  @override
+  AppPreferences get preferences => const AppPreferences();
+  @override
   EncryptionSetupState get encryptionSetup => security;
   @override
   List<ChatMessage> get messages => messageList;
@@ -569,6 +603,8 @@ class FakeBackend extends ChatBackend {
   Future<void> renameRoom(String roomId, String name) async {}
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
+  @override
+  Future<void> updatePreferences(AppPreferences preferences) async {}
   @override
   Future<void> refreshAudioInputs() async {}
   @override

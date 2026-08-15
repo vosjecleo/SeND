@@ -261,15 +261,26 @@ class _RoomPanel extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: IconButton(
-              tooltip: 'Encryption & recovery',
-              icon: Icon(
-                backend.encryptionSetup.status == EncryptionSetupStatus.ready
-                    ? Icons.verified_user
-                    : Icons.gpp_maybe,
-                size: 19,
-              ),
-              onPressed: () => showSecurityCenter(context, backend),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Encryption & recovery',
+                  icon: Icon(
+                    backend.encryptionSetup.status ==
+                            EncryptionSetupStatus.ready
+                        ? Icons.verified_user
+                        : Icons.gpp_maybe,
+                    size: 19,
+                  ),
+                  onPressed: () => showSecurityCenter(context, backend),
+                ),
+                IconButton(
+                  tooltip: 'Settings',
+                  onPressed: () => showDeltiecordSettings(context, backend),
+                  icon: const Icon(Icons.settings_outlined, size: 19),
+                ),
+              ],
             ),
           ),
           SizedBox(

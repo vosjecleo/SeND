@@ -19,6 +19,7 @@ import '../models/chat_models.dart';
 import '../services/giphy_service.dart';
 import 'giphy_dialog.dart';
 import 'security_center.dart';
+import 'settings_screen.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
@@ -334,57 +335,85 @@ class _ChatShellState extends State<ChatShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          if (widget.backend.encryptionSetup.needsAttention)
-            _SecurityBanner(backend: widget.backend),
-          Expanded(
-            child: Row(
-              children: [
-                SizedBox(width: 68, child: _SpaceBar(backend: widget.backend)),
-                const VerticalDivider(width: 1),
-                SizedBox(
-                  width: 280,
-                  child: _RoomPanel(backend: widget.backend),
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(
-                  child: widget.backend.selectedRoom == null
-                      ? const _EmptyConversation()
-                      : widget.backend.selectedRoom!.isVoice
-                      ? VoiceRoomView(
-                          backend: widget.backend,
-                          room: widget.backend.selectedRoom!,
-                        )
-                      : _Conversation(
-                          backend: widget.backend,
-                          controller: _message,
-                          composerFocus: _composerFocus,
-                          sending: _sending,
-                          replyingTo: _replyingTo,
-                          editingMessage: _editingMessage,
-                          onSend: _send,
-                          onReply: _replyTo,
-                          onEdit: _edit,
-                          onCancelComposerAction: _cancelComposerAction,
-                          onAttach: _attachFile,
-                          onGif: _showGifPicker,
-                          onPasteImage: _pasteClipboardImage,
-                          pendingAttachments: _pendingAttachments,
-                          onRemoveAttachment: _removePendingAttachment,
-                          onToggleAttachmentSpoiler: _togglePendingSpoiler,
-                          mentionSuggestions: _mentionSuggestions,
-                          mentionSelectionIndex: _mentionSelectionIndex,
-                          onMentionSelected: _insertMention,
-                          onMentionSelectionChanged: (index) =>
-                              setState(() => _mentionSelectionIndex = index),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.comma, control: true): () =>
+            showDeltiecordSettings(context, widget.backend),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: Column(
+            children: [
+              if (widget.backend.encryptionSetup.needsAttention)
+                _SecurityBanner(backend: widget.backend),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                final showSpaceRail = constraints.maxWidth >= 760;
+                    final preferredPanel =
+                        widget.backend.preferences.roomPanelWidth;
+                    final panelWidth = preferredPanel.clamp(
+                      220.0,
+                      constraints.maxWidth * 0.46,
+                    );
+                    return Row(
+                      children: [
+                        if (showSpaceRail) ...[
+                          SizedBox(
+                            width: 68,
+                            child: _SpaceBar(backend: widget.backend),
+                          ),
+                          const VerticalDivider(width: 1),
+                        ],
+                        SizedBox(
+                          width: panelWidth,
+                          child: _RoomPanel(backend: widget.backend),
                         ),
+                        const VerticalDivider(width: 1),
+                        Expanded(
+                          child: widget.backend.selectedRoom == null
+                              ? const _EmptyConversation()
+                              : widget.backend.selectedRoom!.isVoice
+                              ? VoiceRoomView(
+                                  backend: widget.backend,
+                                  room: widget.backend.selectedRoom!,
+                                )
+                              : _Conversation(
+                                  backend: widget.backend,
+                                  controller: _message,
+                                  composerFocus: _composerFocus,
+                                  sending: _sending,
+                                  replyingTo: _replyingTo,
+                                  editingMessage: _editingMessage,
+                                  onSend: _send,
+                                  onReply: _replyTo,
+                                  onEdit: _edit,
+                                  onCancelComposerAction: _cancelComposerAction,
+                                  onAttach: _attachFile,
+                                  onGif: _showGifPicker,
+                                  onPasteImage: _pasteClipboardImage,
+                                  pendingAttachments: _pendingAttachments,
+                                  onRemoveAttachment: _removePendingAttachment,
+                                  onToggleAttachmentSpoiler:
+                                      _togglePendingSpoiler,
+                                  mentionSuggestions: _mentionSuggestions,
+                                  mentionSelectionIndex: _mentionSelectionIndex,
+                                  onMentionSelected: _insertMention,
+                                  onMentionSelectionChanged: (index) =>
+                                      setState(
+                                        () => _mentionSelectionIndex = index,
+                                      ),
+                                ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

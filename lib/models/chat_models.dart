@@ -2,6 +2,50 @@ import 'dart:typed_data';
 
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
+enum InterfaceDensity { compact, cozy }
+
+class AppPreferences {
+  const AppPreferences({
+    this.density = InterfaceDensity.compact,
+    this.fontScale = 1,
+    this.roomPanelWidth = 280,
+    this.reducedMotion = false,
+    this.highContrast = false,
+    this.autoplayGifs = true,
+    this.showNativeTitleBar = true,
+    this.rememberWindowState = true,
+  });
+
+  final InterfaceDensity density;
+  final double fontScale;
+  final double roomPanelWidth;
+  final bool reducedMotion;
+  final bool highContrast;
+  final bool autoplayGifs;
+  final bool showNativeTitleBar;
+  final bool rememberWindowState;
+
+  AppPreferences copyWith({
+    InterfaceDensity? density,
+    double? fontScale,
+    double? roomPanelWidth,
+    bool? reducedMotion,
+    bool? highContrast,
+    bool? autoplayGifs,
+    bool? showNativeTitleBar,
+    bool? rememberWindowState,
+  }) => AppPreferences(
+    density: density ?? this.density,
+    fontScale: fontScale ?? this.fontScale,
+    roomPanelWidth: roomPanelWidth ?? this.roomPanelWidth,
+    reducedMotion: reducedMotion ?? this.reducedMotion,
+    highContrast: highContrast ?? this.highContrast,
+    autoplayGifs: autoplayGifs ?? this.autoplayGifs,
+    showNativeTitleBar: showNativeTitleBar ?? this.showNativeTitleBar,
+    rememberWindowState: rememberWindowState ?? this.rememberWindowState,
+  );
+}
+
 enum EncryptionSetupStatus {
   loading,
   ready,

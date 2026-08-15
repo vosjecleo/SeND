@@ -71,6 +71,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, RoomPresentation> _roomPresentationOverrides = {};
   bool _notificationsPrimed = false;
   bool _notificationPreviewsEnabled = true;
+  AppPreferences _preferences = const AppPreferences();
   int? _maximumUploadBytes;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
@@ -86,6 +87,12 @@ class MatrixBackend extends ChatBackend {
   String? get error => _error;
   @override
   String? get userId => _client?.userID;
+  @override
+  String? get deviceId => _client?.deviceID;
+  @override
+  Uri? get homeserver => _client?.homeserver;
+  @override
+  AppPreferences get preferences => _preferences;
   @override
   EncryptionSetupState get encryptionSetup => _encryptionSetup;
   @override
@@ -301,6 +308,10 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) =>
       _setNotificationPreviewsEnabled(enabled);
+
+  @override
+  Future<void> updatePreferences(AppPreferences preferences) =>
+      _updatePreferences(preferences);
 
   @override
   void clearError() => _clearSessionError();

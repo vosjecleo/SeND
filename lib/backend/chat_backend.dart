@@ -10,6 +10,9 @@ abstract class ChatBackend extends ChangeNotifier {
   SessionStatus get status;
   String? get error;
   String? get userId;
+  String? get deviceId;
+  Uri? get homeserver;
+  AppPreferences get preferences;
   EncryptionSetupState get encryptionSetup;
   List<SpaceSummary> get spaces;
   String? get selectedSpaceId;
@@ -64,6 +67,7 @@ abstract class ChatBackend extends ChangeNotifier {
   List<ChatMessage> searchMessages(String query);
   Future<void> setSelectedRoomMuted(bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
+  Future<void> updatePreferences(AppPreferences preferences);
   Future<void> loadMoreHistory();
   Future<void> sendMessage(
     String text, {
