@@ -46,7 +46,12 @@ extension _MatrixSession on MatrixBackend {
       _notificationSubscription ??= _notifications.activations.listen(
         (target) => unawaited(_openNotificationTarget(target)),
       );
-      await _notifications.initialize();
+      try {
+        await _notifications.initialize();
+      } catch (_) {
+        // A missing desktop notification service must not prevent Matrix from
+        // restoring the session. Messaging remains usable without alerts.
+      }
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;

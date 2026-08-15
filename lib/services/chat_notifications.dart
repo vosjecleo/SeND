@@ -54,7 +54,6 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
   @override
   Future<void> initialize() async {
     if (_initialized) return;
-    _initialized = true;
     await _plugin.initialize(
       settings: const InitializationSettings(
         linux: LinuxInitializationSettings(
@@ -64,9 +63,15 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
       onDidReceiveNotificationResponse: (response) =>
           _activatePayload(response.payload),
     );
-    final launch = await _plugin.getNotificationAppLaunchDetails();
-    if (launch?.didNotificationLaunchApp ?? false) {
-      _activatePayload(launch?.notificationResponse?.payload);
+    _initialized = true;
+    try {
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp ?? false) {
+        _activatePayload(launch?.notificationResponse?.payload);
+      }
+    } on UnimplementedError {
+      // flutter_local_notifications does not currently implement launch-detail
+      // discovery on Linux. Runtime notification callbacks still work.
     }
   }
 
