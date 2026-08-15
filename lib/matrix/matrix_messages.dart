@@ -82,12 +82,15 @@ extension _MatrixMessages on MatrixBackend {
       final room = _matrix.getRoomById(_selectedRoomId!);
       if (room == null) throw StateError('The selected room is unavailable.');
       await _prepareEncryptedSend(room);
+      final transactionId = _matrix.generateUniqueTransactionId();
       final replyEvent = replyToMessageId == null
           ? null
           : _eventById(replyToMessageId);
+      late final Future<String?> operation;
       if (formattedBody == null || formattedBody.isEmpty) {
-        await room.sendTextEvent(
+        operation = room.sendTextEvent(
           value,
+          txid: transactionId,
           inReplyTo: replyEvent,
           editEventId: editMessageId,
           // Deltiecord does not expose the SDK's slash-command interface.
@@ -98,7 +101,7 @@ extension _MatrixMessages on MatrixBackend {
           parseMarkdown: false,
         );
       } else {
-        await room.sendEvent(
+        operation = room.sendEvent(
           {
             'msgtype': MessageTypes.Text,
             'body': value,
@@ -108,12 +111,81 @@ extension _MatrixMessages on MatrixBackend {
           },
           inReplyTo: replyEvent,
           editEventId: editMessageId,
+          txid: transactionId,
         );
+      }
+      if (_connectionStatus != ConnectionStatus.online) {
+        _offlineSendRooms[transactionId] = room.id;
+        _notifyBackendListeners();
+        unawaited(_completeOfflineSend(transactionId, room.id, operation));
+        return;
+      }
+      final eventId = await operation;
+      if (eventId == null && _connectionStatus != ConnectionStatus.online) {
+        _offlineSendRooms[transactionId] = room.id;
+        _notifyBackendListeners();
       }
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();
       rethrow;
+    }
+  }
+
+  Future<void> _completeOfflineSend(
+    String transactionId,
+    String roomId,
+    Future<String?> operation,
+  ) async {
+    if (_offlineSendRooms[transactionId] != roomId) return;
+    try {
+      final eventId = await operation;
+      if (eventId != null) _offlineSendRooms.remove(transactionId);
+    } catch (exception) {
+      if (_connectionStatus == ConnectionStatus.online) {
+        _offlineSendRooms.remove(transactionId);
+        _error = _friendlyError(exception);
+      }
+    } finally {
+      _notifyBackendListeners();
+    }
+  }
+
+  Future<void> _retryOfflineSends() async {
+    if (_retryingOfflineSends || _offlineSendRooms.isEmpty) return;
+    _retryingOfflineSends = true;
+    try {
+      for (final entry in Map.of(_offlineSendRooms).entries) {
+        if (_connectionStatus != ConnectionStatus.online) break;
+        final room = _matrix.getRoomById(entry.value);
+        if (room == null) {
+          _offlineSendRooms.remove(entry.key);
+          continue;
+        }
+        Event? event;
+        try {
+          event = await _matrix.database.getEventById(entry.key, room);
+        } catch (_) {
+          event = null;
+        }
+        if (event == null || event.status.isSent) {
+          _offlineSendRooms.remove(entry.key);
+          continue;
+        }
+        if (!event.status.isError) continue;
+        try {
+          final eventId = await event.sendAgain(txid: entry.key);
+          if (eventId != null) _offlineSendRooms.remove(entry.key);
+        } catch (_) {
+          if (_connectionStatus == ConnectionStatus.online) {
+            // A connected failure is authoritative (for example forbidden).
+            _offlineSendRooms.remove(entry.key);
+          }
+        }
+      }
+    } finally {
+      _retryingOfflineSends = false;
+      _notifyBackendListeners();
     }
   }
 

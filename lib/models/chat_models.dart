@@ -305,6 +305,8 @@ class ChatMessage {
     this.linkPreview,
     this.readBy = const [],
     this.senderId,
+    this.blocked = false,
+    this.queued = false,
   });
 
   final String id;
@@ -327,6 +329,8 @@ class ChatMessage {
   final LinkPreview? linkPreview;
   final List<ReceiptReaderSummary> readBy;
   final String? senderId;
+  final bool blocked;
+  final bool queued;
 }
 
 class ReceiptReaderSummary {

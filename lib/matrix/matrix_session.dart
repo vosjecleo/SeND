@@ -22,6 +22,7 @@ extension _MatrixSession on MatrixBackend {
         _notifyBackendListeners();
       });
       _syncStatusSubscription = _matrix.onSyncStatus.stream.listen((update) {
+        final previousStatus = _connectionStatus;
         _connectionStatus = switch (update.status) {
           SyncStatus.finished ||
           SyncStatus.waitingForResponse => ConnectionStatus.online,
@@ -32,11 +33,18 @@ extension _MatrixSession on MatrixBackend {
           SyncStatus.error => ConnectionStatus.offline,
         };
         _notifyBackendListeners();
+        if (_connectionStatus == ConnectionStatus.online &&
+            previousStatus != ConnectionStatus.online) {
+          unawaited(_retryOfflineSends());
+        }
       });
       await _matrix.init();
       _initializeVoice();
       _loadSettings();
       await _notifications.initialize();
+      _notificationSubscription ??= _notifications.activations.listen(
+        (target) => unawaited(_openNotificationTarget(target)),
+      );
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;
@@ -374,8 +382,23 @@ extension _MatrixSession on MatrixBackend {
       await _notifications.show(
         title: '$sender in ${room.getLocalizedDisplayname()}',
         body: notificationBody,
+        roomId: room.id,
+        eventId: event.eventId,
         sound: _preferences.notificationSound,
       );
+    }
+  }
+
+  Future<void> _openNotificationTarget(NotificationTarget target) async {
+    if (!_matrix.isLogged()) return;
+    final room = _matrix.getRoomById(target.roomId);
+    if (room == null || room.membership != Membership.join) return;
+    try {
+      await _selectRoom(target.roomId);
+      await _jumpToEvent(target.eventId);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
     }
   }
 

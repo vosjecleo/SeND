@@ -91,6 +91,17 @@ static gboolean window_state_cb(GtkWidget*, GdkEventWindowState* event,
 static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
                              gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
+  if (strcmp(fl_method_call_get_name(call), "present") == 0) {
+    if (self->window != nullptr) {
+      gtk_widget_show(GTK_WIDGET(self->window));
+      gtk_window_deiconify(self->window);
+      gtk_window_present(self->window);
+    }
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(nullptr));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
   if (strcmp(fl_method_call_get_name(call), "configure") != 0) {
     fl_method_call_respond_not_implemented(call, nullptr);
     return;

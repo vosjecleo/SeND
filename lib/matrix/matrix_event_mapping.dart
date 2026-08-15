@@ -34,7 +34,10 @@ extension _MatrixEventMapping on MatrixBackend {
               displayEvent.type == EventTypes.Message ||
               displayEvent.type == EventTypes.Encrypted;
           final attachment = _attachmentFor(displayEvent);
-          final body = event.redacted
+          final blocked = _matrix.ignoredUsers.contains(event.senderId);
+          final body = blocked
+              ? 'Message from blocked user'
+              : event.redacted
               ? 'Message deleted'
               : displayEvent.type == EventTypes.Encrypted
               ? 'Unable to decrypt this message'
@@ -67,17 +70,20 @@ extension _MatrixEventMapping on MatrixBackend {
             edited: displayEvent.eventId != event.eventId,
             redacted: event.redacted,
             reactions: _reactionSummaries(event, timeline),
-            attachment: attachment,
+            attachment: blocked ? null : attachment,
             formattedBody:
-                displayEvent.isRichMessage &&
+                !blocked &&
+                    displayEvent.isRichMessage &&
                     (attachment == null || attachment.caption != null)
                 ? displayEvent.formattedText
                 : null,
             reply: _replyPreviews[event.eventId],
             avatarBytes: _senderAvatarBytes[event.senderId],
-            linkPreview: _linkPreviews[event.eventId],
+            linkPreview: blocked ? null : _linkPreviews[event.eventId],
             senderId: event.senderId,
             readBy: _readersFor(event, timeline),
+            blocked: blocked,
+            queued: _offlineSendRooms.containsKey(event.eventId),
           );
         })
         .toList(growable: false);

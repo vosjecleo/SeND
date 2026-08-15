@@ -66,8 +66,10 @@ extension _MatrixMedia on MatrixBackend {
               name: attachment.name,
               mimeType: attachment.mimeType,
             );
-      await room.sendFileEvent(
+      final transactionId = _matrix.generateUniqueTransactionId();
+      final operation = room.sendFileEvent(
         file,
+        txid: transactionId,
         inReplyTo: replyEvent,
         // Re-encoding large images here is CPU-heavy and stalls Flutter's UI
         // isolate. The SDK still generates a thumbnail, but uploads the
@@ -89,6 +91,17 @@ extension _MatrixMedia on MatrixBackend {
               }
             : null,
       );
+      if (_connectionStatus != ConnectionStatus.online) {
+        _offlineSendRooms[transactionId] = room.id;
+        _notifyBackendListeners();
+        unawaited(_completeOfflineSend(transactionId, room.id, operation));
+        return;
+      }
+      final eventId = await operation;
+      if (eventId == null && _connectionStatus != ConnectionStatus.online) {
+        _offlineSendRooms[transactionId] = room.id;
+        _notifyBackendListeners();
+      }
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();

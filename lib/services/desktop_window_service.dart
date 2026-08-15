@@ -23,6 +23,15 @@ class DesktopWindowService {
     }
   }
 
+  static Future<void> present() async {
+    if (!Platform.isLinux) return;
+    try {
+      await _channel.invokeMethod<void>('present');
+    } on MissingPluginException {
+      // Widget tests and non-desktop targets do not register the GTK channel.
+    }
+  }
+
   static bool _sameWindowSettings(
     AppPreferences? previous,
     AppPreferences current,

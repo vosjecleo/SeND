@@ -49,6 +49,7 @@ class MatrixBackend extends ChatBackend {
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
   StreamSubscription<Object?>? _syncStatusSubscription;
+  StreamSubscription<NotificationTarget>? _notificationSubscription;
   SessionStatus _status = SessionStatus.starting;
   ConnectionStatus _connectionStatus = ConnectionStatus.connecting;
   String? _error;
@@ -75,6 +76,8 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String?> _firstUnreadEventIds = {};
   final Map<String, String> _lastNotificationEventIds = {};
   final Map<String, RoomPresentation> _roomPresentationOverrides = {};
+  final Map<String, String> _offlineSendRooms = {};
+  bool _retryingOfflineSends = false;
   bool _notificationsPrimed = false;
   bool _notificationPreviewsEnabled = true;
   AppPreferences _preferences = const AppPreferences();
@@ -546,9 +549,12 @@ class MatrixBackend extends ChatBackend {
     _syncSubscription?.cancel();
     _loginSubscription?.cancel();
     _syncStatusSubscription?.cancel();
+    _notificationSubscription?.cancel();
     _client?.dispose();
+    unawaited(_notifications.dispose());
     unawaited(_mediaRangeProxy.close());
     _previewHttpClient.close(force: true);
+    _offlineSendRooms.clear();
     super.dispose();
   }
 }

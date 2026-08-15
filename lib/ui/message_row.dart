@@ -39,6 +39,26 @@ class _MessageRowState extends State<_MessageRow> {
 
   ChatMessage get message => widget.message;
 
+  void _showSenderProfile() {
+    final userId = message.senderId;
+    if (userId == null) return;
+    final members = widget.backend.selectedRoomMembers;
+    final member = members
+        .where((candidate) => candidate.userId == userId)
+        .firstOrNull;
+    showMemberProfile(
+      context,
+      widget.backend,
+      member ??
+          RoomMemberSummary(
+            userId: userId,
+            displayName: message.sender,
+            avatarBytes: message.avatarBytes,
+            presence: UserPresence.offline,
+          ),
+    );
+  }
+
   void _enter(PointerEnterEvent _) {
     setState(() => _hovered = true);
   }
@@ -200,12 +220,15 @@ class _MessageRowState extends State<_MessageRow> {
                                 Row(
                                   children: [
                                     Flexible(
-                                      child: Text(
-                                        message.sender,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          height: 1.05,
+                                      child: InkWell(
+                                        onTap: _showSenderProfile,
+                                        child: Text(
+                                          message.sender,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.05,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -323,7 +346,15 @@ class _MessageRowState extends State<_MessageRow> {
                                     ),
                                   ),
                                 ),
-                              if (message.failed)
+                              if (message.queued)
+                                const Text(
+                                  'Queued — retrying after reconnect',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xffffc857),
+                                  ),
+                                )
+                              else if (message.failed)
                                 Row(
                                   children: [
                                     const Text(
@@ -379,24 +410,27 @@ class _MessageRowState extends State<_MessageRow> {
                     Positioned(
                       left: 20,
                       top: 10,
-                      child: CircleAvatar(
-                        radius: 17,
-                        backgroundColor: const Color(0xff3a3c46),
-                        backgroundImage: message.avatarBytes == null
-                            ? null
-                            : MemoryImage(message.avatarBytes!),
-                        child: message.avatarBytes == null
-                            ? Text(
-                                message.sender.trim().isEmpty
-                                    ? '?'
-                                    : message.sender.characters.first
-                                          .toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              )
-                            : null,
+                      child: GestureDetector(
+                        onTap: _showSenderProfile,
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: const Color(0xff3a3c46),
+                          backgroundImage: message.avatarBytes == null
+                              ? null
+                              : MemoryImage(message.avatarBytes!),
+                          child: message.avatarBytes == null
+                              ? Text(
+                                  message.sender.trim().isEmpty
+                                      ? '?'
+                                      : message.sender.characters.first
+                                            .toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
+                              : null,
+                        ),
                       ),
                     ),
                 ],

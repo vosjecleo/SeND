@@ -628,6 +628,22 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           preferences.copyWith(sharePresence: value),
         ),
       ),
+      const Divider(height: 28),
+      Text('Blocked users', style: Theme.of(context).textTheme.titleMedium),
+      if (backend.blockedUserIds.isEmpty)
+        const Text('No blocked Matrix users.')
+      else
+        for (final userId in backend.blockedUserIds)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.block, size: 18),
+            title: SelectableText(userId),
+            trailing: TextButton(
+              onPressed: () => backend.setUserBlocked(userId, false),
+              child: const Text('Unblock'),
+            ),
+          ),
     ]);
   }
 
