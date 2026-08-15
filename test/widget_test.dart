@@ -808,6 +808,49 @@ void main() {
 
     expect(find.text('Alice is typing…'), findsOneWidget);
     expect(tester.getTopLeft(composerPanel).dy, composerTop);
+    expect(
+      tester.getSize(find.byKey(const Key('typing-indicator'))).width,
+      tester.getSize(find.byKey(const Key('conversation-timeline-area'))).width,
+    );
+  });
+
+  testWidgets('emoji completion overlays without resizing the composer', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!emoji-overlay:example.org',
+          name: 'emoji overlay',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('emoji overlay'));
+    await tester.pumpAndSettle();
+    final composer = find.byKey(const Key('message-composer-panel'));
+    final initialHeight = tester.getSize(composer).height;
+
+    await _enterComposer(tester, ':so');
+    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    editor.controller.replaceText(
+      3,
+      0,
+      'b',
+      const TextSelection.collapsed(offset: 4),
+    );
+    await tester.pumpAndSettle();
+
+    expect(editor.controller.document.toPlainText(), ':sob\n');
+    expect(
+      find.byKey(const Key('emoji-completion-popup'), skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.textContaining('😭', skipOffstage: false), findsOneWidget);
+    expect(tester.getSize(composer).height, initialHeight);
   });
 
   testWidgets('home DM rows expose presence and stronger visual hierarchy', (

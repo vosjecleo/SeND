@@ -10,11 +10,11 @@ extension _MatrixProfiles on MatrixBackend {
       userId,
       maxCacheAge: Duration.zero,
     );
-    final avatarBytes = await _profileMedia(profile.avatarUrl, 256, 256);
+    final avatarBytes = await _profileMedia(profile.avatarUrl, 512, 512);
     final bannerUri = Uri.tryParse(
       profile.additionalProperties[_profileBannerField] as String? ?? '',
     );
-    final bannerBytes = await _profileMedia(bannerUri, 800, 240);
+    final bannerBytes = await _profileOriginalMedia(bannerUri);
     final capability = await _profileCapability();
     // ignore: deprecated_member_use
     final presence = _matrix.presences[userId]?.presence;
@@ -50,6 +50,22 @@ extension _MatrixProfiles on MatrixBackend {
       return response.data;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Uint8List?> _profileOriginalMedia(Uri? mxc) async {
+    if (mxc == null || !mxc.isScheme('mxc')) return null;
+    try {
+      final response = await _matrix.getContent(
+        mxc.host,
+        mxc.pathSegments.join('/'),
+      );
+      return response.data;
+    } catch (_) {
+      // Older media repositories may reject the authenticated original-media
+      // endpoint. A large scale thumbnail still looks substantially better
+      // than leaving the profile banner empty.
+      return _profileMedia(mxc, 1920, 640);
     }
   }
 

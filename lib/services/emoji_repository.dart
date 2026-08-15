@@ -70,6 +70,33 @@ class EmojiRepository {
     return null;
   }
 
+  /// Returns the small set of conventional aliases without waiting for the
+  /// complete local dataset to decode. This keeps composer completion instant
+  /// on its first use while [search] loads the full catalogue in parallel.
+  List<EmojiEntry> familiarMatches(String query, {int limit = 3}) {
+    final normalized = query.toLowerCase().replaceAll('_', ' ').trim();
+    if (normalized.isEmpty) return const [];
+    final matches = <EmojiEntry>[];
+    for (final aliasGroup in _familiarAliases.entries) {
+      final aliases = aliasGroup.value;
+      if (!aliases.any(
+        (alias) =>
+            alias.toLowerCase().replaceAll('_', ' ').contains(normalized),
+      )) {
+        continue;
+      }
+      matches.add(
+        EmojiEntry(
+          emoji: aliasGroup.key,
+          name: aliases.first.replaceAll('_', ' '),
+          aliases: aliases,
+        ),
+      );
+      if (matches.length == limit) break;
+    }
+    return matches;
+  }
+
   Future<List<EmojiEntry>> _load() async {
     final source = await rootBundle.loadString('assets/emoji/emojis.json');
     final decoded = jsonDecode(source) as Map<String, dynamic>;

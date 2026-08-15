@@ -2,12 +2,12 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:mime/mime.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/timezone_catalog.dart';
 import 'profile_card.dart';
+import 'profile_image_cropper.dart';
 import 'timezone_picker_dialog.dart';
 
 Future<bool> showProfileEditor(
@@ -97,11 +97,20 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.single;
     final bytes = file.bytes ?? await result.xFiles.single.readAsBytes();
+    if (!mounted) return;
+    final cropped = await showProfileImageCropper(
+      context,
+      bytes: bytes,
+      title: 'Crop profile picture',
+      aspectRatio: 1,
+      maximumWidth: 1024,
+      circularPreview: true,
+    );
+    if (cropped == null || !mounted) return;
     setState(() {
-      _avatar = bytes;
-      _avatarName = file.name;
-      _avatarMime =
-          lookupMimeType(file.name, headerBytes: bytes) ?? 'image/png';
+      _avatar = cropped;
+      _avatarName = 'profile-avatar.png';
+      _avatarMime = 'image/png';
       _removeAvatar = false;
     });
   }
@@ -114,8 +123,17 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     if (result == null || result.files.isEmpty) return;
     final bytes =
         result.files.single.bytes ?? await result.xFiles.single.readAsBytes();
+    if (!mounted) return;
+    final cropped = await showProfileImageCropper(
+      context,
+      bytes: bytes,
+      title: 'Crop profile banner',
+      aspectRatio: 3,
+      maximumWidth: 1920,
+    );
+    if (cropped == null || !mounted) return;
     setState(() {
-      _banner = bytes;
+      _banner = cropped;
       _removeBanner = false;
       _bannerChanged = true;
     });

@@ -594,11 +594,9 @@ class _RoomListTile extends StatelessWidget {
       leading: _RoomIcon(room: room, size: 26),
       title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: room.isVoice
-          ? Text(
-              participantCount == 0
-                  ? 'Nobody connected'
-                  : '$participantCount connected',
-            )
+          ? participantCount == 0
+                ? null
+                : Text('$participantCount connected')
           : backend.selectedSpaceId == null
           ? Text(room.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis)
           : null,

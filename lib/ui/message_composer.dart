@@ -87,6 +87,8 @@ class _MentionPicker extends StatelessWidget {
 
 class _RichComposerState extends State<_RichComposer> {
   final _scrollController = ScrollController();
+  final _emojiOverlay = OverlayPortalController();
+  final _emojiAnchor = LayerLink();
   List<EmojiEntry> _emojiMatches = const [];
   int _emojiSelection = 0;
   int? _emojiStart;
@@ -137,6 +139,15 @@ class _RichComposerState extends State<_RichComposer> {
     final start = completion.start;
     final query = completion.query;
     final generation = ++_emojiGeneration;
+    final familiarMatches = EmojiRepository.instance.familiarMatches(query);
+    if (familiarMatches.isNotEmpty) {
+      setState(() {
+        _emojiStart = start;
+        _emojiMatches = familiarMatches;
+        _emojiSelection = 0;
+      });
+      _syncEmojiOverlay();
+    }
     EmojiRepository.instance.search(query, limit: 3).then((matches) {
       if (!mounted || generation != _emojiGeneration) return;
       setState(() {
@@ -146,6 +157,18 @@ class _RichComposerState extends State<_RichComposer> {
             ? 0
             : _emojiSelection.clamp(0, matches.length - 1);
       });
+      _syncEmojiOverlay();
+    });
+  }
+
+  void _syncEmojiOverlay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_emojiMatches.isEmpty) {
+        if (_emojiOverlay.isShowing) _emojiOverlay.hide();
+      } else if (!_emojiOverlay.isShowing) {
+        _emojiOverlay.show();
+      }
     });
   }
 
@@ -157,6 +180,7 @@ class _RichComposerState extends State<_RichComposer> {
       _emojiStart = null;
       _emojiSelection = 0;
     });
+    _syncEmojiOverlay();
   }
 
   void _acceptEmoji(EmojiEntry entry) {
@@ -207,42 +231,49 @@ class _RichComposerState extends State<_RichComposer> {
   Widget build(BuildContext context) {
     final controlHeight = _composerControlHeightFor(context);
     final editorHeight = _composerEditorHeightFor(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_emojiMatches.isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.only(left: 56, right: 48),
-              decoration: BoxDecoration(
-                color: context.deltiecord.surface,
-                border: Border.all(color: context.deltiecord.divider),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var index = 0; index < _emojiMatches.length; index++)
-                    InkWell(
-                      onTap: () => _acceptEmoji(_emojiMatches[index]),
-                      child: Container(
-                        color: index == _emojiSelection
-                            ? context.deltiecord.hover
-                            : null,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        child: Text(
-                          '${_emojiMatches[index].emoji} :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+    return OverlayPortal(
+      controller: _emojiOverlay,
+      overlayChildBuilder: (context) => CompositedTransformFollower(
+        link: _emojiAnchor,
+        showWhenUnlinked: false,
+        targetAnchor: Alignment.topLeft,
+        followerAnchor: Alignment.bottomLeft,
+        offset: const Offset(56, -4),
+        child: Material(
+          key: const Key('emoji-completion-popup'),
+          elevation: 8,
+          color: context.deltiecord.surface,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: context.deltiecord.divider),
+            borderRadius: BorderRadius.circular(3),
           ),
-        Padding(
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < _emojiMatches.length; index++)
+                InkWell(
+                  onTap: () => _acceptEmoji(_emojiMatches[index]),
+                  child: Container(
+                    color: index == _emojiSelection
+                        ? context.deltiecord.hover
+                        : null,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 7,
+                    ),
+                    child: Text(
+                      '${_emojiMatches[index].emoji} :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      child: CompositedTransformTarget(
+        link: _emojiAnchor,
+        child: Padding(
           key: const Key('message-composer-panel'),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
           child: Row(
@@ -481,7 +512,7 @@ class _RichComposerState extends State<_RichComposer> {
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

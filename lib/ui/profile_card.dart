@@ -43,119 +43,7 @@ class DeltiecordProfileCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 220,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  bottom: 60,
-                  child: profile.bannerBytes == null
-                      ? DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                accent.withValues(alpha: 0.72),
-                                palette.rail,
-                              ],
-                            ),
-                          ),
-                        )
-                      : Image.memory(
-                          profile.bannerBytes!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                        ),
-                ),
-                Positioned(
-                  left: 30,
-                  bottom: 0,
-                  child: Container(
-                    width: 124,
-                    height: 124,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: palette.elevated,
-                      border: Border.all(color: palette.surface, width: 7),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: profile.avatarBytes == null
-                        ? Center(
-                            child: Text(
-                              profile.displayName.characters.firstOrNull
-                                      ?.toUpperCase() ??
-                                  '?',
-                              style: const TextStyle(
-                                fontSize: 42,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          )
-                        : Image.memory(
-                            profile.avatarBytes!,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          ),
-                  ),
-                ),
-                Positioned(
-                  left: 132,
-                  bottom: 12,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _presenceColour(profile.presence),
-                      border: Border.all(color: palette.surface, width: 4),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 20,
-                  bottom: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.elevated,
-                      border: Border.all(color: palette.divider),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _presenceColour(profile.presence),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(_presenceLabel(profile.presence)),
-                      ],
-                    ),
-                  ),
-                ),
-                if (onEdit != null)
-                  Positioned(
-                    right: 16,
-                    top: 14,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Edit profile',
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          _ProfileHeader(profile: profile, accent: accent, onEdit: onEdit),
           Padding(
             padding: const EdgeInsets.fromLTRB(30, 4, 30, 26),
             child: Column(
@@ -287,16 +175,161 @@ class DeltiecordProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  Color _presenceColour(UserPresence presence) => switch (presence) {
-    UserPresence.online => const Color(0xff23d887),
-    UserPresence.away => const Color(0xffffc857),
-    UserPresence.offline => const Color(0xff747680),
-  };
-
-  String _presenceLabel(UserPresence presence) => switch (presence) {
-    UserPresence.online => 'Online',
-    UserPresence.away => 'Away',
-    UserPresence.offline => 'Offline',
-  };
 }
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({
+    required this.profile,
+    required this.accent,
+    required this.onEdit,
+  });
+
+  final UserProfileSummary profile;
+  final Color accent;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.deltiecord;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bannerHeight = (constraints.maxWidth / 3).clamp(180.0, 260.0);
+        return SizedBox(
+          height: bannerHeight + 60,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                right: 0,
+                height: bannerHeight,
+                child: profile.bannerBytes == null
+                    ? DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              accent.withValues(alpha: 0.72),
+                              palette.rail,
+                            ],
+                          ),
+                        ),
+                      )
+                    : Image.memory(
+                        profile.bannerBytes!,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        filterQuality: FilterQuality.high,
+                      ),
+              ),
+              Positioned(
+                left: 30,
+                bottom: 0,
+                child: Container(
+                  width: 124,
+                  height: 124,
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: palette.surface,
+                  ),
+                  child: ClipOval(
+                    clipBehavior: Clip.antiAlias,
+                    child: ColoredBox(
+                      color: palette.elevated,
+                      child: profile.avatarBytes == null
+                          ? Center(
+                              child: Text(
+                                profile.displayName.characters.firstOrNull
+                                        ?.toUpperCase() ??
+                                    '?',
+                                style: const TextStyle(
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : Image.memory(
+                              profile.avatarBytes!,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                              filterQuality: FilterQuality.high,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 132,
+                bottom: 12,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _profilePresenceColour(profile.presence),
+                    border: Border.all(color: palette.surface, width: 4),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 20,
+                bottom: 14,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.elevated,
+                    border: Border.all(color: palette.divider),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _profilePresenceColour(profile.presence),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_profilePresenceLabel(profile.presence)),
+                    ],
+                  ),
+                ),
+              ),
+              if (onEdit != null)
+                Positioned(
+                  right: 16,
+                  top: 14,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Edit profile',
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+Color _profilePresenceColour(UserPresence presence) => switch (presence) {
+  UserPresence.online => const Color(0xff23d887),
+  UserPresence.away => const Color(0xffffc857),
+  UserPresence.offline => const Color(0xff747680),
+};
+
+String _profilePresenceLabel(UserPresence presence) => switch (presence) {
+  UserPresence.online => 'Online',
+  UserPresence.away => 'Away',
+  UserPresence.offline => 'Offline',
+};

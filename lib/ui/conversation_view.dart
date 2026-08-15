@@ -564,6 +564,7 @@ class _ConversationState extends State<_Conversation> {
                   ),
                 Expanded(
                   child: Stack(
+                    key: const Key('conversation-timeline-area'),
                     children: [
                       Positioned.fill(
                         child: backend.timelineLoading
@@ -691,6 +692,59 @@ class _ConversationState extends State<_Conversation> {
                             ),
                           ),
                         ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: IgnorePointer(
+                          child: ClipRect(
+                            child: AnimatedSlide(
+                              duration: backend.preferences.reducedMotion
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 140),
+                              curve: Curves.easeOut,
+                              offset: backend.typingUserNames.isEmpty
+                                  ? const Offset(0, -1)
+                                  : Offset.zero,
+                              child: AnimatedOpacity(
+                                duration: backend.preferences.reducedMotion
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 100),
+                                opacity: backend.typingUserNames.isEmpty
+                                    ? 0
+                                    : 1,
+                                child: Container(
+                                  key: const Key('typing-indicator'),
+                                  height: 24,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  decoration: BoxDecoration(
+                                    color: context.deltiecord.panel,
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: context.deltiecord.divider,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    backend.typingUserNames.isEmpty
+                                        ? ''
+                                        : _typingLabel(backend.typingUserNames),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.deltiecord.muted,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -713,88 +767,24 @@ class _ConversationState extends State<_Conversation> {
                     selectedIndex: widget.mentionSelectionIndex,
                     onSelected: widget.onMentionSelected,
                   ),
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    _RichComposer(
-                      key: widget.composerKey,
-                      controller: widget.controller,
-                      focusNode: widget.composerFocus,
-                      roomName: room.name,
-                      enabled: !widget.sending,
-                      sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-                      onSend: widget.onSend,
-                      onAttach: widget.onAttach,
-                      onGif: widget.onGif,
-                      onPasteImage: widget.onPasteImage,
-                      pendingAttachments: widget.pendingAttachments,
-                      onRemoveAttachment: widget.onRemoveAttachment,
-                      onToggleAttachmentSpoiler:
-                          widget.onToggleAttachmentSpoiler,
-                      mentionSuggestions: widget.mentionSuggestions,
-                      mentionSelectionIndex: widget.mentionSelectionIndex,
-                      onMentionSelected: widget.onMentionSelected,
-                      onMentionSelectionChanged:
-                          widget.onMentionSelectionChanged,
-                    ),
-                    Positioned(
-                      left: 68,
-                      right: 48,
-                      top: -22,
-                      child: IgnorePointer(
-                        child: AnimatedSlide(
-                          duration: backend.preferences.reducedMotion
-                              ? Duration.zero
-                              : const Duration(milliseconds: 140),
-                          curve: Curves.easeOut,
-                          offset: backend.typingUserNames.isEmpty
-                              ? const Offset(0, 1)
-                              : Offset.zero,
-                          child: AnimatedOpacity(
-                            duration: backend.preferences.reducedMotion
-                                ? Duration.zero
-                                : const Duration(milliseconds: 100),
-                            opacity: backend.typingUserNames.isEmpty ? 0 : 1,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                height: 22,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                alignment: Alignment.centerLeft,
-                                decoration: BoxDecoration(
-                                  color: context.deltiecord.panel,
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: context.deltiecord.divider,
-                                    ),
-                                    left: BorderSide(
-                                      color: context.deltiecord.divider,
-                                    ),
-                                    right: BorderSide(
-                                      color: context.deltiecord.divider,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  backend.typingUserNames.isEmpty
-                                      ? ''
-                                      : _typingLabel(backend.typingUserNames),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.deltiecord.muted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                _RichComposer(
+                  key: widget.composerKey,
+                  controller: widget.controller,
+                  focusNode: widget.composerFocus,
+                  roomName: room.name,
+                  enabled: !widget.sending,
+                  sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
+                  onSend: widget.onSend,
+                  onAttach: widget.onAttach,
+                  onGif: widget.onGif,
+                  onPasteImage: widget.onPasteImage,
+                  pendingAttachments: widget.pendingAttachments,
+                  onRemoveAttachment: widget.onRemoveAttachment,
+                  onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
+                  mentionSuggestions: widget.mentionSuggestions,
+                  mentionSelectionIndex: widget.mentionSelectionIndex,
+                  onMentionSelected: widget.onMentionSelected,
+                  onMentionSelectionChanged: widget.onMentionSelectionChanged,
                 ),
               ],
             ),
