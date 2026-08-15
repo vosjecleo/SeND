@@ -1,5 +1,45 @@
 part of 'chat_shell.dart';
 
+enum _MediaAction { copyImage, copyReference, save, open, fullscreen }
+
+Future<_MediaAction?> _showMediaContextMenu(
+  BuildContext context,
+  Offset position, {
+  required bool image,
+}) {
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  return showMenu<_MediaAction>(
+    context: context,
+    position: RelativeRect.fromRect(
+      position & const Size(1, 1),
+      Offset.zero & overlay.size,
+    ),
+    items: [
+      if (image)
+        const PopupMenuItem(
+          value: _MediaAction.copyImage,
+          child: Text('Copy image'),
+        ),
+      PopupMenuItem(
+        value: _MediaAction.copyReference,
+        child: Text(image ? 'Copy image reference' : 'Copy video reference'),
+      ),
+      PopupMenuItem(
+        value: _MediaAction.save,
+        child: Text(image ? 'Save image as…' : 'Save video as…'),
+      ),
+      const PopupMenuItem(
+        value: _MediaAction.open,
+        child: Text('Open externally'),
+      ),
+      const PopupMenuItem(
+        value: _MediaAction.fullscreen,
+        child: Text('View fullscreen'),
+      ),
+    ],
+  );
+}
+
 // Inline playback is implemented with media_kit rather than adapted player
 // source. Attribution and upstream license details are in CREDITS.md.
 class _LinkPreviewCard extends StatelessWidget {
@@ -179,6 +219,61 @@ class _AttachmentViewState extends State<_AttachmentView> {
   bool _saving = false;
   bool _opening = false;
 
+  Future<void> _copyReference() async {
+    final reference = await widget.backend.getAttachmentReference(
+      widget.messageId,
+    );
+    if (reference == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No safe media reference available')),
+        );
+      }
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: reference));
+  }
+
+  Future<void> _copyImage() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) return;
+    final bytes = await widget.backend.downloadAttachment(widget.messageId);
+    final item = DataWriterItem(suggestedName: widget.attachment.name);
+    switch (widget.attachment.mimeType) {
+      case 'image/jpeg':
+        item.add(Formats.jpeg(bytes));
+      case 'image/gif':
+        item.add(Formats.gif(bytes));
+      case 'image/webp':
+        item.add(Formats.webp(bytes));
+      default:
+        item.add(Formats.png(bytes));
+    }
+    await clipboard.write([item]);
+  }
+
+  Future<void> _showContextMenu(
+    Offset position, {
+    required bool image,
+    VoidCallback? fullscreen,
+  }) async {
+    final action = await _showMediaContextMenu(context, position, image: image);
+    switch (action) {
+      case _MediaAction.copyImage:
+        await _copyImage();
+      case _MediaAction.copyReference:
+        await _copyReference();
+      case _MediaAction.save:
+        await _save();
+      case _MediaAction.open:
+        await _open();
+      case _MediaAction.fullscreen:
+        fullscreen?.call();
+      case null:
+        return;
+    }
+  }
+
   Future<void> _save() async {
     if (_saving) return;
     final path = await FilePicker.saveFile(
@@ -300,6 +395,8 @@ class _AttachmentViewState extends State<_AttachmentView> {
         attachment: widget.attachment,
         onSave: _save,
         onOpen: _open,
+        onContextMenu: (position, fullscreen) =>
+            _showContextMenu(position, image: false, fullscreen: fullscreen),
       ),
       AttachmentKind.audio => _InlineAudio(
         backend: widget.backend,
@@ -348,6 +445,11 @@ class _AttachmentViewState extends State<_AttachmentView> {
             ),
             child: InkWell(
               onTap: _showImage,
+              onSecondaryTapDown: (details) => _showContextMenu(
+                details.globalPosition,
+                image: true,
+                fullscreen: _showImage,
+              ),
               child: _PreferenceAwareImage(
                 bytes: bytes,
                 animated: widget.attachment.animated,
@@ -528,6 +630,7 @@ class _InlineVideo extends StatefulWidget {
     required this.attachment,
     required this.onSave,
     required this.onOpen,
+    required this.onContextMenu,
   });
 
   final ChatBackend backend;
@@ -535,6 +638,7 @@ class _InlineVideo extends StatefulWidget {
   final ChatAttachment attachment;
   final VoidCallback onSave;
   final VoidCallback onOpen;
+  final void Function(Offset position, VoidCallback fullscreen) onContextMenu;
 
   @override
   State<_InlineVideo> createState() => _InlineVideoState();
@@ -546,32 +650,9 @@ class _InlineVideoState extends State<_InlineVideo> {
   bool _opening = false;
   bool _opened = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_prepare());
-  }
-
-  Future<void> _prepare() async {
-    if (_opening || _opened) return;
-    setState(() => _opening = true);
-    try {
-      final source = await widget.backend.getMediaPlaybackSource(
-        widget.messageId,
-      );
-      if (source == null) return;
-      await _player.open(
-        Media(source.uri.toString(), httpHeaders: source.headers),
-        play: false,
-      );
-      _opened = true;
-    } catch (exception) {
-      _error = exception.toString();
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
-  }
+  late final Future<Uint8List>? _thumbnail = widget.attachment.hasThumbnail
+      ? widget.backend.downloadAttachment(widget.messageId, thumbnail: true)
+      : null;
 
   Future<void> _play() async {
     if (_opening) return;
@@ -608,6 +689,8 @@ class _InlineVideoState extends State<_InlineVideo> {
       builder: (context) => _FullscreenVideo(
         backend: widget.backend,
         messageId: widget.messageId,
+        onSave: widget.onSave,
+        onOpen: widget.onOpen,
       ),
     );
   }
@@ -645,7 +728,27 @@ class _InlineVideoState extends State<_InlineVideo> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onDoubleTap: _showFullscreen,
-                child: Video(controller: _controller),
+                onSecondaryTapDown: (details) => widget.onContextMenu(
+                  details.globalPosition,
+                  _showFullscreen,
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (!_opened)
+                      if (_thumbnail case final thumbnail?)
+                        FutureBuilder<Uint8List>(
+                          future: thumbnail,
+                          builder: (context, snapshot) => snapshot.data == null
+                              ? const SizedBox.shrink()
+                              : Image.memory(
+                                  snapshot.data!,
+                                  fit: BoxFit.contain,
+                                ),
+                        ),
+                    if (_opened) Video(controller: _controller),
+                  ],
+                ),
               ),
               if (!_player.state.playing)
                 IconButton.filled(
@@ -658,27 +761,6 @@ class _InlineVideoState extends State<_InlineVideo> {
                         )
                       : const Icon(Icons.play_arrow),
                 ),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: SizedBox.square(
-                  dimension: 24,
-                  child: PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    iconSize: 14,
-                    tooltip: 'Video options',
-                    onSelected: (value) =>
-                        value == 'open' ? widget.onOpen() : widget.onSave(),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'open',
-                        child: Text('Open externally'),
-                      ),
-                      PopupMenuItem(value: 'save', child: Text('Save video')),
-                    ],
-                  ),
-                ),
-              ),
               if (_error case final error?)
                 Positioned(
                   left: 3,
@@ -701,10 +783,17 @@ class _InlineVideoState extends State<_InlineVideo> {
 }
 
 class _FullscreenVideo extends StatefulWidget {
-  const _FullscreenVideo({required this.backend, required this.messageId});
+  const _FullscreenVideo({
+    required this.backend,
+    required this.messageId,
+    required this.onSave,
+    required this.onOpen,
+  });
 
   final ChatBackend backend;
   final String messageId;
+  final VoidCallback onSave;
+  final VoidCallback onOpen;
 
   @override
   State<_FullscreenVideo> createState() => _FullscreenVideoState();
@@ -755,10 +844,26 @@ class _FullscreenVideoState extends State<_FullscreenVideo> {
         Positioned(
           right: 12,
           top: 12,
-          child: IconButton.filledTonal(
-            tooltip: 'Close video',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
+          child: Row(
+            children: [
+              IconButton.filledTonal(
+                tooltip: 'Save video',
+                onPressed: widget.onSave,
+                icon: const Icon(Icons.download),
+              ),
+              const SizedBox(width: 6),
+              IconButton.filledTonal(
+                tooltip: 'Open externally',
+                onPressed: widget.onOpen,
+                icon: const Icon(Icons.open_in_new),
+              ),
+              const SizedBox(width: 6),
+              IconButton.filledTonal(
+                tooltip: 'Close video',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ],
           ),
         ),
       ],

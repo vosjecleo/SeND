@@ -112,12 +112,22 @@ class MediaRangeProxy {
 
   (int, int) _parseRange(String? header, int size) {
     const maxChunk = 4 * 1024 * 1024;
+    if (size <= 0) throw const FormatException('Empty media');
     if (header == null || !header.startsWith('bytes=')) {
       return (0, min(size, maxChunk) - 1);
     }
     final parts = header.substring(6).split('-');
-    final start = int.tryParse(parts.first) ?? 0;
-    final requestedEnd = parts.length > 1 ? int.tryParse(parts[1]) : null;
+    if (parts.length != 2) {
+      throw const FormatException('Invalid media range');
+    }
+    final suffixLength = parts.first.isEmpty ? int.tryParse(parts[1]) : null;
+    final int? start = suffixLength == null
+        ? int.tryParse(parts.first)
+        : max(0, size - min(size, suffixLength));
+    if (start == null || suffixLength == 0) {
+      throw const FormatException('Invalid media range');
+    }
+    final requestedEnd = suffixLength == null ? int.tryParse(parts[1]) : null;
     final end = min(
       size - 1,
       min(requestedEnd ?? size - 1, start + maxChunk - 1),

@@ -32,7 +32,9 @@ an external dependency under its own license.
 - [media_kit](https://github.com/media-kit/media-kit) provides inline and
   full-window audio/video playback. Licensed under MIT.
 - [super_clipboard](https://github.com/superlistapp/super_native_extensions)
-  provides desktop clipboard image access. Licensed under MIT.
+  and [super_drag_and_drop](https://github.com/superlistapp/super_native_extensions)
+  provide desktop clipboard image access and native file drag/drop. Licensed
+  under MIT.
 - [flutter_quill](https://github.com/singerdmx/flutter-quill),
   [vsc_quill_delta_to_html](https://github.com/visual-space/vsc_quill_delta_to_html),
   and [markdown](https://github.com/dart-lang/tools/tree/main/pkgs/markdown)

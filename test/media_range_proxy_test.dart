@@ -94,4 +94,42 @@ void main() {
       expect(bytesServed, lessThan(plaintext.length));
     },
   );
+
+  test('serves HTTP suffix ranges from the end of encrypted media', () async {
+    final plaintext = Uint8List.fromList(List.generate(1024, (index) => index));
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    upstream.listen((request) async {
+      final match = RegExp(r'bytes=(\d+)-(\d+)')
+          .firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
+      final start = int.parse(match.group(1)!);
+      final end = int.parse(match.group(2)!);
+      request.response
+        ..statusCode = HttpStatus.partialContent
+        ..add(plaintext.sublist(start, end + 1));
+      await request.response.close();
+    });
+    final proxy = MediaRangeProxy(decryptor: (input, _, _, _) => input);
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final local = await proxy.register(
+      upstream: Uri.parse('http://127.0.0.1:${upstream.port}/media'),
+      accessToken: 'token',
+      key: Uint8List(32),
+      iv: Uint8List(16),
+      size: plaintext.length,
+      mimeType: 'video/mp4',
+    );
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    final request = await client.getUrl(local);
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=-64');
+    final response = await request.close();
+    final bytes = await response.fold<BytesBuilder>(
+      BytesBuilder(),
+      (builder, value) => builder..add(value),
+    );
+    expect(bytes.takeBytes(), plaintext.sublist(plaintext.length - 64));
+  });
 }

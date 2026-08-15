@@ -519,6 +519,10 @@ class MatrixBackend extends ChatBackend {
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) =>
       _getMediaPlaybackSource(messageId);
 
+  @override
+  Future<String?> getAttachmentReference(String messageId) async =>
+      _getAttachmentReference(messageId);
+
   Future<void> _closeTimeline() async {
     _timelineGeneration++;
     _timeline?.cancelSubscriptions();

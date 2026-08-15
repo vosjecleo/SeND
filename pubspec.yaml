@@ -33,6 +33,7 @@ dependencies:
   webrtc_interface: ^1.5.1
   flutter_secure_storage: ^10.3.1
   super_clipboard: ^0.9.1
+  super_drag_and_drop: ^0.9.1
 
 dev_dependencies:
   flutter_test:

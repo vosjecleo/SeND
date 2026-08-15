@@ -129,4 +129,5 @@ abstract class ChatBackend extends ChangeNotifier {
     bool thumbnail = false,
   });
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId);
+  Future<String?> getAttachmentReference(String messageId);
 }

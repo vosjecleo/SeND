@@ -15,6 +15,7 @@ class _Conversation extends StatefulWidget {
     required this.onAttach,
     required this.onGif,
     required this.onPasteImage,
+    required this.onDropAttachments,
     required this.pendingAttachments,
     required this.onRemoveAttachment,
     required this.onToggleAttachmentSpoiler,
@@ -39,6 +40,7 @@ class _Conversation extends StatefulWidget {
   final VoidCallback onAttach;
   final VoidCallback onGif;
   final Future<bool> Function() onPasteImage;
+  final ValueChanged<List<AttachmentDraft>> onDropAttachments;
   final List<AttachmentDraft> pendingAttachments;
   final ValueChanged<int> onRemoveAttachment;
   final ValueChanged<int> onToggleAttachmentSpoiler;
@@ -57,6 +59,7 @@ class _ConversationState extends State<_Conversation> {
   final Map<String, GlobalKey> _messageKeys = {};
   String? _roomId;
   bool _loadingAnchoredHistory = false;
+  bool _draggingFiles = false;
 
   @override
   void initState() {
@@ -287,278 +290,393 @@ class _ConversationState extends State<_Conversation> {
     ),
   );
 
+  DropOperation _onDropOver(DropOverEvent event) {
+    if (!_draggingFiles) setState(() => _draggingFiles = true);
+    return event.session.allowedOperations.contains(DropOperation.copy)
+        ? DropOperation.copy
+        : DropOperation.none;
+  }
+
+  void _onDropLeave(DropEvent _) {
+    if (_draggingFiles) setState(() => _draggingFiles = false);
+  }
+
+  Future<void> _onPerformDrop(PerformDropEvent event) async {
+    final attachments = <AttachmentDraft>[];
+    try {
+      for (final item in event.session.items) {
+        final reader = item.dataReader;
+        if (reader == null) continue;
+        final suggestedName = await reader.getSuggestedName();
+        final completed = Completer<AttachmentDraft?>();
+        final progress = reader.getFile(null, (file) async {
+          try {
+            final bytes = await file.readAll();
+            final name = file.fileName ?? suggestedName ?? 'attachment';
+            completed.complete(
+              AttachmentDraft(
+                bytes: bytes,
+                name: name,
+                mimeType:
+                    lookupMimeType(name, headerBytes: bytes) ??
+                    'application/octet-stream',
+                spoiler: false,
+              ),
+            );
+          } catch (_) {
+            completed.complete(null);
+          }
+        }, onError: (_) => completed.complete(null));
+        if (progress == null) continue;
+        final attachment = await completed.future;
+        if (attachment != null) attachments.add(attachment);
+      }
+      widget.onDropAttachments(attachments);
+    } finally {
+      if (mounted) setState(() => _draggingFiles = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final backend = widget.backend;
     final room = backend.selectedRoom!;
     final messages = backend.messages;
-    return Column(
-      children: [
-        Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          alignment: Alignment.centerLeft,
-          decoration: const BoxDecoration(
-            color: Color(0xff292a30),
-            border: Border(bottom: BorderSide(color: Color(0xff35363d))),
-          ),
-          child: Row(
-            children: [
-              _RoomIcon(room: room, size: 30),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      room.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+    return DropRegion(
+      formats: Formats.standardFormats,
+      hitTestBehavior: HitTestBehavior.opaque,
+      onDropOver: _onDropOver,
+      onPerformDrop: _onPerformDrop,
+      onDropLeave: _onDropLeave,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Column(
+              children: [
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  alignment: Alignment.centerLeft,
+                  decoration: const BoxDecoration(
+                    color: Color(0xff292a30),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xff35363d)),
                     ),
-                    if (room.topic.isNotEmpty)
+                  ),
+                  child: Row(
+                    children: [
+                      _RoomIcon(room: room, size: 30),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              room.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (room.topic.isNotEmpty)
+                              Text(
+                                room.topic,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xff989aa5),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       Text(
-                        room.topic,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        '${backend.selectedRoomMembers.length}',
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           color: Color(0xff989aa5),
                         ),
                       ),
-                  ],
+                      if (backend.firstUnreadMessageId != null)
+                        IconButton(
+                          tooltip: 'Jump to first unread',
+                          onPressed: _jumpToFirstUnread,
+                          icon: const Icon(
+                            Icons.mark_chat_unread_outlined,
+                            size: 19,
+                          ),
+                        ),
+                      IconButton(
+                        tooltip: 'Search',
+                        onPressed: showSearch,
+                        icon: const Icon(Icons.search, size: 19),
+                      ),
+                      IconButton(
+                        tooltip: 'Pinned messages',
+                        onPressed: _showPins,
+                        icon: const Icon(Icons.push_pin_outlined, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: 'Members',
+                        onPressed: showMembers,
+                        icon: const Icon(Icons.people_outline, size: 20),
+                      ),
+                      IconButton(
+                        tooltip: 'Copy room link',
+                        onPressed: () => Clipboard.setData(
+                          ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+                        ),
+                        icon: const Icon(Icons.link, size: 19),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Notification options',
+                        icon: Icon(
+                          backend.selectedRoomMuted
+                              ? Icons.notifications_off_outlined
+                              : Icons.notifications_none,
+                          size: 19,
+                        ),
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'mute':
+                              backend.setSelectedRoomMuted(
+                                !backend.selectedRoomMuted,
+                              );
+                            case 'previews':
+                              backend.setNotificationPreviewsEnabled(
+                                !backend.notificationPreviewsEnabled,
+                              );
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'mute',
+                            child: Text(
+                              backend.selectedRoomMuted
+                                  ? 'Unmute this room'
+                                  : 'Mute this room',
+                            ),
+                          ),
+                          CheckedPopupMenuItem(
+                            value: 'previews',
+                            checked: backend.notificationPreviewsEnabled,
+                            child: const Text('Show message previews'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Text(
-                '${backend.selectedRoomMembers.length}',
-                style: const TextStyle(fontSize: 11, color: Color(0xff989aa5)),
-              ),
-              if (backend.firstUnreadMessageId != null)
-                IconButton(
-                  tooltip: 'Jump to first unread',
-                  onPressed: _jumpToFirstUnread,
-                  icon: const Icon(Icons.mark_chat_unread_outlined, size: 19),
+                if (backend.error case final error?)
+                  MaterialBanner(
+                    content: Text(error),
+                    actions: [
+                      TextButton(
+                        onPressed: backend.clearError,
+                        child: const Text('Dismiss'),
+                      ),
+                    ],
+                  ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: backend.timelineLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : backend.messages.isEmpty
+                            ? const Center(child: Text('No messages yet'))
+                            : ListView.builder(
+                                controller: _scrollController,
+                                reverse: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  0,
+                                  10,
+                                  0,
+                                  14,
+                                ),
+                                itemCount:
+                                    messages.length +
+                                    (backend.historyLoading ||
+                                            backend.canLoadMoreHistory
+                                        ? 1
+                                        : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == messages.length) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      child: Center(
+                                        child: backend.historyLoading
+                                            ? const SizedBox.square(
+                                                dimension: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : TextButton.icon(
+                                                onPressed: _loadOlderAnchored,
+                                                icon: const Icon(
+                                                  Icons.history,
+                                                  size: 17,
+                                                ),
+                                                label: const Text(
+                                                  'Load older messages',
+                                                ),
+                                              ),
+                                      ),
+                                    );
+                                  }
+                                  final message = messages[index];
+                                  final older = index + 1 < messages.length
+                                      ? messages[index + 1]
+                                      : null;
+                                  final startsGroup =
+                                      older == null ||
+                                      older.sender != message.sender ||
+                                      message.timestamp.difference(
+                                            older.timestamp,
+                                          ) >
+                                          const Duration(minutes: 7) ||
+                                      message.reply != null;
+                                  return Column(
+                                    key: _messageKeys.putIfAbsent(
+                                      message.id,
+                                      GlobalKey.new,
+                                    ),
+                                    children: [
+                                      if (message.id ==
+                                          backend.firstUnreadMessageId)
+                                        const _UnreadDivider(),
+                                      _MessageRow(
+                                        message: message,
+                                        startsGroup: startsGroup,
+                                        onReply: () => widget.onReply(message),
+                                        onEdit: message.own && !message.redacted
+                                            ? () => widget.onEdit(message)
+                                            : null,
+                                        onDelete: message.canRedact
+                                            ? () => _deleteMessage(message)
+                                            : null,
+                                        onReact:
+                                            message.redacted || message.system
+                                            ? null
+                                            : () => _pickReaction(message),
+                                        onRetry: message.failed
+                                            ? () => backend.retryMessage(
+                                                message.id,
+                                              )
+                                            : null,
+                                        onCancel:
+                                            message.pending || message.failed
+                                            ? () =>
+                                                  backend.cancelPendingMessage(
+                                                    message.id,
+                                                  )
+                                            : null,
+                                        onToggleReaction: (key) => backend
+                                            .toggleReaction(message.id, key),
+                                        backend: backend,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                      ),
+                      if (!backend.atTimelinePresent)
+                        Positioned(
+                          right: 16,
+                          bottom: 12,
+                          child: FilledButton.tonalIcon(
+                            onPressed: backend.jumpToPresent,
+                            icon: const Icon(
+                              Icons.vertical_align_bottom,
+                              size: 17,
+                            ),
+                            label: const Text('Jump to present'),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              IconButton(
-                tooltip: 'Search',
-                onPressed: showSearch,
-                icon: const Icon(Icons.search, size: 19),
-              ),
-              IconButton(
-                tooltip: 'Pinned messages',
-                onPressed: _showPins,
-                icon: const Icon(Icons.push_pin_outlined, size: 18),
-              ),
-              IconButton(
-                tooltip: 'Members',
-                onPressed: showMembers,
-                icon: const Icon(Icons.people_outline, size: 20),
-              ),
-              IconButton(
-                tooltip: 'Copy room link',
-                onPressed: () => Clipboard.setData(
-                  ClipboardData(text: 'https://matrix.to/#/${room.id}'),
-                ),
-                icon: const Icon(Icons.link, size: 19),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Notification options',
-                icon: Icon(
-                  backend.selectedRoomMuted
-                      ? Icons.notifications_off_outlined
-                      : Icons.notifications_none,
-                  size: 19,
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'mute':
-                      backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
-                    case 'previews':
-                      backend.setNotificationPreviewsEnabled(
-                        !backend.notificationPreviewsEnabled,
-                      );
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'mute',
+                const Divider(height: 1),
+                if (widget.replyingTo case final message?)
+                  _ComposerContext(
+                    label: 'Replying to ${message.sender}',
+                    body: message.body,
+                    onCancel: widget.onCancelComposerAction,
+                  )
+                else if (widget.editingMessage case final message?)
+                  _ComposerContext(
+                    label: 'Editing message',
+                    body: message.body,
+                    onCancel: widget.onCancelComposerAction,
+                  ),
+                if (widget.mentionSuggestions.isNotEmpty)
+                  _MentionPicker(
+                    suggestions: widget.mentionSuggestions,
+                    selectedIndex: widget.mentionSelectionIndex,
+                    onSelected: widget.onMentionSelected,
+                  ),
+                if (backend.typingUserNames.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(68, 2, 12, 0),
                     child: Text(
-                      backend.selectedRoomMuted
-                          ? 'Unmute this room'
-                          : 'Mute this room',
+                      _typingLabel(backend.typingUserNames),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xffa7a9b4),
+                      ),
                     ),
                   ),
-                  CheckedPopupMenuItem(
-                    value: 'previews',
-                    checked: backend.notificationPreviewsEnabled,
-                    child: const Text('Show message previews'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        if (backend.error case final error?)
-          MaterialBanner(
-            content: Text(error),
-            actions: [
-              TextButton(
-                onPressed: backend.clearError,
-                child: const Text('Dismiss'),
-              ),
-            ],
-          ),
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: backend.timelineLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : backend.messages.isEmpty
-                    ? const Center(child: Text('No messages yet'))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        reverse: true,
-                        padding: const EdgeInsets.fromLTRB(0, 10, 0, 14),
-                        itemCount:
-                            messages.length +
-                            (backend.historyLoading ||
-                                    backend.canLoadMoreHistory
-                                ? 1
-                                : 0),
-                        itemBuilder: (context, index) {
-                          if (index == messages.length) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              child: Center(
-                                child: backend.historyLoading
-                                    ? const SizedBox.square(
-                                        dimension: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : TextButton.icon(
-                                        onPressed: _loadOlderAnchored,
-                                        icon: const Icon(
-                                          Icons.history,
-                                          size: 17,
-                                        ),
-                                        label: const Text(
-                                          'Load older messages',
-                                        ),
-                                      ),
-                              ),
-                            );
-                          }
-                          final message = messages[index];
-                          final older = index + 1 < messages.length
-                              ? messages[index + 1]
-                              : null;
-                          final startsGroup =
-                              older == null ||
-                              older.sender != message.sender ||
-                              message.timestamp.difference(older.timestamp) >
-                                  const Duration(minutes: 7) ||
-                              message.reply != null;
-                          return Column(
-                            key: _messageKeys.putIfAbsent(
-                              message.id,
-                              GlobalKey.new,
-                            ),
-                            children: [
-                              if (message.id == backend.firstUnreadMessageId)
-                                const _UnreadDivider(),
-                              _MessageRow(
-                                message: message,
-                                startsGroup: startsGroup,
-                                onReply: () => widget.onReply(message),
-                                onEdit: message.own && !message.redacted
-                                    ? () => widget.onEdit(message)
-                                    : null,
-                                onDelete: message.canRedact
-                                    ? () => _deleteMessage(message)
-                                    : null,
-                                onReact: message.redacted || message.system
-                                    ? null
-                                    : () => _pickReaction(message),
-                                onRetry: message.failed
-                                    ? () => backend.retryMessage(message.id)
-                                    : null,
-                                onCancel: message.pending || message.failed
-                                    ? () => backend.cancelPendingMessage(
-                                        message.id,
-                                      )
-                                    : null,
-                                onToggleReaction: (key) =>
-                                    backend.toggleReaction(message.id, key),
-                                backend: backend,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-              ),
-              if (!backend.atTimelinePresent)
-                Positioned(
-                  right: 16,
-                  bottom: 12,
-                  child: FilledButton.tonalIcon(
-                    onPressed: backend.jumpToPresent,
-                    icon: const Icon(Icons.vertical_align_bottom, size: 17),
-                    label: const Text('Jump to present'),
-                  ),
+                _RichComposer(
+                  key: widget.composerKey,
+                  controller: widget.controller,
+                  focusNode: widget.composerFocus,
+                  roomName: room.name,
+                  enabled: !widget.sending,
+                  sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
+                  onSend: widget.onSend,
+                  onAttach: widget.onAttach,
+                  onGif: widget.onGif,
+                  onPasteImage: widget.onPasteImage,
+                  pendingAttachments: widget.pendingAttachments,
+                  onRemoveAttachment: widget.onRemoveAttachment,
+                  onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
+                  mentionSuggestions: widget.mentionSuggestions,
+                  mentionSelectionIndex: widget.mentionSelectionIndex,
+                  onMentionSelected: widget.onMentionSelected,
+                  onMentionSelectionChanged: widget.onMentionSelectionChanged,
                 ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        if (widget.replyingTo case final message?)
-          _ComposerContext(
-            label: 'Replying to ${message.sender}',
-            body: message.body,
-            onCancel: widget.onCancelComposerAction,
-          )
-        else if (widget.editingMessage case final message?)
-          _ComposerContext(
-            label: 'Editing message',
-            body: message.body,
-            onCancel: widget.onCancelComposerAction,
-          ),
-        if (widget.mentionSuggestions.isNotEmpty)
-          _MentionPicker(
-            suggestions: widget.mentionSuggestions,
-            selectedIndex: widget.mentionSelectionIndex,
-            onSelected: widget.onMentionSelected,
-          ),
-        if (backend.typingUserNames.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(68, 2, 12, 0),
-            child: Text(
-              _typingLabel(backend.typingUserNames),
-              style: const TextStyle(fontSize: 11, color: Color(0xffa7a9b4)),
+              ],
             ),
           ),
-        _RichComposer(
-          key: widget.composerKey,
-          controller: widget.controller,
-          focusNode: widget.composerFocus,
-          roomName: room.name,
-          enabled: !widget.sending,
-          sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-          onSend: widget.onSend,
-          onAttach: widget.onAttach,
-          onGif: widget.onGif,
-          onPasteImage: widget.onPasteImage,
-          pendingAttachments: widget.pendingAttachments,
-          onRemoveAttachment: widget.onRemoveAttachment,
-          onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
-          mentionSuggestions: widget.mentionSuggestions,
-          mentionSelectionIndex: widget.mentionSelectionIndex,
-          onMentionSelected: widget.onMentionSelected,
-          onMentionSelectionChanged: widget.onMentionSelectionChanged,
-        ),
-      ],
+          if (_draggingFiles)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ColoredBox(
+                  color: const Color(0xaa111216),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xff24252b),
+                        border: Border.all(color: const Color(0xff858cff)),
+                      ),
+                      child: const Text('Drop files to attach'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

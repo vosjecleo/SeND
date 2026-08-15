@@ -14,6 +14,7 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
@@ -376,6 +377,12 @@ class _ChatShellState extends State<ChatShell> {
     _composerFocus.requestFocus();
   }
 
+  void _queueAttachments(List<AttachmentDraft> attachments) {
+    if (!mounted || attachments.isEmpty) return;
+    setState(() => _pendingAttachments.addAll(attachments));
+    _composerFocus.requestFocus();
+  }
+
   Future<bool> _pasteClipboardImage() async {
     final clipboard = SystemClipboard.instance;
     if (clipboard == null) return false;
@@ -506,6 +513,7 @@ class _ChatShellState extends State<ChatShell> {
                                   onAttach: _attachFile,
                                   onGif: _showGifPicker,
                                   onPasteImage: _pasteClipboardImage,
+                                  onDropAttachments: _queueAttachments,
                                   pendingAttachments: _pendingAttachments,
                                   onRemoveAttachment: _removePendingAttachment,
                                   onToggleAttachmentSpoiler:

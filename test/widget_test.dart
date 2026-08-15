@@ -802,4 +802,6 @@ class FakeBackend extends ChatBackend {
   @override
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) async =>
       null;
+  @override
+  Future<String?> getAttachmentReference(String messageId) async => null;
 }

@@ -1,6 +1,19 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  String? _getAttachmentReference(String messageId) {
+    final event = _eventById(messageId);
+    if (event == null || !event.hasAttachment) return null;
+    final encryptedReference = event.content
+        .tryGetMap<String, Object?>('file')
+        ?.tryGet<String>('url');
+    final reference = encryptedReference ?? event.content.tryGet<String>('url');
+    final uri = Uri.tryParse(reference ?? '');
+    // Only expose the stable MXC identifier. Download URLs can contain a
+    // homeserver access token, and encrypted file metadata contains the key.
+    return uri?.isScheme('mxc') == true ? uri.toString() : null;
+  }
+
   Future<void> _refreshStorageUsage() async {
     _storageLoading = true;
     _notifyBackendListeners();
