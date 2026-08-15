@@ -82,15 +82,15 @@ extension _MatrixLinkPreviews on MatrixBackend {
       final fxPreview = await _fxTwitterPreview(url);
       if (fxPreview != null) return fxPreview;
       if (!await _isPublicWebUrl(url)) return null;
-      final request = await _previewHttpClient.getUrl(url);
-      request.headers.set(HttpHeaders.acceptHeader, 'text/html');
-      final response = await request.close();
+      final opened = await _openPublicResponse(url, accept: 'text/html');
+      if (opened == null) return null;
+      final (response, responseUri) = opened;
       if (response.statusCode != HttpStatus.ok ||
           response.contentLength > 2 * 1024 * 1024) {
         await response.drain<void>();
         return null;
       }
-      final source = await utf8.decodeStream(response);
+      final source = await _decodeUtf8Limited(response, 2 * 1024 * 1024);
       final document = html_parser.parse(source);
       String? meta(String property) {
         final element =
@@ -102,7 +102,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
 
       Uri? resolved(String? value) {
         if (value == null) return null;
-        return url.resolve(value);
+        return responseUri.resolve(value);
       }
 
       final imageUrl = resolved(meta('og:image') ?? meta('twitter:image'));
@@ -157,10 +157,13 @@ extension _MatrixLinkPreviews on MatrixBackend {
     final statusId = match?.group(1);
     if (statusId == null) return null;
     final apiUrl = Uri.https('api.fxtwitter.com', '/status/$statusId');
-    final request = await _previewHttpClient.getUrl(apiUrl);
-    final response = await request.close();
+    final opened = await _openPublicResponse(apiUrl);
+    if (opened == null) return null;
+    final response = opened.$1;
     if (response.statusCode != HttpStatus.ok) return null;
-    final json = jsonDecode(await utf8.decodeStream(response));
+    final json = jsonDecode(
+      await _decodeUtf8Limited(response, 2 * 1024 * 1024),
+    );
     if (json is! Map) return null;
     final tweet = json['tweet'];
     if (tweet is! Map) return null;
@@ -203,8 +206,9 @@ extension _MatrixLinkPreviews on MatrixBackend {
       return thumbnail.data;
     }
     if (!await _isPublicWebUrl(uri)) return null;
-    final request = await _previewHttpClient.getUrl(uri);
-    final response = await request.close();
+    final opened = await _openPublicResponse(uri);
+    if (opened == null) return null;
+    final response = opened.$1;
     if (response.statusCode != HttpStatus.ok ||
         response.contentLength > 8 * 1024 * 1024) {
       await response.drain<void>();
@@ -227,22 +231,52 @@ extension _MatrixLinkPreviews on MatrixBackend {
       return false;
     }
     final addresses = await InternetAddress.lookup(uri.host);
-    return addresses.isNotEmpty &&
-        addresses.every((address) {
-          if (address.isLoopback ||
-              address.isLinkLocal ||
-              address.isMulticast) {
-            return false;
-          }
-          final raw = address.rawAddress;
-          if (address.type == InternetAddressType.IPv4) {
-            return !(raw[0] == 10 ||
-                raw[0] == 127 ||
-                (raw[0] == 169 && raw[1] == 254) ||
-                (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) ||
-                (raw[0] == 192 && raw[1] == 168));
-          }
-          return !(raw[0] == 0xfc || raw[0] == 0xfd);
-        });
+    return addresses.isNotEmpty && addresses.every(isPublicInternetAddress);
+  }
+
+  Future<(HttpClientResponse, Uri)?> _openPublicResponse(
+    Uri initialUri, {
+    String? accept,
+  }) async {
+    var uri = initialUri;
+    for (var redirects = 0; redirects <= 4; redirects++) {
+      if (!await _isPublicWebUrl(uri)) return null;
+      final request = await _previewHttpClient.getUrl(uri);
+      request.followRedirects = false;
+      if (accept != null) request.headers.set(HttpHeaders.acceptHeader, accept);
+      final response = await request.close();
+      final remote = response.connectionInfo?.remoteAddress;
+      if (remote != null && !isPublicInternetAddress(remote)) {
+        await response.drain<void>();
+        return null;
+      }
+      if (!_isRedirect(response.statusCode)) return (response, uri);
+      final location = response.headers.value(HttpHeaders.locationHeader);
+      await response.drain<void>();
+      if (location == null) return null;
+      uri = uri.resolve(location);
+    }
+    return null;
+  }
+
+  bool _isRedirect(int status) =>
+      status == HttpStatus.movedPermanently ||
+      status == HttpStatus.found ||
+      status == HttpStatus.seeOther ||
+      status == HttpStatus.temporaryRedirect ||
+      status == HttpStatus.permanentRedirect;
+
+  Future<String> _decodeUtf8Limited(
+    HttpClientResponse response,
+    int maximumBytes,
+  ) async {
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response) {
+      if (bytes.length + chunk.length > maximumBytes) {
+        throw const HttpException('Preview response is too large.');
+      }
+      bytes.add(chunk);
+    }
+    return utf8.decode(bytes.takeBytes());
   }
 }

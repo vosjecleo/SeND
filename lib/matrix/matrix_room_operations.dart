@@ -83,9 +83,13 @@ extension _MatrixRoomOperations on MatrixBackend {
       }
       _timeline = timeline;
       await _decryptTimelineEvents(timeline);
+      if (!_isCurrentTimeline(timeline, generation)) return;
       await _hydrateTimelineMetadata(timeline);
+      if (!_isCurrentTimeline(timeline, generation)) return;
     } catch (exception) {
-      _error = _friendlyError(exception);
+      if (_isCurrentSelection(room.id, generation)) {
+        _error = _friendlyError(exception);
+      }
     } finally {
       if (_isCurrentSelection(room.id, generation)) {
         _timelineLoading = false;

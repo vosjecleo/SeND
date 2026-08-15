@@ -11,6 +11,7 @@ import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
+import '../services/public_network_address.dart';
 import '../services/timeline_window_policy.dart';
 import 'matrix_client_factory.dart';
 import 'media_range_proxy.dart';
