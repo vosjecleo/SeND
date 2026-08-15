@@ -1,12 +1,12 @@
-Deltiecord v0.4.2 test bundle
+Deltiecord v0.9.0 beta test bundle
 ================================
 
 Linux AppImage:
-  chmod +x Deltiecord-0.4.2-x86_64.AppImage
-  ./Deltiecord-0.4.2-x86_64.AppImage
+  chmod +x Deltiecord-0.9.0-x86_64.AppImage
+  ./Deltiecord-0.9.0-x86_64.AppImage
 
 Debian/Ubuntu package:
-  sudo apt install ./deltiecord_0.4.2_amd64.deb
+  sudo apt install ./deltiecord_0.9.0_amd64.deb
 
 Verify files:
   sha256sum -c SHA256SUMS
@@ -14,4 +14,5 @@ Verify files:
 The source archive excludes Git history, build caches, local app data, login
 sessions, encryption keys, and generated packaging tools. A desktop Secret
 Service is required for secure session/E2EE storage. PipeWire-Pulse or
-PulseAudio is required for voice-room audio.
+PulseAudio is required for voice-room audio. Wayland screen sharing also needs
+PipeWire, xdg-desktop-portal, and a portal backend for the desktop environment.

@@ -71,10 +71,15 @@ extension _MatrixProfiles on MatrixBackend {
     if (userId == null) return;
     Future<void> setText(String key, String? value) async {
       if (value == null) return;
-      if (value.trim().isEmpty) {
-        await _matrix.deleteProfileField(userId, key);
-      } else {
-        await _matrix.setProfileField(userId, key, {key: value.trim()});
+      try {
+        if (value.trim().isEmpty) {
+          await _matrix.deleteProfileField(userId, key);
+        } else {
+          await _matrix.setProfileField(userId, key, {key: value.trim()});
+        }
+      } on MatrixException catch (exception) {
+        if (exception.error != MatrixError.M_UNRECOGNIZED) rethrow;
+        // Extensible profiles are optional; display name/avatar still work.
       }
     }
 
@@ -83,16 +88,24 @@ extension _MatrixProfiles on MatrixBackend {
       await setText(_profilePronounsField, pronouns);
       await setText('m.tz', timezone);
       if (removeBanner) {
-        await _matrix.deleteProfileField(userId, _profileBannerField);
+        try {
+          await _matrix.deleteProfileField(userId, _profileBannerField);
+        } on MatrixException catch (exception) {
+          if (exception.error != MatrixError.M_UNRECOGNIZED) rethrow;
+        }
       } else if (bannerBytes != null) {
         final mxc = await _matrix.uploadContent(
           bannerBytes,
           filename: 'profile-banner.png',
           contentType: 'image/png',
         );
-        await _matrix.setProfileField(userId, _profileBannerField, {
-          _profileBannerField: mxc.toString(),
-        });
+        try {
+          await _matrix.setProfileField(userId, _profileBannerField, {
+            _profileBannerField: mxc.toString(),
+          });
+        } on MatrixException catch (exception) {
+          if (exception.error != MatrixError.M_UNRECOGNIZED) rethrow;
+        }
       }
       _notifyBackendListeners();
     } catch (exception) {

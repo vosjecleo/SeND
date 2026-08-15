@@ -51,8 +51,11 @@ Clang, CMake, Ninja, pkg-config, and GTK development libraries.
 - `lib/models/` contains SDK-independent view models.
 - `lib/ui/` contains Flutter widgets only.
 
-The current UI provides the everyday text-and-media baseline. MatrixRTC voice
-rooms, administration, and deeper customization are staged below.
+The current v0.9 beta provides the complete agreed desktop feature set: Matrix
+text/media messaging and E2EE, bounded historical timelines, extensible
+profiles, configurable desktop interaction, and MatrixRTC voice/video/screen
+sharing. Remaining work toward v1 is validation, bug fixing, performance,
+security review, and distribution hardening.
 
 ## Roadmap
 
@@ -200,7 +203,28 @@ complete design pass.
 There is no separate v0.5 milestone. These capabilities now ship incrementally
 as v0.4.x so the design and management workflows evolve together.
 
-### Later v0.x — Hardening and platform work
+### v0.9 — Feature-complete desktop beta
+
+- [x] Searchable local emoji and colon completion, arbitrary key bindings,
+  private per-room drafts, drag/drop and clipboard attachments.
+- [x] Extensible Matrix profiles, blocked-user controls, outgoing read-state
+  indicators, actionable desktop notifications, and complete room headers.
+- [x] Bounded 30-event timeline paging, stable visual anchoring, event-centred
+  search/pin/reply navigation, and Jump to Present.
+- [x] Safe media context actions and a zoomable, keyboard-navigable in-client
+  image/video viewer.
+- [x] MatrixRTC voice, deafen, local participant volume/mute, remembered media
+  devices, camera grids, pinning, and explicit portal-based screen sharing.
+- [x] Offline draft retention and idempotent queued text/media retry after
+  reconnect.
+
+The automated desktop gate covers models, services, widgets, timeline-window
+policy, media ranges, shortcuts, drafts, emoji, profile presentation, receipts,
+and RTC state. Multi-user camera and Wayland portal behavior must also be
+retested on the intended machines for each beta package because CI cannot grant
+real microphones, cameras, or portal screen-capture sessions.
+
+### Post-v0.9 — Hardening and platform work
 
 - Federation, slow-network, offline, large-room, long-history, and large-media
   stress testing.

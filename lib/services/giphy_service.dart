@@ -15,30 +15,28 @@ class GifSearchResult {
 }
 
 /// Small client for GIPHY's public API (not adapted from a third-party picker).
-/// The application key is injected into release binaries with a Dart define;
-/// it is intentionally absent from source control. See CREDITS.md.
+/// Deltiecord's rate-limited server proxy adds the shared application key, so
+/// neither source archives nor release binaries contain that credential.
 class GiphyService {
   GiphyService();
 
-  static const _apiKey = String.fromEnvironment('GIPHY_API_KEY');
+  static const _proxyUrl = String.fromEnvironment(
+    'GIPHY_PROXY_URL',
+    defaultValue: 'https://deltie.net/api/servers/giphy/search',
+  );
   final HttpClient _http = HttpClient();
 
   Future<List<GifSearchResult>> search(String query) async {
-    if (_apiKey.isEmpty) {
-      throw StateError('GIPHY is not configured in this build.');
+    final base = Uri.parse(_proxyUrl);
+    if (base.scheme != 'https') {
+      throw StateError('The GIF search proxy must use HTTPS.');
     }
-    final uri = Uri.https('api.giphy.com', '/v1/gifs/search', {
-      'api_key': _apiKey,
-      'q': query,
-      'limit': '24',
-      'rating': 'pg-13',
-      'lang': 'en',
-    });
+    final uri = base.replace(queryParameters: {'q': query});
     final request = await _http.getUrl(uri);
     final response = await request.close();
     final body = await utf8.decodeStream(response);
     if (response.statusCode != HttpStatus.ok) {
-      throw HttpException('Giphy returned ${response.statusCode}.');
+      throw HttpException('GIF search returned ${response.statusCode}.');
     }
     final json = jsonDecode(body) as Map<String, Object?>;
     final data = json['data'];

@@ -1,11 +1,11 @@
 pkgname=deltiecord
-pkgver=0.4.2
+pkgver=0.9.0
 pkgrel=1
 pkgdesc='Compact Matrix desktop client'
 arch=('x86_64')
 url='https://example.invalid/deltiecord'
 license=('custom')
-depends=('gtk3' 'libsecret' 'libpulse' 'mpv')
+depends=('gtk3' 'libsecret' 'libpulse' 'mpv' 'pipewire' 'xdg-desktop-portal')
 makedepends=('flutter' 'cmake' 'clang' 'ninja')
 source=()
 sha256sums=()

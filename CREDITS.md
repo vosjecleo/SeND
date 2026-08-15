@@ -44,8 +44,8 @@ an external dependency under its own license.
 - [flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)
   provides OS-keyring-backed storage for sessions and private configuration.
 - [GIPHY](https://developers.giphy.com/) supplies GIF search results through its
-  public API. Deltiecord contains its own small API client and stores the user's
-  API key in secure storage.
+  public API. Deltiecord contains its own small client; a rate-limited HTTPS
+  proxy holds the shared API key so client binaries never contain it.
 - [FxTwitter/FxEmbed](https://github.com/FixTweet/FxTwitter) supplies public
   preview metadata for X links when the Matrix URL-preview response is
   insufficient. Deltiecord calls the service API; it does not include FxTwitter

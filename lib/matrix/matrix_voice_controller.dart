@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
@@ -33,6 +34,10 @@ class MatrixVoiceController extends ChangeNotifier {
   String? _selectedCameraId;
   final Map<String, double> _participantVolumes = {};
   final Set<String> _locallyMutedParticipants = {};
+  Timer? _inputMeterTimer;
+  double _inputLevel = 0;
+  bool _samplingInput = false;
+  bool _rejoining = false;
   bool _disposed = false;
 
   VoiceConnectionStatus get status => _status;
@@ -41,8 +46,7 @@ class MatrixVoiceController extends ChangeNotifier {
   bool get deafened => _deafened;
   bool get cameraEnabled => _cameraEnabled;
   bool get screenSharing => _screenSharing;
-  double get inputLevel =>
-      !_muted && _activeSpeakerUserId == _client.userID ? 0.82 : 0.04;
+  double get inputLevel => _muted ? 0 : _inputLevel;
   String? get error => _error;
   String? get activeSpeakerUserId => _activeSpeakerUserId;
   List<AudioInputSummary> get audioInputs => _audioInputs;
@@ -134,6 +138,8 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> refreshAudioInputs() async {
+    var inputDisappeared = false;
+    var cameraDisappeared = false;
     try {
       final devices = await flutter_webrtc.navigator.mediaDevices
           .enumerateDevices();
@@ -167,6 +173,7 @@ class MatrixVoiceController extends ChangeNotifier {
           .toList(growable: false);
       if (_selectedAudioInputId != null &&
           !_audioInputs.any((input) => input.id == _selectedAudioInputId)) {
+        inputDisappeared = true;
         _selectedAudioInputId = null;
       }
       if (_selectedAudioOutputId != null &&
@@ -175,6 +182,7 @@ class MatrixVoiceController extends ChangeNotifier {
       }
       if (_selectedCameraId != null &&
           !_cameras.any((camera) => camera.id == _selectedCameraId)) {
+        cameraDisappeared = true;
         _selectedCameraId = null;
       }
     } catch (_) {
@@ -184,6 +192,13 @@ class MatrixVoiceController extends ChangeNotifier {
       _cameras = const [];
     }
     notifyListeners();
+    final roomId = activeRoomId;
+    if (roomId != null && (inputDisappeared || cameraDisappeared)) {
+      _error = cameraDisappeared && _cameraEnabled
+          ? 'The selected camera disappeared; reconnecting with a fallback.'
+          : 'The selected audio device disappeared; reconnecting.';
+      unawaited(_rejoinPreservingState(roomId));
+    }
   }
 
   Future<void> selectAudioOutput(String? deviceId) async {
@@ -206,8 +221,7 @@ class MatrixVoiceController extends ChangeNotifier {
     final roomId = activeRoomId;
     notifyListeners();
     if (roomId != null && _cameraEnabled) {
-      await leave();
-      await join(roomId);
+      await _rejoinPreservingState(roomId);
     }
   }
 
@@ -217,8 +231,7 @@ class MatrixVoiceController extends ChangeNotifier {
     _selectedAudioInputId = deviceId;
     notifyListeners();
     if (reconnectRoomId != null) {
-      await leave();
-      await join(reconnectRoomId);
+      await _rejoinPreservingState(reconnectRoomId);
     }
   }
 
@@ -237,8 +250,9 @@ class MatrixVoiceController extends ChangeNotifier {
     _status = VoiceConnectionStatus.connecting;
     _error = null;
     notifyListeners();
+    GroupCallSession? joiningCall;
     try {
-      final call = await voip.fetchOrCreateGroupCall(
+      final call = joiningCall = await voip.fetchOrCreateGroupCall(
         room.id,
         room,
         MeshBackend(),
@@ -300,13 +314,67 @@ class MatrixVoiceController extends ChangeNotifier {
         ),
       );
       _status = VoiceConnectionStatus.connected;
+      _startInputMeter();
       await _applyRemoteAudioSettings();
     } catch (exception) {
+      try {
+        await joiningCall?.leave();
+      } catch (_) {
+        try {
+          if (joiningCall != null) {
+            await joiningCall.backend.dispose(joiningCall);
+          }
+        } catch (_) {}
+      }
       _status = VoiceConnectionStatus.error;
       _error = friendlyError(exception);
       _activeCall = null;
     }
     if (!_disposed) notifyListeners();
+  }
+
+  void _startInputMeter() {
+    _inputMeterTimer?.cancel();
+    _inputMeterTimer = Timer.periodic(
+      const Duration(milliseconds: 180),
+      (_) => unawaited(_sampleInputLevel()),
+    );
+  }
+
+  Future<void> _sampleInputLevel() async {
+    final call = _activeCall;
+    if (call == null || _samplingInput || _disposed || _muted) {
+      if (_inputLevel != 0) {
+        _inputLevel = 0;
+        if (!_disposed) notifyListeners();
+      }
+      return;
+    }
+    _samplingInput = true;
+    var sampled = 0.0;
+    try {
+      for (final wrapped in call.backend.userMediaStreams) {
+        final peerConnection = wrapped.pc;
+        if (peerConnection == null) continue;
+        final reports = await peerConnection.getStats();
+        for (final report in reports) {
+          if (report.type != 'media-source' ||
+              report.values['kind'] != 'audio') {
+            continue;
+          }
+          final level = report.values['audioLevel'];
+          if (level is num) sampled = max(sampled, level.toDouble());
+        }
+      }
+    } catch (_) {
+      // WebRTC stats availability varies by Linux backend.
+    } finally {
+      _samplingInput = false;
+    }
+    if ((_inputLevel - sampled).abs() >= 0.01) {
+      _inputLevel = sampled.clamp(0, 1);
+      if (!_disposed) notifyListeners();
+    }
   }
 
   void _handleCallEvent(MatrixRTCCallEvent event) {
@@ -397,8 +465,24 @@ class MatrixVoiceController extends ChangeNotifier {
     final roomId = activeRoomId;
     notifyListeners();
     if (roomId != null) {
+      await _rejoinPreservingState(roomId);
+    }
+  }
+
+  Future<void> _rejoinPreservingState(String roomId) async {
+    if (_rejoining || _disposed) return;
+    _rejoining = true;
+    final wasMuted = _muted;
+    final wasDeafened = _deafened;
+    try {
       await leave();
       await join(roomId);
+      if (_status == VoiceConnectionStatus.connected) {
+        if (wasMuted) await setMuted(true);
+        if (wasDeafened) await setDeafened(true);
+      }
+    } finally {
+      _rejoining = false;
     }
   }
 
@@ -432,6 +516,9 @@ class MatrixVoiceController extends ChangeNotifier {
     try {
       await call.leave();
     } finally {
+      _inputMeterTimer?.cancel();
+      _inputMeterTimer = null;
+      _inputLevel = 0;
       await _callSubscription?.cancel();
       _callSubscription = null;
       _activeCall = null;
@@ -447,6 +534,7 @@ class MatrixVoiceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _inputMeterTimer?.cancel();
     unawaited(leave());
     super.dispose();
   }
