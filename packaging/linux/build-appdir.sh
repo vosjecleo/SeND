@@ -11,8 +11,7 @@ install -d "$appdir/usr/lib/deltiecord" "$appdir/usr/bin" \
   "$appdir/usr/share/applications" "$appdir/usr/share/metainfo" \
   "$appdir/usr/share/icons/hicolor/scalable/apps"
 cp -a "$bundle/." "$appdir/usr/lib/deltiecord/"
-install -m 0755 "$repo_root/packaging/linux/deltiecord-launcher" \
-  "$appdir/usr/bin/deltiecord"
+ln -s ../lib/deltiecord/deltiecord "$appdir/usr/bin/deltiecord"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.desktop" \
   "$appdir/usr/share/applications/net.deltie.deltiecord.desktop"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.metainfo.xml" \

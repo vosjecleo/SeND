@@ -29,6 +29,7 @@ export APPIMAGE_EXTRACT_AND_RUN=1
   --executable "$appdir/usr/lib/deltiecord/deltiecord" \
   --desktop-file "$appdir/usr/share/applications/net.deltie.deltiecord.desktop" \
   --icon-file "$appdir/usr/share/icons/hicolor/scalable/apps/net.deltie.deltiecord.svg" \
+  --custom-apprun "$repo_root/packaging/linux/deltiecord-launcher" \
   --output appimage
 test -x "$OUTPUT"
 echo "$OUTPUT"

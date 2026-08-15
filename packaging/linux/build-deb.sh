@@ -9,6 +9,9 @@ trap 'rm -rf "$work"' EXIT
 root="$work/root"
 
 "$repo_root/packaging/linux/build-appdir.sh" "$root"
+unlink "$root/usr/bin/deltiecord"
+install -m 0755 "$repo_root/packaging/linux/deltiecord-launcher" \
+  "$root/usr/bin/deltiecord"
 install -d "$root/DEBIAN"
 cat >"$root/DEBIAN/control" <<EOF
 Package: deltiecord
