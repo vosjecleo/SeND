@@ -30,6 +30,7 @@ extension _MatrixRoomOperations on MatrixBackend {
       if (!_isCurrentSelection(roomId, generation)) return;
       final timeline = await room.getTimeline(
         onUpdate: () => _onTimelineUpdate(generation),
+        limit: _preferences.timelineChunkSize,
       );
       if (!_isCurrentSelection(roomId, generation)) {
         timeline.cancelSubscriptions();
@@ -49,6 +50,44 @@ extension _MatrixRoomOperations on MatrixBackend {
       }
     } finally {
       if (_isCurrentSelection(roomId, generation)) {
+        _timelineLoading = false;
+        _notifyBackendListeners();
+      }
+    }
+  }
+
+  Future<void> _jumpToPresent() async {
+    final roomId = _selectedRoomId;
+    if (roomId == null) return;
+    await _closeTimeline();
+    await _selectRoom(roomId);
+  }
+
+  Future<void> _jumpToEvent(String eventId) async {
+    final roomId = _selectedRoomId;
+    final room = _matrix.getRoomById(roomId ?? '');
+    if (room == null) return;
+    await _closeTimeline();
+    final generation = _timelineGeneration;
+    _timelineLoading = true;
+    _notifyBackendListeners();
+    try {
+      final timeline = await room.getTimeline(
+        eventContextId: eventId,
+        limit: _preferences.timelineChunkSize,
+        onUpdate: () => _onTimelineUpdate(generation),
+      );
+      if (!_isCurrentSelection(room.id, generation)) {
+        timeline.cancelSubscriptions();
+        return;
+      }
+      _timeline = timeline;
+      await _decryptTimelineEvents(timeline);
+      await _hydrateTimelineMetadata(timeline);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    } finally {
+      if (_isCurrentSelection(room.id, generation)) {
         _timelineLoading = false;
         _notifyBackendListeners();
       }

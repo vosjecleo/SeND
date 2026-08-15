@@ -612,6 +612,8 @@ class FakeBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => moreHistory;
   @override
+  bool get atTimelinePresent => true;
+  @override
   String? get firstUnreadMessageId => null;
   @override
   VoiceConnectionStatus get voiceConnectionStatus =>
@@ -708,6 +710,10 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> clearMediaCache() async {}
   @override
+  Future<void> jumpToPresent() async {}
+  @override
+  Future<void> jumpToEvent(String eventId) async {}
+  @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
   @override
   Future<void> updatePreferences(AppPreferences preferences) async {}
@@ -745,6 +751,9 @@ class FakeBackend extends ChatBackend {
   Future<void> setComposerTyping(bool typing) async {}
   @override
   List<ChatMessage> searchMessages(String query) => const [];
+  @override
+  Future<List<ChatMessage>> searchRoomHistory(String query) async =>
+      searchMessages(query);
 
   @override
   Future<void> loadMoreHistory() async {

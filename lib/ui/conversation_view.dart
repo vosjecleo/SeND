@@ -56,6 +56,7 @@ class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _messageKeys = {};
   String? _roomId;
+  bool _loadingAnchoredHistory = false;
 
   @override
   void initState() {
@@ -74,8 +75,36 @@ class _ConversationState extends State<_Conversation> {
   void _loadHistoryNearTop() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 240) {
-      widget.backend.loadMoreHistory();
+      _loadOlderAnchored();
     }
+  }
+
+  Future<void> _loadOlderAnchored() async {
+    if (_loadingAnchoredHistory || !_scrollController.hasClients) return;
+    _loadingAnchoredHistory = true;
+    final position = _scrollController.position;
+    final oldPixels = position.pixels;
+    final oldExtent = position.maxScrollExtent;
+    final preferences = widget.backend.preferences;
+    final atCap =
+        widget.backend.messages.length >=
+        min(120, preferences.timelineChunkSize * preferences.timelineChunkCap);
+    await widget.backend.loadMoreHistory();
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      if (atCap) {
+        final extentDelta =
+            _scrollController.position.maxScrollExtent - oldExtent;
+        _scrollController.jumpTo(
+          (oldPixels + extentDelta).clamp(
+            0,
+            _scrollController.position.maxScrollExtent,
+          ),
+        );
+      }
+      _loadingAnchoredHistory = false;
+    });
   }
 
   void _jumpToFirstUnread() {
@@ -163,60 +192,11 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> showSearch() async {
-    final controller = TextEditingController();
     await showDialog<void>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final results = widget.backend.searchMessages(controller.text);
-          return AlertDialog(
-            title: const Text('Search this room'),
-            content: SizedBox(
-              width: 520,
-              height: 430,
-              child: Column(
-                children: [
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Search messages',
-                    ),
-                    onChanged: (_) => setDialogState(() {}),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: results.length,
-                      itemBuilder: (context, index) {
-                        final message = results[index];
-                        return ListTile(
-                          dense: true,
-                          title: Text(message.sender),
-                          subtitle: Text(
-                            message.body,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: Navigator.of(context).pop,
-                child: const Text('Close'),
-              ),
-            ],
-          );
-        },
-      ),
+      builder: (context) =>
+          _RoomSearchDialog(backend: widget.backend, onSelected: _jumpToEvent),
     );
-    controller.dispose();
   }
 
   void _showPins() => showDialog<void>(
@@ -235,12 +215,27 @@ class _ConversationState extends State<_Conversation> {
                       dense: true,
                       title: Text(message.sender),
                       subtitle: Text(message.body),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _jumpToEvent(message.id);
+                      },
                     ),
                 ],
               ),
       ),
     ),
   );
+
+  Future<void> _jumpToEvent(String eventId) async {
+    await widget.backend.jumpToEvent(eventId);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _messageKeys[eventId]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(target, alignment: 0.5);
+      }
+    });
+  }
 
   void showMembers() => showDialog<void>(
     context: context,
@@ -312,11 +307,31 @@ class _ConversationState extends State<_Conversation> {
               _RoomIcon(room: room, size: 30),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  room.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      room.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (room.topic.isNotEmpty)
+                      Text(
+                        room.topic,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Color(0xff989aa5),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+              Text(
+                '${backend.selectedRoomMembers.length}',
+                style: const TextStyle(fontSize: 11, color: Color(0xff989aa5)),
               ),
               if (backend.firstUnreadMessageId != null)
                 IconButton(
@@ -338,6 +353,13 @@ class _ConversationState extends State<_Conversation> {
                 tooltip: 'Members',
                 onPressed: showMembers,
                 icon: const Icon(Icons.people_outline, size: 20),
+              ),
+              IconButton(
+                tooltip: 'Copy room link',
+                onPressed: () => Clipboard.setData(
+                  ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+                ),
+                icon: const Icon(Icons.link, size: 19),
               ),
               PopupMenuButton<String>(
                 tooltip: 'Notification options',
@@ -387,81 +409,108 @@ class _ConversationState extends State<_Conversation> {
             ],
           ),
         Expanded(
-          child: backend.timelineLoading
-              ? const Center(child: CircularProgressIndicator())
-              : backend.messages.isEmpty
-              ? const Center(child: Text('No messages yet'))
-              : ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 14),
-                  itemCount:
-                      messages.length +
-                      (backend.historyLoading || backend.canLoadMoreHistory
-                          ? 1
-                          : 0),
-                  itemBuilder: (context, index) {
-                    if (index == messages.length) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Center(
-                          child: backend.historyLoading
-                              ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : TextButton.icon(
-                                  onPressed: backend.loadMoreHistory,
-                                  icon: const Icon(Icons.history, size: 17),
-                                  label: const Text('Load older messages'),
-                                ),
-                        ),
-                      );
-                    }
-                    final message = messages[index];
-                    final older = index + 1 < messages.length
-                        ? messages[index + 1]
-                        : null;
-                    final startsGroup =
-                        older == null ||
-                        older.sender != message.sender ||
-                        message.timestamp.difference(older.timestamp) >
-                            const Duration(minutes: 7) ||
-                        message.reply != null;
-                    return Column(
-                      key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
-                      children: [
-                        if (message.id == backend.firstUnreadMessageId)
-                          const _UnreadDivider(),
-                        _MessageRow(
-                          message: message,
-                          startsGroup: startsGroup,
-                          onReply: () => widget.onReply(message),
-                          onEdit: message.own && !message.redacted
-                              ? () => widget.onEdit(message)
-                              : null,
-                          onDelete: message.canRedact
-                              ? () => _deleteMessage(message)
-                              : null,
-                          onReact: message.redacted || message.system
-                              ? null
-                              : () => _pickReaction(message),
-                          onRetry: message.failed
-                              ? () => backend.retryMessage(message.id)
-                              : null,
-                          onCancel: message.pending || message.failed
-                              ? () => backend.cancelPendingMessage(message.id)
-                              : null,
-                          onToggleReaction: (key) =>
-                              backend.toggleReaction(message.id, key),
-                          backend: backend,
-                        ),
-                      ],
-                    );
-                  },
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: backend.timelineLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : backend.messages.isEmpty
+                    ? const Center(child: Text('No messages yet'))
+                    : ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.fromLTRB(0, 10, 0, 14),
+                        itemCount:
+                            messages.length +
+                            (backend.historyLoading ||
+                                    backend.canLoadMoreHistory
+                                ? 1
+                                : 0),
+                        itemBuilder: (context, index) {
+                          if (index == messages.length) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Center(
+                                child: backend.historyLoading
+                                    ? const SizedBox.square(
+                                        dimension: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : TextButton.icon(
+                                        onPressed: _loadOlderAnchored,
+                                        icon: const Icon(
+                                          Icons.history,
+                                          size: 17,
+                                        ),
+                                        label: const Text(
+                                          'Load older messages',
+                                        ),
+                                      ),
+                              ),
+                            );
+                          }
+                          final message = messages[index];
+                          final older = index + 1 < messages.length
+                              ? messages[index + 1]
+                              : null;
+                          final startsGroup =
+                              older == null ||
+                              older.sender != message.sender ||
+                              message.timestamp.difference(older.timestamp) >
+                                  const Duration(minutes: 7) ||
+                              message.reply != null;
+                          return Column(
+                            key: _messageKeys.putIfAbsent(
+                              message.id,
+                              GlobalKey.new,
+                            ),
+                            children: [
+                              if (message.id == backend.firstUnreadMessageId)
+                                const _UnreadDivider(),
+                              _MessageRow(
+                                message: message,
+                                startsGroup: startsGroup,
+                                onReply: () => widget.onReply(message),
+                                onEdit: message.own && !message.redacted
+                                    ? () => widget.onEdit(message)
+                                    : null,
+                                onDelete: message.canRedact
+                                    ? () => _deleteMessage(message)
+                                    : null,
+                                onReact: message.redacted || message.system
+                                    ? null
+                                    : () => _pickReaction(message),
+                                onRetry: message.failed
+                                    ? () => backend.retryMessage(message.id)
+                                    : null,
+                                onCancel: message.pending || message.failed
+                                    ? () => backend.cancelPendingMessage(
+                                        message.id,
+                                      )
+                                    : null,
+                                onToggleReaction: (key) =>
+                                    backend.toggleReaction(message.id, key),
+                                backend: backend,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+              ),
+              if (!backend.atTimelinePresent)
+                Positioned(
+                  right: 16,
+                  bottom: 12,
+                  child: FilledButton.tonalIcon(
+                    onPressed: backend.jumpToPresent,
+                    icon: const Icon(Icons.vertical_align_bottom, size: 17),
+                    label: const Text('Jump to present'),
+                  ),
                 ),
+            ],
+          ),
         ),
         const Divider(height: 1),
         if (widget.replyingTo case final message?)
@@ -520,6 +569,123 @@ class _ConversationState extends State<_Conversation> {
     }
     return '${names.first}, ${names[1]} and ${names.length - 2} others are typing…';
   }
+}
+
+class _RoomSearchDialog extends StatefulWidget {
+  const _RoomSearchDialog({required this.backend, required this.onSelected});
+
+  final ChatBackend backend;
+  final ValueChanged<String> onSelected;
+
+  @override
+  State<_RoomSearchDialog> createState() => _RoomSearchDialogState();
+}
+
+class _RoomSearchDialogState extends State<_RoomSearchDialog> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+  List<ChatMessage> _results = const [];
+  bool _searching = false;
+  String? _error;
+  int _generation = 0;
+
+  void _queryChanged(String value) {
+    _debounce?.cancel();
+    if (value.trim().isEmpty) {
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _error = null;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 350), _search);
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.isEmpty) return;
+    final generation = ++_generation;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.backend.searchRoomHistory(query);
+      if (!mounted || generation != _generation) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() => _error = 'Search failed. Try again.');
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _searching = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Search this room'),
+    content: SizedBox(
+      width: 520,
+      height: 430,
+      child: Column(
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Search message history',
+            ),
+            onChanged: _queryChanged,
+            onSubmitted: (_) {
+              _debounce?.cancel();
+              _search();
+            },
+          ),
+          if (_searching) const LinearProgressIndicator(minHeight: 2),
+          const SizedBox(height: 8),
+          if (_error != null) Text(_error!),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _results.length,
+              itemBuilder: (context, index) {
+                final message = _results[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(message.sender),
+                  subtitle: Text(
+                    message.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    widget.onSelected(message.id);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: Navigator.of(context).pop,
+        child: const Text('Close'),
+      ),
+    ],
+  );
 }
 
 class _EmptyConversation extends StatelessWidget {

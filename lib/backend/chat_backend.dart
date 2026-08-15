@@ -32,6 +32,7 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get timelineLoading;
   bool get historyLoading;
   bool get canLoadMoreHistory;
+  bool get atTimelinePresent;
   String? get firstUnreadMessageId;
   VoiceConnectionStatus get voiceConnectionStatus;
   String? get activeVoiceRoomId;
@@ -102,10 +103,13 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> setVoiceMuted(bool muted);
   Future<void> setComposerTyping(bool typing);
   List<ChatMessage> searchMessages(String query);
+  Future<List<ChatMessage>> searchRoomHistory(String query);
   Future<void> setSelectedRoomMuted(bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
   Future<void> updatePreferences(AppPreferences preferences);
   Future<void> loadMoreHistory();
+  Future<void> jumpToPresent();
+  Future<void> jumpToEvent(String eventId);
   Future<void> sendMessage(
     String text, {
     String? formattedBody,

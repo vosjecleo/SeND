@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:html/parser.dart' as html_parser;
@@ -135,6 +136,8 @@ class MatrixBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => _timeline?.canRequestHistory ?? false;
   @override
+  bool get atTimelinePresent => !(_timeline?.canRequestFuture ?? false);
+  @override
   String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
   @override
   VoiceConnectionStatus get voiceConnectionStatus =>
@@ -260,6 +263,10 @@ class MatrixBackend extends ChatBackend {
         )
         .toList(growable: false);
   }
+
+  @override
+  Future<List<ChatMessage>> searchRoomHistory(String query) =>
+      _searchRoomHistory(query);
 
   @override
   bool get notificationPreviewsEnabled => _notificationPreviewsEnabled;
@@ -465,6 +472,10 @@ class MatrixBackend extends ChatBackend {
   Future<void> setSelectedRoomMuted(bool muted) => _setSelectedRoomMuted(muted);
   @override
   Future<void> loadMoreHistory() => _loadMoreHistory();
+  @override
+  Future<void> jumpToPresent() => _jumpToPresent();
+  @override
+  Future<void> jumpToEvent(String eventId) => _jumpToEvent(eventId);
 
   @override
   Future<void> sendMessage(
