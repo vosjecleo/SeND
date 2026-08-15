@@ -76,9 +76,41 @@ extension _MatrixEventMapping on MatrixBackend {
             reply: _replyPreviews[event.eventId],
             avatarBytes: _senderAvatarBytes[event.senderId],
             linkPreview: _linkPreviews[event.eventId],
+            senderId: event.senderId,
+            readBy: _readersFor(event, timeline),
           );
         })
         .toList(growable: false);
+  }
+
+  List<ReceiptReaderSummary> _readersFor(Event event, Timeline timeline) {
+    if (event.senderId != _matrix.userID || event.status.isSending) {
+      return const [];
+    }
+    final room = event.room;
+    if (room.getParticipants().length >
+        _preferences.readReceiptMemberThreshold) {
+      return const [];
+    }
+    final eventIndex = timeline.events.indexOf(event);
+    if (eventIndex < 0) return const [];
+    final readers = <ReceiptReaderSummary>[];
+    for (final entry in room.receiptState.global.otherUsers.entries) {
+      if (entry.key == _matrix.userID) continue;
+      final receiptIndex = timeline.events.indexWhere(
+        (candidate) => candidate.eventId == entry.value.eventId,
+      );
+      if (receiptIndex >= 0 && receiptIndex <= eventIndex) {
+        final user = room.unsafeGetUserFromMemoryOrFallback(entry.key);
+        readers.add(
+          ReceiptReaderSummary(
+            userId: entry.key,
+            displayName: user.calcDisplayname(),
+          ),
+        );
+      }
+    }
+    return readers;
   }
 
   bool _isVisibleTimelineEvent(Event event) =>

@@ -57,6 +57,42 @@ class DeltiecordApp extends StatelessWidget {
                   )
                 : const PageTransitionsTheme(),
             useMaterial3: true,
+            dialogTheme: const DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(3)),
+                side: BorderSide(color: Color(0xff555762)),
+              ),
+            ),
+            menuTheme: const MenuThemeData(
+              style: MenuStyle(
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                    side: BorderSide(color: Color(0xff555762)),
+                  ),
+                ),
+                padding: WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(vertical: 3),
+                ),
+              ),
+            ),
+            popupMenuTheme: const PopupMenuThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(2)),
+                side: BorderSide(color: Color(0xff555762)),
+              ),
+            ),
+            tooltipTheme: const TooltipThemeData(
+              waitDuration: Duration(milliseconds: 450),
+              showDuration: Duration(seconds: 4),
+              decoration: BoxDecoration(
+                color: Color(0xff16171b),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xff555762)),
+                ),
+              ),
+              textStyle: TextStyle(color: Color(0xffdedfe5), fontSize: 11),
+            ),
           ),
           builder: (context, child) {
             final media = MediaQuery.of(context);

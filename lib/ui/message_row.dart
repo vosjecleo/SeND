@@ -303,6 +303,26 @@ class _MessageRowState extends State<_MessageRow> {
                                     color: Color(0xff989aa5),
                                   ),
                                 ),
+                              if (message.own &&
+                                  !message.failed &&
+                                  !message.pending)
+                                Tooltip(
+                                  message: message.readBy.isEmpty
+                                      ? 'Sent to homeserver'
+                                      : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      message.readBy.isEmpty
+                                          ? Icons.check
+                                          : Icons.done_all,
+                                      size: 14,
+                                      color: message.readBy.isEmpty
+                                          ? const Color(0xff989aa5)
+                                          : const Color(0xff8fa2ff),
+                                    ),
+                                  ),
+                                ),
                               if (message.failed)
                                 Row(
                                   children: [

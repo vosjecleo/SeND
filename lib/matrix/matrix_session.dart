@@ -410,13 +410,28 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<bool>('show_native_title_bar') ?? true,
       rememberWindowState:
           content?.tryGet<bool>('remember_window_state') ?? true,
-      settingsShortcut: switch (content?.tryGet<String>('settings_shortcut')) {
-        'controlShiftS' => SettingsShortcut.controlShiftS,
-        'controlAltS' => SettingsShortcut.controlAltS,
-        _ => SettingsShortcut.controlComma,
-      },
+      shortcutBindings: _shortcutBindingsFrom(content),
       sendWithCtrlEnter: content?.tryGet<bool>('send_with_ctrl_enter') ?? false,
+      readReceiptMemberThreshold:
+          content?.tryGet<int>('receipt_member_threshold') ?? 10,
+      timelineChunkSize: content?.tryGet<int>('timeline_chunk_size') ?? 30,
+      timelineChunkCap: content?.tryGet<int>('timeline_chunk_cap') ?? 3,
     );
+  }
+
+  Map<AppShortcutAction, String> _shortcutBindingsFrom(
+    Map<String, Object?>? content,
+  ) {
+    final result = <AppShortcutAction, String>{...defaultShortcutBindings};
+    final stored = content?['shortcut_bindings'];
+    if (stored is! Map) return result;
+    for (final entry in stored.entries) {
+      final action = AppShortcutAction.values
+          .where((candidate) => candidate.name == entry.key)
+          .firstOrNull;
+      if (action != null) result[action] = entry.value.toString();
+    }
+    return result;
   }
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
@@ -468,8 +483,14 @@ extension _MatrixSession on MatrixBackend {
           'font_family': preferences.fontFamily,
           'show_native_title_bar': preferences.showNativeTitleBar,
           'remember_window_state': preferences.rememberWindowState,
-          'settings_shortcut': preferences.settingsShortcut.name,
+          'shortcut_bindings': {
+            for (final entry in preferences.shortcutBindings.entries)
+              entry.key.name: entry.value,
+          },
           'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
+          'receipt_member_threshold': preferences.readReceiptMemberThreshold,
+          'timeline_chunk_size': preferences.timelineChunkSize,
+          'timeline_chunk_cap': preferences.timelineChunkCap,
         },
       );
       if (identical(_pendingPreferences, preferences)) {

@@ -7,6 +7,8 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
 import 'security_center.dart';
+import 'app_shortcuts.dart';
+import 'profile_fields_dialog.dart';
 
 enum _SettingsPage {
   account,
@@ -234,69 +236,38 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         ],
       ),
     ]),
-    _SettingsPage.shortcuts => _section('Keyboard shortcuts', [
-      _shortcut('Focus message composer', 'Any printable key'),
-      DropdownButtonFormField<bool>(
-        initialValue: backend.preferences.sendWithCtrlEnter,
-        decoration: const InputDecoration(
-          labelText: 'Send message',
-          border: OutlineInputBorder(),
-        ),
-        items: const [
-          DropdownMenuItem(value: false, child: Text('Enter')),
-          DropdownMenuItem(value: true, child: Text('Ctrl + Enter')),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            backend.updatePreferences(
-              backend.preferences.copyWith(sendWithCtrlEnter: value),
-            );
-          }
-        },
-      ),
-      const SizedBox(height: 12),
-      _shortcut(
-        'New line',
-        backend.preferences.sendWithCtrlEnter ? 'Enter' : 'Shift + Enter',
-      ),
-      _shortcut('Paste attachment', 'Ctrl + V'),
-      DropdownButtonFormField<SettingsShortcut>(
-        initialValue: backend.preferences.settingsShortcut,
-        decoration: const InputDecoration(
-          labelText: 'Open settings',
-          border: OutlineInputBorder(),
-        ),
-        items: const [
-          DropdownMenuItem(
-            value: SettingsShortcut.controlComma,
-            child: Text('Ctrl + ,'),
-          ),
-          DropdownMenuItem(
-            value: SettingsShortcut.controlShiftS,
-            child: Text('Ctrl + Shift + S'),
-          ),
-          DropdownMenuItem(
-            value: SettingsShortcut.controlAltS,
-            child: Text('Ctrl + Alt + S'),
-          ),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            backend.updatePreferences(
-              backend.preferences.copyWith(settingsShortcut: value),
-            );
-          }
-        },
-      ),
-      const SizedBox(height: 12),
-      _shortcut('Close dialog / menu', 'Escape'),
-    ]),
+    _SettingsPage.shortcuts => _shortcuts(),
     _SettingsPage.advanced => _section('Advanced diagnostics', [
       _value('Deltiecord', 'v$deltiecordVersion ($deltiecordBuildNumber)'),
       _value('Session', backend.status.name),
       _value('Connection', backend.connectionStatus.name),
       _value('Voice', backend.voiceConnectionStatus.name),
       _value('Selected room', backend.selectedRoom?.id ?? 'None'),
+      const SizedBox(height: 18),
+      Text(
+        'Timeline message chunk size — ${backend.preferences.timelineChunkSize}',
+      ),
+      Slider(
+        value: backend.preferences.timelineChunkSize.toDouble(),
+        min: 10,
+        max: 100,
+        divisions: 9,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(timelineChunkSize: value.round()),
+        ),
+      ),
+      Text(
+        'Timeline message chunk cap — ${backend.preferences.timelineChunkCap}',
+      ),
+      Slider(
+        value: backend.preferences.timelineChunkCap.toDouble(),
+        min: 1,
+        max: 10,
+        divisions: 9,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(timelineChunkCap: value.round()),
+        ),
+      ),
       const SizedBox(height: 12),
       OutlinedButton.icon(
         onPressed: () {
@@ -343,6 +314,66 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]),
   };
 
+  Widget _shortcuts() {
+    final bindings = backend.preferences.shortcutBindings;
+    String? conflictFor(AppShortcutAction action, String candidate) {
+      for (final entry in bindings.entries) {
+        if (entry.key != action && entry.value == candidate) {
+          return shortcutActionLabel(entry.key);
+        }
+      }
+      return null;
+    }
+
+    return _section('Keyboard shortcuts', [
+      Text(
+        'Configurable shortcuts',
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 8),
+      for (final action in AppShortcutAction.values)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            children: [
+              Expanded(child: Text(shortcutActionLabel(action))),
+              ShortcutRecorder(
+                value: bindings[action] ?? defaultShortcutBindings[action]!,
+                conflict: (candidate) => conflictFor(action, candidate),
+                onRecorded: (value) => backend.updatePreferences(
+                  backend.preferences.copyWith(
+                    shortcutBindings: {...bindings, action: value},
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: () => backend.updatePreferences(
+          backend.preferences.copyWith(
+            shortcutBindings: defaultShortcutBindings,
+          ),
+        ),
+        icon: const Icon(Icons.restore),
+        label: const Text('Restore defaults'),
+      ),
+      const Divider(height: 30),
+      Text('Fixed shortcuts', style: Theme.of(context).textTheme.titleMedium),
+      _shortcut('Close topmost popup or dialog', 'Escape'),
+      _shortcut(
+        'Send message',
+        backend.preferences.sendWithCtrlEnter ? 'Ctrl + Enter' : 'Enter',
+      ),
+      _shortcut(
+        'New line',
+        backend.preferences.sendWithCtrlEnter ? 'Enter' : 'Shift + Enter',
+      ),
+      _shortcut('Paste attachment', 'Ctrl + V'),
+    ]);
+  }
+
   Widget _account() => _section('Account', [
     Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,6 +410,14 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   OutlinedButton(
                     onPressed: _pickAvatar,
                     child: const Text('Change picture'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _editExtendedProfile,
+                    child: const Text('Edit bio and details'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _pickBanner,
+                    child: const Text('Change banner'),
                   ),
                   if (backend.profileAvatarBytes != null)
                     TextButton(
@@ -558,6 +597,18 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           preferences.copyWith(sendReadReceipts: value),
         ),
       ),
+      Text(
+        'Show per-message receipts up to ${preferences.readReceiptMemberThreshold} members',
+      ),
+      Slider(
+        value: preferences.readReceiptMemberThreshold.toDouble(),
+        min: 2,
+        max: 100,
+        divisions: 98,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(readReceiptMemberThreshold: value.round()),
+        ),
+      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Send typing notifications'),
@@ -711,6 +762,38 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         fileName: file.name,
         mimeType: lookupMimeType(file.name, headerBytes: bytes) ?? 'image/png',
       ),
+    );
+  }
+
+  Future<void> _editExtendedProfile() async {
+    final userId = backend.userId;
+    if (userId == null) return;
+    final profile = await backend.getUserProfile(userId);
+    if (!mounted) return;
+    final result = await showDialog<ProfileFieldsResult>(
+      context: context,
+      builder: (context) => ProfileFieldsDialog(profile: profile),
+    );
+    if (result == null) return;
+    await _runSettingAction(
+      () => backend.updateOwnProfileFields(
+        bio: result.bio,
+        pronouns: result.pronouns,
+        timezone: result.timezone,
+      ),
+    );
+  }
+
+  Future<void> _pickBanner() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final bytes =
+        result.files.single.bytes ?? await result.xFiles.single.readAsBytes();
+    await _runSettingAction(
+      () => backend.updateOwnProfileFields(bannerBytes: bytes),
     );
   }
 

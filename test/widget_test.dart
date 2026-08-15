@@ -586,6 +586,8 @@ class FakeBackend extends ChatBackend {
   @override
   bool get storageLoading => false;
   @override
+  List<String> get blockedUserIds => const [];
+  @override
   List<ChatMessage> get pinnedMessages => const [];
   @override
   List<RoomSummary> get rooms => roomList;
@@ -677,6 +679,8 @@ class FakeBackend extends ChatBackend {
     bool encrypted = true,
   }) async {}
   @override
+  Future<void> createSpace({required String name, String topic = ''}) async {}
+  @override
   Future<void> renameRoom(String roomId, String name) async {}
   @override
   Future<void> setRoomTopic(String roomId, String topic) async {}
@@ -684,6 +688,21 @@ class FakeBackend extends ChatBackend {
   Future<void> setRoomAvatar(String roomId, Uint8List? bytes) async {}
   @override
   Future<void> setMemberPowerLevel(String userId, int powerLevel) async {}
+  @override
+  Future<UserProfileSummary> getUserProfile(String userId) async =>
+      UserProfileSummary(userId: userId, displayName: userId);
+  @override
+  Future<void> updateOwnProfileFields({
+    String? bio,
+    String? pronouns,
+    String? timezone,
+    Uint8List? bannerBytes,
+    bool removeBanner = false,
+  }) async {}
+  @override
+  Future<void> startDirectChat(String userId) async {}
+  @override
+  Future<void> setUserBlocked(String userId, bool blocked) async {}
   @override
   Future<void> refreshStorageUsage() async {}
   @override

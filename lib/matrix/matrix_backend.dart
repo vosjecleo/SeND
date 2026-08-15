@@ -23,6 +23,7 @@ part 'matrix_crypto.dart';
 part 'matrix_room_operations.dart';
 part 'matrix_messages.dart';
 part 'matrix_media.dart';
+part 'matrix_profiles.dart';
 
 final _webUrlPattern = RegExp(r'https?://[^\s<>]+');
 
@@ -156,6 +157,8 @@ class MatrixBackend extends ChatBackend {
   int get storageUsageBytes => _storageUsageBytes;
   @override
   bool get storageLoading => _storageLoading;
+  @override
+  List<String> get blockedUserIds => _client?.ignoredUsers ?? const [];
   @override
   List<MentionSuggestion> get mentionSuggestions {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
@@ -407,6 +410,10 @@ class MatrixBackend extends ChatBackend {
   );
 
   @override
+  Future<void> createSpace({required String name, String topic = ''}) =>
+      _createSpace(name: name, topic: topic);
+
+  @override
   Future<void> renameRoom(String roomId, String name) =>
       _renameRoom(roomId, name);
 
@@ -427,6 +434,32 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> clearMediaCache() => _clearMediaCache();
+
+  @override
+  Future<UserProfileSummary> getUserProfile(String userId) =>
+      _getUserProfile(userId);
+
+  @override
+  Future<void> updateOwnProfileFields({
+    String? bio,
+    String? pronouns,
+    String? timezone,
+    Uint8List? bannerBytes,
+    bool removeBanner = false,
+  }) => _updateOwnProfileFields(
+    bio: bio,
+    pronouns: pronouns,
+    timezone: timezone,
+    bannerBytes: bannerBytes,
+    removeBanner: removeBanner,
+  );
+
+  @override
+  Future<void> startDirectChat(String userId) => _startDirectChat(userId);
+
+  @override
+  Future<void> setUserBlocked(String userId, bool blocked) =>
+      _setUserBlocked(userId, blocked);
 
   @override
   Future<void> setSelectedRoomMuted(bool muted) => _setSelectedRoomMuted(muted);

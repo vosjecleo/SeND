@@ -37,48 +37,112 @@ class _SpaceBar extends StatelessWidget {
 
   final ChatBackend backend;
 
+  Future<void> _createSpace(BuildContext context) async {
+    final name = TextEditingController();
+    final topic = TextEditingController();
+    final create = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Space'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Space name'),
+              ),
+              TextField(
+                controller: topic,
+                decoration: const InputDecoration(
+                  labelText: 'Topic (optional)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    final spaceName = name.text.trim();
+    final spaceTopic = topic.text.trim();
+    name.dispose();
+    topic.dispose();
+    if (create == true && spaceName.isNotEmpty) {
+      await backend.createSpace(name: spaceName, topic: spaceTopic);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xff191a1e),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      child: Column(
         children: [
-          _SpaceButton(
-            tooltip: 'Home',
-            selected: backend.selectedSpaceId == null,
-            onTap: () => backend.selectSpace(null),
-            child: const Icon(Icons.home_filled, size: 21),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              children: [
+                _SpaceButton(
+                  tooltip: 'Home',
+                  selected: backend.selectedSpaceId == null,
+                  onTap: () => backend.selectSpace(null),
+                  child: const Icon(Icons.home_filled, size: 21),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                  child: Divider(height: 1),
+                ),
+                for (final space in backend.spaces)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: _SpaceButton(
+                      tooltip: space.name,
+                      selected: backend.selectedSpaceId == space.id,
+                      onTap: () => backend.selectSpace(space.id),
+                      child: space.avatarBytes == null
+                          ? Text(
+                              _initials(space.name),
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : Image.memory(
+                              space.avatarBytes!,
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-            child: Divider(height: 1),
-          ),
-          for (final space in backend.spaces)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 7),
-              child: _SpaceButton(
-                tooltip: space.name,
-                selected: backend.selectedSpaceId == space.id,
-                onTap: () => backend.selectSpace(space.id),
-                child: space.avatarBytes == null
-                    ? Text(
-                        _initials(space.name),
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      )
-                    : Image.memory(
-                        space.avatarBytes!,
-                        width: 48,
-                        height: 48,
-                        fit: BoxFit.cover,
-                      ),
+          const Divider(height: 1),
+          SizedBox(
+            height: 56,
+            child: Center(
+              child: IconButton(
+                tooltip: 'Create Space',
+                onPressed: () => _createSpace(context),
+                icon: const Icon(Icons.add_box_outlined, size: 22),
               ),
             ),
+          ),
         ],
       ),
     );

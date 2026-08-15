@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
@@ -18,10 +19,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/giphy_service.dart';
+import '../services/emoji_repository.dart';
+import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
+import 'emoji_picker_dialog.dart';
 import 'security_center.dart';
 import 'settings_screen.dart';
 import 'profile_dialog.dart';
+import 'app_shortcuts.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
@@ -53,6 +58,12 @@ class _ChatShellState extends State<ChatShell> {
   int _mentionSelectionIndex = 0;
   bool _wasTyping = false;
   final GiphyService _giphy = GiphyService();
+  final _composerKey = GlobalKey<_RichComposerState>();
+  final _conversationKey = GlobalKey<_ConversationState>();
+  final _draftStore = DraftStore();
+  final Map<String, _RoomDraft> _memoryDrafts = {};
+  String? _draftRoomId;
+  bool _restoringDraft = false;
 
   @override
   void initState() {
@@ -81,6 +92,71 @@ class _ChatShellState extends State<ChatShell> {
       ),
     );
     _message.addListener(_updateMentionQuery);
+    _message.addListener(_saveActiveDraft);
+    _draftRoomId = widget.backend.selectedRoom?.id;
+    widget.backend.addListener(_handleBackendRoomChange);
+    unawaited(_initializeDrafts());
+  }
+
+  Future<void> _initializeDrafts() async {
+    await _draftStore.initialize();
+    if (!mounted) return;
+    _restoreDraft(widget.backend.selectedRoom?.id);
+  }
+
+  void _handleBackendRoomChange() {
+    final roomId = widget.backend.selectedRoom?.id;
+    if (roomId == _draftRoomId) return;
+    _storeCurrentDraft();
+    _restoreDraft(roomId);
+  }
+
+  void _saveActiveDraft() {
+    if (_restoringDraft) return;
+    final roomId = _draftRoomId;
+    if (roomId == null) return;
+    _draftStore.write(roomId, _message.document.toDelta().toJson());
+  }
+
+  void _storeCurrentDraft() {
+    final roomId = _draftRoomId;
+    if (roomId == null) return;
+    _memoryDrafts[roomId] = _RoomDraft(
+      delta: _message.document.toDelta().toJson(),
+      attachments: List.of(_pendingAttachments),
+      replyingTo: _replyingTo,
+      editingMessage: _editingMessage,
+    );
+    _saveActiveDraft();
+  }
+
+  void _restoreDraft(String? roomId) {
+    _draftRoomId = roomId;
+    final memory = roomId == null ? null : _memoryDrafts[roomId];
+    final stored = roomId == null ? null : _draftStore.read(roomId);
+    final delta = memory?.delta ?? stored?.delta;
+    _restoringDraft = true;
+    try {
+      _message.document = delta == null || delta.isEmpty
+          ? Document()
+          : Document.fromJson(delta);
+      final end = max(0, _message.document.length - 1);
+      _message.updateSelection(
+        TextSelection.collapsed(offset: end),
+        ChangeSource.local,
+      );
+      if (mounted) {
+        setState(() {
+          _pendingAttachments
+            ..clear()
+            ..addAll(memory?.attachments ?? const []);
+          _replyingTo = memory?.replyingTo;
+          _editingMessage = memory?.editingMessage;
+        });
+      }
+    } finally {
+      _restoringDraft = false;
+    }
   }
 
   void _updateMentionQuery() {
@@ -137,6 +213,7 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<void> _send() async {
+    final sendingRoomId = widget.backend.selectedRoom?.id;
     final serialized = serializeRichMessage(_message.document);
     final text = serialized.plainText.trim();
     if ((text.isEmpty && _pendingAttachments.isEmpty) || _sending) return;
@@ -165,13 +242,20 @@ class _ChatShellState extends State<ChatShell> {
           );
         }
       }
-      if (mounted) {
+      if (mounted && widget.backend.selectedRoom?.id == sendingRoomId) {
         _message.clear();
         setState(() {
           _pendingAttachments.clear();
           _replyingTo = null;
           _editingMessage = null;
         });
+        if (sendingRoomId != null) {
+          _memoryDrafts.remove(sendingRoomId);
+          _draftStore.remove(sendingRoomId);
+        }
+      } else if (sendingRoomId != null) {
+        _memoryDrafts.remove(sendingRoomId);
+        _draftStore.remove(sendingRoomId);
       }
     } catch (_) {
       // Leave the document intact so a failed send can be retried.
@@ -328,36 +412,43 @@ class _ChatShellState extends State<ChatShell> {
 
   @override
   void dispose() {
+    _storeCurrentDraft();
+    widget.backend.removeListener(_handleBackendRoomChange);
     _message.removeListener(_updateMentionQuery);
+    _message.removeListener(_saveActiveDraft);
     _message.dispose();
     _composerFocus.dispose();
     _giphy.dispose();
+    unawaited(_draftStore.dispose());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final settingsShortcut =
-        switch (widget.backend.preferences.settingsShortcut) {
-          SettingsShortcut.controlComma => const SingleActivator(
-            LogicalKeyboardKey.comma,
-            control: true,
-          ),
-          SettingsShortcut.controlShiftS => const SingleActivator(
-            LogicalKeyboardKey.keyS,
-            control: true,
-            shift: true,
-          ),
-          SettingsShortcut.controlAltS => const SingleActivator(
-            LogicalKeyboardKey.keyS,
-            control: true,
-            alt: true,
-          ),
-        };
+    final callbacks = <AppShortcutAction, VoidCallback>{
+      AppShortcutAction.openSettings: () =>
+          showDeltiecordSettings(context, widget.backend),
+      AppShortcutAction.toggleMicrophone: () =>
+          widget.backend.setVoiceMuted(!widget.backend.voiceMuted),
+      AppShortcutAction.disconnectVoice: widget.backend.leaveVoiceRoom,
+      AppShortcutAction.openGifPicker: _showGifPicker,
+      AppShortcutAction.openEmojiPicker: () =>
+          _composerKey.currentState?.showEmojiPicker(),
+      AppShortcutAction.openFilePicker: _attachFile,
+      AppShortcutAction.focusComposer: _composerFocus.requestFocus,
+      AppShortcutAction.searchRoom: () =>
+          _conversationKey.currentState?.showSearch(),
+      AppShortcutAction.toggleMembers: () =>
+          _conversationKey.currentState?.showMembers(),
+    };
+    final bindings = <ShortcutActivator, VoidCallback>{};
+    for (final entry in widget.backend.preferences.shortcutBindings.entries) {
+      final activator = decodeShortcut(entry.value);
+      final callback = callbacks[entry.key];
+      if (activator != null && callback != null) bindings[activator] = callback;
+    }
     return CallbackShortcuts(
-      bindings: {
-        settingsShortcut: () => showDeltiecordSettings(context, widget.backend),
-      },
+      bindings: bindings,
       child: Focus(
         autofocus: true,
         child: Scaffold(
@@ -400,6 +491,8 @@ class _ChatShellState extends State<ChatShell> {
                                   room: widget.backend.selectedRoom!,
                                 )
                               : _Conversation(
+                                  key: _conversationKey,
+                                  composerKey: _composerKey,
                                   backend: widget.backend,
                                   controller: _message,
                                   composerFocus: _composerFocus,
@@ -450,6 +543,20 @@ class _ChatShellState extends State<ChatShell> {
         .take(6)
         .toList(growable: false);
   }
+}
+
+class _RoomDraft {
+  const _RoomDraft({
+    required this.delta,
+    required this.attachments,
+    this.replyingTo,
+    this.editingMessage,
+  });
+
+  final List<dynamic> delta;
+  final List<AttachmentDraft> attachments;
+  final ChatMessage? replyingTo;
+  final ChatMessage? editingMessage;
 }
 
 class _ConnectionBanner extends StatelessWidget {

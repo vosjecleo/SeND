@@ -121,6 +121,26 @@ extension _MatrixRoomOperations on MatrixBackend {
     }
   }
 
+  Future<void> _createSpace({
+    required String name,
+    required String topic,
+  }) async {
+    try {
+      final roomId = await _matrix.createSpace(
+        name: name.trim(),
+        topic: topic.trim().isEmpty ? null : topic.trim(),
+        visibility: Visibility.private,
+        waitForSync: true,
+      );
+      _selectSpace(roomId);
+      unawaited(_refreshRoomMetadata());
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
   Future<void> _renameRoom(String roomId, String name) async {
     final room = _matrix.getRoomById(roomId);
     if (room == null || name.trim().isEmpty) return;

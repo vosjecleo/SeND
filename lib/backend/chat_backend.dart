@@ -43,6 +43,7 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get devicesLoading;
   int get storageUsageBytes;
   bool get storageLoading;
+  List<String> get blockedUserIds;
 
   Future<void> initialize();
   Future<void> login({
@@ -67,10 +68,21 @@ abstract class ChatBackend extends ChangeNotifier {
     String topic,
     bool encrypted,
   });
+  Future<void> createSpace({required String name, String topic});
   Future<void> renameRoom(String roomId, String name);
   Future<void> setRoomTopic(String roomId, String topic);
   Future<void> setRoomAvatar(String roomId, Uint8List? bytes);
   Future<void> setMemberPowerLevel(String userId, int powerLevel);
+  Future<UserProfileSummary> getUserProfile(String userId);
+  Future<void> updateOwnProfileFields({
+    String? bio,
+    String? pronouns,
+    String? timezone,
+    Uint8List? bannerBytes,
+    bool removeBanner,
+  });
+  Future<void> startDirectChat(String userId);
+  Future<void> setUserBlocked(String userId, bool blocked);
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);
   Future<void> refreshDevices();

@@ -6,7 +6,31 @@ enum ConnectionStatus { connecting, online, reconnecting, offline }
 
 enum InterfaceDensity { compact, cozy }
 
-enum SettingsShortcut { controlComma, controlShiftS, controlAltS }
+enum AppShortcutAction {
+  openSettings,
+  toggleMicrophone,
+  toggleDeafen,
+  disconnectVoice,
+  openGifPicker,
+  openEmojiPicker,
+  openFilePicker,
+  focusComposer,
+  searchRoom,
+  toggleMembers,
+}
+
+const defaultShortcutBindings = <AppShortcutAction, String>{
+  AppShortcutAction.openSettings: 'control+comma',
+  AppShortcutAction.toggleMicrophone: 'control+shift+m',
+  AppShortcutAction.toggleDeafen: 'control+shift+d',
+  AppShortcutAction.disconnectVoice: 'control+shift+backslash',
+  AppShortcutAction.openGifPicker: 'control+g',
+  AppShortcutAction.openEmojiPicker: 'control+e',
+  AppShortcutAction.openFilePicker: 'control+u',
+  AppShortcutAction.focusComposer: 'control+l',
+  AppShortcutAction.searchRoom: 'control+f',
+  AppShortcutAction.toggleMembers: 'control+shift+u',
+};
 
 class AppPreferences {
   const AppPreferences({
@@ -25,8 +49,11 @@ class AppPreferences {
     this.fontFamily = 'System',
     this.showNativeTitleBar = true,
     this.rememberWindowState = true,
-    this.settingsShortcut = SettingsShortcut.controlComma,
+    this.shortcutBindings = defaultShortcutBindings,
     this.sendWithCtrlEnter = false,
+    this.readReceiptMemberThreshold = 10,
+    this.timelineChunkSize = 30,
+    this.timelineChunkCap = 3,
   });
 
   final InterfaceDensity density;
@@ -44,8 +71,11 @@ class AppPreferences {
   final String fontFamily;
   final bool showNativeTitleBar;
   final bool rememberWindowState;
-  final SettingsShortcut settingsShortcut;
+  final Map<AppShortcutAction, String> shortcutBindings;
   final bool sendWithCtrlEnter;
+  final int readReceiptMemberThreshold;
+  final int timelineChunkSize;
+  final int timelineChunkCap;
 
   AppPreferences copyWith({
     InterfaceDensity? density,
@@ -63,8 +93,11 @@ class AppPreferences {
     String? fontFamily,
     bool? showNativeTitleBar,
     bool? rememberWindowState,
-    SettingsShortcut? settingsShortcut,
+    Map<AppShortcutAction, String>? shortcutBindings,
     bool? sendWithCtrlEnter,
+    int? readReceiptMemberThreshold,
+    int? timelineChunkSize,
+    int? timelineChunkCap,
   }) => AppPreferences(
     density: density ?? this.density,
     fontScale: fontScale ?? this.fontScale,
@@ -82,8 +115,12 @@ class AppPreferences {
     fontFamily: fontFamily ?? this.fontFamily,
     showNativeTitleBar: showNativeTitleBar ?? this.showNativeTitleBar,
     rememberWindowState: rememberWindowState ?? this.rememberWindowState,
-    settingsShortcut: settingsShortcut ?? this.settingsShortcut,
+    shortcutBindings: shortcutBindings ?? this.shortcutBindings,
     sendWithCtrlEnter: sendWithCtrlEnter ?? this.sendWithCtrlEnter,
+    readReceiptMemberThreshold:
+        readReceiptMemberThreshold ?? this.readReceiptMemberThreshold,
+    timelineChunkSize: timelineChunkSize ?? this.timelineChunkSize,
+    timelineChunkCap: timelineChunkCap ?? this.timelineChunkCap,
   );
 }
 
@@ -180,6 +217,32 @@ class RoomMemberSummary {
   final int maxAssignablePowerLevel;
 }
 
+class UserProfileSummary {
+  const UserProfileSummary({
+    required this.userId,
+    required this.displayName,
+    this.avatarBytes,
+    this.bannerBytes,
+    this.presence = UserPresence.offline,
+    this.bio,
+    this.pronouns,
+    this.timezone,
+    this.extensibleFieldsSupported = true,
+    this.blocked = false,
+  });
+
+  final String userId;
+  final String displayName;
+  final Uint8List? avatarBytes;
+  final Uint8List? bannerBytes;
+  final UserPresence presence;
+  final String? bio;
+  final String? pronouns;
+  final String? timezone;
+  final bool extensibleFieldsSupported;
+  final bool blocked;
+}
+
 class VoiceParticipantSummary {
   const VoiceParticipantSummary({
     required this.userId,
@@ -240,6 +303,8 @@ class ChatMessage {
     this.reply,
     this.avatarBytes,
     this.linkPreview,
+    this.readBy = const [],
+    this.senderId,
   });
 
   final String id;
@@ -260,6 +325,15 @@ class ChatMessage {
   final ReplyPreview? reply;
   final Uint8List? avatarBytes;
   final LinkPreview? linkPreview;
+  final List<ReceiptReaderSummary> readBy;
+  final String? senderId;
+}
+
+class ReceiptReaderSummary {
+  const ReceiptReaderSummary({required this.userId, required this.displayName});
+
+  final String userId;
+  final String displayName;
 }
 
 class LinkPreview {

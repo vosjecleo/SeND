@@ -22,6 +22,8 @@ class _Conversation extends StatefulWidget {
     required this.mentionSelectionIndex,
     required this.onMentionSelected,
     required this.onMentionSelectionChanged,
+    required this.composerKey,
+    super.key,
   });
 
   final ChatBackend backend;
@@ -44,6 +46,7 @@ class _Conversation extends StatefulWidget {
   final int mentionSelectionIndex;
   final ValueChanged<String> onMentionSelected;
   final ValueChanged<int> onMentionSelectionChanged;
+  final GlobalKey<_RichComposerState> composerKey;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -159,7 +162,7 @@ class _ConversationState extends State<_Conversation> {
     if (emoji != null) await widget.backend.toggleReaction(message.id, emoji);
   }
 
-  Future<void> _showSearch() async {
+  Future<void> showSearch() async {
     final controller = TextEditingController();
     await showDialog<void>(
       context: context,
@@ -239,7 +242,7 @@ class _ConversationState extends State<_Conversation> {
     ),
   );
 
-  void _showMembers() => showDialog<void>(
+  void showMembers() => showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text('${widget.backend.selectedRoomMembers.length} members'),
@@ -323,7 +326,7 @@ class _ConversationState extends State<_Conversation> {
                 ),
               IconButton(
                 tooltip: 'Search',
-                onPressed: _showSearch,
+                onPressed: showSearch,
                 icon: const Icon(Icons.search, size: 19),
               ),
               IconButton(
@@ -333,7 +336,7 @@ class _ConversationState extends State<_Conversation> {
               ),
               IconButton(
                 tooltip: 'Members',
-                onPressed: _showMembers,
+                onPressed: showMembers,
                 icon: const Icon(Icons.people_outline, size: 20),
               ),
               PopupMenuButton<String>(
@@ -488,6 +491,7 @@ class _ConversationState extends State<_Conversation> {
             ),
           ),
         _RichComposer(
+          key: widget.composerKey,
           controller: widget.controller,
           focusNode: widget.composerFocus,
           roomName: room.name,
