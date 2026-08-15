@@ -12,15 +12,21 @@ class StoredDraft {
 }
 
 class DraftStore {
+  DraftStore([this._file]);
+
   Timer? _saveTimer;
   File? _file;
   final Map<String, StoredDraft> _drafts = {};
 
   Future<void> initialize() async {
-    final support = await getApplicationSupportDirectory();
-    final directory = Directory(path.join(support.path, 'deltiecord'));
-    await directory.create(recursive: true);
-    _file = File(path.join(directory.path, 'drafts.json'));
+    if (_file == null) {
+      final support = await getApplicationSupportDirectory();
+      final directory = Directory(path.join(support.path, 'deltiecord'));
+      await directory.create(recursive: true);
+      _file = File(path.join(directory.path, 'drafts.json'));
+    } else {
+      await _file!.parent.create(recursive: true);
+    }
     if (!await _file!.exists()) return;
     try {
       final decoded =
@@ -41,8 +47,7 @@ class DraftStore {
   StoredDraft? read(String roomId) => _drafts[roomId];
 
   void write(String roomId, List<dynamic> delta) {
-    final plain = delta.toString();
-    if (plain.isEmpty) {
+    if (!_containsContent(delta)) {
       _drafts.remove(roomId);
     } else {
       _drafts[roomId] = StoredDraft(delta: delta);
@@ -50,6 +55,16 @@ class DraftStore {
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 350), _persist);
   }
+
+  bool _containsContent(List<dynamic> delta) => delta.any((operation) {
+    if (operation is! Map) return false;
+    final insert = operation['insert'];
+    return switch (insert) {
+      String value => value.trim().isNotEmpty,
+      Map() => true,
+      _ => false,
+    };
+  });
 
   void remove(String roomId) {
     _drafts.remove(roomId);

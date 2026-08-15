@@ -12,6 +12,7 @@ class _MessageRow extends StatefulWidget {
     required this.onCancel,
     required this.onToggleReaction,
     required this.onJumpToReply,
+    required this.mediaMessages,
     required this.backend,
   });
 
@@ -25,6 +26,7 @@ class _MessageRow extends StatefulWidget {
   final VoidCallback? onCancel;
   final ValueChanged<String> onToggleReaction;
   final ValueChanged<String> onJumpToReply;
+  final List<ChatMessage> mediaMessages;
   final ChatBackend backend;
 
   @override
@@ -317,6 +319,7 @@ class _MessageRowState extends State<_MessageRow> {
                                     backend: widget.backend,
                                     messageId: message.id,
                                     attachment: attachment,
+                                    gallery: widget.mediaMessages,
                                   ),
                                 ),
                               if (message.linkPreview case final preview?)

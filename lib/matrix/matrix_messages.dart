@@ -76,13 +76,15 @@ extension _MatrixMessages on MatrixBackend {
         historyCount: _preferences.timelineChunkSize,
       );
       if (!identical(timeline, _timeline)) return;
-      final hardCap = min(
-        120,
-        _preferences.timelineChunkSize * _preferences.timelineChunkCap,
+      final hardCap = TimelineWindowPolicy.hardCap(
+        chunkSize: _preferences.timelineChunkSize,
+        chunkCap: _preferences.timelineChunkCap,
       );
-      if (timeline.events.length > hardCap) {
-        timeline.events.removeRange(0, timeline.events.length - hardCap);
-      }
+      TimelineWindowPolicy.trimNewestFirst(
+        timeline.events,
+        hardCap: hardCap,
+        loaded: TimelinePageDirection.older,
+      );
       await _decryptTimelineEvents(timeline);
       if (!identical(timeline, _timeline)) return;
       await _hydrateTimelineMetadata(timeline);
@@ -106,13 +108,15 @@ extension _MatrixMessages on MatrixBackend {
         historyCount: _preferences.timelineChunkSize,
       );
       if (!identical(timeline, _timeline)) return;
-      final hardCap = min(
-        120,
-        _preferences.timelineChunkSize * _preferences.timelineChunkCap,
+      final hardCap = TimelineWindowPolicy.hardCap(
+        chunkSize: _preferences.timelineChunkSize,
+        chunkCap: _preferences.timelineChunkCap,
       );
-      if (timeline.events.length > hardCap) {
-        timeline.events.removeRange(hardCap, timeline.events.length);
-      }
+      TimelineWindowPolicy.trimNewestFirst(
+        timeline.events,
+        hardCap: hardCap,
+        loaded: TimelinePageDirection.newer,
+      );
       await _decryptTimelineEvents(timeline);
       if (!identical(timeline, _timeline)) return;
       await _hydrateTimelineMetadata(timeline);

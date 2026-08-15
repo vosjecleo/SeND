@@ -362,6 +362,13 @@ class _ConversationState extends State<_Conversation> {
     final backend = widget.backend;
     final room = backend.selectedRoom!;
     final messages = backend.messages;
+    final mediaMessages = messages
+        .where(
+          (message) =>
+              message.attachment?.kind == AttachmentKind.image ||
+              message.attachment?.kind == AttachmentKind.video,
+        )
+        .toList(growable: false);
     return DropRegion(
       formats: Formats.standardFormats,
       hitTestBehavior: HitTestBehavior.opaque,
@@ -605,6 +612,7 @@ class _ConversationState extends State<_Conversation> {
                                         onToggleReaction: (key) => backend
                                             .toggleReaction(message.id, key),
                                         onJumpToReply: _jumpToEvent,
+                                        mediaMessages: mediaMessages,
                                         backend: backend,
                                       ),
                                     ],

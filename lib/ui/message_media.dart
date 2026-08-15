@@ -203,11 +203,13 @@ class _AttachmentView extends StatefulWidget {
     required this.backend,
     required this.messageId,
     required this.attachment,
+    required this.gallery,
   });
 
   final ChatBackend backend;
   final String messageId;
   final ChatAttachment attachment;
+  final List<ChatMessage> gallery;
 
   @override
   State<_AttachmentView> createState() => _AttachmentViewState();
@@ -318,61 +320,14 @@ class _AttachmentViewState extends State<_AttachmentView> {
     }
   }
 
-  void _showImage() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: FutureBuilder<Uint8List>(
-                future: widget.backend.downloadAttachment(widget.messageId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Center(child: Text('Image unavailable'));
-                  }
-                  if (snapshot.data case final bytes?) {
-                    return InteractiveViewer(
-                      minScale: 0.25,
-                      maxScale: 8,
-                      child: Center(child: Image.memory(bytes)),
-                    );
-                  }
-                  return const Center(child: CircularProgressIndicator());
-                },
-              ),
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Row(
-                children: [
-                  IconButton.filledTonal(
-                    tooltip: 'Save image',
-                    onPressed: _save,
-                    icon: const Icon(Icons.download),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton.filledTonal(
-                    tooltip: 'Open externally',
-                    onPressed: _open,
-                    icon: const Icon(Icons.open_in_new),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton.filledTonal(
-                    tooltip: 'Close image',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  void _showMedia() => showDialog<void>(
+    context: context,
+    builder: (context) => _MediaLightbox(
+      backend: widget.backend,
+      messages: widget.gallery,
+      initialMessageId: widget.messageId,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -413,6 +368,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
         onOpen: _open,
         onContextMenu: (position, fullscreen) =>
             _showContextMenu(position, image: false, fullscreen: fullscreen),
+        onFullscreen: _showMedia,
       ),
       AttachmentKind.audio => _InlineAudio(
         backend: widget.backend,
@@ -460,11 +416,11 @@ class _AttachmentViewState extends State<_AttachmentView> {
               maxHeight: screen.height * 0.5,
             ),
             child: InkWell(
-              onTap: _showImage,
+              onTap: _showMedia,
               onSecondaryTapDown: (details) => _showContextMenu(
                 details.globalPosition,
                 image: true,
-                fullscreen: _showImage,
+                fullscreen: _showMedia,
               ),
               child: _PreferenceAwareImage(
                 bytes: bytes,
@@ -647,6 +603,7 @@ class _InlineVideo extends StatefulWidget {
     required this.onSave,
     required this.onOpen,
     required this.onContextMenu,
+    required this.onFullscreen,
   });
 
   final ChatBackend backend;
@@ -655,6 +612,7 @@ class _InlineVideo extends StatefulWidget {
   final VoidCallback onSave;
   final VoidCallback onOpen;
   final void Function(Offset position, VoidCallback fullscreen) onContextMenu;
+  final VoidCallback onFullscreen;
 
   @override
   State<_InlineVideo> createState() => _InlineVideoState();
@@ -700,15 +658,7 @@ class _InlineVideoState extends State<_InlineVideo> {
   }
 
   void _showFullscreen() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => _FullscreenVideo(
-        backend: widget.backend,
-        messageId: widget.messageId,
-        onSave: widget.onSave,
-        onOpen: widget.onOpen,
-      ),
-    );
+    widget.onFullscreen();
   }
 
   @override
@@ -798,24 +748,230 @@ class _InlineVideoState extends State<_InlineVideo> {
   }
 }
 
-class _FullscreenVideo extends StatefulWidget {
-  const _FullscreenVideo({
+class _MediaLightbox extends StatefulWidget {
+  const _MediaLightbox({
+    required this.backend,
+    required this.messages,
+    required this.initialMessageId,
+  });
+
+  final ChatBackend backend;
+  final List<ChatMessage> messages;
+  final String initialMessageId;
+
+  @override
+  State<_MediaLightbox> createState() => _MediaLightboxState();
+}
+
+class _MediaLightboxState extends State<_MediaLightbox> {
+  late int _index = max(
+    0,
+    widget.messages.indexWhere(
+      (message) => message.id == widget.initialMessageId,
+    ),
+  );
+  final Map<String, Future<Uint8List>> _images = {};
+
+  ChatMessage get _message => widget.messages[_index];
+  ChatAttachment get _attachment => _message.attachment!;
+
+  void _previous() {
+    if (_index + 1 < widget.messages.length) setState(() => _index++);
+  }
+
+  void _next() {
+    if (_index > 0) setState(() => _index--);
+  }
+
+  Future<void> _copyReference() async {
+    final reference = await widget.backend.getAttachmentReference(_message.id);
+    if (reference != null) {
+      await Clipboard.setData(ClipboardData(text: reference));
+    }
+  }
+
+  Future<void> _copyImage() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null || _attachment.kind != AttachmentKind.image) return;
+    final bytes = await widget.backend.downloadAttachment(_message.id);
+    final item = DataWriterItem(suggestedName: _attachment.name);
+    switch (_attachment.mimeType) {
+      case 'image/jpeg':
+        item.add(Formats.jpeg(bytes));
+      case 'image/gif':
+        item.add(Formats.gif(bytes));
+      case 'image/webp':
+        item.add(Formats.webp(bytes));
+      default:
+        item.add(Formats.png(bytes));
+    }
+    await clipboard.write([item]);
+  }
+
+  Future<void> _save() async {
+    final path = await FilePicker.saveFile(
+      dialogTitle: 'Save attachment',
+      fileName: _attachment.name,
+    );
+    if (path == null) return;
+    final bytes = await widget.backend.downloadAttachment(_message.id);
+    await File(path).writeAsBytes(bytes, flush: true);
+  }
+
+  Future<void> _open() async {
+    final bytes = await widget.backend.downloadAttachment(_message.id);
+    final directory = await getTemporaryDirectory();
+    final safeName = path.basename(_attachment.name);
+    final file = File(
+      path.join(
+        directory.path,
+        '${_message.id.hashCode}_${safeName.isEmpty ? 'attachment' : safeName}',
+      ),
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    await launchUrl(Uri.file(file.path));
+  }
+
+  Future<void> _contextMenu(Offset position) async {
+    final image = _attachment.kind == AttachmentKind.image;
+    final action = await _showMediaContextMenu(context, position, image: image);
+    switch (action) {
+      case _MediaAction.copyImage:
+        await _copyImage();
+      case _MediaAction.copyReference:
+        await _copyReference();
+      case _MediaAction.save:
+        await _save();
+      case _MediaAction.open:
+        await _open();
+      case _MediaAction.fullscreen || null:
+        return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): _previous,
+      const SingleActivator(LogicalKeyboardKey.arrowRight): _next,
+    },
+    child: Focus(
+      autofocus: true,
+      child: Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onSecondaryTapDown: (details) =>
+                    _contextMenu(details.globalPosition),
+                child: _attachment.kind == AttachmentKind.video
+                    ? _LightboxVideo(
+                        key: ValueKey(_message.id),
+                        backend: widget.backend,
+                        messageId: _message.id,
+                      )
+                    : FutureBuilder<Uint8List>(
+                        future: _images.putIfAbsent(
+                          _message.id,
+                          () => widget.backend.downloadAttachment(_message.id),
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return const Center(
+                              child: Text('Image unavailable'),
+                            );
+                          }
+                          if (snapshot.data case final bytes?) {
+                            return InteractiveViewer(
+                              key: ValueKey(_message.id),
+                              minScale: 0.25,
+                              maxScale: 8,
+                              child: Center(child: Image.memory(bytes)),
+                            );
+                          }
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      ),
+              ),
+            ),
+            if (_index + 1 < widget.messages.length)
+              Positioned(
+                left: 12,
+                top: 0,
+                bottom: 0,
+                child: IconButton.filledTonal(
+                  tooltip: 'Previous attachment',
+                  onPressed: _previous,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+              ),
+            if (_index > 0)
+              Positioned(
+                right: 12,
+                top: 0,
+                bottom: 0,
+                child: IconButton.filledTonal(
+                  tooltip: 'Next attachment',
+                  onPressed: _next,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ),
+            Positioned(
+              right: 12,
+              top: 12,
+              child: Row(
+                children: [
+                  Text(
+                    '${_index + 1}/${widget.messages.length}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Save attachment',
+                    onPressed: _save,
+                    icon: const Icon(Icons.download),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: 'Open externally',
+                    onPressed: _open,
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: 'Close viewer',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _LightboxVideo extends StatefulWidget {
+  const _LightboxVideo({
     required this.backend,
     required this.messageId,
-    required this.onSave,
-    required this.onOpen,
+    super.key,
   });
 
   final ChatBackend backend;
   final String messageId;
-  final VoidCallback onSave;
-  final VoidCallback onOpen;
 
   @override
-  State<_FullscreenVideo> createState() => _FullscreenVideoState();
+  State<_LightboxVideo> createState() => _LightboxVideoState();
 }
 
-class _FullscreenVideoState extends State<_FullscreenVideo> {
+class _LightboxVideoState extends State<_LightboxVideo> {
   late final Player _player = Player();
   late final VideoController _controller = VideoController(_player);
   String? _error;
@@ -848,43 +1004,9 @@ class _FullscreenVideoState extends State<_FullscreenVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog.fullscreen(
-    backgroundColor: Colors.black,
-    child: Stack(
-      children: [
-        Positioned.fill(
-          child: _error == null
-              ? Video(controller: _controller, fit: BoxFit.contain)
-              : Center(child: Text(_error!)),
-        ),
-        Positioned(
-          right: 12,
-          top: 12,
-          child: Row(
-            children: [
-              IconButton.filledTonal(
-                tooltip: 'Save video',
-                onPressed: widget.onSave,
-                icon: const Icon(Icons.download),
-              ),
-              const SizedBox(width: 6),
-              IconButton.filledTonal(
-                tooltip: 'Open externally',
-                onPressed: widget.onOpen,
-                icon: const Icon(Icons.open_in_new),
-              ),
-              const SizedBox(width: 6),
-              IconButton.filledTonal(
-                tooltip: 'Close video',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) => _error == null
+      ? Video(controller: _controller, fit: BoxFit.contain)
+      : Center(child: Text(_error!));
 }
 
 class _InlineAudio extends StatefulWidget {

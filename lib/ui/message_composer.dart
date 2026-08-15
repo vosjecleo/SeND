@@ -115,6 +115,16 @@ class _RichComposerState extends State<_RichComposer> {
     if (closed != null) {
       final query = closed.group(1)!;
       final start = before.lastIndexOf(':', before.length - 2);
+      final familiar = EmojiRepository.instance.familiarEmoji(query);
+      if (familiar != null) {
+        widget.controller.replaceText(
+          start,
+          cursor - start,
+          familiar,
+          TextSelection.collapsed(offset: start + familiar.length),
+        );
+        return;
+      }
       final generation = ++_emojiGeneration;
       EmojiRepository.instance.exactAlias(query).then((entry) {
         if (!mounted || generation != _emojiGeneration || entry == null) return;

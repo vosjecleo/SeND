@@ -34,6 +34,20 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
   var _nextId = 1;
   bool _initialized = false;
 
+  void _activatePayload(String? payload) {
+    if (payload == null) return;
+    try {
+      final data = jsonDecode(payload) as Map<String, Object?>;
+      final roomId = data['room_id'] as String?;
+      final eventId = data['event_id'] as String?;
+      if (roomId == null || eventId == null) return;
+      _activations.add(NotificationTarget(roomId: roomId, eventId: eventId));
+      unawaited(DesktopWindowService.present());
+    } catch (_) {
+      // Ignore stale or malformed notification payloads.
+    }
+  }
+
   @override
   Stream<NotificationTarget> get activations => _activations.stream;
 
@@ -47,23 +61,13 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
           defaultActionName: 'Open Deltiecord',
         ),
       ),
-      onDidReceiveNotificationResponse: (response) {
-        final payload = response.payload;
-        if (payload == null) return;
-        try {
-          final data = jsonDecode(payload) as Map<String, Object?>;
-          final roomId = data['room_id'] as String?;
-          final eventId = data['event_id'] as String?;
-          if (roomId == null || eventId == null) return;
-          _activations.add(
-            NotificationTarget(roomId: roomId, eventId: eventId),
-          );
-          unawaited(DesktopWindowService.present());
-        } catch (_) {
-          // Ignore stale or malformed notification payloads.
-        }
-      },
+      onDidReceiveNotificationResponse: (response) =>
+          _activatePayload(response.payload),
     );
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp ?? false) {
+      _activatePayload(launch?.notificationResponse?.payload);
+    }
   }
 
   @override

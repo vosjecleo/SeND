@@ -41,10 +41,10 @@ extension _MatrixSession on MatrixBackend {
       await _matrix.init();
       _initializeVoice();
       _loadSettings();
-      await _notifications.initialize();
       _notificationSubscription ??= _notifications.activations.listen(
         (target) => unawaited(_openNotificationTarget(target)),
       );
+      await _notifications.initialize();
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
           : SessionStatus.signedOut;

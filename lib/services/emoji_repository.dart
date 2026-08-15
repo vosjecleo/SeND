@@ -2,6 +2,23 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+const _familiarAliases = <String, List<String>>{
+  '😭': ['sob', 'cry', 'loudly_crying'],
+  '😂': ['joy', 'tears_of_joy'],
+  '🤣': ['rofl'],
+  '❤️': ['heart', 'love'],
+  '👍': ['thumbsup', '+1'],
+  '👎': ['thumbsdown', '-1'],
+  '💀': ['skull', 'dead'],
+  '🙏': ['pray', 'please'],
+  '🔥': ['fire', 'lit'],
+  '🎉': ['tada', 'party'],
+  '👀': ['eyes'],
+  '🤔': ['thinking'],
+  '😅': ['sweat_smile'],
+  '😎': ['sunglasses'],
+};
+
 class EmojiEntry {
   const EmojiEntry({
     required this.emoji,
@@ -41,18 +58,33 @@ class EmojiRepository {
 
   Future<List<EmojiEntry>> load() => _loading ??= _load();
 
+  String? familiarEmoji(String alias) {
+    final normalized = alias.toLowerCase().replaceAll('_', ' ').trim();
+    for (final entry in _familiarAliases.entries) {
+      if (entry.value.any(
+        (candidate) => candidate.replaceAll('_', ' ') == normalized,
+      )) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
   Future<List<EmojiEntry>> _load() async {
     final source = await rootBundle.loadString('assets/emoji/emojis.json');
     final decoded = jsonDecode(source) as Map<String, dynamic>;
     return decoded.entries
         .map((entry) {
           final data = entry.value as Map<String, dynamic>;
+          final aliases =
+              (data['keywords'] as List? ?? const [])
+                  .whereType<String>()
+                  .toSet()
+                ..addAll(_familiarAliases[entry.key] ?? const []);
           return EmojiEntry(
             emoji: entry.key,
             name: data['name'] as String? ?? entry.key,
-            aliases: (data['keywords'] as List? ?? const [])
-                .whereType<String>()
-                .toList(growable: false),
+            aliases: aliases.toList(growable: false),
           );
         })
         .toList(growable: false);

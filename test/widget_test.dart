@@ -536,6 +536,170 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('restores independent composer drafts while switching rooms', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!one:example.org',
+          name: 'one',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+        RoomSummary(
+          id: '!two:example.org',
+          name: 'two',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    await _enterComposer(tester, 'draft one');
+
+    await tester.tap(find.text('two'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .controller
+          .document
+          .toPlainText(),
+      '\n',
+    );
+    await _enterComposer(tester, 'draft two');
+
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .controller
+          .document
+          .toPlainText(),
+      'draft one\n',
+    );
+  });
+
+  testWidgets('shows homeserver accepted and participant read states', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!dm:example.org',
+          name: 'Alice',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$read',
+          sender: 'Deltie',
+          senderId: '@deltie:example.org',
+          body: 'hello',
+          timestamp: DateTime(2026, 8, 15),
+          pending: false,
+          own: true,
+          readBy: const [
+            ReceiptReaderSummary(
+              userId: '@alice:example.org',
+              displayName: 'Alice',
+            ),
+          ],
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Alice'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.done_all), findsOneWidget);
+    expect(find.byTooltip('Read by Alice'), findsOneWidget);
+  });
+
+  testWidgets('opens extensible profile details from a message sender', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!profile:example.org',
+          name: 'profiles',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..testProfile = const UserProfileSummary(
+        userId: '@alice:example.org',
+        displayName: 'Alice',
+        presence: UserPresence.online,
+        bio: 'Matrix enthusiast',
+        pronouns: 'she/her',
+        timezone: 'Europe/Amsterdam',
+      )
+      ..messageList = [
+        ChatMessage(
+          id: r'$profile',
+          sender: 'Alice',
+          senderId: '@alice:example.org',
+          body: 'hello',
+          timestamp: DateTime(2026, 8, 15),
+          pending: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('profiles'));
+    await tester.pump();
+    await tester.tap(find.text('Alice').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('@alice:example.org'), findsOneWidget);
+    expect(find.text('Presence: online'), findsOneWidget);
+    expect(find.text('Pronouns: she/her'), findsOneWidget);
+    expect(find.text('Timezone: Europe/Amsterdam'), findsOneWidget);
+    expect(find.text('Matrix enthusiast'), findsOneWidget);
+  });
+
+  testWidgets('converts a closed local emoji alias in the composer', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!emoji:example.org',
+          name: 'emoji',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('emoji'));
+    await tester.pump();
+    await _enterComposer(tester, ':sob:');
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .controller
+          .document
+          .toPlainText(),
+      '😭\n',
+    );
+  });
 }
 
 Future<void> _enterComposer(WidgetTester tester, String text) async {
@@ -586,6 +750,7 @@ class FakeBackend extends ChatBackend {
   String? lastEditMessageId;
   String? removedDeviceId;
   String? removalPassword;
+  UserProfileSummary? testProfile;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
     keyBackupEnabled: true,
@@ -747,7 +912,7 @@ class FakeBackend extends ChatBackend {
   Future<void> setMemberPowerLevel(String userId, int powerLevel) async {}
   @override
   Future<UserProfileSummary> getUserProfile(String userId) async =>
-      UserProfileSummary(userId: userId, displayName: userId);
+      testProfile ?? UserProfileSummary(userId: userId, displayName: userId);
   @override
   Future<void> updateOwnProfileFields({
     String? bio,

@@ -18,4 +18,8 @@ void main() {
     expect(entries.length, greaterThan(1800));
     expect(entries.every((entry) => entry.name.trim().isNotEmpty), isTrue);
   });
+
+  test('closed-form familiar aliases resolve exactly', () async {
+    expect((await EmojiRepository.instance.exactAlias('sob'))?.emoji, '😭');
+  });
 }
