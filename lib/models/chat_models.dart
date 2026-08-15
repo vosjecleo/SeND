@@ -8,6 +8,8 @@ enum ConnectionStatus { connecting, online, reconnecting, offline }
 
 enum InterfaceDensity { compact, cozy }
 
+enum DeltiecordThemeMode { light, dark, oled }
+
 enum AppShortcutAction {
   openSettings,
   toggleMicrophone,
@@ -37,6 +39,9 @@ const defaultShortcutBindings = <AppShortcutAction, String>{
 class AppPreferences {
   const AppPreferences({
     this.density = InterfaceDensity.compact,
+    this.compactness = 0.4,
+    this.themeMode = DeltiecordThemeMode.dark,
+    this.interfaceScale = 1,
     this.fontScale = 1,
     this.roomPanelWidth = 280,
     this.reducedMotion = false,
@@ -63,6 +68,9 @@ class AppPreferences {
   });
 
   final InterfaceDensity density;
+  final double compactness;
+  final DeltiecordThemeMode themeMode;
+  final double interfaceScale;
   final double fontScale;
   final double roomPanelWidth;
   final bool reducedMotion;
@@ -89,6 +97,9 @@ class AppPreferences {
 
   AppPreferences copyWith({
     InterfaceDensity? density,
+    double? compactness,
+    DeltiecordThemeMode? themeMode,
+    double? interfaceScale,
     double? fontScale,
     double? roomPanelWidth,
     bool? reducedMotion,
@@ -114,6 +125,9 @@ class AppPreferences {
     Map<String, double>? participantVolumes,
   }) => AppPreferences(
     density: density ?? this.density,
+    compactness: compactness ?? this.compactness,
+    themeMode: themeMode ?? this.themeMode,
+    interfaceScale: interfaceScale ?? this.interfaceScale,
     fontScale: fontScale ?? this.fontScale,
     roomPanelWidth: roomPanelWidth ?? this.roomPanelWidth,
     reducedMotion: reducedMotion ?? this.reducedMotion,

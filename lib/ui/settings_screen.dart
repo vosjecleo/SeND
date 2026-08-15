@@ -1,14 +1,15 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mime/mime.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
+import 'accent_color_picker.dart';
 import 'security_center.dart';
 import 'app_shortcuts.dart';
-import 'profile_fields_dialog.dart';
+import 'profile_card.dart';
+import 'profile_editor_dialog.dart';
+import 'deltiecord_theme.dart';
 
 enum _SettingsPage {
   account,
@@ -46,6 +47,7 @@ class _SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<_SettingsScreen> {
   _SettingsPage _page = _SettingsPage.account;
+  Future<UserProfileSummary>? _ownProfile;
 
   ChatBackend get backend => widget.backend;
 
@@ -56,6 +58,12 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     backend.refreshDevices();
     backend.refreshProfile();
     backend.refreshStorageUsage();
+    _reloadOwnProfile();
+  }
+
+  void _reloadOwnProfile() {
+    final userId = backend.userId;
+    if (userId != null) _ownProfile = backend.getUserProfile(userId);
   }
 
   @override
@@ -74,32 +82,35 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         children: [
           SizedBox(
             width: 220,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(10),
-                    children: [
-                      for (final page in _SettingsPage.values)
-                        ListTile(
-                          dense: true,
-                          selected: _page == page,
-                          leading: Icon(_iconFor(page), size: 19),
-                          title: Text(_labelFor(page)),
-                          onTap: () => setState(() => _page = page),
-                        ),
-                    ],
+            child: Material(
+              color: context.deltiecord.panel,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(10),
+                      children: [
+                        for (final page in _SettingsPage.values)
+                          ListTile(
+                            dense: true,
+                            selected: _page == page,
+                            leading: Icon(_iconFor(page), size: 19),
+                            title: Text(_labelFor(page)),
+                            onTap: () => setState(() => _page = page),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.logout, size: 19),
-                  title: const Text('Log out'),
-                  onTap: backend.logout,
-                ),
-                const SizedBox(height: 6),
-              ],
+                  const Divider(height: 1),
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.logout, size: 19),
+                    title: const Text('Log out'),
+                    onTap: backend.logout,
+                  ),
+                  const SizedBox(height: 6),
+                ],
+              ),
             ),
           ),
           const VerticalDivider(width: 1),
@@ -409,64 +420,34 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   }
 
   Widget _account() => _section('Account', [
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
-          radius: 38,
-          backgroundImage: backend.profileAvatarBytes == null
-              ? null
-              : MemoryImage(backend.profileAvatarBytes!),
-          child: backend.profileAvatarBytes == null
-              ? const Icon(Icons.person, size: 34)
-              : null,
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                backend.profileDisplayName ??
-                    backend.userId ??
-                    'Matrix account',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(backend.userId ?? 'Unavailable'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  OutlinedButton(
-                    onPressed: _editDisplayName,
-                    child: const Text('Change display name'),
-                  ),
-                  OutlinedButton(
-                    onPressed: _pickAvatar,
-                    child: const Text('Change picture'),
-                  ),
-                  OutlinedButton(
-                    onPressed: _editExtendedProfile,
-                    child: const Text('Edit bio and details'),
-                  ),
-                  OutlinedButton(
-                    onPressed: _pickBanner,
-                    child: const Text('Change banner'),
-                  ),
-                  if (backend.profileAvatarBytes != null)
-                    TextButton(
-                      onPressed: () => _runSettingAction(
-                        () => backend.setProfileAvatar(null),
-                      ),
-                      child: const Text('Remove picture'),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
+    if (_ownProfile case final profileFuture?)
+      FutureBuilder<UserProfileSummary>(
+        future: profileFuture,
+        builder: (context, snapshot) {
+          final profile = snapshot.data;
+          if (profile == null) {
+            return const SizedBox(
+              height: 220,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return DeltiecordProfileCard(
+            profile: profile,
+            onEdit: () async {
+              final changed = await showProfileEditor(
+                context,
+                backend,
+                profile,
+              );
+              if (changed && mounted) {
+                setState(_reloadOwnProfile);
+              }
+            },
+          );
+        },
+      )
+    else
+      const Text('Profile unavailable.'),
     const Divider(height: 28),
     _value('Homeserver', backend.homeserver?.toString() ?? 'Unavailable'),
     _value('Device ID', backend.deviceId ?? 'Unavailable'),
@@ -488,30 +469,64 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _appearance() {
     final preferences = backend.preferences;
     return _section('Appearance', [
-      SegmentedButton<InterfaceDensity>(
+      const Text('Theme'),
+      SegmentedButton<DeltiecordThemeMode>(
         segments: const [
           ButtonSegment(
-            value: InterfaceDensity.compact,
-            label: Text('Compact'),
+            value: DeltiecordThemeMode.light,
+            icon: Icon(Icons.light_mode_outlined),
+            label: Text('Light'),
           ),
-          ButtonSegment(value: InterfaceDensity.cozy, label: Text('Cozy')),
+          ButtonSegment(
+            value: DeltiecordThemeMode.dark,
+            icon: Icon(Icons.dark_mode_outlined),
+            label: Text('Dark'),
+          ),
+          ButtonSegment(
+            value: DeltiecordThemeMode.oled,
+            icon: Icon(Icons.contrast),
+            label: Text('OLED'),
+          ),
         ],
-        selected: {preferences.density},
+        selected: {preferences.themeMode},
         onSelectionChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(density: value.first),
+          preferences.copyWith(themeMode: value.first),
         ),
       ),
       const SizedBox(height: 20),
-      Text('Font scale — ${(preferences.fontScale * 100).round()}%'),
+      Text('Interface scale — ${(preferences.interfaceScale * 100).round()}%'),
       Slider(
-        value: preferences.fontScale,
+        key: const Key('interface-scale-slider'),
+        value: preferences.interfaceScale,
         min: 0.8,
-        max: 1.4,
-        divisions: 6,
-        label: '${(preferences.fontScale * 100).round()}%',
-        onChanged: (value) =>
-            backend.updatePreferences(preferences.copyWith(fontScale: value)),
+        max: 1.3,
+        divisions: 10,
+        label: '${(preferences.interfaceScale * 100).round()}%',
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(interfaceScale: value),
+        ),
       ),
+      const Text(
+        'Scales panels, controls, icons, media, and text together. Text-only '
+        'scaling is under Accessibility.',
+      ),
+      const SizedBox(height: 20),
+      Text('Compactness — ${(preferences.compactness * 100).round()}%'),
+      Slider(
+        key: const Key('compactness-slider'),
+        value: preferences.compactness,
+        min: 0,
+        max: 1,
+        divisions: 20,
+        label: '${(preferences.compactness * 100).round()}%',
+        onChanged: (value) =>
+            backend.updatePreferences(preferences.copyWith(compactness: value)),
+      ),
+      const Text(
+        'Lower values give text and controls more breathing room; higher '
+        'values fit more information on screen.',
+      ),
+      const SizedBox(height: 20),
       Text('Room panel — ${preferences.roomPanelWidth.round()} px'),
       Slider(
         value: preferences.roomPanelWidth,
@@ -555,47 +570,11 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       const SizedBox(height: 16),
       const Text('Accent colour'),
-      Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        children:
-            const [
-                  0xff6975d9,
-                  0xff9b6bd3,
-                  0xff3f94a8,
-                  0xff4f9b68,
-                  0xffc47a45,
-                  0xffba6074,
-                ]
-                .map((color) {
-                  final selected = preferences.accentColor == color;
-                  return Tooltip(
-                    message:
-                        '#${color.toRadixString(16).substring(2).toUpperCase()}',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => backend.updatePreferences(
-                        preferences.copyWith(accentColor: color),
-                      ),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: Color(color),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: selected ? Colors.white : Colors.transparent,
-                            width: 3,
-                          ),
-                        ),
-                        child: selected
-                            ? const Icon(Icons.check, size: 17)
-                            : null,
-                      ),
-                    ),
-                  );
-                })
-                .toList(growable: false),
+      AccentColorPicker(
+        color: preferences.accentColor,
+        onChanged: (color) => backend.updatePreferences(
+          backend.preferences.copyWith(accentColor: color),
+        ),
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -739,6 +718,19 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _accessibility() {
     final preferences = backend.preferences;
     return _section('Accessibility', [
+      Text('Text size — ${(preferences.fontScale * 100).round()}%'),
+      Slider(
+        key: const Key('font-scale-slider'),
+        value: preferences.fontScale,
+        min: 0.8,
+        max: 1.4,
+        divisions: 6,
+        label: '${(preferences.fontScale * 100).round()}%',
+        onChanged: (value) =>
+            backend.updatePreferences(preferences.copyWith(fontScale: value)),
+      ),
+      const Text('Changes text size without enlarging the rest of the UI.'),
+      const SizedBox(height: 12),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Reduce motion'),
@@ -787,66 +779,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
 
   Widget _shortcut(String action, String keys) => _value(action, keys);
 
-  Future<void> _editDisplayName() async {
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) =>
-          _DisplayNameDialog(initialValue: backend.profileDisplayName ?? ''),
-    );
-    if (value?.isNotEmpty == true) {
-      await _runSettingAction(() => backend.setProfileDisplayName(value!));
-    }
-  }
-
-  Future<void> _pickAvatar() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.single;
-    final bytes = file.bytes ?? await result.xFiles.single.readAsBytes();
-    await _runSettingAction(
-      () => backend.setProfileAvatar(
-        bytes,
-        fileName: file.name,
-        mimeType: lookupMimeType(file.name, headerBytes: bytes) ?? 'image/png',
-      ),
-    );
-  }
-
-  Future<void> _editExtendedProfile() async {
-    final userId = backend.userId;
-    if (userId == null) return;
-    final profile = await backend.getUserProfile(userId);
-    if (!mounted) return;
-    final result = await showDialog<ProfileFieldsResult>(
-      context: context,
-      builder: (context) => ProfileFieldsDialog(profile: profile),
-    );
-    if (result == null) return;
-    await _runSettingAction(
-      () => backend.updateOwnProfileFields(
-        bio: result.bio,
-        pronouns: result.pronouns,
-        timezone: result.timezone,
-      ),
-    );
-  }
-
-  Future<void> _pickBanner() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes =
-        result.files.single.bytes ?? await result.xFiles.single.readAsBytes();
-    await _runSettingAction(
-      () => backend.updateOwnProfileFields(bannerBytes: bytes),
-    );
-  }
-
   Future<String?> _askForPassword(String title, String warning) async {
     final password = await showDialog<String>(
       context: context,
@@ -890,47 +822,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       );
     }
   }
-}
-
-class _DisplayNameDialog extends StatefulWidget {
-  const _DisplayNameDialog({required this.initialValue});
-
-  final String initialValue;
-
-  @override
-  State<_DisplayNameDialog> createState() => _DisplayNameDialogState();
-}
-
-class _DisplayNameDialogState extends State<_DisplayNameDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialValue,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Change display name'),
-    content: TextField(
-      controller: _controller,
-      autofocus: true,
-      decoration: const InputDecoration(labelText: 'Display name'),
-    ),
-    actions: [
-      TextButton(
-        onPressed: Navigator.of(context).pop,
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-        child: const Text('Save'),
-      ),
-    ],
-  );
 }
 
 class _PasswordPromptDialog extends StatefulWidget {

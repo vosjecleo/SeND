@@ -87,12 +87,19 @@ class _SpaceBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xff191a1e),
+      color: context.deltiecord.rail,
       child: Column(
         children: [
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              padding: EdgeInsets.symmetric(
+                vertical: _densityBetween(
+                  backend.preferences.compactness,
+                  roomy: 9,
+                  compact: 5,
+                ),
+                horizontal: 8,
+              ),
               children: [
                 _SpaceButton(
                   tooltip: 'Home',
@@ -106,7 +113,13 @@ class _SpaceBar extends StatelessWidget {
                 ),
                 for (final space in backend.spaces)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 7),
+                    padding: EdgeInsets.only(
+                      bottom: _densityBetween(
+                        backend.preferences.compactness,
+                        roomy: 8,
+                        compact: 4,
+                      ),
+                    ),
                     child: _SpaceButton(
                       tooltip: space.name,
                       selected: backend.selectedSpaceId == space.id,
@@ -181,7 +194,7 @@ class _SpaceButton extends StatelessWidget {
           child: Material(
             color: selected
                 ? Theme.of(context).colorScheme.primaryContainer
-                : const Color(0xff2b2d34),
+                : context.deltiecord.elevated,
             borderRadius: BorderRadius.circular(4),
             clipBehavior: Clip.hardEdge,
             child: InkWell(
@@ -289,15 +302,18 @@ class _RoomPanel extends StatelessWidget {
     final textRooms = backend.rooms.where((room) => !room.isVoice).toList();
     final voiceRooms = backend.rooms.where((room) => room.isVoice).toList();
     return Material(
-      color: const Color(0xff202126),
+      color: context.deltiecord.panel,
       child: Column(
         children: [
           Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerLeft,
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xff35363d))),
+            decoration: BoxDecoration(
+              color: context.deltiecord.surface,
+              border: Border(
+                bottom: BorderSide(color: context.deltiecord.divider),
+              ),
             ),
             child: Row(
               children: [
@@ -331,7 +347,13 @@ class _RoomPanel extends StatelessWidget {
             child: backend.rooms.isEmpty
                 ? const Center(child: Text('No joined rooms'))
                 : ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    padding: EdgeInsets.symmetric(
+                      vertical: _densityBetween(
+                        backend.preferences.compactness,
+                        roomy: 8,
+                        compact: 3,
+                      ),
+                    ),
                     children: [
                       if (backend.selectedSpaceId != null &&
                           textRooms.isNotEmpty)
@@ -360,9 +382,9 @@ class _RoomPanel extends StatelessWidget {
                       child: SizedBox.square(
                         dimension: 34,
                         child: backend.profileAvatarBytes == null
-                            ? const ColoredBox(
-                                color: Color(0xff3a3c46),
-                                child: Icon(Icons.person, size: 19),
+                            ? ColoredBox(
+                                color: context.deltiecord.elevated,
+                                child: const Icon(Icons.person, size: 19),
                               )
                             : Image.memory(
                                 backend.profileAvatarBytes!,
@@ -429,8 +451,8 @@ class _RoomSectionLabel extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(14, 9, 10, 3),
     child: Text(
       label,
-      style: const TextStyle(
-        color: Color(0xff989aa5),
+      style: TextStyle(
+        color: context.deltiecord.muted,
         fontSize: 10,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
@@ -562,9 +584,10 @@ class _RoomListTile extends StatelessWidget {
     if (backend.selectedSpaceId == null && !room.isVoice) {
       return _HomeRoomListTile(backend: backend, room: room);
     }
+    final compactness = backend.preferences.compactness;
     return ListTile(
       dense: true,
-      visualDensity: const VisualDensity(vertical: -3),
+      visualDensity: VisualDensity(vertical: -1 - (compactness * 2)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 10),
       minVerticalPadding: 0,
       selected: backend.selectedRoom?.id == room.id,
@@ -639,9 +662,28 @@ class _HomeRoomListTile extends StatelessWidget {
       child: InkWell(
         onTap: () => backend.selectRoom(room.id),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 60),
+          constraints: BoxConstraints(
+            minHeight: _densityBetween(
+              backend.preferences.compactness,
+              roomy: 66,
+              compact: 52,
+            ),
+          ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              _densityBetween(
+                backend.preferences.compactness,
+                roomy: 9,
+                compact: 5,
+              ),
+              10,
+              _densityBetween(
+                backend.preferences.compactness,
+                roomy: 9,
+                compact: 5,
+              ),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -662,13 +704,19 @@ class _HomeRoomListTile extends StatelessWidget {
                           height: 1,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      SizedBox(
+                        height: _densityBetween(
+                          backend.preferences.compactness,
+                          roomy: 6,
+                          compact: 3,
+                        ),
+                      ),
                       Text(
                         room.lastMessage,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xffb7b8c0),
+                        style: TextStyle(
+                          color: context.deltiecord.muted,
                           fontSize: 13,
                           height: 1.05,
                         ),
@@ -724,7 +772,7 @@ class _RoomIcon extends StatelessWidget {
         children: [
           Positioned.fill(
             child: CircleAvatar(
-              backgroundColor: const Color(0xff3a3c46),
+              backgroundColor: context.deltiecord.elevated,
               backgroundImage: avatar == null ? null : MemoryImage(avatar),
               child: avatar == null
                   ? Text(
@@ -754,7 +802,7 @@ class _RoomIcon extends StatelessWidget {
                     UserPresence.away => const Color(0xffffc857),
                     UserPresence.offline => const Color(0xff747680),
                   },
-                  border: Border.all(color: const Color(0xff202126), width: 2),
+                  border: Border.all(color: context.deltiecord.panel, width: 2),
                 ),
               ),
             ),

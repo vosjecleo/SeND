@@ -32,6 +32,7 @@ import 'app_shortcuts.dart';
 import 'rich_message.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
+import 'deltiecord_theme.dart';
 
 part 'chat_navigation.dart';
 part 'conversation_view.dart';
@@ -58,6 +59,14 @@ double _composerControlHeightFor(BuildContext context) => max(
 
 double _bottomPanelHeightFor(BuildContext context) =>
     max(_bottomPanelHeight, _composerControlHeightFor(context) + 22);
+
+double _densityBetween(
+  double value, {
+  required double roomy,
+  required double compact,
+}) {
+  return ui.lerpDouble(roomy, compact, value)!;
+}
 
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});

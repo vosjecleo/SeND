@@ -52,8 +52,60 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Accessibility'), findsOneWidget);
-    expect(find.text('Advanced'), findsOneWidget);
-    expect(find.text('@deltie:example.org'), findsOneWidget);
+    expect(find.text('Advanced', skipOffstage: false), findsOneWidget);
+    expect(find.text('@deltie:example.org'), findsWidgets);
+  });
+
+  testWidgets('appearance exposes themes, scaling, density, and exact colour', (
+    tester,
+  ) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Light'), findsOneWidget);
+    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('OLED'), findsOneWidget);
+    expect(find.byKey(const Key('interface-scale-slider')), findsOneWidget);
+    expect(find.byKey(const Key('compactness-slider')), findsOneWidget);
+    expect(find.byKey(const Key('accent-colour-wheel')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('accent-hex-field')),
+      '#123456',
+    );
+    await tester.pump();
+    expect(backend.preferences.accentColor, 0xff123456);
+  });
+
+  testWidgets('profile editor updates its preview before saving', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..testProfile = const UserProfileSummary(
+        userId: '@deltie:example.org',
+        displayName: 'Deltie',
+        bio: 'Existing biography',
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Edit profile'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Display name'),
+      'Preview Name',
+    );
+    await tester.pump();
+
+    expect(find.text('Preview Name'), findsWidgets);
+    expect(find.text('Edit profile — live preview'), findsOneWidget);
   });
 
   testWidgets('shows an explicit offline state', (tester) async {
@@ -840,6 +892,7 @@ void main() {
     expect(find.text('Jump to present'), findsOneWidget);
     await tester.tap(find.text('Jump to present'));
     await tester.pumpAndSettle();
+    expect(backend.jumpPresentRequests, 1);
     expect(find.text('Jump to present'), findsNothing);
   });
 
@@ -882,9 +935,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('@alice:example.org'), findsOneWidget);
-    expect(find.text('Presence: online'), findsOneWidget);
-    expect(find.text('Pronouns: she/her'), findsOneWidget);
-    expect(find.text('Timezone: Europe/Amsterdam'), findsOneWidget);
+    expect(find.text('Online'), findsOneWidget);
+    expect(find.text('she/her'), findsOneWidget);
+    expect(find.byIcon(Icons.schedule), findsOneWidget);
+    expect(
+      find.textContaining('Europe/Amsterdam', skipOffstage: false),
+      findsNothing,
+    );
     expect(find.text('Matrix enthusiast'), findsOneWidget);
   });
 
@@ -964,6 +1021,7 @@ class FakeBackend extends ChatBackend {
   bool cameraEnabled = false;
   Completer<void>? sendGate;
   int historyRequests = 0;
+  int jumpPresentRequests = 0;
   final List<String> sentMessages = [];
   final List<String?> sentMessageRoomIds = [];
   final List<String?> sentAttachmentRoomIds = [];
@@ -1159,7 +1217,10 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> clearMediaCache() async {}
   @override
-  Future<void> jumpToPresent() async {}
+  Future<void> jumpToPresent() async {
+    jumpPresentRequests++;
+  }
+
   @override
   Future<void> loadMoreFuture() async {}
   @override
@@ -1169,7 +1230,11 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> setNotificationPreviewsEnabled(bool enabled) async {}
   @override
-  Future<void> updatePreferences(AppPreferences preferences) async {}
+  Future<void> updatePreferences(AppPreferences preferences) async {
+    currentPreferences = preferences;
+    notifyListeners();
+  }
+
   @override
   Future<void> refreshAudioInputs() async {}
   @override

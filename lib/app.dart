@@ -6,6 +6,7 @@ import 'backend/chat_backend.dart';
 import 'models/chat_models.dart';
 import 'services/desktop_window_service.dart';
 import 'ui/chat_shell.dart';
+import 'ui/deltiecord_theme.dart';
 import 'ui/login_screen.dart';
 
 class DeltiecordApp extends StatelessWidget {
@@ -25,11 +26,15 @@ class DeltiecordApp extends StatelessWidget {
           );
         }
         final contrast = preferences.highContrast;
+        final palette = DeltiecordPalette.forMode(preferences.themeMode);
+        final brightness = preferences.themeMode == DeltiecordThemeMode.light
+            ? Brightness.light
+            : Brightness.dark;
         final colorScheme = ColorScheme.fromSeed(
           seedColor: Color(preferences.accentColor),
-          brightness: Brightness.dark,
+          brightness: brightness,
           contrastLevel: contrast ? 1 : 0,
-        );
+        ).copyWith(surface: palette.surface, onSurface: palette.text);
         return MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
@@ -40,16 +45,21 @@ class DeltiecordApp extends StatelessWidget {
             FlutterQuillLocalizations.delegate,
           ],
           theme: ThemeData(
-            brightness: Brightness.dark,
+            brightness: brightness,
             colorScheme: colorScheme,
             iconTheme: IconThemeData(color: colorScheme.primary),
-            scaffoldBackgroundColor: const Color(0xff25262c),
+            scaffoldBackgroundColor: palette.background,
+            canvasColor: palette.surface,
+            cardColor: palette.elevated,
+            dividerColor: palette.divider,
+            extensions: [palette],
             fontFamily: preferences.fontFamily == 'System'
                 ? null
                 : preferences.fontFamily,
-            visualDensity: preferences.density == InterfaceDensity.compact
-                ? VisualDensity.compact
-                : VisualDensity.standard,
+            visualDensity: VisualDensity(
+              horizontal: -2 * preferences.compactness,
+              vertical: -2 * preferences.compactness,
+            ),
             pageTransitionsTheme: preferences.reducedMotion
                 ? const PageTransitionsTheme(
                     builders: {
@@ -59,52 +69,80 @@ class DeltiecordApp extends StatelessWidget {
                   )
                 : const PageTransitionsTheme(),
             useMaterial3: true,
-            dialogTheme: const DialogThemeData(
+            dialogTheme: DialogThemeData(
+              backgroundColor: palette.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(3)),
-                side: BorderSide(color: Color(0xff555762)),
+                borderRadius: const BorderRadius.all(Radius.circular(3)),
+                side: BorderSide(color: palette.divider),
               ),
             ),
-            menuTheme: const MenuThemeData(
+            appBarTheme: AppBarTheme(
+              backgroundColor: palette.surface,
+              foregroundColor: palette.text,
+              surfaceTintColor: Colors.transparent,
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: palette.input,
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: palette.divider),
+                borderRadius: const BorderRadius.all(Radius.circular(3)),
+              ),
+            ),
+            menuTheme: MenuThemeData(
               style: MenuStyle(
+                backgroundColor: WidgetStatePropertyAll(palette.elevated),
                 shape: WidgetStatePropertyAll(
                   RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
-                    side: BorderSide(color: Color(0xff555762)),
+                    borderRadius: const BorderRadius.all(Radius.circular(2)),
+                    side: BorderSide(color: palette.divider),
                   ),
                 ),
-                padding: WidgetStatePropertyAll(
+                padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(vertical: 3),
                 ),
               ),
             ),
-            popupMenuTheme: const PopupMenuThemeData(
+            popupMenuTheme: PopupMenuThemeData(
+              color: palette.elevated,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(2)),
-                side: BorderSide(color: Color(0xff555762)),
+                borderRadius: const BorderRadius.all(Radius.circular(2)),
+                side: BorderSide(color: palette.divider),
               ),
             ),
-            tooltipTheme: const TooltipThemeData(
-              waitDuration: Duration(milliseconds: 450),
-              showDuration: Duration(seconds: 4),
+            tooltipTheme: TooltipThemeData(
+              waitDuration: const Duration(milliseconds: 450),
+              showDuration: const Duration(seconds: 4),
               decoration: BoxDecoration(
-                color: Color(0xff16171b),
+                color: palette.elevated,
                 border: Border.fromBorderSide(
-                  BorderSide(color: Color(0xff555762)),
+                  BorderSide(color: palette.divider),
                 ),
               ),
-              textStyle: TextStyle(color: Color(0xffdedfe5), fontSize: 11),
+              textStyle: TextStyle(color: palette.text, fontSize: 11),
             ),
           ),
           builder: (context, child) {
             final media = MediaQuery.of(context);
-            return MediaQuery(
-              data: media.copyWith(
-                textScaler: TextScaler.linear(preferences.fontScale),
-                disableAnimations: preferences.reducedMotion,
-                highContrast: preferences.highContrast,
+            final interfaceScale = preferences.interfaceScale;
+            final scaledMedia = media.copyWith(
+              size: media.size / interfaceScale,
+              textScaler: TextScaler.linear(preferences.fontScale),
+              disableAnimations: preferences.reducedMotion,
+              highContrast: preferences.highContrast,
+            );
+            final content = MediaQuery(data: scaledMedia, child: child!);
+            if (interfaceScale == 1) return content;
+            return ClipRect(
+              child: FittedBox(
+                fit: BoxFit.fill,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: media.size.width / interfaceScale,
+                  height: media.size.height / interfaceScale,
+                  child: content,
+                ),
               ),
-              child: child!,
             );
           },
           home: switch (backend.status) {

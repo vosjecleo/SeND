@@ -455,6 +455,19 @@ extension _MatrixSession on MatrixBackend {
       density: content?.tryGet<String>('density') == 'cozy'
           ? InterfaceDensity.cozy
           : InterfaceDensity.compact,
+      compactness:
+          (content?['compactness'] as num?)?.toDouble().clamp(0, 1) ??
+          (content?.tryGet<String>('density') == 'cozy' ? 0.15 : 0.4),
+      themeMode:
+          DeltiecordThemeMode.values
+              .where(
+                (mode) => mode.name == content?.tryGet<String>('theme_mode'),
+              )
+              .firstOrNull ??
+          DeltiecordThemeMode.dark,
+      interfaceScale:
+          (content?['interface_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ??
+          1,
       fontScale:
           (content?['font_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ?? 1,
       roomPanelWidth:
@@ -551,6 +564,9 @@ extension _MatrixSession on MatrixBackend {
         {
           ...?existing,
           'density': preferences.density.name,
+          'compactness': preferences.compactness,
+          'theme_mode': preferences.themeMode.name,
+          'interface_scale': preferences.interfaceScale,
           'font_scale': preferences.fontScale,
           'room_panel_width': preferences.roomPanelWidth,
           'reduced_motion': preferences.reducedMotion,

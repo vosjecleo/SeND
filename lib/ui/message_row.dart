@@ -138,8 +138,10 @@ class _MessageRowState extends State<_MessageRow> {
 
   @override
   Widget build(BuildContext context) {
-    final compact =
-        widget.backend.preferences.density == InterfaceDensity.compact;
+    final compactness = widget.backend.preferences.compactness;
+    final groupTop = 11 - (compactness * 5);
+    final continuationTop = 4 - (compactness * 3);
+    final rowBottom = 3 - (compactness * 2);
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
     final clock = TimeOfDay.fromDateTime(local).format(context);
@@ -174,8 +176,8 @@ class _MessageRowState extends State<_MessageRow> {
             type: MaterialType.transparency,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xff202126),
-                border: Border.all(color: const Color(0xff41434c)),
+                color: context.deltiecord.elevated,
+                border: Border.all(color: context.deltiecord.divider),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: _MessageActions(
@@ -206,7 +208,7 @@ class _MessageRowState extends State<_MessageRow> {
             duration: widget.backend.preferences.reducedMotion
                 ? Duration.zero
                 : const Duration(milliseconds: 110),
-            color: _hovered ? const Color(0xff292a30) : Colors.transparent,
+            color: _hovered ? context.deltiecord.hover : Colors.transparent,
             child: Opacity(
               opacity: message.pending ? 0.55 : 1,
               child: Stack(
@@ -215,11 +217,9 @@ class _MessageRowState extends State<_MessageRow> {
                   Padding(
                     padding: EdgeInsets.fromLTRB(
                       20,
-                      widget.startsGroup
-                          ? (compact ? 6 : 10)
-                          : (compact ? 1 : 3),
+                      widget.startsGroup ? groupTop : continuationTop,
                       20,
-                      1,
+                      rowBottom,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,7 +253,7 @@ class _MessageRowState extends State<_MessageRow> {
                                           .textTheme
                                           .labelSmall
                                           ?.copyWith(
-                                            color: const Color(0xff989aa5),
+                                            color: context.deltiecord.muted,
                                           ),
                                     ),
                                     if (message.own &&
@@ -269,7 +269,7 @@ class _MessageRowState extends State<_MessageRow> {
                                               ? Icons.check
                                               : Icons.done_all,
                                           size: 11,
-                                          color: const Color(0xff989aa5),
+                                          color: context.deltiecord.muted,
                                         ),
                                       ),
                                     ],
@@ -290,11 +290,13 @@ class _MessageRowState extends State<_MessageRow> {
                                       9,
                                       6,
                                     ),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xff292a30),
+                                    decoration: BoxDecoration(
+                                      color: context.deltiecord.elevated,
                                       border: Border(
                                         left: BorderSide(
-                                          color: Color(0xff747fdb),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
                                           width: 3,
                                         ),
                                       ),
@@ -305,10 +307,12 @@ class _MessageRowState extends State<_MessageRow> {
                                       children: [
                                         Text(
                                           reply.sender,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xffb8bfff),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
                                           ),
                                         ),
                                         Text(
@@ -335,7 +339,7 @@ class _MessageRowState extends State<_MessageRow> {
                                               ? FontStyle.italic
                                               : FontStyle.normal,
                                           color: message.redacted
-                                              ? const Color(0xff989aa5)
+                                              ? context.deltiecord.muted
                                               : null,
                                         ),
                                       ),
@@ -355,11 +359,11 @@ class _MessageRowState extends State<_MessageRow> {
                                   child: _LinkPreviewCard(preview: preview),
                                 ),
                               if (message.edited)
-                                const Text(
+                                Text(
                                   '(edited)',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Color(0xff989aa5),
+                                    color: context.deltiecord.muted,
                                   ),
                                 ),
                               if (message.queued)
@@ -425,12 +429,12 @@ class _MessageRowState extends State<_MessageRow> {
                   if (widget.startsGroup)
                     Positioned(
                       left: 20,
-                      top: 10,
+                      top: groupTop,
                       child: GestureDetector(
                         onTap: _showSenderProfile,
                         child: CircleAvatar(
                           radius: 17,
-                          backgroundColor: const Color(0xff3a3c46),
+                          backgroundColor: context.deltiecord.elevated,
                           backgroundImage: message.avatarBytes == null
                               ? null
                               : MemoryImage(message.avatarBytes!),

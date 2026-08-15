@@ -72,8 +72,8 @@ class _LinkPreviewCard extends StatelessWidget {
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: const Color(0xff292a30),
-              border: Border.all(color: const Color(0xff3b3d46)),
+              color: context.deltiecord.elevated,
+              border: Border.all(color: context.deltiecord.divider),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Column(
@@ -103,8 +103,8 @@ class _LinkPreviewCard extends StatelessWidget {
                     children: [
                       Text(
                         preview.siteName ?? preview.url.host,
-                        style: const TextStyle(
-                          color: Color(0xffa7a9b4),
+                        style: TextStyle(
+                          color: context.deltiecord.muted,
                           fontSize: 11,
                         ),
                       ),
@@ -114,8 +114,8 @@ class _LinkPreviewCard extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xffb8bfff),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -338,7 +338,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
           width: 208,
           height: 116,
           child: Material(
-            color: const Color(0xff17181c),
+            color: context.deltiecord.input,
             borderRadius: BorderRadius.circular(5),
             child: InkWell(
               onTap: () => setState(() => _revealed = true),
@@ -537,8 +537,8 @@ class _FileTile extends StatelessWidget {
     constraints: const BoxConstraints(maxWidth: 460),
     padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
     decoration: BoxDecoration(
-      color: const Color(0xff292a30),
-      border: Border.all(color: const Color(0xff3b3d45)),
+      color: context.deltiecord.elevated,
+      border: Border.all(color: context.deltiecord.divider),
       borderRadius: BorderRadius.circular(5),
     ),
     child: Row(
@@ -556,7 +556,7 @@ class _FileTile extends StatelessWidget {
               Text(attachment.name, overflow: TextOverflow.ellipsis),
               Text(
                 error ?? _fileDetails(attachment),
-                style: const TextStyle(fontSize: 11, color: Color(0xff989aa5)),
+                style: TextStyle(fontSize: 11, color: context.deltiecord.muted),
               ),
             ],
           ),
@@ -1069,8 +1069,8 @@ class _InlineAudioState extends State<_InlineAudio> {
     constraints: const BoxConstraints(maxWidth: 460),
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
     decoration: BoxDecoration(
-      color: const Color(0xff292a30),
-      border: Border.all(color: const Color(0xff3b3d45)),
+      color: context.deltiecord.elevated,
+      border: Border.all(color: context.deltiecord.divider),
       borderRadius: BorderRadius.circular(5),
     ),
     child: StreamBuilder<bool>(

@@ -160,11 +160,12 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _returnToPresent() async {
-    if (!widget.backend.atTimelinePresent) {
-      await widget.backend.jumpToPresent();
-      if (!mounted) return;
-      await WidgetsBinding.instance.endOfFrame;
-    }
+    // Reconstruct the recent timeline even when the button was triggered only
+    // by local scrolling. This prevents a pruned/stale recent window from
+    // masquerading as the current room state.
+    await widget.backend.jumpToPresent();
+    if (!mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
     if (_scrollController.hasClients) {
       await _scrollController.animateTo(
         0,
@@ -434,10 +435,10 @@ class _ConversationState extends State<_Conversation> {
                   height: 56,
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   alignment: Alignment.centerLeft,
-                  decoration: const BoxDecoration(
-                    color: Color(0xff292a30),
+                  decoration: BoxDecoration(
+                    color: context.deltiecord.surface,
                     border: Border(
-                      bottom: BorderSide(color: Color(0xff35363d)),
+                      bottom: BorderSide(color: context.deltiecord.divider),
                     ),
                   ),
                   child: Row(
@@ -461,9 +462,9 @@ class _ConversationState extends State<_Conversation> {
                                 room.topic,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  color: Color(0xff989aa5),
+                                  color: context.deltiecord.muted,
                                 ),
                               ),
                           ],
@@ -471,9 +472,9 @@ class _ConversationState extends State<_Conversation> {
                       ),
                       Text(
                         '${backend.selectedRoomMembers.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xff989aa5),
+                          color: context.deltiecord.muted,
                         ),
                       ),
                       if (backend.firstUnreadMessageId != null)
@@ -762,12 +763,18 @@ class _ConversationState extends State<_Conversation> {
                                   horizontal: 8,
                                 ),
                                 alignment: Alignment.centerLeft,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xff202126),
+                                decoration: BoxDecoration(
+                                  color: context.deltiecord.panel,
                                   border: Border(
-                                    top: BorderSide(color: Color(0xff35363d)),
-                                    left: BorderSide(color: Color(0xff35363d)),
-                                    right: BorderSide(color: Color(0xff35363d)),
+                                    top: BorderSide(
+                                      color: context.deltiecord.divider,
+                                    ),
+                                    left: BorderSide(
+                                      color: context.deltiecord.divider,
+                                    ),
+                                    right: BorderSide(
+                                      color: context.deltiecord.divider,
+                                    ),
                                   ),
                                 ),
                                 child: Text(
@@ -776,9 +783,9 @@ class _ConversationState extends State<_Conversation> {
                                       : _typingLabel(backend.typingUserNames),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
-                                    color: Color(0xffa7a9b4),
+                                    color: context.deltiecord.muted,
                                   ),
                                 ),
                               ),
@@ -804,8 +811,10 @@ class _ConversationState extends State<_Conversation> {
                         vertical: 16,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xff24252b),
-                        border: Border.all(color: const Color(0xff858cff)),
+                        color: context.deltiecord.elevated,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                       child: const Text('Drop files to attach'),
                     ),

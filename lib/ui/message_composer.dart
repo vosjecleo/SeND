@@ -57,10 +57,10 @@ class _MentionPicker extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 14),
     child: Material(
-      color: const Color(0xff202126),
-      shape: const RoundedRectangleBorder(
-        side: BorderSide(color: Color(0xff4a4c56)),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
+      color: context.deltiecord.surface,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: context.deltiecord.divider),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
@@ -73,7 +73,7 @@ class _MentionPicker extends StatelessWidget {
             return ListTile(
               dense: true,
               selected: index == selectedIndex,
-              selectedTileColor: const Color(0xff34374b),
+              selectedTileColor: context.deltiecord.hover,
               title: Text(suggestion.displayName),
               subtitle: Text(suggestion.isRoom ? 'Room' : suggestion.matrixId),
               onTap: () => onSelected(suggestion.matrixId),
@@ -216,8 +216,8 @@ class _RichComposerState extends State<_RichComposer> {
             child: Container(
               margin: const EdgeInsets.only(left: 56, right: 48),
               decoration: BoxDecoration(
-                color: const Color(0xff1c1d22),
-                border: Border.all(color: const Color(0xff555762)),
+                color: context.deltiecord.surface,
+                border: Border.all(color: context.deltiecord.divider),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -227,7 +227,7 @@ class _RichComposerState extends State<_RichComposer> {
                       onTap: () => _acceptEmoji(_emojiMatches[index]),
                       child: Container(
                         color: index == _emojiSelection
-                            ? const Color(0xff34374b)
+                            ? context.deltiecord.hover
                             : null,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 9,
@@ -301,7 +301,8 @@ class _RichComposerState extends State<_RichComposer> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xff777985)),
+                    color: context.deltiecord.input,
+                    border: Border.all(color: context.deltiecord.divider),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Column(
@@ -546,11 +547,11 @@ class _PendingAttachmentTile extends StatelessWidget {
           height: 68,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xff292a30),
+            color: context.deltiecord.elevated,
             border: Border.all(
               color: attachment.spoiler
-                  ? const Color(0xff747fdb)
-                  : const Color(0xff484a53),
+                  ? Theme.of(context).colorScheme.primary
+                  : context.deltiecord.divider,
             ),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -622,7 +623,7 @@ class _ComposerContext extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    color: const Color(0xff202126),
+    color: context.deltiecord.surface,
     padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
     child: Row(
       children: [

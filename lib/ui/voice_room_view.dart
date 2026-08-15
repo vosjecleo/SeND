@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'deltiecord_theme.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({required this.backend, required this.room, super.key});
@@ -121,9 +122,9 @@ class _VoiceHeader extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 56,
     padding: const EdgeInsets.symmetric(horizontal: 18),
-    decoration: const BoxDecoration(
-      color: Color(0xff292a30),
-      border: Border(bottom: BorderSide(color: Color(0xff35363d))),
+    decoration: BoxDecoration(
+      color: context.deltiecord.surface,
+      border: Border(bottom: BorderSide(color: context.deltiecord.divider)),
     ),
     child: Row(
       children: [
@@ -377,9 +378,9 @@ class _VoiceBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(
-      color: Color(0xff202126),
-      border: Border(top: BorderSide(color: Color(0xff35363d))),
+    decoration: BoxDecoration(
+      color: context.deltiecord.panel,
+      border: Border(top: BorderSide(color: context.deltiecord.divider)),
     ),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     child: Wrap(
@@ -544,11 +545,11 @@ class _RtcAvatarTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.all(2),
     decoration: BoxDecoration(
-      color: const Color(0xff18191d),
+      color: context.deltiecord.input,
       border: Border.all(
         color: participant.speaking
             ? const Color(0xff76d49b)
-            : const Color(0xff3b3d46),
+            : context.deltiecord.divider,
         width: participant.speaking ? 2 : 1,
       ),
     ),
@@ -646,7 +647,7 @@ class _RtcVideoTileState extends State<_RtcVideoTile> {
         border: Border.all(
           color: widget.speaking
               ? const Color(0xff76d49b)
-              : const Color(0xff3b3d46),
+              : context.deltiecord.divider,
           width: widget.speaking ? 2 : 1,
         ),
       ),
