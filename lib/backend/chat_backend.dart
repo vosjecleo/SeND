@@ -36,6 +36,8 @@ abstract class ChatBackend extends ChangeNotifier {
   String? get voiceError;
   List<AudioInputSummary> get audioInputs;
   String? get selectedAudioInputId;
+  List<DeviceSessionSummary> get deviceSessions;
+  bool get devicesLoading;
 
   Future<void> initialize();
   Future<void> login({
@@ -61,6 +63,7 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> renameRoom(String roomId, String name);
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);
+  Future<void> refreshDevices();
   Future<void> joinVoiceRoom(String roomId);
   Future<void> leaveVoiceRoom();
   Future<void> setVoiceMuted(bool muted);

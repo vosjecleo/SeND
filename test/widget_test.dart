@@ -77,6 +77,26 @@ void main() {
     expect(find.text('Matrix ID'), findsOneWidget);
   });
 
+  testWidgets('shows SDK-independent Matrix device sessions', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..deviceList = const [
+        DeviceSessionSummary(
+          id: 'TESTDEVICE',
+          displayName: 'Deltiecord Desktop',
+          current: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Devices'));
+    await tester.pump();
+
+    expect(find.text('Deltiecord Desktop (this device)'), findsOneWidget);
+    expect(find.textContaining('TESTDEVICE'), findsOneWidget);
+  });
+
   testWidgets('selects a Matrix Space from the server bar', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
@@ -492,6 +512,7 @@ class FakeBackend extends ChatBackend {
   List<SpaceSummary> spaceList = const [];
   String? currentSpaceId;
   List<ChatMessage> messageList = const [];
+  List<DeviceSessionSummary> deviceList = const [];
   List<MentionSuggestion> mentionList = const [];
   bool moreHistory = false;
   int historyRequests = 0;
@@ -565,6 +586,10 @@ class FakeBackend extends ChatBackend {
   @override
   String? get selectedAudioInputId => null;
   @override
+  List<DeviceSessionSummary> get deviceSessions => deviceList;
+  @override
+  bool get devicesLoading => false;
+  @override
   String? get userId => '@deltie:example.org';
 
   @override
@@ -620,6 +645,8 @@ class FakeBackend extends ChatBackend {
   Future<void> refreshAudioInputs() async {}
   @override
   Future<void> selectAudioInput(String? deviceId) async {}
+  @override
+  Future<void> refreshDevices() async {}
   @override
   Future<void> joinVoiceRoom(String roomId) async {}
   @override

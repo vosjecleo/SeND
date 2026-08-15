@@ -43,6 +43,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   ChatBackend get backend => widget.backend;
 
   @override
+  void initState() {
+    super.initState();
+    backend.refreshAudioInputs();
+    backend.refreshDevices();
+  }
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: backend,
     builder: (context, _) => Scaffold(
@@ -101,14 +108,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         label: const Text('Log out'),
       ),
     ]),
-    _SettingsPage.devices => _section('Devices', [
-      _value('This device', 'Deltiecord Desktop'),
-      _value('Device ID', backend.deviceId ?? 'Unavailable'),
-      const Text(
-        'Full device-session management will gain permission-aware removal '
-        'controls during v0.5. Encryption verification is available now.',
-      ),
-    ]),
+    _SettingsPage.devices => _devices(),
     _SettingsPage.encryption => _section('Encryption & recovery', [
       _value('Status', _encryptionLabel(backend.encryptionSetup.status)),
       _value(
@@ -287,6 +287,54 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]);
   }
 
+  Widget _devices() => _section('Devices', [
+    Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Matrix sessions currently associated with this account.',
+          ),
+        ),
+        IconButton(
+          tooltip: 'Refresh devices',
+          onPressed: backend.devicesLoading ? null : backend.refreshDevices,
+          icon: backend.devicesLoading
+              ? const SizedBox.square(
+                  dimension: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh),
+        ),
+      ],
+    ),
+    if (!backend.devicesLoading && backend.deviceSessions.isEmpty)
+      const Text('No device information is available.')
+    else
+      for (final device in backend.deviceSessions)
+        Card(
+          child: ListTile(
+            leading: Icon(
+              device.current ? Icons.computer : Icons.devices_other,
+            ),
+            title: Text(
+              '${device.displayName}${device.current ? ' (this device)' : ''}',
+            ),
+            subtitle: Text(
+              [
+                device.id,
+                if (device.lastSeenAt != null)
+                  'Last seen ${_formatDeviceTime(device.lastSeenAt!)}',
+                if (device.lastSeenIp != null) device.lastSeenIp!,
+              ].join(' · '),
+            ),
+          ),
+        ),
+    const Text(
+      'Session removal requires interactive Matrix authentication and will be '
+      'added with the permission-aware management pass in v0.5.',
+    ),
+  ]);
+
   Widget _accessibility() {
     final preferences = backend.preferences;
     return _section('Accessibility', [
@@ -374,3 +422,10 @@ String _encryptionLabel(EncryptionSetupStatus status) => switch (status) {
   EncryptionSetupStatus.unavailable => 'Unavailable',
   EncryptionSetupStatus.error => 'Error',
 };
+
+String _formatDeviceTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} '
+      '${two(local.hour)}:${two(local.minute)}';
+}

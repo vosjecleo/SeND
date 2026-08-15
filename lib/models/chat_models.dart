@@ -103,6 +103,22 @@ class AudioInputSummary {
   final String label;
 }
 
+class DeviceSessionSummary {
+  const DeviceSessionSummary({
+    required this.id,
+    required this.displayName,
+    required this.current,
+    this.lastSeenAt,
+    this.lastSeenIp,
+  });
+
+  final String id;
+  final String displayName;
+  final bool current;
+  final DateTime? lastSeenAt;
+  final String? lastSeenIp;
+}
+
 enum UserPresence { online, away, offline }
 
 class RoomMemberSummary {

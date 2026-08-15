@@ -75,6 +75,8 @@ class MatrixBackend extends ChatBackend {
   bool _notificationPreviewsEnabled = true;
   AppPreferences _preferences = const AppPreferences();
   int? _maximumUploadBytes;
+  List<DeviceSessionSummary> _deviceSessions = const [];
+  bool _devicesLoading = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -133,6 +135,10 @@ class MatrixBackend extends ChatBackend {
   List<AudioInputSummary> get audioInputs => _voice?.audioInputs ?? const [];
   @override
   String? get selectedAudioInputId => _voice?.selectedAudioInputId;
+  @override
+  List<DeviceSessionSummary> get deviceSessions => _deviceSessions;
+  @override
+  bool get devicesLoading => _devicesLoading;
   @override
   List<MentionSuggestion> get mentionSuggestions {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
@@ -296,6 +302,9 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> selectAudioInput(String? deviceId) =>
       _selectAudioInput(deviceId);
+
+  @override
+  Future<void> refreshDevices() => _refreshDevices();
 
   @override
   Future<void> joinVoiceRoom(String roomId) => _joinVoiceRoom(roomId);

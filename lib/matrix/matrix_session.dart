@@ -108,6 +108,7 @@ extension _MatrixSession on MatrixBackend {
       _notificationsPrimed = false;
       _maximumUploadBytes = null;
       _mediaPlaybackSources.clear();
+      _deviceSessions = const [];
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
@@ -140,6 +141,43 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _selectAudioInput(String? deviceId) async =>
       _voice?.selectAudioInput(deviceId);
+
+  Future<void> _refreshDevices() async {
+    if (!_matrix.isLogged() || _devicesLoading) return;
+    _devicesLoading = true;
+    _notifyBackendListeners();
+    try {
+      final devices = await _matrix.getDevices() ?? const [];
+      _deviceSessions =
+          devices
+              .map(
+                (device) => DeviceSessionSummary(
+                  id: device.deviceId,
+                  displayName: device.displayName?.trim().isNotEmpty == true
+                      ? device.displayName!.trim()
+                      : 'Unnamed Matrix device',
+                  current: device.deviceId == _matrix.deviceID,
+                  lastSeenAt: device.lastSeenTs == null
+                      ? null
+                      : DateTime.fromMillisecondsSinceEpoch(device.lastSeenTs!),
+                  lastSeenIp: device.lastSeenIp,
+                ),
+              )
+              .toList(growable: false)
+            ..sort((a, b) {
+              if (a.current != b.current) return a.current ? -1 : 1;
+              return (b.lastSeenAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                  .compareTo(
+                    a.lastSeenAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                  );
+            });
+    } catch (exception) {
+      _error = _friendlyError(exception);
+    } finally {
+      _devicesLoading = false;
+      _notifyBackendListeners();
+    }
+  }
 
   Future<void> _joinVoiceRoom(String roomId) async {
     _initializeVoice();
