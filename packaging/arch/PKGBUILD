@@ -28,5 +28,5 @@ package() {
   install -Dm644 packaging/linux/net.deltie.deltiecord.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/net.deltie.deltiecord.svg"
   install -Dm644 packaging/linux/net.deltie.deltiecord.metainfo.xml \
-    "$pkgdir/usr/share/metainfo/net.deltie.deltiecord.metainfo.xml"
+    "$pkgdir/usr/share/metainfo/net.deltie.deltiecord.appdata.xml"
 }

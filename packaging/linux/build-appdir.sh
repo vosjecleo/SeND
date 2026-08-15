@@ -15,7 +15,7 @@ ln -s ../lib/deltiecord/deltiecord "$appdir/usr/bin/deltiecord"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.desktop" \
   "$appdir/usr/share/applications/net.deltie.deltiecord.desktop"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.metainfo.xml" \
-  "$appdir/usr/share/metainfo/net.deltie.deltiecord.metainfo.xml"
+  "$appdir/usr/share/metainfo/net.deltie.deltiecord.appdata.xml"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.svg" \
   "$appdir/usr/share/icons/hicolor/scalable/apps/net.deltie.deltiecord.svg"
 ln -s usr/share/applications/net.deltie.deltiecord.desktop "$appdir/net.deltie.deltiecord.desktop"
