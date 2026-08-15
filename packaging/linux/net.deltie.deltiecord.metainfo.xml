@@ -20,6 +20,11 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.4" date="2026-08-16" type="development">
+      <description>
+        <p>Compact, vertically ranked emoji completion popup.</p>
+      </description>
+    </release>
     <release version="0.9.3" date="2026-08-16" type="development">
       <description>
         <p>Profile image cropping and compact messaging presentation fixes.</p>

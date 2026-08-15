@@ -850,6 +850,27 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('😭', skipOffstage: false), findsOneWidget);
+    final popup = find.byKey(
+      const Key('emoji-completion-popup'),
+      skipOffstage: false,
+    );
+    expect(tester.getSize(popup).width, 280);
+    expect(tester.getSize(popup).height, lessThan(150));
+    if (find
+        .byKey(const Key('emoji-completion-result-1'))
+        .evaluate()
+        .isNotEmpty) {
+      expect(
+        tester
+            .getTopLeft(find.byKey(const Key('emoji-completion-result-0')))
+            .dy,
+        greaterThan(
+          tester
+              .getTopLeft(find.byKey(const Key('emoji-completion-result-1')))
+              .dy,
+        ),
+      );
+    }
     expect(tester.getSize(composer).height, initialHeight);
   });
 

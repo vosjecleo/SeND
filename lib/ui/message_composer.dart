@@ -239,35 +239,51 @@ class _RichComposerState extends State<_RichComposer> {
         targetAnchor: Alignment.topLeft,
         followerAnchor: Alignment.bottomLeft,
         offset: const Offset(56, -4),
-        child: Material(
-          key: const Key('emoji-completion-popup'),
-          elevation: 8,
-          color: context.deltiecord.surface,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: context.deltiecord.divider),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < _emojiMatches.length; index++)
-                InkWell(
-                  onTap: () => _acceptEmoji(_emojiMatches[index]),
-                  child: Container(
-                    color: index == _emojiSelection
-                        ? context.deltiecord.hover
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 7,
+        child: UnconstrainedBox(
+          alignment: Alignment.bottomLeft,
+          child: SizedBox(
+            width: 280,
+            child: Material(
+              key: const Key('emoji-completion-popup'),
+              elevation: 8,
+              color: context.deltiecord.surface,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: context.deltiecord.divider),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // The strongest match sits nearest the input so accepting
+                  // the default result feels spatially connected to typing.
+                  for (
+                    var index = _emojiMatches.length - 1;
+                    index >= 0;
+                    index--
+                  )
+                    InkWell(
+                      key: Key('emoji-completion-result-$index'),
+                      onTap: () => _acceptEmoji(_emojiMatches[index]),
+                      child: Container(
+                        color: index == _emojiSelection
+                            ? context.deltiecord.hover
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        child: Text(
+                          '${_emojiMatches[index].emoji}  :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      '${_emojiMatches[index].emoji} :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
-                    ),
-                  ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
