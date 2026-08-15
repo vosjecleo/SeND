@@ -168,6 +168,35 @@ void main() {
     expect(find.byType(QuillEditor), findsNothing);
   });
 
+  testWidgets('exposes connected MatrixRTC media controls', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:example.org'
+      ..currentVoiceStatus = VoiceConnectionStatus.connected
+      ..currentActiveVoiceId = '!voice:example.org'
+      ..roomList = const [
+        RoomSummary(
+          id: '!voice:example.org',
+          name: 'Lounge',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+          presentation: RoomPresentation.voice,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Lounge'));
+    await tester.pump();
+
+    expect(find.text('Mute'), findsOneWidget);
+    expect(find.text('Deafen'), findsOneWidget);
+    expect(find.text('Camera on'), findsOneWidget);
+    expect(find.text('Share'), findsOneWidget);
+    await tester.tap(find.text('Deafen'));
+    await tester.pump();
+    expect(backend.deafened, isTrue);
+  });
+
   testWidgets('prompts an unverified device for recovery', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
@@ -542,6 +571,9 @@ class FakeBackend extends ChatBackend {
   List<DeviceSessionSummary> deviceList = const [];
   List<MentionSuggestion> mentionList = const [];
   bool moreHistory = false;
+  VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
+  String? currentActiveVoiceId;
+  bool deafened = false;
   int historyRequests = 0;
   final List<String> sentMessages = [];
   final List<String> redactedMessageIds = [];
@@ -616,18 +648,35 @@ class FakeBackend extends ChatBackend {
   @override
   String? get firstUnreadMessageId => null;
   @override
-  VoiceConnectionStatus get voiceConnectionStatus =>
-      VoiceConnectionStatus.disconnected;
+  VoiceConnectionStatus get voiceConnectionStatus => currentVoiceStatus;
   @override
-  String? get activeVoiceRoomId => null;
+  String? get activeVoiceRoomId => currentActiveVoiceId;
   @override
   bool get voiceMuted => false;
+  @override
+  bool get voiceDeafened => deafened;
+  @override
+  bool get voiceCameraEnabled => false;
+  @override
+  bool get voiceScreenSharing => false;
+  @override
+  double get voiceInputLevel => 0;
   @override
   String? get voiceError => null;
   @override
   List<AudioInputSummary> get audioInputs => const [];
   @override
   String? get selectedAudioInputId => null;
+  @override
+  List<RtcDeviceSummary> get audioOutputs => const [];
+  @override
+  String? get selectedAudioOutputId => null;
+  @override
+  List<RtcDeviceSummary> get cameras => const [];
+  @override
+  String? get selectedCameraId => null;
+  @override
+  List<RtcMediaStreamSummary> get rtcMediaStreams => const [];
   @override
   List<DeviceSessionSummary> get deviceSessions => deviceList;
   @override
@@ -722,6 +771,10 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> selectAudioInput(String? deviceId) async {}
   @override
+  Future<void> selectAudioOutput(String? deviceId) async {}
+  @override
+  Future<void> selectCamera(String? deviceId) async {}
+  @override
   Future<void> refreshDevices() async {}
   @override
   Future<void> refreshProfile() async {}
@@ -747,6 +800,20 @@ class FakeBackend extends ChatBackend {
   Future<void> leaveVoiceRoom() async {}
   @override
   Future<void> setVoiceMuted(bool muted) async {}
+  @override
+  Future<void> setVoiceDeafened(bool value) async {
+    deafened = value;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setVoiceCameraEnabled(bool enabled) async {}
+  @override
+  Future<void> setVoiceScreenSharing(bool enabled) async {}
+  @override
+  Future<void> setParticipantVolume(String userId, double volume) async {}
+  @override
+  Future<void> setParticipantLocallyMuted(String userId, bool muted) async {}
   @override
   Future<void> setComposerTyping(bool typing) async {}
   @override

@@ -437,6 +437,8 @@ class _ChatShellState extends State<ChatShell> {
           showDeltiecordSettings(context, widget.backend),
       AppShortcutAction.toggleMicrophone: () =>
           widget.backend.setVoiceMuted(!widget.backend.voiceMuted),
+      AppShortcutAction.toggleDeafen: () =>
+          widget.backend.setVoiceDeafened(!widget.backend.voiceDeafened),
       AppShortcutAction.disconnectVoice: widget.backend.leaveVoiceRoom,
       AppShortcutAction.openGifPicker: _showGifPicker,
       AppShortcutAction.openEmojiPicker: () =>
@@ -492,7 +494,9 @@ class _ChatShellState extends State<ChatShell> {
                         Expanded(
                           child: widget.backend.selectedRoom == null
                               ? const _EmptyConversation()
-                              : widget.backend.selectedRoom!.isVoice
+                              : widget.backend.selectedRoom!.isVoice ||
+                                    widget.backend.activeVoiceRoomId ==
+                                        widget.backend.selectedRoom!.id
                               ? VoiceRoomView(
                                   backend: widget.backend,
                                   room: widget.backend.selectedRoom!,

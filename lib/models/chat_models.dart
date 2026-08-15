@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:webrtc_interface/webrtc_interface.dart';
+
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
 enum ConnectionStatus { connecting, online, reconnecting, offline }
@@ -54,6 +56,10 @@ class AppPreferences {
     this.readReceiptMemberThreshold = 10,
     this.timelineChunkSize = 30,
     this.timelineChunkCap = 3,
+    this.preferredAudioInputId = '',
+    this.preferredAudioOutputId = '',
+    this.preferredCameraId = '',
+    this.participantVolumes = const {},
   });
 
   final InterfaceDensity density;
@@ -76,6 +82,10 @@ class AppPreferences {
   final int readReceiptMemberThreshold;
   final int timelineChunkSize;
   final int timelineChunkCap;
+  final String preferredAudioInputId;
+  final String preferredAudioOutputId;
+  final String preferredCameraId;
+  final Map<String, double> participantVolumes;
 
   AppPreferences copyWith({
     InterfaceDensity? density,
@@ -98,6 +108,10 @@ class AppPreferences {
     int? readReceiptMemberThreshold,
     int? timelineChunkSize,
     int? timelineChunkCap,
+    String? preferredAudioInputId,
+    String? preferredAudioOutputId,
+    String? preferredCameraId,
+    Map<String, double>? participantVolumes,
   }) => AppPreferences(
     density: density ?? this.density,
     fontScale: fontScale ?? this.fontScale,
@@ -121,6 +135,11 @@ class AppPreferences {
         readReceiptMemberThreshold ?? this.readReceiptMemberThreshold,
     timelineChunkSize: timelineChunkSize ?? this.timelineChunkSize,
     timelineChunkCap: timelineChunkCap ?? this.timelineChunkCap,
+    preferredAudioInputId: preferredAudioInputId ?? this.preferredAudioInputId,
+    preferredAudioOutputId:
+        preferredAudioOutputId ?? this.preferredAudioOutputId,
+    preferredCameraId: preferredCameraId ?? this.preferredCameraId,
+    participantVolumes: participantVolumes ?? this.participantVolumes,
   );
 }
 
@@ -177,6 +196,33 @@ class AudioInputSummary {
 
   final String id;
   final String label;
+}
+
+class RtcDeviceSummary {
+  const RtcDeviceSummary({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+class RtcMediaStreamSummary {
+  const RtcMediaStreamSummary({
+    required this.id,
+    required this.userId,
+    required this.displayName,
+    required this.stream,
+    required this.local,
+    required this.screenShare,
+    required this.videoMuted,
+  });
+
+  final String id;
+  final String userId;
+  final String displayName;
+  final MediaStream stream;
+  final bool local;
+  final bool screenShare;
+  final bool videoMuted;
 }
 
 class DeviceSessionSummary {
@@ -249,12 +295,16 @@ class VoiceParticipantSummary {
     required this.displayName,
     this.avatarBytes,
     this.speaking = false,
+    this.localVolume = 1,
+    this.locallyMuted = false,
   });
 
   final String userId;
   final String displayName;
   final Uint8List? avatarBytes;
   final bool speaking;
+  final double localVolume;
+  final bool locallyMuted;
 }
 
 class RoomSummary {

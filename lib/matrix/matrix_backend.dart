@@ -150,11 +150,30 @@ class MatrixBackend extends ChatBackend {
   @override
   bool get voiceMuted => _voice?.muted ?? false;
   @override
+  bool get voiceDeafened => _voice?.deafened ?? false;
+  @override
+  bool get voiceCameraEnabled => _voice?.cameraEnabled ?? false;
+  @override
+  bool get voiceScreenSharing => _voice?.screenSharing ?? false;
+  @override
+  double get voiceInputLevel => _voice?.inputLevel ?? 0;
+  @override
   String? get voiceError => _voice?.error;
   @override
   List<AudioInputSummary> get audioInputs => _voice?.audioInputs ?? const [];
   @override
   String? get selectedAudioInputId => _voice?.selectedAudioInputId;
+  @override
+  List<RtcDeviceSummary> get audioOutputs => _voice?.audioOutputs ?? const [];
+  @override
+  String? get selectedAudioOutputId => _voice?.selectedAudioOutputId;
+  @override
+  List<RtcDeviceSummary> get cameras => _voice?.cameras ?? const [];
+  @override
+  String? get selectedCameraId => _voice?.selectedCameraId;
+  @override
+  List<RtcMediaStreamSummary> get rtcMediaStreams =>
+      _voice?.mediaStreams ?? const [];
   @override
   List<DeviceSessionSummary> get deviceSessions => _deviceSessions;
   @override
@@ -340,6 +359,14 @@ class MatrixBackend extends ChatBackend {
       _selectAudioInput(deviceId);
 
   @override
+  Future<void> selectAudioOutput(String? deviceId) =>
+      _selectAudioOutputAndRemember(deviceId);
+
+  @override
+  Future<void> selectCamera(String? deviceId) =>
+      _selectCameraAndRemember(deviceId);
+
+  @override
   Future<void> refreshDevices() => _refreshDevices();
 
   @override
@@ -368,6 +395,26 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> setVoiceMuted(bool muted) => _setVoiceMuted(muted);
+
+  @override
+  Future<void> setVoiceDeafened(bool deafened) =>
+      _voice?.setDeafened(deafened) ?? Future.value();
+
+  @override
+  Future<void> setVoiceCameraEnabled(bool enabled) =>
+      _voice?.setCameraEnabled(enabled) ?? Future.value();
+
+  @override
+  Future<void> setVoiceScreenSharing(bool enabled) =>
+      _voice?.setScreenSharing(enabled) ?? Future.value();
+
+  @override
+  Future<void> setParticipantVolume(String userId, double volume) =>
+      _setParticipantVolumeAndRemember(userId, volume);
+
+  @override
+  Future<void> setParticipantLocallyMuted(String userId, bool muted) =>
+      _voice?.setParticipantLocallyMuted(userId, muted) ?? Future.value();
 
   @override
   Future<void> leaveVoiceRoom() => _leaveVoiceRoom();

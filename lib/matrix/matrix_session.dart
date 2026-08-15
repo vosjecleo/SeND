@@ -150,8 +150,42 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _refreshAudioInputs() async => _voice?.refreshAudioInputs();
 
-  Future<void> _selectAudioInput(String? deviceId) async =>
-      _voice?.selectAudioInput(deviceId);
+  Future<void> _selectAudioInput(String? deviceId) async {
+    await _voice?.selectAudioInput(deviceId);
+    await _updatePreferences(
+      _preferences.copyWith(preferredAudioInputId: deviceId ?? ''),
+    );
+  }
+
+  Future<void> _selectAudioOutputAndRemember(String? deviceId) async {
+    await _voice?.selectAudioOutput(deviceId);
+    await _updatePreferences(
+      _preferences.copyWith(preferredAudioOutputId: deviceId ?? ''),
+    );
+  }
+
+  Future<void> _selectCameraAndRemember(String? deviceId) async {
+    await _voice?.selectCamera(deviceId);
+    await _updatePreferences(
+      _preferences.copyWith(preferredCameraId: deviceId ?? ''),
+    );
+  }
+
+  Future<void> _setParticipantVolumeAndRemember(
+    String userId,
+    double volume,
+  ) async {
+    final normalized = volume.clamp(0.0, 1.0).toDouble();
+    await _voice?.setParticipantVolume(userId, normalized);
+    await _updatePreferences(
+      _preferences.copyWith(
+        participantVolumes: {
+          ..._preferences.participantVolumes,
+          userId: normalized,
+        },
+      ),
+    );
+  }
 
   Future<void> _refreshDevices() async {
     if (!_matrix.isLogged() || _devicesLoading) return;
@@ -439,7 +473,23 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<int>('receipt_member_threshold') ?? 10,
       timelineChunkSize: content?.tryGet<int>('timeline_chunk_size') ?? 30,
       timelineChunkCap: content?.tryGet<int>('timeline_chunk_cap') ?? 3,
+      preferredAudioInputId:
+          content?.tryGet<String>('preferred_audio_input') ?? '',
+      preferredAudioOutputId:
+          content?.tryGet<String>('preferred_audio_output') ?? '',
+      preferredCameraId: content?.tryGet<String>('preferred_camera') ?? '',
+      participantVolumes:
+          content
+              ?.tryGetMap<String, Object?>('participant_volumes')
+              ?.map(
+                (userId, volume) => MapEntry(
+                  userId,
+                  volume is num ? volume.toDouble().clamp(0, 1) : 1,
+                ),
+              ) ??
+          const {},
     );
+    _voice?.applyPreferences(_preferences);
   }
 
   Map<AppShortcutAction, String> _shortcutBindingsFrom(
@@ -514,6 +564,10 @@ extension _MatrixSession on MatrixBackend {
           'receipt_member_threshold': preferences.readReceiptMemberThreshold,
           'timeline_chunk_size': preferences.timelineChunkSize,
           'timeline_chunk_cap': preferences.timelineChunkCap,
+          'preferred_audio_input': preferences.preferredAudioInputId,
+          'preferred_audio_output': preferences.preferredAudioOutputId,
+          'preferred_camera': preferences.preferredCameraId,
+          'participant_volumes': preferences.participantVolumes,
         },
       );
       if (identical(_pendingPreferences, preferences)) {

@@ -169,8 +169,42 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ],
       ),
+      if (backend.audioOutputs.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String?>(
+          initialValue: backend.selectedAudioOutputId,
+          decoration: const InputDecoration(
+            labelText: 'Audio output',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('System default')),
+            for (final output in backend.audioOutputs)
+              DropdownMenuItem(value: output.id, child: Text(output.label)),
+          ],
+          onChanged: backend.selectAudioOutput,
+        ),
+      ],
+      if (backend.cameras.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String?>(
+          initialValue: backend.selectedCameraId,
+          decoration: const InputDecoration(
+            labelText: 'Camera',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('System default')),
+            for (final camera in backend.cameras)
+              DropdownMenuItem(value: camera.id, child: Text(camera.label)),
+          ],
+          onChanged: backend.selectCamera,
+        ),
+      ],
       const SizedBox(height: 12),
-      const Text('Camera controls appear when video calling is enabled.'),
+      const Text(
+        'Screen selection uses the standard desktop portal on Linux/Wayland.',
+      ),
     ]),
     _SettingsPage.notifications => _section('Notifications', [
       SwitchListTile(

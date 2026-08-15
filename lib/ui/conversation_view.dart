@@ -424,6 +424,11 @@ class _ConversationState extends State<_Conversation> {
                         icon: const Icon(Icons.people_outline, size: 20),
                       ),
                       IconButton(
+                        tooltip: 'Start MatrixRTC call',
+                        onPressed: () => backend.joinVoiceRoom(room.id),
+                        icon: const Icon(Icons.video_call_outlined, size: 20),
+                      ),
+                      IconButton(
                         tooltip: 'Copy room link',
                         onPressed: () => Clipboard.setData(
                           ClipboardData(text: 'https://matrix.to/#/${room.id}'),
