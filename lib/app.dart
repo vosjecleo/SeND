@@ -25,6 +25,11 @@ class DeltiecordApp extends StatelessWidget {
           );
         }
         final contrast = preferences.highContrast;
+        final colorScheme = ColorScheme.fromSeed(
+          seedColor: Color(preferences.accentColor),
+          brightness: Brightness.dark,
+          contrastLevel: contrast ? 1 : 0,
+        );
         return MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
@@ -36,11 +41,8 @@ class DeltiecordApp extends StatelessWidget {
           ],
           theme: ThemeData(
             brightness: Brightness.dark,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Color(preferences.accentColor),
-              brightness: Brightness.dark,
-              contrastLevel: contrast ? 1 : 0,
-            ),
+            colorScheme: colorScheme,
+            iconTheme: IconThemeData(color: colorScheme.primary),
             scaffoldBackgroundColor: const Color(0xff25262c),
             fontFamily: preferences.fontFamily == 'System'
                 ? null

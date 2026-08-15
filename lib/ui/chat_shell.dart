@@ -39,6 +39,11 @@ part 'message_composer.dart';
 part 'message_row.dart';
 part 'message_media.dart';
 
+// The two bottom panels meet across separate widget trees. Keeping their
+// geometry shared prevents one-pixel seams when either side is refactored.
+const double _bottomPanelHeight = 56;
+const double _composerControlHeight = 34;
+
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});
 

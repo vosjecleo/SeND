@@ -55,11 +55,14 @@ class _Conversation extends StatefulWidget {
 }
 
 class _ConversationState extends State<_Conversation> {
+  static const _jumpToPresentScrollThreshold = 360.0;
+
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _messageKeys = {};
   String? _roomId;
   bool _loadingAnchoredHistory = false;
   bool _draggingFiles = false;
+  bool _scrolledAwayFromPresent = false;
   VoidCallback? _dismissMessageActions;
 
   @override
@@ -78,6 +81,11 @@ class _ConversationState extends State<_Conversation> {
 
   void _loadTimelineNearEdges() {
     if (!_scrollController.hasClients) return;
+    final scrolledAway =
+        _scrollController.position.pixels > _jumpToPresentScrollThreshold;
+    if (scrolledAway != _scrolledAwayFromPresent && mounted) {
+      setState(() => _scrolledAwayFromPresent = scrolledAway);
+    }
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 240) {
       _loadOlderAnchored();
@@ -151,12 +159,33 @@ class _ConversationState extends State<_Conversation> {
     await _jumpToEvent(eventId);
   }
 
+  Future<void> _returnToPresent() async {
+    if (!widget.backend.atTimelinePresent) {
+      await widget.backend.jumpToPresent();
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (_scrollController.hasClients) {
+      await _scrollController.animateTo(
+        0,
+        duration: widget.backend.preferences.reducedMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    }
+    if (mounted && _scrolledAwayFromPresent) {
+      setState(() => _scrolledAwayFromPresent = false);
+    }
+  }
+
   @override
   void didUpdateWidget(covariant _Conversation oldWidget) {
     super.didUpdateWidget(oldWidget);
     final roomId = widget.backend.selectedRoom?.id;
     if (_roomId != roomId) {
       _roomId = roomId;
+      _scrolledAwayFromPresent = false;
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
       _focusComposerAfterBuild();
     } else if (oldWidget.sending && !widget.sending) {
@@ -541,6 +570,7 @@ class _ConversationState extends State<_Conversation> {
                             : backend.messages.isEmpty
                             ? const Center(child: Text('No messages yet'))
                             : ListView.builder(
+                                key: const Key('message-timeline'),
                                 controller: _scrollController,
                                 reverse: true,
                                 padding: const EdgeInsets.fromLTRB(
@@ -642,12 +672,13 @@ class _ConversationState extends State<_Conversation> {
                                 },
                               ),
                       ),
-                      if (!backend.atTimelinePresent)
+                      if (!backend.atTimelinePresent ||
+                          _scrolledAwayFromPresent)
                         Positioned(
                           right: 16,
                           bottom: 12,
                           child: FilledButton.tonalIcon(
-                            onPressed: backend.jumpToPresent,
+                            onPressed: _returnToPresent,
                             icon: const Icon(
                               Icons.vertical_align_bottom,
                               size: 17,
@@ -681,35 +712,82 @@ class _ConversationState extends State<_Conversation> {
                     selectedIndex: widget.mentionSelectionIndex,
                     onSelected: widget.onMentionSelected,
                   ),
-                if (backend.typingUserNames.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(68, 2, 12, 0),
-                    child: Text(
-                      _typingLabel(backend.typingUserNames),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xffa7a9b4),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _RichComposer(
+                      key: widget.composerKey,
+                      controller: widget.controller,
+                      focusNode: widget.composerFocus,
+                      roomName: room.name,
+                      enabled: !widget.sending,
+                      sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
+                      onSend: widget.onSend,
+                      onAttach: widget.onAttach,
+                      onGif: widget.onGif,
+                      onPasteImage: widget.onPasteImage,
+                      pendingAttachments: widget.pendingAttachments,
+                      onRemoveAttachment: widget.onRemoveAttachment,
+                      onToggleAttachmentSpoiler:
+                          widget.onToggleAttachmentSpoiler,
+                      mentionSuggestions: widget.mentionSuggestions,
+                      mentionSelectionIndex: widget.mentionSelectionIndex,
+                      onMentionSelected: widget.onMentionSelected,
+                      onMentionSelectionChanged:
+                          widget.onMentionSelectionChanged,
+                    ),
+                    Positioned(
+                      left: 68,
+                      right: 48,
+                      top: -22,
+                      child: IgnorePointer(
+                        child: AnimatedSlide(
+                          duration: backend.preferences.reducedMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 140),
+                          curve: Curves.easeOut,
+                          offset: backend.typingUserNames.isEmpty
+                              ? const Offset(0, 1)
+                              : Offset.zero,
+                          child: AnimatedOpacity(
+                            duration: backend.preferences.reducedMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 100),
+                            opacity: backend.typingUserNames.isEmpty ? 0 : 1,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                height: 22,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                alignment: Alignment.centerLeft,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xff202126),
+                                  border: Border(
+                                    top: BorderSide(color: Color(0xff35363d)),
+                                    left: BorderSide(color: Color(0xff35363d)),
+                                    right: BorderSide(color: Color(0xff35363d)),
+                                  ),
+                                ),
+                                child: Text(
+                                  backend.typingUserNames.isEmpty
+                                      ? ''
+                                      : _typingLabel(backend.typingUserNames),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xffa7a9b4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                _RichComposer(
-                  key: widget.composerKey,
-                  controller: widget.controller,
-                  focusNode: widget.composerFocus,
-                  roomName: room.name,
-                  enabled: !widget.sending,
-                  sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-                  onSend: widget.onSend,
-                  onAttach: widget.onAttach,
-                  onGif: widget.onGif,
-                  onPasteImage: widget.onPasteImage,
-                  pendingAttachments: widget.pendingAttachments,
-                  onRemoveAttachment: widget.onRemoveAttachment,
-                  onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
-                  mentionSuggestions: widget.mentionSuggestions,
-                  mentionSelectionIndex: widget.mentionSelectionIndex,
-                  onMentionSelected: widget.onMentionSelected,
-                  onMentionSelectionChanged: widget.onMentionSelectionChanged,
+                  ],
                 ),
               ],
             ),

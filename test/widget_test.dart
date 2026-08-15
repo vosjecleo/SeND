@@ -681,6 +681,21 @@ void main() {
       ]
       ..messageList = [
         ChatMessage(
+          id: r'$newer-read',
+          sender: 'Deltie',
+          senderId: '@deltie:example.org',
+          body: 'second message in the cluster',
+          timestamp: DateTime(2026, 8, 15, 0, 1),
+          pending: false,
+          own: true,
+          readBy: const [
+            ReceiptReaderSummary(
+              userId: '@alice:example.org',
+              displayName: 'Alice',
+            ),
+          ],
+        ),
+        ChatMessage(
           id: r'$read',
           sender: 'Deltie',
           senderId: '@deltie:example.org',
@@ -702,6 +717,81 @@ void main() {
 
     expect(find.byIcon(Icons.done_all), findsOneWidget);
     expect(find.byTooltip('Read by Alice'), findsOneWidget);
+  });
+
+  testWidgets('bottom panels align and typing does not resize the composer', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!layout:example.org',
+          name: 'layout',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('layout'));
+    await tester.pumpAndSettle();
+
+    final accountPanel = find.byKey(const Key('current-user-panel'));
+    final composerPanel = find.byKey(const Key('message-composer-panel'));
+    expect(
+      tester.getTopLeft(accountPanel).dy,
+      tester.getTopLeft(composerPanel).dy,
+    );
+    final composerTop = tester.getTopLeft(composerPanel).dy;
+
+    backend.setTypingNames(const ['Alice']);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice is typing…'), findsOneWidget);
+    expect(tester.getTopLeft(composerPanel).dy, composerTop);
+  });
+
+  testWidgets('offers jump to present after scrolling away from recent chat', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!history:example.org',
+          name: 'history',
+          lastMessage: 'latest',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ]
+      ..messageList = List.generate(
+        40,
+        (index) => ChatMessage(
+          id: '\$history-$index',
+          sender: index.isEven ? 'Alice' : 'Bob',
+          senderId: index.isEven ? '@alice:example.org' : '@bob:example.org',
+          body: 'Timeline message $index with enough content to fill a row.',
+          timestamp: DateTime(2026, 8, 15, 0, index),
+          pending: false,
+        ),
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('history'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jump to present'), findsNothing);
+    await tester.drag(
+      find.byKey(const Key('message-timeline')),
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jump to present'), findsOneWidget);
+    await tester.tap(find.text('Jump to present'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jump to present'), findsNothing);
   });
 
   testWidgets('opens extensible profile details from a message sender', (
@@ -816,6 +906,7 @@ class FakeBackend extends ChatBackend {
   List<ChatMessage> messageList = const [];
   List<DeviceSessionSummary> deviceList = const [];
   List<MentionSuggestion> mentionList = const [];
+  List<String> typingNames = const [];
   bool moreHistory = false;
   VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
   String? currentActiveVoiceId;
@@ -861,7 +952,13 @@ class FakeBackend extends ChatBackend {
   @override
   List<MentionSuggestion> get mentionSuggestions => mentionList;
   @override
-  List<String> get typingUserNames => const [];
+  List<String> get typingUserNames => typingNames;
+
+  void setTypingNames(List<String> names) {
+    typingNames = names;
+    notifyListeners();
+  }
+
   @override
   List<RoomMemberSummary> get selectedRoomMembers => const [];
   @override

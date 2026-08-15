@@ -240,21 +240,22 @@ class _RichComposerState extends State<_RichComposer> {
           ),
         ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 13),
+        key: const Key('message-composer-panel'),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             SizedBox(
               width: 40,
-              height: 34,
+              height: _composerControlHeight,
               child: PopupMenuButton<String>(
                 tooltip: 'Add content',
                 enabled: widget.enabled,
                 padding: EdgeInsets.zero,
-                icon: const Icon(
+                icon: Icon(
                   Icons.add_circle_outline,
                   size: 25,
-                  color: Color(0xffc7c8d0),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 onSelected: (action) {
                   switch (action) {
@@ -358,7 +359,10 @@ class _RichComposerState extends State<_RichComposer> {
                           ),
                           // Keep the compact 32 px composer while seating its text
                           // cleanly alongside the attachment and send controls.
-                          padding: const EdgeInsets.fromLTRB(12, 7, 12, 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
                           placeholder: 'Message #${widget.roomName}',
                           // ignore: experimental_member_use
                           onKeyPressed: (event, _) {
@@ -441,15 +445,15 @@ class _RichComposerState extends State<_RichComposer> {
             ),
             SizedBox(
               width: 40,
-              height: 34,
+              height: _composerControlHeight,
               child: IconButton(
                 tooltip: 'Send',
                 padding: EdgeInsets.zero,
                 onPressed: widget.enabled ? widget.onSend : null,
-                icon: const Icon(
+                icon: Icon(
                   Icons.send,
                   size: 25,
-                  color: Color(0xffc7c8d0),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ),

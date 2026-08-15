@@ -345,26 +345,6 @@ class _MessageRowState extends State<_MessageRow> {
                                     color: Color(0xff989aa5),
                                   ),
                                 ),
-                              if (message.own &&
-                                  !message.failed &&
-                                  !message.pending)
-                                Tooltip(
-                                  message: message.readBy.isEmpty
-                                      ? 'Sent to homeserver'
-                                      : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Icon(
-                                      message.readBy.isEmpty
-                                          ? Icons.check
-                                          : Icons.done_all,
-                                      size: 14,
-                                      color: message.readBy.isEmpty
-                                          ? const Color(0xff989aa5)
-                                          : const Color(0xff8fa2ff),
-                                    ),
-                                  ),
-                                ),
                               if (message.queued)
                                 const Text(
                                   'Queued — retrying after reconnect',
@@ -449,6 +429,26 @@ class _MessageRowState extends State<_MessageRow> {
                                   ),
                                 )
                               : null,
+                        ),
+                      ),
+                    ),
+                  if (widget.startsGroup &&
+                      message.own &&
+                      !message.failed &&
+                      !message.pending)
+                    Positioned(
+                      // The receipt lives in the avatar/text gutter. It is an
+                      // overlay so a status change can never resize the row.
+                      left: 50,
+                      top: compact ? 22 : 26,
+                      child: Tooltip(
+                        message: message.readBy.isEmpty
+                            ? 'Sent to homeserver'
+                            : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
+                        child: Icon(
+                          message.readBy.isEmpty ? Icons.check : Icons.done_all,
+                          size: 13,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ),

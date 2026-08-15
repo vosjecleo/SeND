@@ -342,53 +342,70 @@ class _RoomPanel extends StatelessWidget {
           ),
           const Divider(height: 1),
           SizedBox(
-            height: 56,
-            child: ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              leading: ClipOval(
-                child: SizedBox.square(
-                  dimension: 34,
-                  child: backend.profileAvatarBytes == null
-                      ? const ColoredBox(
-                          color: Color(0xff3a3c46),
-                          child: Icon(Icons.person, size: 19),
-                        )
-                      : Image.memory(
-                          backend.profileAvatarBytes!,
-                          fit: BoxFit.cover,
+            key: const Key('current-user-panel'),
+            height: _bottomPanelHeight,
+            child: InkWell(
+              onTap: () => showOwnProfile(context, backend),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ClipOval(
+                      child: SizedBox.square(
+                        dimension: 34,
+                        child: backend.profileAvatarBytes == null
+                            ? const ColoredBox(
+                                color: Color(0xff3a3c46),
+                                child: Icon(Icons.person, size: 19),
+                              )
+                            : Image.memory(
+                                backend.profileAvatarBytes!,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        backend.profileDisplayName ??
+                            backend.userId
+                                ?.split(':')
+                                .first
+                                .replaceFirst('@', '') ??
+                            'Matrix account',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: 36,
+                      child: IconButton(
+                        tooltip: 'Encryption & recovery',
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          backend.encryptionSetup.status ==
+                                  EncryptionSetupStatus.ready
+                              ? Icons.verified_user
+                              : Icons.gpp_maybe,
+                          size: 19,
                         ),
+                        onPressed: () => showSecurityCenter(context, backend),
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: 36,
+                      child: IconButton(
+                        tooltip: 'Settings',
+                        padding: EdgeInsets.zero,
+                        onPressed: () =>
+                            showDeltiecordSettings(context, backend),
+                        icon: const Icon(Icons.settings_outlined, size: 19),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              title: Text(
-                backend.profileDisplayName ??
-                    backend.userId?.split(':').first.replaceFirst('@', '') ??
-                    'Matrix account',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Encryption & recovery',
-                    icon: Icon(
-                      backend.encryptionSetup.status ==
-                              EncryptionSetupStatus.ready
-                          ? Icons.verified_user
-                          : Icons.gpp_maybe,
-                      size: 19,
-                    ),
-                    onPressed: () => showSecurityCenter(context, backend),
-                  ),
-                  IconButton(
-                    tooltip: 'Settings',
-                    onPressed: () => showDeltiecordSettings(context, backend),
-                    icon: const Icon(Icons.settings_outlined, size: 19),
-                  ),
-                ],
-              ),
-              onTap: () => showOwnProfile(context, backend),
             ),
           ),
         ],
