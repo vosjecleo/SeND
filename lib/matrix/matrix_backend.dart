@@ -41,6 +41,8 @@ class MatrixBackend extends ChatBackend {
   Timeline? _timeline;
   MatrixVoiceController? _voice;
   Timer? _typingStopTimer;
+  Timer? _settingsSaveTimer;
+  AppPreferences? _pendingPreferences;
   String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
@@ -420,6 +422,7 @@ class MatrixBackend extends ChatBackend {
   @override
   void dispose() {
     _typingStopTimer?.cancel();
+    _settingsSaveTimer?.cancel();
     final voice = _voice;
     _voice = null;
     voice?.removeListener(notifyListeners);

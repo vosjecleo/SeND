@@ -348,10 +348,10 @@ class _AttachmentViewState extends State<_AttachmentView> {
             ),
             child: InkWell(
               onTap: _showImage,
-              child: Image.memory(
-                bytes,
-                fit: BoxFit.contain,
-                gaplessPlayback: true,
+              child: _PreferenceAwareImage(
+                bytes: bytes,
+                animated: widget.attachment.animated,
+                autoplay: widget.backend.preferences.autoplayGifs,
               ),
             ),
           ),
@@ -366,6 +366,78 @@ class _AttachmentViewState extends State<_AttachmentView> {
     onSave: _save,
     opening: _opening,
     onOpen: _open,
+  );
+}
+
+class _PreferenceAwareImage extends StatelessWidget {
+  const _PreferenceAwareImage({
+    required this.bytes,
+    required this.animated,
+    required this.autoplay,
+  });
+
+  final Uint8List bytes;
+  final bool animated;
+  final bool autoplay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!animated || autoplay) {
+      return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
+    }
+    return _FirstFrameImage(bytes: bytes);
+  }
+}
+
+class _FirstFrameImage extends StatefulWidget {
+  const _FirstFrameImage({required this.bytes});
+
+  final Uint8List bytes;
+
+  @override
+  State<_FirstFrameImage> createState() => _FirstFrameImageState();
+}
+
+class _FirstFrameImageState extends State<_FirstFrameImage> {
+  late Future<ui.Image> _frame = _decode();
+  ui.Image? _decoded;
+
+  Future<ui.Image> _decode() async {
+    final codec = await ui.instantiateImageCodec(widget.bytes);
+    try {
+      final frame = await codec.getNextFrame();
+      _decoded = frame.image;
+      return frame.image;
+    } finally {
+      codec.dispose();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _FirstFrameImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bytes, widget.bytes)) {
+      _decoded?.dispose();
+      _decoded = null;
+      _frame = _decode();
+    }
+  }
+
+  @override
+  void dispose() {
+    _decoded?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<ui.Image>(
+    future: _frame,
+    builder: (context, snapshot) {
+      final image = snapshot.data;
+      return image == null
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : RawImage(image: image, fit: BoxFit.contain);
+    },
   );
 }
 

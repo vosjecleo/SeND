@@ -264,6 +264,7 @@ extension _MatrixSession on MatrixBackend {
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     _notificationPreviewsEnabled =
         content?.tryGet<bool>('notification_previews') ?? true;
+    if (_pendingPreferences != null) return;
     _preferences = AppPreferences(
       density: content?.tryGet<String>('density') == 'cozy'
           ? InterfaceDensity.cozy
@@ -285,6 +286,18 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
     if (_matrix.userID == null) return;
+    _preferences = preferences;
+    _pendingPreferences = preferences;
+    _settingsSaveTimer?.cancel();
+    _settingsSaveTimer = Timer(const Duration(milliseconds: 300), () {
+      final pending = _pendingPreferences;
+      if (pending != null) unawaited(_persistPreferences(pending));
+    });
+    _notifyBackendListeners();
+  }
+
+  Future<void> _persistPreferences(AppPreferences preferences) async {
+    if (_matrix.userID == null) return;
     final existing =
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     try {
@@ -303,7 +316,9 @@ extension _MatrixSession on MatrixBackend {
           'remember_window_state': preferences.rememberWindowState,
         },
       );
-      _preferences = preferences;
+      if (identical(_pendingPreferences, preferences)) {
+        _pendingPreferences = null;
+      }
       _notifyBackendListeners();
     } catch (exception) {
       _error = _friendlyError(exception);

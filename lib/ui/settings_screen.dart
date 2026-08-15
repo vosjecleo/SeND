@@ -270,7 +270,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Native title bar'),
-        subtitle: const Text('Applied to new windows after restart.'),
+        subtitle: const Text('Show GTK window decorations on Linux.'),
         value: preferences.showNativeTitleBar,
         onChanged: (value) => backend.updatePreferences(
           preferences.copyWith(showNativeTitleBar: value),
