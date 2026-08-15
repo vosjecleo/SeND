@@ -204,264 +204,285 @@ class _RichComposerState extends State<_RichComposer> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (_emojiMatches.isNotEmpty)
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.only(left: 56, right: 48),
-            decoration: BoxDecoration(
-              color: const Color(0xff1c1d22),
-              border: Border.all(color: const Color(0xff555762)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var index = 0; index < _emojiMatches.length; index++)
-                  InkWell(
-                    onTap: () => _acceptEmoji(_emojiMatches[index]),
-                    child: Container(
-                      color: index == _emojiSelection
-                          ? const Color(0xff34374b)
-                          : null,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
+  Widget build(BuildContext context) {
+    final controlHeight = _composerControlHeightFor(context);
+    final editorHeight = _composerEditorHeightFor(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_emojiMatches.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.only(left: 56, right: 48),
+              decoration: BoxDecoration(
+                color: const Color(0xff1c1d22),
+                border: Border.all(color: const Color(0xff555762)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < _emojiMatches.length; index++)
+                    InkWell(
+                      onTap: () => _acceptEmoji(_emojiMatches[index]),
+                      child: Container(
+                        color: index == _emojiSelection
+                            ? const Color(0xff34374b)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        child: Text(
+                          '${_emojiMatches[index].emoji} :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                        ),
                       ),
-                      child: Text(
-                        '${_emojiMatches[index].emoji} :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
-                      ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      Padding(
-        key: const Key('message-composer-panel'),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            SizedBox(
-              width: 40,
-              height: _composerControlHeight,
-              child: PopupMenuButton<String>(
-                tooltip: 'Add content',
-                enabled: widget.enabled,
-                padding: EdgeInsets.zero,
-                icon: Icon(
-                  Icons.add_circle_outline,
-                  size: 25,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                onSelected: (action) {
-                  switch (action) {
-                    case 'file':
-                      widget.onAttach();
-                    case 'emoji':
-                      showEmojiPicker();
-                    case 'gif':
-                      widget.onGif();
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'file',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.insert_drive_file_outlined),
-                      title: Text('Add file'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'emoji',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.emoji_emotions_outlined),
-                      title: Text('Emoji'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'gif',
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(Icons.gif_box_outlined),
-                      title: Text('Sticker / GIF'),
-                    ),
-                  ),
                 ],
               ),
             ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xff777985)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (widget.pendingAttachments.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (
-                              var index = 0;
-                              index < widget.pendingAttachments.length;
-                              index++
-                            )
-                              _PendingAttachmentTile(
-                                attachment: widget.pendingAttachments[index],
-                                onRemove: () =>
-                                    widget.onRemoveAttachment(index),
-                                onToggleSpoiler: () =>
-                                    widget.onToggleAttachmentSpoiler(index),
-                              ),
-                          ],
-                        ),
+          ),
+        Padding(
+          key: const Key('message-composer-panel'),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: 40,
+                height: controlHeight,
+                child: PopupMenuButton<String>(
+                  tooltip: 'Add content',
+                  enabled: widget.enabled,
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    Icons.add_circle_outline,
+                    size: 25,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'file':
+                        widget.onAttach();
+                      case 'emoji':
+                        showEmojiPicker();
+                      case 'gif':
+                        widget.onGif();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'file',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.insert_drive_file_outlined),
+                        title: Text('Add file'),
                       ),
-                    DefaultTextStyle.merge(
-                      style: const TextStyle(fontSize: 15),
-                      child: QuillEditor(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        scrollController: _scrollController,
-                        config: QuillEditorConfig(
-                          autoFocus: false,
-                          minHeight: 32,
-                          maxHeight: 132,
-                          customStyles: const DefaultStyles(
-                            paragraph: DefaultTextBlockStyle(
-                              TextStyle(fontSize: 15, height: 1.2),
-                              HorizontalSpacing.zero,
-                              VerticalSpacing.zero,
-                              VerticalSpacing.zero,
-                              null,
-                            ),
-                            placeHolder: DefaultTextBlockStyle(
-                              TextStyle(
-                                fontSize: 15,
-                                height: 1.2,
-                                color: Color(0x99989aa5),
-                              ),
-                              HorizontalSpacing.zero,
-                              VerticalSpacing.zero,
-                              VerticalSpacing.zero,
-                              null,
-                            ),
-                          ),
-                          // Keep the compact 32 px composer while seating its text
-                          // cleanly alongside the attachment and send controls.
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          placeholder: 'Message #${widget.roomName}',
-                          // ignore: experimental_member_use
-                          onKeyPressed: (event, _) {
-                            if (event is KeyDownEvent &&
-                                _emojiMatches.isNotEmpty) {
-                              if (event.logicalKey == LogicalKeyboardKey.tab) {
-                                setState(
-                                  () => _emojiSelection =
-                                      (_emojiSelection + 1) %
-                                      _emojiMatches.length,
-                                );
-                                return KeyEventResult.handled;
-                              }
-                              if (event.logicalKey ==
-                                  LogicalKeyboardKey.enter) {
-                                _acceptEmoji(_emojiMatches[_emojiSelection]);
-                                return KeyEventResult.handled;
-                              }
-                              if (event.logicalKey ==
-                                  LogicalKeyboardKey.escape) {
-                                _clearEmojiCompletion();
-                                return KeyEventResult.handled;
-                              }
-                            }
-                            if (event is KeyDownEvent &&
-                                event.logicalKey == LogicalKeyboardKey.keyV &&
-                                (HardwareKeyboard.instance.isControlPressed ||
-                                    HardwareKeyboard.instance.isMetaPressed)) {
-                              unawaited(widget.onPasteImage());
-                              return KeyEventResult.ignored;
-                            }
-                            if (event is KeyDownEvent &&
-                                widget.mentionSuggestions.isNotEmpty) {
-                              if (event.logicalKey ==
-                                  LogicalKeyboardKey.arrowDown) {
-                                widget.onMentionSelectionChanged(
-                                  (widget.mentionSelectionIndex + 1) %
-                                      widget.mentionSuggestions.length,
-                                );
-                                return KeyEventResult.handled;
-                              }
-                              if (event.logicalKey ==
-                                  LogicalKeyboardKey.arrowUp) {
-                                widget.onMentionSelectionChanged(
-                                  (widget.mentionSelectionIndex - 1) %
-                                      widget.mentionSuggestions.length,
-                                );
-                                return KeyEventResult.handled;
-                              }
-                              if (event.logicalKey ==
-                                      LogicalKeyboardKey.enter &&
-                                  !HardwareKeyboard.instance.isShiftPressed) {
-                                widget.onMentionSelected(
-                                  widget
-                                      .mentionSuggestions[widget
-                                          .mentionSelectionIndex]
-                                      .matrixId,
-                                );
-                                return KeyEventResult.handled;
-                              }
-                            }
-                            if (event is KeyDownEvent &&
-                                event.logicalKey == LogicalKeyboardKey.enter &&
-                                !HardwareKeyboard.instance.isShiftPressed &&
-                                (widget.sendWithCtrlEnter ==
-                                    HardwareKeyboard
-                                        .instance
-                                        .isControlPressed)) {
-                              widget.onSend();
-                              return KeyEventResult.handled;
-                            }
-                            return KeyEventResult.ignored;
-                          },
-                        ),
+                    ),
+                    PopupMenuItem(
+                      value: 'emoji',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.emoji_emotions_outlined),
+                        title: Text('Emoji'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'gif',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.gif_box_outlined),
+                        title: Text('Sticker / GIF'),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            SizedBox(
-              width: 40,
-              height: _composerControlHeight,
-              child: IconButton(
-                tooltip: 'Send',
-                padding: EdgeInsets.zero,
-                onPressed: widget.enabled ? widget.onSend : null,
-                icon: Icon(
-                  Icons.send,
-                  size: 25,
-                  color: Theme.of(context).colorScheme.primary,
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xff777985)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (widget.pendingAttachments.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (
+                                var index = 0;
+                                index < widget.pendingAttachments.length;
+                                index++
+                              )
+                                _PendingAttachmentTile(
+                                  attachment: widget.pendingAttachments[index],
+                                  onRemove: () =>
+                                      widget.onRemoveAttachment(index),
+                                  onToggleSpoiler: () =>
+                                      widget.onToggleAttachmentSpoiler(index),
+                                ),
+                            ],
+                          ),
+                        ),
+                      DefaultTextStyle.merge(
+                        style: const TextStyle(fontSize: 15),
+                        child: SizedBox(
+                          // Quill otherwise applies scaled line metrics on top
+                          // of its minimum and silently makes this row taller
+                          // than the adjacent bottom panels.
+                          height: editorHeight,
+                          child: QuillEditor(
+                            controller: widget.controller,
+                            focusNode: widget.focusNode,
+                            scrollController: _scrollController,
+                            config: QuillEditorConfig(
+                              autoFocus: false,
+                              minHeight: editorHeight,
+                              maxHeight: editorHeight,
+                              customStyles: const DefaultStyles(
+                                paragraph: DefaultTextBlockStyle(
+                                  TextStyle(fontSize: 15, height: 1.2),
+                                  HorizontalSpacing.zero,
+                                  VerticalSpacing.zero,
+                                  VerticalSpacing.zero,
+                                  null,
+                                ),
+                                placeHolder: DefaultTextBlockStyle(
+                                  TextStyle(
+                                    fontSize: 15,
+                                    height: 1.2,
+                                    color: Color(0x99989aa5),
+                                  ),
+                                  HorizontalSpacing.zero,
+                                  VerticalSpacing.zero,
+                                  VerticalSpacing.zero,
+                                  null,
+                                ),
+                              ),
+                              // Keep the compact composer while seating its text
+                              // cleanly alongside the attachment and send controls.
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
+                              placeholder: 'Message #${widget.roomName}',
+                              // ignore: experimental_member_use
+                              onKeyPressed: (event, _) {
+                                if (event is KeyDownEvent &&
+                                    _emojiMatches.isNotEmpty) {
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.tab) {
+                                    setState(
+                                      () => _emojiSelection =
+                                          (_emojiSelection + 1) %
+                                          _emojiMatches.length,
+                                    );
+                                    return KeyEventResult.handled;
+                                  }
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.enter) {
+                                    _acceptEmoji(
+                                      _emojiMatches[_emojiSelection],
+                                    );
+                                    return KeyEventResult.handled;
+                                  }
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.escape) {
+                                    _clearEmojiCompletion();
+                                    return KeyEventResult.handled;
+                                  }
+                                }
+                                if (event is KeyDownEvent &&
+                                    event.logicalKey ==
+                                        LogicalKeyboardKey.keyV &&
+                                    (HardwareKeyboard
+                                            .instance
+                                            .isControlPressed ||
+                                        HardwareKeyboard
+                                            .instance
+                                            .isMetaPressed)) {
+                                  unawaited(widget.onPasteImage());
+                                  return KeyEventResult.ignored;
+                                }
+                                if (event is KeyDownEvent &&
+                                    widget.mentionSuggestions.isNotEmpty) {
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowDown) {
+                                    widget.onMentionSelectionChanged(
+                                      (widget.mentionSelectionIndex + 1) %
+                                          widget.mentionSuggestions.length,
+                                    );
+                                    return KeyEventResult.handled;
+                                  }
+                                  if (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowUp) {
+                                    widget.onMentionSelectionChanged(
+                                      (widget.mentionSelectionIndex - 1) %
+                                          widget.mentionSuggestions.length,
+                                    );
+                                    return KeyEventResult.handled;
+                                  }
+                                  if (event.logicalKey ==
+                                          LogicalKeyboardKey.enter &&
+                                      !HardwareKeyboard
+                                          .instance
+                                          .isShiftPressed) {
+                                    widget.onMentionSelected(
+                                      widget
+                                          .mentionSuggestions[widget
+                                              .mentionSelectionIndex]
+                                          .matrixId,
+                                    );
+                                    return KeyEventResult.handled;
+                                  }
+                                }
+                                if (event is KeyDownEvent &&
+                                    event.logicalKey ==
+                                        LogicalKeyboardKey.enter &&
+                                    !HardwareKeyboard.instance.isShiftPressed &&
+                                    (widget.sendWithCtrlEnter ==
+                                        HardwareKeyboard
+                                            .instance
+                                            .isControlPressed)) {
+                                  widget.onSend();
+                                  return KeyEventResult.handled;
+                                }
+                                return KeyEventResult.ignored;
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              SizedBox(
+                width: 40,
+                height: controlHeight,
+                child: IconButton(
+                  tooltip: 'Send',
+                  padding: EdgeInsets.zero,
+                  onPressed: widget.enabled ? widget.onSend : null,
+                  icon: Icon(
+                    Icons.send,
+                    size: 25,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class _PendingAttachmentTile extends StatelessWidget {

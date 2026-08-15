@@ -724,6 +724,7 @@ void main() {
   ) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
+      ..currentPreferences = const AppPreferences(fontScale: 1.6)
       ..roomList = const [
         RoomSummary(
           id: '!layout:example.org',
@@ -739,8 +740,13 @@ void main() {
 
     final accountPanel = find.byKey(const Key('current-user-panel'));
     final composerPanel = find.byKey(const Key('message-composer-panel'));
+    final createSpacePanel = find.byKey(const Key('create-space-panel'));
     expect(
       tester.getTopLeft(accountPanel).dy,
+      tester.getTopLeft(composerPanel).dy,
+    );
+    expect(
+      tester.getTopLeft(createSpacePanel).dy,
       tester.getTopLeft(composerPanel).dy,
     );
     final composerTop = tester.getTopLeft(composerPanel).dy;
@@ -750,6 +756,49 @@ void main() {
 
     expect(find.text('Alice is typing…'), findsOneWidget);
     expect(tester.getTopLeft(composerPanel).dy, composerTop);
+  });
+
+  testWidgets('home DM rows expose presence and stronger visual hierarchy', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!alice:example.org',
+          name: 'Alice',
+          lastMessage: 'See you tomorrow',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+          presence: UserPresence.online,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(
+      find.byKey(const Key('presence-!alice:example.org-online')),
+      findsOneWidget,
+    );
+    final name = tester.widget<Text>(find.text('Alice'));
+    expect(name.style?.fontSize, 16);
+    expect(name.style?.fontWeight, FontWeight.w700);
+    expect(find.text('See you tomorrow'), findsOneWidget);
+  });
+
+  testWidgets('Space buttons remain square without selected side strips', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Test')];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(
+      tester.getSize(find.byKey(const Key('space-button-Test'))),
+      const Size.square(48),
+    );
+    expect(tester.widget<Icon>(find.byIcon(Icons.add_box_outlined)).size, 27);
   });
 
   testWidgets('offers jump to present after scrolling away from recent chat', (
@@ -907,6 +956,7 @@ class FakeBackend extends ChatBackend {
   List<DeviceSessionSummary> deviceList = const [];
   List<MentionSuggestion> mentionList = const [];
   List<String> typingNames = const [];
+  AppPreferences currentPreferences = const AppPreferences();
   bool moreHistory = false;
   VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
   String? currentActiveVoiceId;
@@ -944,7 +994,7 @@ class FakeBackend extends ChatBackend {
   @override
   bool get profileLoading => false;
   @override
-  AppPreferences get preferences => const AppPreferences();
+  AppPreferences get preferences => currentPreferences;
   @override
   EncryptionSetupState get encryptionSetup => security;
   @override

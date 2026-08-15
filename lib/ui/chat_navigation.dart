@@ -123,9 +123,10 @@ class _SpaceBar extends StatelessWidget {
                             )
                           : Image.memory(
                               space.avatarBytes!,
-                              width: 48,
-                              height: 48,
+                              width: double.infinity,
+                              height: double.infinity,
                               fit: BoxFit.cover,
+                              gaplessPlayback: true,
                             ),
                     ),
                   ),
@@ -134,12 +135,13 @@ class _SpaceBar extends StatelessWidget {
           ),
           const Divider(height: 1),
           SizedBox(
-            height: 56,
+            key: const Key('create-space-panel'),
+            height: _bottomPanelHeightFor(context),
             child: Center(
               child: IconButton(
                 tooltip: 'Create Space',
                 onPressed: () => _createSpace(context),
-                icon: const Icon(Icons.add_box_outlined, size: 22),
+                icon: const Icon(Icons.add_box_outlined, size: 27),
               ),
             ),
           ),
@@ -172,18 +174,21 @@ class _SpaceButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: SizedBox(
-        height: 48,
-        child: Material(
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : const Color(0xff2b2d34),
-          borderRadius: BorderRadius.circular(4),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
+      child: Align(
+        child: SizedBox.square(
+          key: ValueKey('space-button-$tooltip'),
+          dimension: 48,
+          child: Material(
+            color: selected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : const Color(0xff2b2d34),
             borderRadius: BorderRadius.circular(4),
-            child: Center(child: child),
+            clipBehavior: Clip.hardEdge,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(4),
+              child: Center(child: child),
+            ),
           ),
         ),
       ),
@@ -343,7 +348,7 @@ class _RoomPanel extends StatelessWidget {
           const Divider(height: 1),
           SizedBox(
             key: const Key('current-user-panel'),
-            height: _bottomPanelHeight,
+            height: _bottomPanelHeightFor(context),
             child: InkWell(
               onTap: () => showOwnProfile(context, backend),
               child: Padding(
@@ -554,6 +559,9 @@ class _RoomListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final participantCount = room.voiceParticipants.length;
+    if (backend.selectedSpaceId == null && !room.isVoice) {
+      return _HomeRoomListTile(backend: backend, room: room);
+    }
     return ListTile(
       dense: true,
       visualDensity: const VisualDensity(vertical: -3),
@@ -614,11 +622,83 @@ class _RoomListTile extends StatelessWidget {
   }
 }
 
+class _HomeRoomListTile extends StatelessWidget {
+  const _HomeRoomListTile({required this.backend, required this.room});
+
+  final ChatBackend backend;
+  final RoomSummary room;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = backend.selectedRoom?.id == room.id;
+    return Material(
+      color: selected
+          ? Theme.of(context).colorScheme.primaryContainer
+                .withValues(alpha: 0.42)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: () => backend.selectRoom(room.id),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _RoomIcon(room: room, size: 34, showPresence: room.isDirect),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        room.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        room.lastMessage,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xffb7b8c0),
+                          fontSize: 13,
+                          height: 1.05,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (room.unreadCount > 0) ...[
+                  const SizedBox(width: 8),
+                  Badge(label: Text('${room.unreadCount}')),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RoomIcon extends StatelessWidget {
-  const _RoomIcon({required this.room, required this.size});
+  const _RoomIcon({
+    required this.room,
+    required this.size,
+    this.showPresence = false,
+  });
 
   final RoomSummary room;
   final double size;
+  final bool showPresence;
 
   @override
   Widget build(BuildContext context) {
@@ -637,21 +717,49 @@ class _RoomIcon extends StatelessWidget {
       );
     }
     final avatar = room.avatarBytes;
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: const Color(0xff3a3c46),
-      backgroundImage: avatar == null ? null : MemoryImage(avatar),
-      child: avatar == null
-          ? Text(
-              room.name.trim().isEmpty
-                  ? '?'
-                  : room.name.trim().characters.first.toUpperCase(),
-              style: TextStyle(
-                fontSize: size * 0.4,
-                fontWeight: FontWeight.w700,
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: CircleAvatar(
+              backgroundColor: const Color(0xff3a3c46),
+              backgroundImage: avatar == null ? null : MemoryImage(avatar),
+              child: avatar == null
+                  ? Text(
+                      room.name.trim().isEmpty
+                          ? '?'
+                          : room.name.trim().characters.first.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: size * 0.4,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+          if (showPresence)
+            Positioned(
+              left: -1,
+              bottom: -1,
+              child: Container(
+                key: ValueKey('presence-${room.id}-${room.presence.name}'),
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: switch (room.presence) {
+                    UserPresence.online => const Color(0xff43b581),
+                    UserPresence.away => const Color(0xffffc857),
+                    UserPresence.offline => const Color(0xff747680),
+                  },
+                  border: Border.all(color: const Color(0xff202126), width: 2),
+                ),
               ),
-            )
-          : null,
+            ),
+        ],
+      ),
     );
   }
 }

@@ -11,7 +11,28 @@ extension _MatrixRoomMetadata on MatrixBackend {
     voiceParticipants: _voiceParticipants(room),
     avatarBytes: _avatarBytes[room.id],
     topic: room.topic,
+    isDirect: room.isDirectChat,
+    presence: _roomPresence(room),
   );
+
+  UserPresence _roomPresence(Room room) {
+    var result = UserPresence.offline;
+    for (final user in room.getParticipants()) {
+      if (user.id == _matrix.userID) continue;
+      // Room summaries are synchronous; sync refreshes this SDK cache and
+      // notifies the backend whenever presence changes.
+      // ignore: deprecated_member_use
+      switch (_matrix.presences[user.id]?.presence) {
+        case PresenceType.online:
+          return UserPresence.online;
+        case PresenceType.unavailable:
+          result = UserPresence.away;
+        default:
+          break;
+      }
+    }
+    return result;
+  }
 
   RoomPresentation _presentationFor(Room room) {
     final overridden = _roomPresentationOverrides[room.id];

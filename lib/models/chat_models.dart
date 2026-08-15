@@ -319,6 +319,8 @@ class RoomSummary {
     this.voiceParticipants = const [],
     this.avatarBytes,
     this.topic = '',
+    this.isDirect = false,
+    this.presence = UserPresence.offline,
   });
 
   final String id;
@@ -330,6 +332,8 @@ class RoomSummary {
   final List<VoiceParticipantSummary> voiceParticipants;
   final Uint8List? avatarBytes;
   final String topic;
+  final bool isDirect;
+  final UserPresence presence;
 
   bool get isVoice => presentation == RoomPresentation.voice;
 }

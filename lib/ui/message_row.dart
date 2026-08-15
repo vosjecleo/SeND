@@ -256,6 +256,23 @@ class _MessageRowState extends State<_MessageRow> {
                                             color: const Color(0xff989aa5),
                                           ),
                                     ),
+                                    if (message.own &&
+                                        !message.failed &&
+                                        !message.pending) ...[
+                                      const SizedBox(width: 5),
+                                      Tooltip(
+                                        message: message.readBy.isEmpty
+                                            ? 'Sent to homeserver'
+                                            : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
+                                        child: Icon(
+                                          message.readBy.isEmpty
+                                              ? Icons.check
+                                              : Icons.done_all,
+                                          size: 11,
+                                          color: const Color(0xff989aa5),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               if (message.reply case final reply?)
@@ -429,26 +446,6 @@ class _MessageRowState extends State<_MessageRow> {
                                   ),
                                 )
                               : null,
-                        ),
-                      ),
-                    ),
-                  if (widget.startsGroup &&
-                      message.own &&
-                      !message.failed &&
-                      !message.pending)
-                    Positioned(
-                      // The receipt lives in the avatar/text gutter. It is an
-                      // overlay so a status change can never resize the row.
-                      left: 50,
-                      top: compact ? 22 : 26,
-                      child: Tooltip(
-                        message: message.readBy.isEmpty
-                            ? 'Sent to homeserver'
-                            : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
-                        child: Icon(
-                          message.readBy.isEmpty ? Icons.check : Icons.done_all,
-                          size: 13,
-                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ),

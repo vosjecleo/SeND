@@ -43,6 +43,21 @@ part 'message_media.dart';
 // geometry shared prevents one-pixel seams when either side is refactored.
 const double _bottomPanelHeight = 56;
 const double _composerControlHeight = 34;
+const double _composerEditorHeight = 32;
+
+double _composerEditorHeightFor(BuildContext context) => max(
+  _composerEditorHeight,
+  MediaQuery.textScalerOf(context).scale(15) * 1.2 + 14,
+);
+
+double _composerControlHeightFor(BuildContext context) => max(
+  _composerControlHeight,
+  // The editor's one-pixel border sits outside constrained content.
+  _composerEditorHeightFor(context) + 2,
+);
+
+double _bottomPanelHeightFor(BuildContext context) =>
+    max(_bottomPanelHeight, _composerControlHeightFor(context) + 22);
 
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});

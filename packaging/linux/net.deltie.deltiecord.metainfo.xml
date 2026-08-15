@@ -20,6 +20,11 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.1" date="2026-08-16" type="development">
+      <description>
+        <p>Desktop beta layout and presence polish.</p>
+      </description>
+    </release>
     <release version="0.9.0" date="2026-08-15" type="development">
       <description>
         <p>Feature-complete desktop beta.</p>
