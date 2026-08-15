@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
+enum ConnectionStatus { connecting, online, reconnecting, offline }
+
 enum InterfaceDensity { compact, cozy }
 
 class AppPreferences {

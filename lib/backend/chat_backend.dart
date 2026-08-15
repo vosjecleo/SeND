@@ -8,6 +8,7 @@ import '../models/chat_models.dart';
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
   SessionStatus get status;
+  ConnectionStatus get connectionStatus;
   String? get error;
   String? get userId;
   String? get deviceId;

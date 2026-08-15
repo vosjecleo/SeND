@@ -44,7 +44,9 @@ class MatrixBackend extends ChatBackend {
   String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
+  StreamSubscription<Object?>? _syncStatusSubscription;
   SessionStatus _status = SessionStatus.starting;
+  ConnectionStatus _connectionStatus = ConnectionStatus.connecting;
   String? _error;
   String? _selectedRoomId;
   String? _selectedSpaceId;
@@ -83,6 +85,8 @@ class MatrixBackend extends ChatBackend {
 
   @override
   SessionStatus get status => _status;
+  @override
+  ConnectionStatus get connectionStatus => _connectionStatus;
   @override
   String? get error => _error;
   @override
@@ -414,6 +418,7 @@ class MatrixBackend extends ChatBackend {
     _timeline?.cancelSubscriptions();
     _syncSubscription?.cancel();
     _loginSubscription?.cancel();
+    _syncStatusSubscription?.cancel();
     _client?.dispose();
     unawaited(_mediaRangeProxy.close());
     _previewHttpClient.close(force: true);

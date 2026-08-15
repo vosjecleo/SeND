@@ -193,6 +193,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     _SettingsPage.advanced => _section('Advanced diagnostics', [
       _value('Deltiecord', 'v0.4 development'),
       _value('Session', backend.status.name),
+      _value('Connection', backend.connectionStatus.name),
       _value('Voice', backend.voiceConnectionStatus.name),
       _value('Selected room', backend.selectedRoom?.id ?? 'None'),
       const SizedBox(height: 12),

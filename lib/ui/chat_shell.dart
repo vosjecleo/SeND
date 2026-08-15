@@ -347,10 +347,12 @@ class _ChatShellState extends State<ChatShell> {
             children: [
               if (widget.backend.encryptionSetup.needsAttention)
                 _SecurityBanner(backend: widget.backend),
+              if (widget.backend.connectionStatus != ConnectionStatus.online)
+                _ConnectionBanner(status: widget.backend.connectionStatus),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                final showSpaceRail = constraints.maxWidth >= 760;
+                    final showSpaceRail = constraints.maxWidth >= 760;
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
                     final panelWidth = preferredPanel.clamp(
@@ -429,5 +431,44 @@ class _ChatShellState extends State<ChatShell> {
         )
         .take(6)
         .toList(growable: false);
+  }
+}
+
+class _ConnectionBanner extends StatelessWidget {
+  const _ConnectionBanner({required this.status});
+
+  final ConnectionStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, message) = switch (status) {
+      ConnectionStatus.connecting => (
+        Icons.sync,
+        'Connecting to the homeserver…',
+      ),
+      ConnectionStatus.reconnecting => (
+        Icons.sync_problem,
+        'Connection interrupted — reconnecting…',
+      ),
+      ConnectionStatus.offline => (
+        Icons.cloud_off_outlined,
+        'Offline — messages will send after reconnecting.',
+      ),
+      ConnectionStatus.online => (Icons.cloud_done_outlined, ''),
+    };
+    return Material(
+      color: const Color(0xff493a1f),
+      child: SizedBox(
+        height: 34,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16),
+            const SizedBox(width: 8),
+            Text(message, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -104,6 +104,8 @@ class _MessageRowState extends State<_MessageRow> {
 
   @override
   Widget build(BuildContext context) {
+    final compact =
+        widget.backend.preferences.density == InterfaceDensity.compact;
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
     final clock = TimeOfDay.fromDateTime(local).format(context);
@@ -167,7 +169,9 @@ class _MessageRowState extends State<_MessageRow> {
           onEnter: _enter,
           onExit: _exit,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 110),
+            duration: widget.backend.preferences.reducedMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 110),
             color: _hovered ? const Color(0xff292a30) : Colors.transparent,
             child: Opacity(
               opacity: message.pending ? 0.55 : 1,
@@ -177,7 +181,9 @@ class _MessageRowState extends State<_MessageRow> {
                   Padding(
                     padding: EdgeInsets.fromLTRB(
                       20,
-                      widget.startsGroup ? 8 : 1,
+                      widget.startsGroup
+                          ? (compact ? 6 : 10)
+                          : (compact ? 1 : 3),
                       20,
                       1,
                     ),

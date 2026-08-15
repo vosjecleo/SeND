@@ -5,6 +5,7 @@ extension _MatrixSession on MatrixBackend {
     try {
       await _syncSubscription?.cancel();
       await _loginSubscription?.cancel();
+      await _syncStatusSubscription?.cancel();
       await _disposeVoice();
       _client?.dispose();
       _client = await createMatrixClient();
@@ -18,6 +19,18 @@ extension _MatrixSession on MatrixBackend {
         _status = _matrix.isLogged()
             ? SessionStatus.signedIn
             : SessionStatus.signedOut;
+        _notifyBackendListeners();
+      });
+      _syncStatusSubscription = _matrix.onSyncStatus.stream.listen((update) {
+        _connectionStatus = switch (update.status) {
+          SyncStatus.finished ||
+          SyncStatus.waitingForResponse => ConnectionStatus.online,
+          SyncStatus.processing || SyncStatus.cleaningUp =>
+            _connectionStatus == ConnectionStatus.offline
+                ? ConnectionStatus.reconnecting
+                : ConnectionStatus.online,
+          SyncStatus.error => ConnectionStatus.offline,
+        };
         _notifyBackendListeners();
       });
       await _matrix.init();
@@ -46,6 +59,7 @@ extension _MatrixSession on MatrixBackend {
     required String password,
   }) async {
     _status = SessionStatus.signingIn;
+    _connectionStatus = ConnectionStatus.connecting;
     _error = null;
     _notifyBackendListeners();
     try {
@@ -58,10 +72,12 @@ extension _MatrixSession on MatrixBackend {
       );
       _initializeVoice();
       _status = SessionStatus.signedIn;
+      _connectionStatus = ConnectionStatus.online;
       unawaited(_refreshMediaConfig());
       await refreshEncryptionSetup();
     } catch (exception) {
       _status = SessionStatus.signedOut;
+      _connectionStatus = ConnectionStatus.offline;
       _error = _friendlyError(exception);
     }
     _notifyBackendListeners();
@@ -97,6 +113,7 @@ extension _MatrixSession on MatrixBackend {
         status: EncryptionSetupStatus.loading,
       );
       _status = SessionStatus.signedOut;
+      _connectionStatus = ConnectionStatus.offline;
     } catch (exception) {
       _error = _friendlyError(exception);
     }

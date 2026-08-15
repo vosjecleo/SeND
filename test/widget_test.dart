@@ -54,6 +54,16 @@ void main() {
     expect(find.text('@deltie:example.org'), findsOneWidget);
   });
 
+  testWidgets('shows an explicit offline state', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentConnectionStatus = ConnectionStatus.offline;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(find.textContaining('Offline'), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
+  });
+
   testWidgets('opens settings with the control-comma shortcut', (tester) async {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
@@ -476,6 +486,7 @@ Future<void> _revealMessageActions(WidgetTester tester, Finder message) async {
 
 class FakeBackend extends ChatBackend {
   SessionStatus currentStatus = SessionStatus.starting;
+  ConnectionStatus currentConnectionStatus = ConnectionStatus.online;
   List<RoomSummary> roomList = const [];
   RoomSummary? currentRoom;
   List<SpaceSummary> spaceList = const [];
@@ -530,6 +541,8 @@ class FakeBackend extends ChatBackend {
   bool get notificationPreviewsEnabled => true;
   @override
   SessionStatus get status => currentStatus;
+  @override
+  ConnectionStatus get connectionStatus => currentConnectionStatus;
   @override
   bool get timelineLoading => false;
   @override
