@@ -17,4 +17,5 @@ commit="$(git rev-parse HEAD)"
   echo "Built: $(date --iso-8601=seconds)"
   echo "Architecture: x86_64"
 } >dist/BUILD-INFO.txt
+cp packaging/README.md dist/README.txt
 (cd dist && sha256sum -- *.deb *.AppImage >SHA256SUMS)

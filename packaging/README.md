@@ -17,8 +17,15 @@ required for persisted login and E2EE keys. Audio requires a reachable PulseAudi
 or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
 `xdg-desktop-portal-gtk` or `xdg-desktop-portal-kde`. The AppImage is assembled
-with linuxdeploy; build it on the oldest supported Linux distribution for the
-widest glibc compatibility.
+with linuxdeploy. Official x86_64 artifacts are built inside Debian 12 so native
+plugins retain a glibc 2.36 baseline; building them directly on a newer rolling
+distribution produces packages that may not start on Debian.
+
+The Debian 12 build environment needs Flutter plus `clang`, `cmake`, `ninja`,
+`pkg-config`, `fakeroot`, `patchelf`, and the development packages for GTK 3,
+libsecret, PulseAudio, ALSA, libv4l, libmpv, and PipeWire. `appstreamcli validate
+packaging/linux/net.deltie.deltiecord.metainfo.xml` validates the desktop
+metadata before packaging.
 
 The Arch recipe is in `packaging/arch/PKGBUILD` and intentionally builds from the
 local checkout so it can be used for test packages before a public source release.
