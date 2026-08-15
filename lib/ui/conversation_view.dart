@@ -60,6 +60,7 @@ class _ConversationState extends State<_Conversation> {
   String? _roomId;
   bool _loadingAnchoredHistory = false;
   bool _draggingFiles = false;
+  VoidCallback? _dismissMessageActions;
 
   @override
   void initState() {
@@ -190,6 +191,7 @@ class _ConversationState extends State<_Conversation> {
       ),
     );
     if (confirmed == true) await widget.backend.redactMessage(message.id);
+    _focusComposerAfterBuild();
   }
 
   Future<void> _pickReaction(ChatMessage message) async {
@@ -208,6 +210,7 @@ class _ConversationState extends State<_Conversation> {
           .toList(growable: false),
     );
     if (emoji != null) await widget.backend.toggleReaction(message.id, emoji);
+    _focusComposerAfterBuild();
   }
 
   Future<void> showSearch() async {
@@ -216,6 +219,7 @@ class _ConversationState extends State<_Conversation> {
       builder: (context) =>
           _RoomSearchDialog(backend: widget.backend, onSelected: _jumpToEvent),
     );
+    _focusComposerAfterBuild();
   }
 
   Future<void> _showPins() async {
@@ -247,6 +251,7 @@ class _ConversationState extends State<_Conversation> {
         ),
       ),
     );
+    _focusComposerAfterBuild();
   }
 
   Future<void> _jumpToEvent(String eventId) async {
@@ -260,55 +265,71 @@ class _ConversationState extends State<_Conversation> {
     });
   }
 
-  void showMembers() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('${widget.backend.selectedRoomMembers.length} members'),
-      content: SizedBox(
-        width: 360,
-        height: 480,
-        child: ListView(
-          children: [
-            for (final member in widget.backend.selectedRoomMembers)
-              ListTile(
-                dense: true,
-                leading: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 15,
-                      backgroundImage: member.avatarBytes == null
-                          ? null
-                          : MemoryImage(member.avatarBytes!),
-                      child: member.avatarBytes == null
-                          ? Text(member.displayName.characters.first)
-                          : null,
-                    ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: CircleAvatar(
-                        radius: 4,
-                        backgroundColor: switch (member.presence) {
-                          UserPresence.online => const Color(0xff76d49b),
-                          UserPresence.away => const Color(0xffffc857),
-                          UserPresence.offline => const Color(0xff686a73),
-                        },
+  Future<void> showMembers() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${widget.backend.selectedRoomMembers.length} members'),
+        content: SizedBox(
+          width: 360,
+          height: 480,
+          child: ListView(
+            children: [
+              for (final member in widget.backend.selectedRoomMembers)
+                ListTile(
+                  dense: true,
+                  leading: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 15,
+                        backgroundImage: member.avatarBytes == null
+                            ? null
+                            : MemoryImage(member.avatarBytes!),
+                        child: member.avatarBytes == null
+                            ? Text(member.displayName.characters.first)
+                            : null,
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: CircleAvatar(
+                          radius: 4,
+                          backgroundColor: switch (member.presence) {
+                            UserPresence.online => const Color(0xff76d49b),
+                            UserPresence.away => const Color(0xffffc857),
+                            UserPresence.offline => const Color(0xff686a73),
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  title: Text(member.displayName),
+                  subtitle: Text(member.userId),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    showMemberProfile(this.context, widget.backend, member);
+                  },
                 ),
-                title: Text(member.displayName),
-                subtitle: Text(member.userId),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  showMemberProfile(this.context, widget.backend, member);
-                },
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+    _focusComposerAfterBuild();
+  }
+
+  bool dismissTemporaryUi() {
+    final dismiss = _dismissMessageActions;
+    if (dismiss == null) return false;
+    _dismissMessageActions = null;
+    dismiss();
+    return true;
+  }
+
+  void _registerMessageActions(VoidCallback dismiss) {
+    _dismissMessageActions?.call();
+    _dismissMessageActions = dismiss;
+  }
 
   DropOperation _onDropOver(DropOverEvent event) {
     if (!_draggingFiles) setState(() => _draggingFiles = true);
@@ -614,6 +635,7 @@ class _ConversationState extends State<_Conversation> {
                                         onJumpToReply: _jumpToEvent,
                                         mediaMessages: mediaMessages,
                                         backend: backend,
+                                        onActionsShown: _registerMessageActions,
                                       ),
                                     ],
                                   );

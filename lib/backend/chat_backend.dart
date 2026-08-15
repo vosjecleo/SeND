@@ -131,6 +131,7 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> jumpToEvent(String eventId);
   Future<void> sendMessage(
     String text, {
+    String? roomId,
     String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
@@ -141,6 +142,7 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> toggleReaction(String messageId, String key);
   Future<void> sendAttachment(
     AttachmentDraft attachment, {
+    String? roomId,
     String? replyToMessageId,
   });
   Future<Uint8List> downloadAttachment(

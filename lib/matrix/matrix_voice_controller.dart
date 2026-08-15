@@ -131,6 +131,7 @@ class MatrixVoiceController extends ChangeNotifier {
       DeltiecordWebRtcDelegate(
         isCallActive: () =>
             _status == VoiceConnectionStatus.connecting ||
+            _status == VoiceConnectionStatus.reconnecting ||
             _status == VoiceConnectionStatus.connected,
       ),
     );
@@ -247,7 +248,9 @@ class MatrixVoiceController extends ChangeNotifier {
     initialize();
     final voip = _voip;
     if (voip == null) return;
-    _status = VoiceConnectionStatus.connecting;
+    _status = _rejoining
+        ? VoiceConnectionStatus.reconnecting
+        : VoiceConnectionStatus.connecting;
     _error = null;
     notifyListeners();
     GroupCallSession? joiningCall;
@@ -386,8 +389,13 @@ class MatrixVoiceController extends ChangeNotifier {
           GroupCallState.entering ||
           GroupCallState.initializingLocalCallFeed ||
           GroupCallState.localCallFeedInitialized =>
-            VoiceConnectionStatus.connecting,
-          GroupCallState.leaving => VoiceConnectionStatus.disconnecting,
+            _rejoining
+                ? VoiceConnectionStatus.reconnecting
+                : VoiceConnectionStatus.connecting,
+          GroupCallState.leaving =>
+            _rejoining
+                ? VoiceConnectionStatus.reconnecting
+                : VoiceConnectionStatus.disconnecting,
           GroupCallState.ended || GroupCallState.localCallFeedUninitialized =>
             VoiceConnectionStatus.disconnected,
         };
@@ -472,6 +480,8 @@ class MatrixVoiceController extends ChangeNotifier {
   Future<void> _rejoinPreservingState(String roomId) async {
     if (_rejoining || _disposed) return;
     _rejoining = true;
+    _status = VoiceConnectionStatus.reconnecting;
+    notifyListeners();
     final wasMuted = _muted;
     final wasDeafened = _deafened;
     try {
@@ -511,7 +521,9 @@ class MatrixVoiceController extends ChangeNotifier {
   Future<void> leave() async {
     final call = _activeCall;
     if (call == null) return;
-    _status = VoiceConnectionStatus.disconnecting;
+    _status = _rejoining
+        ? VoiceConnectionStatus.reconnecting
+        : VoiceConnectionStatus.disconnecting;
     if (!_disposed) notifyListeners();
     try {
       await call.leave();
@@ -526,7 +538,9 @@ class MatrixVoiceController extends ChangeNotifier {
       _muted = false;
       _deafened = false;
       _screenSharing = false;
-      _status = VoiceConnectionStatus.disconnected;
+      _status = _rejoining
+          ? VoiceConnectionStatus.reconnecting
+          : VoiceConnectionStatus.disconnected;
       if (!_disposed) notifyListeners();
     }
   }

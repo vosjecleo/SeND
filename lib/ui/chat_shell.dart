@@ -21,6 +21,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/giphy_service.dart';
 import '../services/emoji_repository.dart';
+import '../services/emoji_completion.dart';
 import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
 import 'emoji_picker_dialog.dart';
@@ -224,6 +225,7 @@ class _ChatShellState extends State<ChatShell> {
       if (attachments.isEmpty) {
         await widget.backend.sendMessage(
           text,
+          roomId: sendingRoomId,
           formattedBody: serialized.html,
           replyToMessageId: _replyingTo?.id,
           editMessageId: _editingMessage?.id,
@@ -239,6 +241,7 @@ class _ChatShellState extends State<ChatShell> {
               spoiler: attachment.spoiler,
               caption: index == 0 && text.isNotEmpty ? text : null,
             ),
+            roomId: sendingRoomId,
             replyToMessageId: index == 0 ? _replyingTo?.id : null,
           );
         }
@@ -324,6 +327,7 @@ class _ChatShellState extends State<ChatShell> {
       _composerFocus.requestFocus();
       return;
     }
+    final sendingRoomId = widget.backend.selectedRoom?.id;
     setState(() => _sending = true);
     try {
       final bytes = await _giphy.download(gif);
@@ -334,6 +338,7 @@ class _ChatShellState extends State<ChatShell> {
           mimeType: 'image/gif',
           spoiler: false,
         ),
+        roomId: sendingRoomId,
         replyToMessageId: _replyingTo?.id,
       );
       if (mounted) setState(() => _replyingTo = null);
@@ -456,6 +461,15 @@ class _ChatShellState extends State<ChatShell> {
       final callback = callbacks[entry.key];
       if (activator != null && callback != null) bindings[activator] = callback;
     }
+    bindings[const SingleActivator(LogicalKeyboardKey.escape)] = () {
+      if (_conversationKey.currentState?.dismissTemporaryUi() == true) {
+        _composerFocus.requestFocus();
+      } else if (_replyingTo != null || _editingMessage != null) {
+        _cancelComposerAction();
+      } else {
+        _composerFocus.requestFocus();
+      }
+    };
     return CallbackShortcuts(
       bindings: bindings,
       child: Focus(

@@ -186,6 +186,7 @@ enum RoomPresentation { text, voice }
 enum VoiceConnectionStatus {
   disconnected,
   connecting,
+  reconnecting,
   connected,
   disconnecting,
   error,

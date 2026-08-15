@@ -70,7 +70,9 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             ),
           ),
         Expanded(
-          child: connectedHere && streams.isNotEmpty
+          child:
+              connectedHere &&
+                  (streams.isNotEmpty || backend.voiceCameraEnabled)
               ? Row(
                   children: [
                     Expanded(
@@ -135,6 +137,9 @@ class _VoiceHeader extends StatelessWidget {
         ),
         if (backend.voiceConnectionStatus == VoiceConnectionStatus.connecting)
           const Text('Connecting…')
+        else if (backend.voiceConnectionStatus ==
+            VoiceConnectionStatus.reconnecting)
+          const Text('Reconnecting…')
         else if (backend.voiceConnectionStatus == VoiceConnectionStatus.error)
           const Text('Connection error'),
       ],
@@ -183,7 +188,9 @@ class _VoiceLobby extends StatelessWidget {
             FilledButton.icon(
               onPressed:
                   backend.voiceConnectionStatus ==
-                      VoiceConnectionStatus.connecting
+                          VoiceConnectionStatus.connecting ||
+                      backend.voiceConnectionStatus ==
+                          VoiceConnectionStatus.reconnecting
                   ? null
                   : () => backend.joinVoiceRoom(room.id),
               icon: const Icon(Icons.headset),
@@ -443,6 +450,14 @@ class _VideoStage extends StatelessWidget {
     final pinned = pinnedStreamId == null
         ? null
         : streams.where((stream) => stream.id == pinnedStreamId).firstOrNull;
+    final cameraOffParticipants = participants
+        .where(
+          (participant) => !streams.any(
+            (stream) =>
+                !stream.screenShare && stream.userId == participant.userId,
+          ),
+        )
+        .toList(growable: false);
     if (pinned != null) {
       return Column(
         children: [
@@ -469,6 +484,11 @@ class _VideoStage extends StatelessWidget {
                       onPin: () => onPin(stream.id),
                     ),
                   ),
+                for (final participant in cameraOffParticipants)
+                  SizedBox(
+                    width: 190,
+                    child: _RtcAvatarTile(participant: participant),
+                  ),
               ],
             ),
           ),
@@ -490,8 +510,13 @@ class _VideoStage extends StatelessWidget {
             mainAxisSpacing: 8,
             childAspectRatio: 16 / 9,
           ),
-          itemCount: streams.length,
+          itemCount: streams.length + cameraOffParticipants.length,
           itemBuilder: (context, index) {
+            if (index >= streams.length) {
+              return _RtcAvatarTile(
+                participant: cameraOffParticipants[index - streams.length],
+              );
+            }
             final stream = streams[index];
             return _RtcVideoTile(
               stream: stream,
@@ -507,6 +532,59 @@ class _VideoStage extends StatelessWidget {
 
   bool _speaking(String userId) => participants.any(
     (participant) => participant.userId == userId && participant.speaking,
+  );
+}
+
+class _RtcAvatarTile extends StatelessWidget {
+  const _RtcAvatarTile({required this.participant});
+
+  final VoiceParticipantSummary participant;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      color: const Color(0xff18191d),
+      border: Border.all(
+        color: participant.speaking
+            ? const Color(0xff76d49b)
+            : const Color(0xff3b3d46),
+        width: participant.speaking ? 2 : 1,
+      ),
+    ),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(
+          child: CircleAvatar(
+            radius: 42,
+            backgroundImage: participant.avatarBytes == null
+                ? null
+                : MemoryImage(participant.avatarBytes!),
+            child: participant.avatarBytes == null
+                ? Text(
+                    participant.displayName.characters.firstOrNull ?? '?',
+                    style: const TextStyle(fontSize: 28),
+                  )
+                : null,
+          ),
+        ),
+        Positioned(
+          left: 8,
+          bottom: 7,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(color: Color(0xaa111216)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Text(
+                '${participant.displayName} · camera off',
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 

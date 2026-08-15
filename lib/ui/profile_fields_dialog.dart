@@ -44,6 +44,7 @@ class _ProfileFieldsDialogState extends State<ProfileFieldsDialog> {
             ),
           TextField(
             controller: _bio,
+            enabled: widget.profile.extensibleFieldsSupported,
             maxLines: 4,
             decoration: const InputDecoration(
               labelText: 'Bio / about',
@@ -53,6 +54,7 @@ class _ProfileFieldsDialogState extends State<ProfileFieldsDialog> {
           const SizedBox(height: 10),
           TextField(
             controller: _pronouns,
+            enabled: widget.profile.extensibleFieldsSupported,
             decoration: const InputDecoration(
               labelText: 'Pronouns',
               border: OutlineInputBorder(),
@@ -61,6 +63,7 @@ class _ProfileFieldsDialogState extends State<ProfileFieldsDialog> {
           const SizedBox(height: 10),
           TextField(
             controller: _timezone,
+            enabled: widget.profile.extensibleFieldsSupported,
             decoration: const InputDecoration(
               labelText: 'Timezone (for example Europe/Amsterdam)',
               border: OutlineInputBorder(),
@@ -75,11 +78,13 @@ class _ProfileFieldsDialogState extends State<ProfileFieldsDialog> {
         child: const Text('Cancel'),
       ),
       FilledButton(
-        onPressed: () => Navigator.of(context).pop((
-          bio: _bio.text.trim(),
-          pronouns: _pronouns.text.trim(),
-          timezone: _timezone.text.trim(),
-        )),
+        onPressed: widget.profile.extensibleFieldsSupported
+            ? () => Navigator.of(context).pop((
+                bio: _bio.text.trim(),
+                pronouns: _pronouns.text.trim(),
+                timezone: _timezone.text.trim(),
+              ))
+            : null,
         child: const Text('Save'),
       ),
     ],

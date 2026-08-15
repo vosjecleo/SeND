@@ -88,6 +88,8 @@ class MatrixBackend extends ChatBackend {
   String? _profileDisplayName;
   Uint8List? _profileAvatarBytes;
   bool _profileLoading = false;
+  ProfileFieldsCapability? _profileFieldsCapability;
+  bool _profileFieldsCapabilityLoaded = false;
   int _storageUsageBytes = 0;
   bool _storageLoading = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
@@ -537,11 +539,13 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> sendMessage(
     String body, {
+    String? roomId,
     String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   }) => _sendMessage(
     body,
+    roomId: roomId,
     formattedBody: formattedBody,
     replyToMessageId: replyToMessageId,
     editMessageId: editMessageId,
@@ -563,8 +567,13 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> sendAttachment(
     AttachmentDraft attachment, {
+    String? roomId,
     String? replyToMessageId,
-  }) => _sendAttachment(attachment, replyToMessageId: replyToMessageId);
+  }) => _sendAttachment(
+    attachment,
+    roomId: roomId,
+    replyToMessageId: replyToMessageId,
+  );
 
   @override
   Future<Uint8List> downloadAttachment(

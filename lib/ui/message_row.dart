@@ -14,6 +14,7 @@ class _MessageRow extends StatefulWidget {
     required this.onJumpToReply,
     required this.mediaMessages,
     required this.backend,
+    required this.onActionsShown,
   });
 
   final ChatMessage message;
@@ -28,6 +29,7 @@ class _MessageRow extends StatefulWidget {
   final ValueChanged<String> onJumpToReply;
   final List<ChatMessage> mediaMessages;
   final ChatBackend backend;
+  final ValueChanged<VoidCallback> onActionsShown;
 
   @override
   State<_MessageRow> createState() => _MessageRowState();
@@ -81,8 +83,16 @@ class _MessageRowState extends State<_MessageRow> {
         globalPosition.dy.clamp(0, viewport.height - 48),
       );
     });
+    widget.onActionsShown(_hideActions);
     _actionsOverlay.show();
     _scheduleActionsDismissal();
+  }
+
+  void _hideActions() {
+    _dismissActionsTimer?.cancel();
+    _actionsMenuOpen = false;
+    _actionsHovered = false;
+    _actionsOverlay.hide();
   }
 
   void _actionsEnter(PointerEnterEvent _) {
@@ -116,7 +126,7 @@ class _MessageRowState extends State<_MessageRow> {
   }
 
   void _reply() {
-    _actionsOverlay.hide();
+    _hideActions();
     widget.onReply();
   }
 

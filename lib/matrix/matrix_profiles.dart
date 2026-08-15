@@ -15,14 +15,7 @@ extension _MatrixProfiles on MatrixBackend {
       profile.additionalProperties[_profileBannerField] as String? ?? '',
     );
     final bannerBytes = await _profileMedia(bannerUri, 800, 240);
-    // The endpoint itself is the compatibility probe. Older homeservers return
-    // M_UNRECOGNIZED; the base display name/avatar remain fully usable.
-    var extensible = true;
-    try {
-      await _matrix.getProfileField(userId, 'm.tz');
-    } catch (_) {
-      extensible = false;
-    }
+    final capability = await _profileCapability();
     // ignore: deprecated_member_use
     final presence = _matrix.presences[userId]?.presence;
     return UserProfileSummary(
@@ -39,7 +32,7 @@ extension _MatrixProfiles on MatrixBackend {
       bio: profile.additionalProperties[_profileBioField] as String?,
       pronouns: profile.additionalProperties[_profilePronounsField] as String?,
       timezone: profile.mTz,
-      extensibleFieldsSupported: extensible,
+      extensibleFieldsSupported: capability?.enabled == true,
       blocked: _matrix.ignoredUsers.contains(userId),
     );
   }
@@ -69,8 +62,21 @@ extension _MatrixProfiles on MatrixBackend {
   }) async {
     final userId = _matrix.userID;
     if (userId == null) return;
+    final capability = await _profileCapability();
+    bool supports(String key) {
+      if (capability?.enabled != true) return false;
+      final allowed = capability?.allowed;
+      if (allowed != null) return allowed.contains(key);
+      return !(capability?.disallowed?.contains(key) ?? false);
+    }
+
+    Never unsupported(String key) => throw UnsupportedError(
+      'This homeserver does not advertise support for the profile field $key.',
+    );
+
     Future<void> setText(String key, String? value) async {
       if (value == null) return;
+      if (!supports(key)) unsupported(key);
       try {
         if (value.trim().isEmpty) {
           await _matrix.deleteProfileField(userId, key);
@@ -88,12 +94,14 @@ extension _MatrixProfiles on MatrixBackend {
       await setText(_profilePronounsField, pronouns);
       await setText('m.tz', timezone);
       if (removeBanner) {
+        if (!supports(_profileBannerField)) unsupported(_profileBannerField);
         try {
           await _matrix.deleteProfileField(userId, _profileBannerField);
         } on MatrixException catch (exception) {
           if (exception.error != MatrixError.M_UNRECOGNIZED) rethrow;
         }
       } else if (bannerBytes != null) {
+        if (!supports(_profileBannerField)) unsupported(_profileBannerField);
         final mxc = await _matrix.uploadContent(
           bannerBytes,
           filename: 'profile-banner.png',
@@ -113,6 +121,18 @@ extension _MatrixProfiles on MatrixBackend {
       _notifyBackendListeners();
       rethrow;
     }
+  }
+
+  Future<ProfileFieldsCapability?> _profileCapability() async {
+    if (_profileFieldsCapabilityLoaded) return _profileFieldsCapability;
+    try {
+      _profileFieldsCapability =
+          (await _matrix.getCapabilities()).mProfileFields;
+    } catch (_) {
+      _profileFieldsCapability = null;
+    }
+    _profileFieldsCapabilityLoaded = true;
+    return _profileFieldsCapability;
   }
 
   Future<void> _startDirectChat(String userId) async {

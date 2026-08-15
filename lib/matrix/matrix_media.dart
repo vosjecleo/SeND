@@ -42,9 +42,10 @@ extension _MatrixMedia on MatrixBackend {
 
   Future<void> _sendAttachment(
     AttachmentDraft attachment, {
+    String? roomId,
     String? replyToMessageId,
   }) async {
-    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
     try {
       await _validateUploadSize(attachment.bytes.length);

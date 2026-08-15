@@ -130,14 +130,16 @@ extension _MatrixMessages on MatrixBackend {
 
   Future<void> _sendMessage(
     String text, {
+    String? roomId,
     String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   }) async {
     final value = text.trim();
-    if (value.isEmpty || _selectedRoomId == null) return;
+    final targetRoomId = roomId ?? _selectedRoomId;
+    if (value.isEmpty || targetRoomId == null) return;
     try {
-      final room = _matrix.getRoomById(_selectedRoomId!);
+      final room = _matrix.getRoomById(targetRoomId);
       if (room == null) throw StateError('The selected room is unavailable.');
       await _prepareEncryptedSend(room);
       final transactionId = _matrix.generateUniqueTransactionId();

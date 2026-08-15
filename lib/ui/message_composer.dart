@@ -104,17 +104,14 @@ class _RichComposerState extends State<_RichComposer> {
       0,
       text.length,
     );
-    final before = text.substring(0, cursor);
-    final line = before.substring(before.lastIndexOf('\n') + 1);
-    if (line.split('`').length.isEven) {
+    final completion = findEmojiCompletion(text, cursor);
+    if (completion == null) {
       _clearEmojiCompletion();
       return;
     }
-    final closed = RegExp(r'(?:^|\s):([a-zA-Z0-9_+-]{2,32}):$')
-        .firstMatch(before);
-    if (closed != null) {
-      final query = closed.group(1)!;
-      final start = before.lastIndexOf(':', before.length - 2);
+    if (completion.closed) {
+      final query = completion.query;
+      final start = completion.start;
       final familiar = EmojiRepository.instance.familiarEmoji(query);
       if (familiar != null) {
         widget.controller.replaceText(
@@ -137,14 +134,8 @@ class _RichComposerState extends State<_RichComposer> {
       });
       return;
     }
-    final match = RegExp(r'(?:^|\s):([a-zA-Z0-9_+-]{1,32})$')
-        .firstMatch(before);
-    if (match == null || (match.start > 0 && before[match.start] == r'\')) {
-      _clearEmojiCompletion();
-      return;
-    }
-    final start = before.lastIndexOf(':');
-    final query = match.group(1)!;
+    final start = completion.start;
+    final query = completion.query;
     final generation = ++_emojiGeneration;
     EmojiRepository.instance.search(query, limit: 3).then((matches) {
       if (!mounted || generation != _emojiGeneration) return;

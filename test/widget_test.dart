@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
@@ -197,6 +199,39 @@ void main() {
     expect(backend.deafened, isTrue);
   });
 
+  testWidgets('shows RTC reconnect and a camera-off participant fallback', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:example.org'
+      ..currentVoiceStatus = VoiceConnectionStatus.reconnecting
+      ..currentActiveVoiceId = '!voice:example.org'
+      ..cameraEnabled = true
+      ..roomList = const [
+        RoomSummary(
+          id: '!voice:example.org',
+          name: 'Lounge',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+          presentation: RoomPresentation.voice,
+          voiceParticipants: [
+            VoiceParticipantSummary(
+              userId: '@alice:example.org',
+              displayName: 'Alice',
+            ),
+          ],
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Lounge'));
+    await tester.pump();
+
+    expect(find.text('Reconnecting…'), findsOneWidget);
+    expect(find.text('Alice · camera off'), findsOneWidget);
+  });
+
   testWidgets('prompts an unverified device for recovery', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
@@ -329,6 +364,12 @@ void main() {
 
     await _revealMessageActions(tester, find.text('Original').last);
     expect(find.byTooltip('Reply'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.byTooltip('Reply'), findsNothing);
+
+    await _revealMessageActions(tester, find.text('Original').last);
+    expect(find.byTooltip('Reply'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 1100));
     expect(find.byTooltip('Reply'), findsNothing);
 
@@ -423,6 +464,43 @@ void main() {
     expect(backend.sentMessages, ['hello from Deltiecord']);
     expect(find.text('hello from Deltiecord'), findsNothing);
     expect(composer.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('an in-flight send keeps its original target room', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..sendGate = gate
+      ..roomList = const [
+        RoomSummary(
+          id: '!one:example.org',
+          name: 'one',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+        RoomSummary(
+          id: '!two:example.org',
+          name: 'two',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    await _enterComposer(tester, 'keep this in room one');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    await tester.tap(find.text('two'));
+    await tester.pump();
+
+    expect(backend.sentMessageRoomIds, ['!one:example.org']);
+    gate.complete();
+    await tester.pump();
   });
 
   testWidgets('autocompletes Matrix user mentions into the composer', (
@@ -742,8 +820,12 @@ class FakeBackend extends ChatBackend {
   VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
   String? currentActiveVoiceId;
   bool deafened = false;
+  bool cameraEnabled = false;
+  Completer<void>? sendGate;
   int historyRequests = 0;
   final List<String> sentMessages = [];
+  final List<String?> sentMessageRoomIds = [];
+  final List<String?> sentAttachmentRoomIds = [];
   final List<String> redactedMessageIds = [];
   final List<(String, String)> toggledReactions = [];
   String? lastReplyToMessageId;
@@ -827,7 +909,7 @@ class FakeBackend extends ChatBackend {
   @override
   bool get voiceDeafened => deafened;
   @override
-  bool get voiceCameraEnabled => false;
+  bool get voiceCameraEnabled => cameraEnabled;
   @override
   bool get voiceScreenSharing => false;
   @override
@@ -1005,13 +1087,16 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> sendMessage(
     String text, {
+    String? roomId,
     String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
   }) async {
     sentMessages.add(text);
+    sentMessageRoomIds.add(roomId);
     lastReplyToMessageId = replyToMessageId;
     lastEditMessageId = editMessageId;
+    await sendGate?.future;
   }
 
   @override
@@ -1032,8 +1117,11 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> sendAttachment(
     AttachmentDraft attachment, {
+    String? roomId,
     String? replyToMessageId,
-  }) async {}
+  }) async {
+    sentAttachmentRoomIds.add(roomId);
+  }
 
   @override
   Future<Uint8List> downloadAttachment(

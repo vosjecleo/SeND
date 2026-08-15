@@ -9,6 +9,8 @@ extension _MatrixSession on MatrixBackend {
       await _disposeVoice();
       _client?.dispose();
       _client = await createMatrixClient();
+      _profileFieldsCapability = null;
+      _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((_) {
         _loadSettings();
         _notifyBackendListeners();
@@ -120,6 +122,8 @@ extension _MatrixSession on MatrixBackend {
       _deviceSessions = const [];
       _profileDisplayName = null;
       _profileAvatarBytes = null;
+      _profileFieldsCapability = null;
+      _profileFieldsCapabilityLoaded = false;
       _mediaRangeProxy.clear();
       _encryptionSetup = const EncryptionSetupState(
         status: EncryptionSetupStatus.loading,
