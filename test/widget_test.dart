@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';

@@ -10,9 +10,113 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  GtkWindow* window;
+  gboolean remember_window_state;
+  gboolean show_native_title_bar;
+  gint window_x;
+  gint window_y;
+  gint window_width;
+  gint window_height;
+  gboolean maximized;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static gchar* window_state_path() {
+  gchar* directory =
+      g_build_filename(g_get_user_config_dir(), "deltiecord", nullptr);
+  g_mkdir_with_parents(directory, 0700);
+  gchar* path = g_build_filename(directory, "window.ini", nullptr);
+  g_free(directory);
+  return path;
+}
+
+static void load_window_state(MyApplication* self) {
+  g_autofree gchar* path = window_state_path();
+  g_autoptr(GKeyFile) state = g_key_file_new();
+  if (!g_key_file_load_from_file(state, path, G_KEY_FILE_NONE, nullptr)) return;
+  self->remember_window_state =
+      g_key_file_get_boolean(state, "window", "remember", nullptr);
+  self->show_native_title_bar =
+      g_key_file_get_boolean(state, "window", "native_title_bar", nullptr);
+  if (!self->remember_window_state) return;
+  self->window_width = g_key_file_get_integer(state, "window", "width", nullptr);
+  self->window_height =
+      g_key_file_get_integer(state, "window", "height", nullptr);
+  self->window_x = g_key_file_get_integer(state, "window", "x", nullptr);
+  self->window_y = g_key_file_get_integer(state, "window", "y", nullptr);
+  self->maximized = g_key_file_get_boolean(state, "window", "maximized", nullptr);
+}
+
+static void save_window_state(MyApplication* self) {
+  g_autoptr(GKeyFile) state = g_key_file_new();
+  g_key_file_set_boolean(state, "window", "remember",
+                         self->remember_window_state);
+  g_key_file_set_boolean(state, "window", "native_title_bar",
+                         self->show_native_title_bar);
+  if (self->remember_window_state) {
+    g_key_file_set_integer(state, "window", "width", self->window_width);
+    g_key_file_set_integer(state, "window", "height", self->window_height);
+    g_key_file_set_integer(state, "window", "x", self->window_x);
+    g_key_file_set_integer(state, "window", "y", self->window_y);
+    g_key_file_set_boolean(state, "window", "maximized", self->maximized);
+  }
+  gsize length = 0;
+  g_autofree gchar* data = g_key_file_to_data(state, &length, nullptr);
+  g_autofree gchar* path = window_state_path();
+  g_file_set_contents(path, data, length, nullptr);
+}
+
+static void apply_title_bar(MyApplication* self) {
+  if (self->show_native_title_bar) {
+    gtk_window_set_decorated(self->window, TRUE);
+    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+    gtk_widget_show(GTK_WIDGET(header_bar));
+    gtk_header_bar_set_title(header_bar, "deltiecord");
+    gtk_header_bar_set_show_close_button(header_bar, TRUE);
+    gtk_window_set_titlebar(self->window, GTK_WIDGET(header_bar));
+  } else {
+    gtk_window_set_titlebar(self->window, nullptr);
+    gtk_window_set_decorated(self->window, FALSE);
+  }
+}
+
+static gboolean window_configure_cb(GtkWidget*, GdkEventConfigure* event,
+                                    MyApplication* self) {
+  if (!self->remember_window_state || self->maximized) return FALSE;
+  self->window_x = event->x;
+  self->window_y = event->y;
+  self->window_width = event->width;
+  self->window_height = event->height;
+  return FALSE;
+}
+
+static gboolean window_state_cb(GtkWidget*, GdkEventWindowState* event,
+                                MyApplication* self) {
+  self->maximized =
+      (event->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0;
+  return FALSE;
+}
+
+static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
+                             gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  if (strcmp(fl_method_call_get_name(call), "configure") != 0) {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  FlValue* args = fl_method_call_get_args(call);
+  FlValue* title = fl_value_lookup_string(args, "showNativeTitleBar");
+  FlValue* remember = fl_value_lookup_string(args, "rememberWindowState");
+  if (title != nullptr) self->show_native_title_bar = fl_value_get_bool(title);
+  if (remember != nullptr)
+    self->remember_window_state = fl_value_get_bool(remember);
+  apply_title_bar(self);
+  save_window_state(self);
+  g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+      fl_method_success_response_new(nullptr));
+  fl_method_call_respond(call, response, nullptr);
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -24,6 +128,8 @@ static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
+  self->window = window;
+  load_window_state(self);
 
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
@@ -42,7 +148,7 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
-  if (use_header_bar) {
+  if (use_header_bar && self->show_native_title_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "deltiecord");
@@ -52,7 +158,18 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "deltiecord");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  gtk_window_set_default_size(
+      window, self->window_width > 0 ? self->window_width : 1280,
+      self->window_height > 0 ? self->window_height : 720);
+  if (self->remember_window_state && self->window_x >= 0 &&
+      self->window_y >= 0) {
+    gtk_window_move(window, self->window_x, self->window_y);
+  }
+  if (self->maximized) gtk_window_maximize(window);
+  g_signal_connect(window, "configure-event", G_CALLBACK(window_configure_cb),
+                   self);
+  g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_cb),
+                   self);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -74,6 +191,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "net.deltie.deltiecord/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(channel, window_method_cb,
+                                            g_object_ref(self), g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -110,9 +234,8 @@ static void my_application_startup(GApplication* application) {
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
-  // MyApplication* self = MY_APPLICATION(object);
-
-  // Perform any actions required at application shutdown.
+  MyApplication* self = MY_APPLICATION(application);
+  save_window_state(self);
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
 }
@@ -133,7 +256,16 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
-static void my_application_init(MyApplication* self) {}
+static void my_application_init(MyApplication* self) {
+  self->window = nullptr;
+  self->remember_window_state = TRUE;
+  self->show_native_title_bar = TRUE;
+  self->window_x = -1;
+  self->window_y = -1;
+  self->window_width = 1280;
+  self->window_height = 720;
+  self->maximized = FALSE;
+}
 
 MyApplication* my_application_new() {
   // Set the program name to the application ID, which helps various systems

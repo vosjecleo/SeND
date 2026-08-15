@@ -4,6 +4,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import 'backend/chat_backend.dart';
 import 'models/chat_models.dart';
+import 'services/desktop_window_service.dart';
 import 'ui/chat_shell.dart';
 import 'ui/login_screen.dart';
 
@@ -18,6 +19,9 @@ class DeltiecordApp extends StatelessWidget {
       listenable: backend,
       builder: (context, _) {
         final preferences = backend.preferences;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => DesktopWindowService.apply(preferences),
+        );
         final contrast = preferences.highContrast;
         return MaterialApp(
           title: 'Deltiecord',
