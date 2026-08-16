@@ -85,7 +85,7 @@ jobs:
           $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches.Groups[1].Value
           $release = (Resolve-Path 'build/windows/x64/runner/Release').Path
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item LICENSE, CREDITS.md -Destination $release
+          Copy-Item LICENSE, CREDITS.md, THIRD-PARTY-NOTICES.md -Destination $release
           Compress-Archive -Path "$release/*" -DestinationPath "dist/Deltiecord-$version-windows-x64-portable.zip" -CompressionLevel Optimal
           "DELTIECORD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DELTIECORD_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append
