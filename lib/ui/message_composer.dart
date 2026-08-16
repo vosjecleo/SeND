@@ -293,13 +293,13 @@ class _RichComposerState extends State<_RichComposer> {
           color: context.deltiecord.panel,
           child: Padding(
             key: const Key('message-composer-panel'),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Container(
+              key: const Key('message-composer-island'),
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               decoration: BoxDecoration(
                 color: context.deltiecord.island,
-                border: Border.all(color: context.deltiecord.divider),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -356,11 +356,7 @@ class _RichComposerState extends State<_RichComposer> {
                   ),
                   Expanded(
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: context.deltiecord.input,
-                        border: Border.all(color: context.deltiecord.divider),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                      color: context.deltiecord.island,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -431,7 +427,7 @@ class _RichComposerState extends State<_RichComposer> {
                                   // Keep the compact composer while seating its text
                                   // cleanly alongside the attachment and send controls.
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                                    horizontal: 8,
                                     vertical: 7,
                                   ),
                                   placeholder: 'Message #${widget.roomName}',

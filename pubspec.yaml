@@ -1,7 +1,7 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.9.6+46
+version: 0.9.7+47
 
 environment:
   sdk: ^3.13.0

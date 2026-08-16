@@ -660,10 +660,11 @@ class _CurrentUserPanel extends StatelessWidget {
     child: ColoredBox(
       color: context.deltiecord.panel,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Material(
+          key: const Key('current-user-island'),
           color: context.deltiecord.island,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => showOwnProfile(context, backend),
@@ -673,7 +674,7 @@ class _CurrentUserPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox.square(
-                    dimension: 36,
+                    dimension: 40,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
@@ -785,7 +786,7 @@ class _UserControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
-    dimension: 32,
+    dimension: 34,
     child: IconButton(
       tooltip: tooltip,
       padding: EdgeInsets.zero,

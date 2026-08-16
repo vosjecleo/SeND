@@ -41,9 +41,9 @@ part 'message_media.dart';
 
 // The two bottom panels meet across separate widget trees. Keeping their
 // geometry shared prevents one-pixel seams when either side is refactored.
-const double _bottomPanelHeight = 56;
-const double _composerControlHeight = 34;
-const double _composerEditorHeight = 32;
+const double _bottomPanelHeight = 68;
+const double _composerControlHeight = 38;
+const double _composerEditorHeight = 36;
 
 double _composerEditorHeightFor(BuildContext context) => max(
   _composerEditorHeight,
@@ -57,7 +57,7 @@ double _composerControlHeightFor(BuildContext context) => max(
 );
 
 double _bottomPanelHeightFor(BuildContext context) =>
-    max(_bottomPanelHeight, _composerControlHeightFor(context) + 22);
+    max(_bottomPanelHeight, _composerControlHeightFor(context) + 24);
 
 double _densityBetween(
   double value, {

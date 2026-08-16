@@ -810,6 +810,23 @@ void main() {
       tester.getTopLeft(accountPanel).dy,
       tester.getTopLeft(composerPanel).dy,
     );
+    final accountIsland = find.byKey(const Key('current-user-island'));
+    final composerIsland = find.byKey(const Key('message-composer-island'));
+    expect(
+      tester.getTopLeft(accountIsland).dx - tester.getTopLeft(accountPanel).dx,
+      10,
+    );
+    expect(
+      tester.getTopLeft(composerIsland).dx -
+          tester.getTopLeft(composerPanel).dx,
+      10,
+    );
+    expect(
+      tester.getSize(accountIsland).height,
+      tester.getSize(composerIsland).height,
+    );
+    final composerSurface = tester.widget<Container>(composerIsland);
+    expect((composerSurface.decoration! as BoxDecoration).border, isNull);
     final composerTop = tester.getTopLeft(composerPanel).dy;
 
     backend.setTypingNames(const ['Alice']);
