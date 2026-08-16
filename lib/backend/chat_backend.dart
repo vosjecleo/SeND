@@ -94,6 +94,7 @@ abstract class ChatBackend extends ChangeNotifier {
     String? timezone,
     String? statusMessage,
     int? profileColor,
+    int? profileColorSecondary,
     Uint8List? bannerBytes,
     bool removeBanner,
   });

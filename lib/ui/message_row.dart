@@ -158,7 +158,7 @@ class _MessageRowState extends State<_MessageRow> {
           message.body,
           style: const TextStyle(
             color: Color(0xff989aa5),
-            fontSize: 12,
+            fontSize: DeltiecordTypeScale.normal,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -240,6 +240,8 @@ class _MessageRowState extends State<_MessageRow> {
                                           message.sender,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
+                                            fontSize:
+                                                DeltiecordTypeScale.bigChat,
                                             fontWeight: FontWeight.w600,
                                             height: 1.05,
                                           ),
@@ -308,7 +310,8 @@ class _MessageRowState extends State<_MessageRow> {
                                         Text(
                                           reply.sender,
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize:
+                                                DeltiecordTypeScale.normal,
                                             fontWeight: FontWeight.w600,
                                             color: Theme.of(context)
                                                 .colorScheme
@@ -319,7 +322,10 @@ class _MessageRowState extends State<_MessageRow> {
                                           reply.body.replaceAll('\n', ' '),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 12),
+                                          style: const TextStyle(
+                                            fontSize:
+                                                DeltiecordTypeScale.normal,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -362,7 +368,7 @@ class _MessageRowState extends State<_MessageRow> {
                                 Text(
                                   '(edited)',
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: DeltiecordTypeScale.normal,
                                     color: context.deltiecord.muted,
                                   ),
                                 ),
@@ -370,7 +376,7 @@ class _MessageRowState extends State<_MessageRow> {
                                 const Text(
                                   'Queued — retrying after reconnect',
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: DeltiecordTypeScale.normal,
                                     color: Color(0xffffc857),
                                   ),
                                 )
@@ -380,7 +386,7 @@ class _MessageRowState extends State<_MessageRow> {
                                     const Text(
                                       'Failed to send',
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: DeltiecordTypeScale.normal,
                                         color: Colors.redAccent,
                                       ),
                                     ),
@@ -394,7 +400,7 @@ class _MessageRowState extends State<_MessageRow> {
                                 Text(
                                   status,
                                   style: const TextStyle(
-                                    fontSize: 11,
+                                    fontSize: DeltiecordTypeScale.normal,
                                     color: Color(0xffb8bfff),
                                   ),
                                 ),
@@ -428,12 +434,15 @@ class _MessageRowState extends State<_MessageRow> {
                   ),
                   if (widget.startsGroup)
                     Positioned(
-                      left: 20,
+                      // The text column begins at x=64. A 32px avatar at x=16
+                      // is optically centered in the gutter before it.
+                      left: 16,
                       top: groupTop,
                       child: GestureDetector(
+                        key: ValueKey('message-avatar-${message.id}'),
                         onTap: _showSenderProfile,
                         child: CircleAvatar(
-                          radius: 17,
+                          radius: 16,
                           backgroundColor: context.deltiecord.elevated,
                           backgroundImage: message.avatarBytes == null
                               ? null
@@ -445,7 +454,7 @@ class _MessageRowState extends State<_MessageRow> {
                                       : message.sender.characters.first
                                             .toUpperCase(),
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: DeltiecordTypeScale.normal,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 )
@@ -478,7 +487,7 @@ class _UnreadDivider extends StatelessWidget {
             'NEW',
             style: TextStyle(
               color: Color(0xffff8b91),
-              fontSize: 10,
+              fontSize: DeltiecordTypeScale.normal,
               fontWeight: FontWeight.w700,
             ),
           ),

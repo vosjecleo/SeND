@@ -454,6 +454,7 @@ class _ConversationState extends State<_Conversation> {
                               room.name,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
+                                fontSize: DeltiecordTypeScale.bigUi,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -463,7 +464,7 @@ class _ConversationState extends State<_Conversation> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: DeltiecordTypeScale.normal,
                                   color: context.deltiecord.muted,
                                 ),
                               ),
@@ -473,7 +474,7 @@ class _ConversationState extends State<_Conversation> {
                       Text(
                         '${backend.selectedRoomMembers.length}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: DeltiecordTypeScale.normal,
                           color: context.deltiecord.muted,
                         ),
                       ),
@@ -735,7 +736,7 @@ class _ConversationState extends State<_Conversation> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: DeltiecordTypeScale.normal,
                                       color: context.deltiecord.muted,
                                     ),
                                   ),
@@ -748,7 +749,6 @@ class _ConversationState extends State<_Conversation> {
                     ],
                   ),
                 ),
-                const Divider(height: 1),
                 if (widget.replyingTo case final message?)
                   _ComposerContext(
                     label: 'Replying to ${message.sender}',

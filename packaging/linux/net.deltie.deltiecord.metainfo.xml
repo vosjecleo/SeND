@@ -20,6 +20,11 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.6" date="2026-08-16" type="development">
+      <description>
+        <p>Unified lower strip, profile gradients, compact search, typography, and Space discovery fixes.</p>
+      </description>
+    </release>
     <release version="0.9.5" date="2026-08-16" type="development">
       <description>
         <p>RTC audio controls, profile status and colour, navigation search, and theme cohesion.</p>

@@ -521,6 +521,7 @@ class MatrixBackend extends ChatBackend {
     String? timezone,
     String? statusMessage,
     int? profileColor,
+    int? profileColorSecondary,
     Uint8List? bannerBytes,
     bool removeBanner = false,
   }) => _updateOwnProfileFields(
@@ -529,6 +530,7 @@ class MatrixBackend extends ChatBackend {
     timezone: timezone,
     statusMessage: statusMessage,
     profileColor: profileColor,
+    profileColorSecondary: profileColorSecondary,
     bannerBytes: bannerBytes,
     removeBanner: removeBanner,
   );

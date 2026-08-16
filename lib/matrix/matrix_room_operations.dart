@@ -5,17 +5,62 @@ extension _MatrixRoomOperations on MatrixBackend {
     final normalized = query.trim();
     if (normalized.isEmpty || !_matrix.isLogged()) return const [];
     try {
-      final response = await _matrix.queryPublicRooms(
+      String? directoryServer;
+      var searchTerm = normalized;
+      final alias = RegExp(r'^#[^:]*:([^\s]+)$').firstMatch(normalized);
+      if (alias != null) {
+        directoryServer = alias.group(1);
+        searchTerm = normalized.substring(1, normalized.indexOf(':'));
+      } else if (!normalized.contains(RegExp(r'\s')) &&
+          normalized.contains('.') &&
+          !normalized.startsWith('#')) {
+        directoryServer = normalized;
+        searchTerm = '';
+      }
+
+      Future<QueryPublicRoomsResponse> queryDirectory({
+        required bool filterByType,
+      }) => _matrix.queryPublicRooms(
+        server: directoryServer,
         filter: PublicRoomQueryFilter(
-          genericSearchTerm: normalized,
-          roomTypes: const ['m.space'],
+          genericSearchTerm: searchTerm.isEmpty ? null : searchTerm,
+          roomTypes: filterByType ? const ['m.space'] : null,
         ),
         limit: 30,
       );
+
+      QueryPublicRoomsResponse response;
+      try {
+        try {
+          response = await queryDirectory(filterByType: true);
+        } catch (_) {
+          // The room-type directory filter is newer than public-room search
+          // and older Synapse deployments may reject it altogether.
+          response = await queryDirectory(filterByType: false);
+        }
+      } catch (_) {
+        if (alias == null) rethrow;
+        response = QueryPublicRoomsResponse(chunk: const []);
+      }
+      if (response.chunk.isEmpty) {
+        try {
+          response = await queryDirectory(filterByType: false);
+        } catch (_) {
+          if (alias == null) rethrow;
+        }
+      }
       final entries = <SpaceDirectoryEntry>[];
-      for (final room in response.chunk.where(
-        (entry) => entry.roomType == 'm.space',
-      )) {
+      for (final room in response.chunk) {
+        var isSpace = room.roomType == 'm.space';
+        if (!isSpace && room.roomType == null) {
+          try {
+            await _matrix.getSpaceHierarchy(room.roomId, limit: 1, maxDepth: 0);
+            isSpace = true;
+          } catch (_) {
+            // Ordinary public rooms do not belong in the Space picker.
+          }
+        }
+        if (!isSpace) continue;
         entries.add(
           SpaceDirectoryEntry(
             roomId: room.roomId,
@@ -27,6 +72,39 @@ extension _MatrixRoomOperations on MatrixBackend {
             avatarBytes: await _profileMedia(room.avatarUrl, 96, 96),
           ),
         );
+      }
+      if (entries.isEmpty && alias != null) {
+        // Exact aliases can still be resolved when a Space is joinable but its
+        // owner has not published it in the server's room directory.
+        try {
+          final resolved = await _matrix.getRoomIdByAlias(normalized);
+          final roomId = resolved.roomId;
+          if (roomId == null) return entries;
+          final hierarchy = await _matrix.getSpaceHierarchy(
+            roomId,
+            limit: 1,
+            maxDepth: 0,
+          );
+          final root = hierarchy.rooms
+              .where((room) => room.roomId == roomId)
+              .firstOrNull;
+          if (root != null && root.roomType == 'm.space') {
+            entries.add(
+              SpaceDirectoryEntry(
+                roomId: root.roomId,
+                name: root.name?.trim().isNotEmpty == true
+                    ? root.name!.trim()
+                    : normalized,
+                memberCount: root.numJoinedMembers,
+                topic: root.topic ?? '',
+                avatarBytes: await _profileMedia(root.avatarUrl, 96, 96),
+              ),
+            );
+          }
+        } catch (_) {
+          // The no-results explanation in the picker covers unpublished or
+          // inaccessible aliases without turning it into an application error.
+        }
       }
       return entries;
     } catch (exception) {

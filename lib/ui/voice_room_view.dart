@@ -169,7 +169,10 @@ class _VoiceLobby extends StatelessWidget {
                 ? 'Nobody is connected'
                 : '${room.voiceParticipants.length} connected',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: DeltiecordTypeScale.bigUi,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 10),
           for (final participant in room.voiceParticipants)
@@ -221,7 +224,10 @@ class _ParticipantPanel extends StatelessWidget {
       for (final participant in room.voiceParticipants)
         _ParticipantTile(backend: backend, participant: participant),
       const Divider(height: 22),
-      const Text('Input level', style: TextStyle(fontSize: 11)),
+      const Text(
+        'Input level',
+        style: TextStyle(fontSize: DeltiecordTypeScale.normal),
+      ),
       const SizedBox(height: 4),
       LinearProgressIndicator(
         value: backend.voiceMuted ? 0 : backend.voiceInputLevel,
@@ -378,7 +384,7 @@ class _DeviceSelectors extends StatelessWidget {
             width: 38,
             child: Text(
               '${(backend.preferences.microphoneVolume * 100).round()}%',
-              style: const TextStyle(fontSize: 10),
+              style: const TextStyle(fontSize: DeltiecordTypeScale.normal),
             ),
           ),
         ],
@@ -399,7 +405,7 @@ class _DeviceSelectors extends StatelessWidget {
             width: 38,
             child: Text(
               '${(backend.preferences.outputVolume * 100).round()}%',
-              style: const TextStyle(fontSize: 10),
+              style: const TextStyle(fontSize: DeltiecordTypeScale.normal),
             ),
           ),
         ],
@@ -421,10 +427,7 @@ class _VoiceBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: context.deltiecord.panel,
-      border: Border(top: BorderSide(color: context.deltiecord.divider)),
-    ),
+    decoration: BoxDecoration(color: context.deltiecord.panel),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     child: Wrap(
       alignment: WrapAlignment.center,
@@ -622,7 +625,7 @@ class _RtcAvatarTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               child: Text(
                 '${participant.displayName} · camera off',
-                style: const TextStyle(fontSize: 11),
+                style: const TextStyle(fontSize: DeltiecordTypeScale.normal),
               ),
             ),
           ),
@@ -716,7 +719,7 @@ class _RtcVideoTileState extends State<_RtcVideoTile> {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 child: Text(
                   '${widget.stream.displayName}${widget.stream.screenShare ? ' · screen' : ''}',
-                  style: const TextStyle(fontSize: 11),
+                  style: const TextStyle(fontSize: DeltiecordTypeScale.normal),
                 ),
               ),
             ),

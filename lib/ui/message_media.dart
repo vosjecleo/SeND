@@ -105,7 +105,7 @@ class _LinkPreviewCard extends StatelessWidget {
                         preview.siteName ?? preview.url.host,
                         style: TextStyle(
                           color: context.deltiecord.muted,
-                          fontSize: 11,
+                          fontSize: DeltiecordTypeScale.normal,
                         ),
                       ),
                       if (preview.title case final title?) ...[
@@ -126,7 +126,10 @@ class _LinkPreviewCard extends StatelessWidget {
                           description,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, height: 1.25),
+                          style: const TextStyle(
+                            fontSize: DeltiecordTypeScale.normal,
+                            height: 1.25,
+                          ),
                         ),
                       ],
                     ],
@@ -348,7 +351,10 @@ class _AttachmentViewState extends State<_AttachmentView> {
                   children: [
                     Icon(Icons.visibility_off_outlined, size: 17),
                     SizedBox(height: 2),
-                    Text('Reveal spoiler', style: TextStyle(fontSize: 10)),
+                    Text(
+                      'Reveal spoiler',
+                      style: TextStyle(fontSize: DeltiecordTypeScale.normal),
+                    ),
                   ],
                 ),
               ),
@@ -556,7 +562,10 @@ class _FileTile extends StatelessWidget {
               Text(attachment.name, overflow: TextOverflow.ellipsis),
               Text(
                 error ?? _fileDetails(attachment),
-                style: TextStyle(fontSize: 11, color: context.deltiecord.muted),
+                style: TextStyle(
+                  fontSize: DeltiecordTypeScale.normal,
+                  color: context.deltiecord.muted,
+                ),
               ),
             ],
           ),
@@ -737,7 +746,10 @@ class _InlineVideoState extends State<_InlineVideo> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 8),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: DeltiecordTypeScale.normal,
+                    ),
                   ),
                 ),
             ],
@@ -1099,7 +1111,7 @@ class _InlineAudioState extends State<_InlineAudio> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: DeltiecordTypeScale.normal,
                       color: Colors.redAccent,
                     ),
                   ),

@@ -42,6 +42,54 @@ class DeltiecordApp extends StatelessWidget {
           brightness: brightness,
           contrastLevel: contrast ? 1 : 0,
         ).copyWith(surface: palette.surface, onSurface: palette.text);
+        final baseText = ThemeData(brightness: brightness).textTheme;
+        final textTheme = baseText.copyWith(
+          displayLarge: baseText.displayLarge?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          displayMedium: baseText.displayMedium?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          displaySmall: baseText.displaySmall?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          headlineLarge: baseText.headlineLarge?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          headlineMedium: baseText.headlineMedium?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          headlineSmall: baseText.headlineSmall?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          titleLarge: baseText.titleLarge?.copyWith(
+            fontSize: DeltiecordTypeScale.bigUi,
+          ),
+          titleMedium: baseText.titleMedium?.copyWith(
+            fontSize: DeltiecordTypeScale.bigChat,
+          ),
+          titleSmall: baseText.titleSmall?.copyWith(
+            fontSize: DeltiecordTypeScale.bigChat,
+          ),
+          bodyLarge: baseText.bodyLarge?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+          bodyMedium: baseText.bodyMedium?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+          bodySmall: baseText.bodySmall?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+          labelLarge: baseText.labelLarge?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+          labelMedium: baseText.labelMedium?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+          labelSmall: baseText.labelSmall?.copyWith(
+            fontSize: DeltiecordTypeScale.normal,
+          ),
+        );
         return MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
@@ -60,6 +108,7 @@ class DeltiecordApp extends StatelessWidget {
             cardColor: palette.elevated,
             dividerColor: palette.divider,
             extensions: [palette],
+            textTheme: textTheme,
             fontFamily: preferences.fontFamily == 'System'
                 ? null
                 : preferences.fontFamily,
@@ -126,7 +175,10 @@ class DeltiecordApp extends StatelessWidget {
                   BorderSide(color: palette.divider),
                 ),
               ),
-              textStyle: TextStyle(color: palette.text, fontSize: 11),
+              textStyle: TextStyle(
+                color: palette.text,
+                fontSize: DeltiecordTypeScale.normal,
+              ),
             ),
           ),
           builder: (context, child) {

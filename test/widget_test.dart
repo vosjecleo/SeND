@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/backend/chat_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -106,6 +107,8 @@ void main() {
 
     expect(find.text('Preview Name'), findsWidgets);
     expect(find.text('Edit profile — live preview'), findsOneWidget);
+    expect(find.text('Profile gradient — top'), findsOneWidget);
+    expect(find.text('Profile gradient — bottom'), findsOneWidget);
   });
 
   testWidgets('shows an explicit offline state', (tester) async {
@@ -903,7 +906,7 @@ void main() {
       findsOneWidget,
     );
     final name = tester.widget<Text>(find.text('Alice'));
-    expect(name.style?.fontSize, 16);
+    expect(name.style?.fontSize, DeltiecordTypeScale.bigChat);
     expect(name.style?.fontWeight, FontWeight.w700);
     expect(find.text('See you tomorrow'), findsOneWidget);
   });
@@ -932,6 +935,8 @@ void main() {
       ];
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
+    await tester.tap(find.byTooltip('Search direct messages and groups'));
+    await tester.pump();
     await tester.enterText(find.byKey(const Key('room-list-search')), 'garden');
     await tester.pump();
     expect(find.text('Garden club'), findsOneWidget);
@@ -1075,6 +1080,8 @@ void main() {
         bio: 'Matrix enthusiast',
         pronouns: 'she/her',
         timezone: 'Europe/Amsterdam',
+        profileColor: 0xffaa2233,
+        profileColorSecondary: 0xff2233aa,
       )
       ..messageList = [
         ChatMessage(
@@ -1101,6 +1108,14 @@ void main() {
       findsNothing,
     );
     expect(find.text('Matrix enthusiast'), findsOneWidget);
+    final dialog = tester.widget<Dialog>(
+      find.byKey(const Key('profile-side-panel')),
+    );
+    expect(dialog.alignment, Alignment.centerRight);
+    final profileCard = tester.widget<Container>(
+      find.byKey(const Key('profile-card')),
+    );
+    expect((profileCard.decoration! as BoxDecoration).gradient, isNotNull);
   });
 
   testWidgets('converts a closed local emoji alias in the composer', (
@@ -1373,6 +1388,7 @@ class FakeBackend extends ChatBackend {
     String? timezone,
     String? statusMessage,
     int? profileColor,
+    int? profileColorSecondary,
     Uint8List? bannerBytes,
     bool removeBanner = false,
   }) async {}

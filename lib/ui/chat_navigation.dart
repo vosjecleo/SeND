@@ -103,7 +103,7 @@ class _SpaceBar extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.clip,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: DeltiecordTypeScale.normal,
                                 fontWeight: FontWeight.w700,
                               ),
                             )
@@ -221,7 +221,7 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
             controller: _query,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Search the public Matrix Space directory',
+              hintText: 'Space name, #alias:server, or Matrix server',
               prefixIcon: const Icon(Icons.travel_explore_outlined),
               suffixIcon: IconButton(
                 tooltip: 'Search',
@@ -237,7 +237,14 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
           const SizedBox(height: 8),
           Expanded(
             child: _results.isEmpty && !_searching
-                ? const Center(child: Text('No public Spaces found yet.'))
+                ? const Center(
+                    child: Text(
+                      'No published Spaces found. Try #alias:server or a '
+                      'Matrix server name; unpublished Spaces cannot be '
+                      'discovered through Matrix directories.',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: _results.length,
                     itemBuilder: (context, index) {
@@ -334,6 +341,7 @@ class _RoomPanel extends StatefulWidget {
 class _RoomPanelState extends State<_RoomPanel> {
   final _roomSearchController = TextEditingController();
   String _roomQuery = '';
+  bool _roomSearchVisible = false;
 
   ChatBackend get backend => widget.backend;
 
@@ -450,291 +458,342 @@ class _RoomPanelState extends State<_RoomPanel> {
               .toList(growable: false);
     final textRooms = visibleRooms.where((room) => !room.isVoice).toList();
     final voiceRooms = visibleRooms.where((room) => room.isVoice).toList();
-    return Material(
-      color: context.deltiecord.panel,
-      child: Column(
-        children: [
-          Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              color: context.deltiecord.surface,
-              border: Border(
-                bottom: BorderSide(color: context.deltiecord.divider),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    backend.selectedSpaceId == null
-                        ? 'Home'
-                        : backend.spaces
-                                  .where(
-                                    (space) =>
-                                        space.id == backend.selectedSpaceId,
-                                  )
-                                  .map((space) => space.name)
-                                  .firstOrNull ??
-                              'Space',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: backend.selectedSpaceId == null
-                      ? 'Start chat or create room'
-                      : 'Create room',
-                  icon: const Icon(Icons.add, size: 20),
-                  onSelected: (value) {
-                    if (value == 'direct') _startDirectMessage(context);
-                    if (value == 'room') _createRoom(context);
-                  },
-                  itemBuilder: (context) => [
-                    if (backend.selectedSpaceId == null)
-                      const PopupMenuItem(
-                        value: 'direct',
-                        child: ListTile(
-                          dense: true,
-                          leading: Icon(Icons.person_add_alt_1_outlined),
-                          title: Text('Start direct message'),
-                        ),
-                      ),
-                    PopupMenuItem(
-                      value: 'room',
-                      child: ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.add_comment_outlined),
-                        title: Text(
-                          backend.selectedSpaceId == null
-                              ? 'Create group chat'
-                              : 'Create room',
-                        ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (_roomSearchVisible) {
+            setState(() => _roomSearchVisible = false);
+          }
+        },
+      },
+      child: Focus(
+        child: Material(
+          color: context.deltiecord.panel,
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  Container(
+                    height: 56,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: context.deltiecord.surface,
+                      border: Border(
+                        bottom: BorderSide(color: context.deltiecord.divider),
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 7, 8, 3),
-            child: SizedBox(
-              height: 34,
-              child: TextField(
-                key: const Key('room-list-search'),
-                controller: _roomSearchController,
-                decoration: InputDecoration(
-                  hintText: backend.selectedSpaceId == null
-                      ? 'Search direct messages and groups'
-                      : 'Search rooms',
-                  prefixIcon: const Icon(Icons.search, size: 17),
-                  suffixIcon: _roomQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear room search',
-                          onPressed: () {
-                            _roomSearchController.clear();
-                            setState(() => _roomQuery = '');
-                          },
-                          icon: const Icon(Icons.close, size: 15),
-                        ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
-                ),
-                onChanged: (value) => setState(() => _roomQuery = value),
-              ),
-            ),
-          ),
-          Expanded(
-            child: visibleRooms.isEmpty
-                ? Center(
-                    child: Text(
-                      query.isEmpty ? 'No joined rooms' : 'No matching rooms',
-                    ),
-                  )
-                : ListView(
-                    padding: EdgeInsets.symmetric(
-                      vertical: _densityBetween(
-                        backend.preferences.compactness,
-                        roomy: 8,
-                        compact: 3,
-                      ),
-                    ),
-                    children: [
-                      if (backend.selectedSpaceId != null &&
-                          textRooms.isNotEmpty)
-                        const _RoomSectionLabel('TEXT ROOMS'),
-                      for (final room in textRooms)
-                        _RoomListTile(backend: backend, room: room),
-                      if (voiceRooms.isNotEmpty)
-                        const _RoomSectionLabel('VOICE ROOMS'),
-                      for (final room in voiceRooms)
-                        _RoomListTile(backend: backend, room: room),
-                    ],
-                  ),
-          ),
-          const Divider(height: 1),
-          SizedBox(
-            key: const Key('current-user-panel'),
-            height: _bottomPanelHeightFor(context),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-              child: Material(
-                color: context.deltiecord.rail,
-                borderRadius: BorderRadius.circular(10),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => showOwnProfile(context, backend),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        SizedBox.square(
-                          dimension: 36,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned.fill(
-                                child: ClipOval(
-                                  child: backend.profileAvatarBytes == null
-                                      ? ColoredBox(
-                                          color: context.deltiecord.elevated,
-                                          child: const Icon(
-                                            Icons.person,
-                                            size: 19,
-                                          ),
-                                        )
-                                      : Image.memory(
-                                          backend.profileAvatarBytes!,
-                                          fit: BoxFit.cover,
-                                        ),
-                                ),
-                              ),
-                              Positioned(
-                                left: -1,
-                                bottom: -1,
-                                child: Container(
-                                  key: ValueKey(
-                                    'current-user-presence-'
-                                    '${backend.profilePresence.name}',
-                                  ),
-                                  width: 11,
-                                  height: 11,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: switch (backend.profilePresence) {
-                                      UserPresence.online => const Color(
-                                        0xff43b581,
-                                      ),
-                                      UserPresence.away => const Color(
-                                        0xffffc857,
-                                      ),
-                                      UserPresence.offline => const Color(
-                                        0xff747680,
-                                      ),
-                                    },
-                                    border: Border.all(
-                                      color: context.deltiecord.rail,
-                                      width: 2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 9),
                         Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                backend.profileDisplayName ??
-                                    backend.userId
-                                        ?.split(':')
-                                        .first
-                                        .replaceFirst('@', '') ??
-                                    'Matrix account',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                          child: Text(
+                            backend.selectedSpaceId == null
+                                ? 'Home'
+                                : backend.spaces
+                                          .where(
+                                            (space) =>
+                                                space.id ==
+                                                backend.selectedSpaceId,
+                                          )
+                                          .map((space) => space.name)
+                                          .firstOrNull ??
+                                      'Space',
+                            style: const TextStyle(
+                              fontSize: DeltiecordTypeScale.bigUi,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: backend.selectedSpaceId == null
+                              ? 'Search direct messages and groups'
+                              : 'Search rooms',
+                          onPressed: () => setState(
+                            () => _roomSearchVisible = !_roomSearchVisible,
+                          ),
+                          icon: Icon(
+                            _roomSearchVisible ? Icons.close : Icons.search,
+                            size: 19,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: backend.selectedSpaceId == null
+                              ? 'Start chat or create room'
+                              : 'Create room',
+                          icon: const Icon(Icons.add, size: 20),
+                          onSelected: (value) {
+                            if (value == 'direct') _startDirectMessage(context);
+                            if (value == 'room') _createRoom(context);
+                          },
+                          itemBuilder: (context) => [
+                            if (backend.selectedSpaceId == null)
+                              const PopupMenuItem(
+                                value: 'direct',
+                                child: ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    Icons.person_add_alt_1_outlined,
+                                  ),
+                                  title: Text('Start direct message'),
                                 ),
                               ),
-                              if (backend.profileStatusMessage
-                                  case final status?)
-                                Text(
-                                  status,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: context.deltiecord.muted,
-                                  ),
+                            PopupMenuItem(
+                              value: 'room',
+                              child: ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.add_comment_outlined),
+                                title: Text(
+                                  backend.selectedSpaceId == null
+                                      ? 'Create group chat'
+                                      : 'Create room',
                                 ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: visibleRooms.isEmpty
+                        ? Center(
+                            child: Text(
+                              query.isEmpty
+                                  ? 'No joined rooms'
+                                  : 'No matching rooms',
+                            ),
+                          )
+                        : ListView(
+                            padding: EdgeInsets.symmetric(
+                              vertical: _densityBetween(
+                                backend.preferences.compactness,
+                                roomy: 8,
+                                compact: 3,
+                              ),
+                            ),
+                            children: [
+                              if (backend.selectedSpaceId != null &&
+                                  textRooms.isNotEmpty)
+                                const _RoomSectionLabel('TEXT ROOMS'),
+                              for (final room in textRooms)
+                                _RoomListTile(backend: backend, room: room),
+                              if (voiceRooms.isNotEmpty)
+                                const _RoomSectionLabel('VOICE ROOMS'),
+                              for (final room in voiceRooms)
+                                _RoomListTile(backend: backend, room: room),
                             ],
                           ),
-                        ),
-                        SizedBox.square(
-                          dimension: 32,
-                          child: IconButton(
-                            tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () =>
-                                backend.setVoiceMuted(!backend.voiceMuted),
-                            icon: Icon(
-                              backend.voiceMuted ? Icons.mic_off : Icons.mic,
-                              size: 18,
+                  ),
+                  SizedBox(height: _bottomPanelHeightFor(context)),
+                ],
+              ),
+              if (_roomSearchVisible)
+                Positioned(
+                  key: const Key('room-search-popup'),
+                  top: 50,
+                  left: 8,
+                  right: 8,
+                  child: TapRegion(
+                    onTapOutside: (_) =>
+                        setState(() => _roomSearchVisible = false),
+                    child: Material(
+                      elevation: 12,
+                      color: context.deltiecord.elevated,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        side: BorderSide(color: context.deltiecord.divider),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: SizedBox(
+                          height: 34,
+                          child: TextField(
+                            key: const Key('room-list-search'),
+                            controller: _roomSearchController,
+                            autofocus: true,
+                            decoration: InputDecoration(
+                              hintText: backend.selectedSpaceId == null
+                                  ? 'Search direct messages and groups'
+                                  : 'Search rooms',
+                              prefixIcon: const Icon(Icons.search, size: 17),
+                              suffixIcon: _roomQuery.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear room search',
+                                      onPressed: () {
+                                        _roomSearchController.clear();
+                                        setState(() => _roomQuery = '');
+                                      },
+                                      icon: const Icon(Icons.close, size: 15),
+                                    ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 6,
+                              ),
                             ),
+                            onChanged: (value) =>
+                                setState(() => _roomQuery = value),
+                            onSubmitted: (_) =>
+                                setState(() => _roomSearchVisible = false),
                           ),
                         ),
-                        SizedBox.square(
-                          dimension: 32,
-                          child: IconButton(
-                            tooltip: backend.voiceDeafened
-                                ? 'Undeafen'
-                                : 'Deafen',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () => backend.setVoiceDeafened(
-                              !backend.voiceDeafened,
-                            ),
-                            icon: Icon(
-                              backend.voiceDeafened
-                                  ? Icons.headset_off
-                                  : Icons.headphones,
-                              size: 18,
-                            ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrentUserPanel extends StatelessWidget {
+  const _CurrentUserPanel({required this.backend});
+
+  final ChatBackend backend;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const Key('current-user-panel'),
+    height: _bottomPanelHeightFor(context),
+    child: ColoredBox(
+      color: context.deltiecord.panel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        child: Material(
+          color: context.deltiecord.island,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => showOwnProfile(context, backend),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox.square(
+                    dimension: 36,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(
+                          child: ClipOval(
+                            child: backend.profileAvatarBytes == null
+                                ? ColoredBox(
+                                    color: context.deltiecord.elevated,
+                                    child: const Icon(Icons.person, size: 19),
+                                  )
+                                : Image.memory(
+                                    backend.profileAvatarBytes!,
+                                    fit: BoxFit.cover,
+                                  ),
                           ),
                         ),
-                        SizedBox.square(
-                          dimension: 32,
-                          child: IconButton(
-                            tooltip: 'Settings',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () =>
-                                showDeltiecordSettings(context, backend),
-                            icon: const Icon(Icons.settings_outlined, size: 18),
+                        Positioned(
+                          left: -1,
+                          bottom: -1,
+                          child: Container(
+                            key: ValueKey(
+                              'current-user-presence-'
+                              '${backend.profilePresence.name}',
+                            ),
+                            width: 11,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: switch (backend.profilePresence) {
+                                UserPresence.online => const Color(0xff43b581),
+                                UserPresence.away => const Color(0xffffc857),
+                                UserPresence.offline => const Color(0xff747680),
+                              },
+                              border: Border.all(
+                                color: context.deltiecord.island,
+                                width: 2,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          backend.profileDisplayName ??
+                              backend.userId
+                                  ?.split(':')
+                                  .first
+                                  .replaceFirst('@', '') ??
+                              'Matrix account',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (backend.profileStatusMessage case final status?)
+                          Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: context.deltiecord.muted),
+                          ),
+                      ],
+                    ),
+                  ),
+                  _UserControlButton(
+                    tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
+                    onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
+                    icon: backend.voiceMuted ? Icons.mic_off : Icons.mic,
+                  ),
+                  _UserControlButton(
+                    tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
+                    onPressed: () =>
+                        backend.setVoiceDeafened(!backend.voiceDeafened),
+                    icon: backend.voiceDeafened
+                        ? Icons.headset_off
+                        : Icons.headphones,
+                  ),
+                  _UserControlButton(
+                    tooltip: 'Settings',
+                    onPressed: () => showDeltiecordSettings(context, backend),
+                    icon: Icons.settings_outlined,
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
+
+class _UserControlButton extends StatelessWidget {
+  const _UserControlButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 32,
+    child: IconButton(
+      tooltip: tooltip,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+    ),
+  );
 }
 
 class _StartDirectMessageDialog extends StatefulWidget {
@@ -798,7 +857,7 @@ class _RoomSectionLabel extends StatelessWidget {
       label,
       style: TextStyle(
         color: context.deltiecord.muted,
-        fontSize: 10,
+        fontSize: DeltiecordTypeScale.normal,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
       ),
@@ -1042,7 +1101,7 @@ class _HomeRoomListTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: DeltiecordTypeScale.bigChat,
                           fontWeight: FontWeight.w700,
                           height: 1,
                         ),
@@ -1060,7 +1119,7 @@ class _HomeRoomListTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.deltiecord.muted,
-                          fontSize: 13,
+                          fontSize: DeltiecordTypeScale.normal,
                           height: 1.05,
                         ),
                       ),

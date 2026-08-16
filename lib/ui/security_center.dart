@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'deltiecord_theme.dart';
 
 Future<void> showSecurityCenter(BuildContext context, ChatBackend backend) =>
     showDialog<void>(
@@ -144,7 +145,9 @@ class _SecurityDialogState extends State<_SecurityDialog> {
                         const SizedBox(height: 8),
                         const Text(
                           'This credential is used only to unlock Matrix Secure Secret Storage. Deltiecord does not save the text you enter.',
-                          style: TextStyle(fontSize: 12),
+                          style: TextStyle(
+                            fontSize: DeltiecordTypeScale.normal,
+                          ),
                         ),
                       ],
                       if (_localError case final error?) ...[
@@ -318,7 +321,10 @@ class _GeneratedKey extends StatelessWidget {
     children: [
       const Text(
         'Save this recovery key now',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: DeltiecordTypeScale.bigUi,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       const SizedBox(height: 8),
       const Text(
@@ -334,7 +340,10 @@ class _GeneratedKey extends StatelessWidget {
         ),
         child: SelectableText(
           recoveryKey,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 15),
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: DeltiecordTypeScale.bigChat,
+          ),
         ),
       ),
       const SizedBox(height: 8),

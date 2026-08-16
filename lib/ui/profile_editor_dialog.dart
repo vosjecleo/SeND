@@ -48,6 +48,8 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     text: widget.initialProfile.statusMessage,
   );
   late int _profileColor = widget.initialProfile.profileColor ?? 0xff6975d9;
+  late int _profileColorSecondary =
+      widget.initialProfile.profileColorSecondary ?? 0xff343966;
   String? _timezone;
   Uint8List? _avatar;
   Uint8List? _banner;
@@ -95,6 +97,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     timezone: _timezone,
     statusMessage: _status.text,
     profileColor: _profileColor,
+    profileColorSecondary: _profileColorSecondary,
     extensibleFieldsSupported: widget.initialProfile.extensibleFieldsSupported,
   );
 
@@ -184,6 +187,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
         timezone: extensible ? _timezone?.trim() ?? '' : null,
         statusMessage: _status.text.trim(),
         profileColor: extensible ? _profileColor : null,
+        profileColorSecondary: extensible ? _profileColorSecondary : null,
         bannerBytes: extensible && _bannerChanged && !_removeBanner
             ? _banner
             : null,
@@ -284,11 +288,18 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text('Profile colour'),
+                        const Text('Profile gradient — top'),
                         AccentColorPicker(
                           color: _profileColor,
                           onChanged: (color) =>
                               setState(() => _profileColor = color),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text('Profile gradient — bottom'),
+                        AccentColorPicker(
+                          color: _profileColorSecondary,
+                          onChanged: (color) =>
+                              setState(() => _profileColorSecondary = color),
                         ),
                         const SizedBox(height: 4),
                         OutlinedButton.icon(

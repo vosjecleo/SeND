@@ -73,8 +73,15 @@ class _ProfileDialogState extends State<_ProfileDialog> {
 
   @override
   Widget build(BuildContext context) => Dialog(
+    key: const Key('profile-side-panel'),
+    alignment: widget.own ? Alignment.center : Alignment.centerRight,
+    insetPadding: const EdgeInsets.all(12),
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 760, maxHeight: 860),
+      constraints: const BoxConstraints(
+        minWidth: 620,
+        maxWidth: 700,
+        maxHeight: 860,
+      ),
       child: FutureBuilder<UserProfileSummary>(
         future: _profile,
         builder: (context, snapshot) {

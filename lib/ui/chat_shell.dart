@@ -517,88 +517,111 @@ class _ChatShellState extends State<ChatShell> {
                       220.0,
                       constraints.maxWidth * 0.46,
                     );
-                    return Row(
+                    // Include the resize gutter so the lower controls form one
+                    // uninterrupted strip across rail, room list, and composer.
+                    final navigationWidth =
+                        panelWidth + (showSpaceRail ? 69 : 0) + 5;
+                    return Stack(
                       children: [
-                        if (showSpaceRail) ...[
-                          SizedBox(
-                            width: 68,
-                            child: _SpaceBar(backend: widget.backend),
-                          ),
-                          const VerticalDivider(width: 1),
-                        ],
-                        SizedBox(
-                          width: panelWidth,
-                          child: _RoomPanel(backend: widget.backend),
-                        ),
-                        MouseRegion(
-                          cursor: SystemMouseCursors.resizeColumn,
-                          child: GestureDetector(
-                            key: const Key('room-panel-resize-handle'),
-                            behavior: HitTestBehavior.opaque,
-                            onHorizontalDragUpdate: (details) {
-                              final width =
-                                  (widget.backend.preferences.roomPanelWidth +
-                                          details.delta.dx)
-                                      .clamp(
-                                        220.0,
-                                        constraints.maxWidth * 0.46,
-                                      );
-                              widget.backend.updatePreferences(
-                                widget.backend.preferences.copyWith(
-                                  roomPanelWidth: width,
+                        Positioned.fill(
+                          child: Row(
+                            children: [
+                              if (showSpaceRail) ...[
+                                SizedBox(
+                                  width: 68,
+                                  child: _SpaceBar(backend: widget.backend),
                                 ),
-                              );
-                            },
-                            child: SizedBox(
-                              width: 5,
-                              child: Center(
-                                child: VerticalDivider(
-                                  width: 1,
-                                  color: context.deltiecord.divider,
+                                const VerticalDivider(width: 1),
+                              ],
+                              SizedBox(
+                                width: panelWidth,
+                                child: _RoomPanel(backend: widget.backend),
+                              ),
+                              MouseRegion(
+                                cursor: SystemMouseCursors.resizeColumn,
+                                child: GestureDetector(
+                                  key: const Key('room-panel-resize-handle'),
+                                  behavior: HitTestBehavior.opaque,
+                                  onHorizontalDragUpdate: (details) {
+                                    final width =
+                                        (widget
+                                                    .backend
+                                                    .preferences
+                                                    .roomPanelWidth +
+                                                details.delta.dx)
+                                            .clamp(
+                                              220.0,
+                                              constraints.maxWidth * 0.46,
+                                            );
+                                    widget.backend.updatePreferences(
+                                      widget.backend.preferences.copyWith(
+                                        roomPanelWidth: width,
+                                      ),
+                                    );
+                                  },
+                                  child: SizedBox(
+                                    width: 5,
+                                    child: Center(
+                                      child: VerticalDivider(
+                                        width: 1,
+                                        color: context.deltiecord.divider,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
+                              Expanded(
+                                child: widget.backend.selectedRoom == null
+                                    ? const _EmptyConversation()
+                                    : widget.backend.selectedRoom!.isVoice ||
+                                          widget.backend.activeVoiceRoomId ==
+                                              widget.backend.selectedRoom!.id
+                                    ? VoiceRoomView(
+                                        backend: widget.backend,
+                                        room: widget.backend.selectedRoom!,
+                                      )
+                                    : _Conversation(
+                                        key: _conversationKey,
+                                        composerKey: _composerKey,
+                                        backend: widget.backend,
+                                        controller: _message,
+                                        composerFocus: _composerFocus,
+                                        sending: _sending,
+                                        replyingTo: _replyingTo,
+                                        editingMessage: _editingMessage,
+                                        onSend: _send,
+                                        onReply: _replyTo,
+                                        onEdit: _edit,
+                                        onCancelComposerAction:
+                                            _cancelComposerAction,
+                                        onAttach: _attachFile,
+                                        onGif: _showGifPicker,
+                                        onPasteImage: _pasteClipboardImage,
+                                        onDropAttachments: _queueAttachments,
+                                        pendingAttachments: _pendingAttachments,
+                                        onRemoveAttachment:
+                                            _removePendingAttachment,
+                                        onToggleAttachmentSpoiler:
+                                            _togglePendingSpoiler,
+                                        mentionSuggestions: _mentionSuggestions,
+                                        mentionSelectionIndex:
+                                            _mentionSelectionIndex,
+                                        onMentionSelected: _insertMention,
+                                        onMentionSelectionChanged: (index) =>
+                                            setState(
+                                              () => _mentionSelectionIndex =
+                                                  index,
+                                            ),
+                                      ),
+                              ),
+                            ],
                           ),
                         ),
-                        Expanded(
-                          child: widget.backend.selectedRoom == null
-                              ? const _EmptyConversation()
-                              : widget.backend.selectedRoom!.isVoice ||
-                                    widget.backend.activeVoiceRoomId ==
-                                        widget.backend.selectedRoom!.id
-                              ? VoiceRoomView(
-                                  backend: widget.backend,
-                                  room: widget.backend.selectedRoom!,
-                                )
-                              : _Conversation(
-                                  key: _conversationKey,
-                                  composerKey: _composerKey,
-                                  backend: widget.backend,
-                                  controller: _message,
-                                  composerFocus: _composerFocus,
-                                  sending: _sending,
-                                  replyingTo: _replyingTo,
-                                  editingMessage: _editingMessage,
-                                  onSend: _send,
-                                  onReply: _replyTo,
-                                  onEdit: _edit,
-                                  onCancelComposerAction: _cancelComposerAction,
-                                  onAttach: _attachFile,
-                                  onGif: _showGifPicker,
-                                  onPasteImage: _pasteClipboardImage,
-                                  onDropAttachments: _queueAttachments,
-                                  pendingAttachments: _pendingAttachments,
-                                  onRemoveAttachment: _removePendingAttachment,
-                                  onToggleAttachmentSpoiler:
-                                      _togglePendingSpoiler,
-                                  mentionSuggestions: _mentionSuggestions,
-                                  mentionSelectionIndex: _mentionSelectionIndex,
-                                  onMentionSelected: _insertMention,
-                                  onMentionSelectionChanged: (index) =>
-                                      setState(
-                                        () => _mentionSelectionIndex = index,
-                                      ),
-                                ),
+                        Positioned(
+                          left: 0,
+                          bottom: 0,
+                          width: navigationWidth,
+                          child: _CurrentUserPanel(backend: widget.backend),
                         ),
                       ],
                     );
@@ -671,7 +694,10 @@ class _ConnectionBanner extends StatelessWidget {
           children: [
             Icon(icon, size: 16),
             const SizedBox(width: 8),
-            Text(message, style: const TextStyle(fontSize: 12)),
+            Text(
+              message,
+              style: const TextStyle(fontSize: DeltiecordTypeScale.normal),
+            ),
           ],
         ),
       ),

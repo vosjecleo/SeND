@@ -29,11 +29,27 @@ class DeltiecordProfileCard extends StatelessWidget {
     final accent = Color(
       profile.profileColor ?? Theme.of(context).colorScheme.primary.toARGB32(),
     );
+    final secondaryAccent = Color(
+      profile.profileColorSecondary ??
+          Color.lerp(accent, palette.rail, 0.62)!.toARGB32(),
+    );
+    final gradientTop = Color.alphaBlend(
+      accent.withValues(alpha: 0.28),
+      palette.surface,
+    );
+    final gradientBottom = Color.alphaBlend(
+      secondaryAccent.withValues(alpha: 0.3),
+      palette.surface,
+    );
     final timezone = profile.timezone;
     return Container(
       key: const Key('profile-card'),
       decoration: BoxDecoration(
-        color: palette.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [gradientTop, gradientBottom],
+        ),
         border: Border.all(color: accent.withValues(alpha: 0.75), width: 2),
         borderRadius: BorderRadius.circular(5),
         boxShadow: const [
@@ -45,7 +61,12 @@ class DeltiecordProfileCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProfileHeader(profile: profile, accent: accent, onEdit: onEdit),
+          _ProfileHeader(
+            profile: profile,
+            accent: accent,
+            secondaryAccent: secondaryAccent,
+            onEdit: onEdit,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(30, 4, 30, 26),
             child: Column(
@@ -114,7 +135,10 @@ class DeltiecordProfileCard extends StatelessWidget {
                     Expanded(
                       child: SelectableText(
                         profile.userId,
-                        style: TextStyle(color: palette.muted, fontSize: 16),
+                        style: TextStyle(
+                          color: palette.muted,
+                          fontSize: DeltiecordTypeScale.normal,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -219,11 +243,13 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.profile,
     required this.accent,
+    required this.secondaryAccent,
     required this.onEdit,
   });
 
   final UserProfileSummary profile;
   final Color accent;
+  final Color secondaryAccent;
   final VoidCallback? onEdit;
 
   @override
@@ -250,7 +276,7 @@ class _ProfileHeader extends StatelessWidget {
                             end: Alignment.bottomRight,
                             colors: [
                               accent.withValues(alpha: 0.72),
-                              palette.rail,
+                              secondaryAccent.withValues(alpha: 0.8),
                             ],
                           ),
                         ),

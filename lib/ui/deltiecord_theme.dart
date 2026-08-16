@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_models.dart';
 
+/// Deltiecord's deliberately small desktop type scale.
+///
+/// Feature widgets should choose a semantic tier instead of inventing a new
+/// point size. Font scaling remains available through accessibility settings.
+abstract final class DeltiecordTypeScale {
+  static const double normal = 14;
+  static const double bigChat = 15;
+  static const double bigUi = 17;
+}
+
 @immutable
 class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
   const DeltiecordPalette({
@@ -11,6 +21,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
     required this.surface,
     required this.elevated,
     required this.input,
+    required this.island,
     required this.hover,
     required this.divider,
     required this.text,
@@ -23,6 +34,9 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
   final Color surface;
   final Color elevated;
   final Color input;
+
+  /// Stable lower-strip cards used by the own-profile and composer islands.
+  final Color island;
   final Color hover;
   final Color divider;
   final Color text;
@@ -36,20 +50,22 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
       surface: Color(0xfff2f3f5),
       elevated: Color(0xffe3e5e8),
       input: Color(0xffffffff),
+      island: Color(0xffe3e5e8),
       hover: Color(0xffe3e5e8),
       divider: Color(0xffe3e5e8),
       text: Color(0xff202225),
       muted: Color(0xff5c6068),
     ),
     DeltiecordThemeMode.dark => const DeltiecordPalette(
-      background: Color(0xff313338),
-      rail: Color(0xff1e1f22),
-      panel: Color(0xff2b2d31),
-      surface: Color(0xff313338),
-      elevated: Color(0xff2b2d31),
+      background: Color(0xff26272c),
+      rail: Color(0xff17181b),
+      panel: Color(0xff202125),
+      surface: Color(0xff26272c),
+      elevated: Color(0xff202125),
       input: Color(0xff1e1f22),
-      hover: Color(0xff2b2d31),
-      divider: Color(0xff1e1f22),
+      island: Color(0xff1e1f22),
+      hover: Color(0xff202125),
+      divider: Color(0xff17181b),
       text: Color(0xfff2f3f5),
       muted: Color(0xffb5bac1),
     ),
@@ -60,6 +76,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
       surface: Color(0xff000000),
       elevated: Color(0xff000000),
       input: Color(0xff000000),
+      island: Color(0xff000000),
       hover: Color(0xff000000),
       divider: Color(0xff292929),
       text: Color(0xfff5f5f5),
@@ -75,6 +92,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
     Color? surface,
     Color? elevated,
     Color? input,
+    Color? island,
     Color? hover,
     Color? divider,
     Color? text,
@@ -86,6 +104,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
     surface: surface ?? this.surface,
     elevated: elevated ?? this.elevated,
     input: input ?? this.input,
+    island: island ?? this.island,
     hover: hover ?? this.hover,
     divider: divider ?? this.divider,
     text: text ?? this.text,
@@ -102,6 +121,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
       surface: Color.lerp(surface, other.surface, t)!,
       elevated: Color.lerp(elevated, other.elevated, t)!,
       input: Color.lerp(input, other.input, t)!,
+      island: Color.lerp(island, other.island, t)!,
       hover: Color.lerp(hover, other.hover, t)!,
       divider: Color.lerp(divider, other.divider, t)!,
       text: Color.lerp(text, other.text, t)!,

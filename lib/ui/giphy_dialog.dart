@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/giphy_service.dart';
+import 'deltiecord_theme.dart';
 
 class GiphyDialog extends StatefulWidget {
   const GiphyDialog({required this.service, super.key});
@@ -104,7 +105,10 @@ class _GiphyDialogState extends State<GiphyDialog> {
             alignment: Alignment.centerRight,
             child: Text(
               'Powered by GIPHY',
-              style: TextStyle(fontSize: 10, color: Color(0xff989aa5)),
+              style: TextStyle(
+                fontSize: DeltiecordTypeScale.normal,
+                color: Color(0xff989aa5),
+              ),
             ),
           ),
         ],

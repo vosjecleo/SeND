@@ -314,6 +314,7 @@ class UserProfileSummary {
     this.timezone,
     this.statusMessage,
     this.profileColor,
+    this.profileColorSecondary,
     this.extensibleFieldsSupported = true,
     this.blocked = false,
   });
@@ -327,7 +328,12 @@ class UserProfileSummary {
   final String? pronouns;
   final String? timezone;
   final String? statusMessage;
+
+  /// Top colour of Deltiecord's interoperable, client-namespaced gradient.
   final int? profileColor;
+
+  /// Bottom colour of Deltiecord's interoperable, client-namespaced gradient.
+  final int? profileColorSecondary;
   final bool extensibleFieldsSupported;
   final bool blocked;
 }

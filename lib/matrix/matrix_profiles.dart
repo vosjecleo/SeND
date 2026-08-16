@@ -4,6 +4,7 @@ const _profileBioField = 'net.deltiecord.bio';
 const _profilePronounsField = 'net.deltiecord.pronouns';
 const _profileBannerField = 'net.deltiecord.banner';
 const _profileColorField = 'net.deltiecord.profile_color';
+const _profileColorSecondaryField = 'net.deltiecord.profile_color_secondary';
 
 extension _MatrixProfiles on MatrixBackend {
   Future<UserProfileSummary> _getUserProfile(String userId) async {
@@ -40,6 +41,9 @@ extension _MatrixProfiles on MatrixBackend {
       timezone: profile.mTz,
       statusMessage: presence?.statusMsg,
       profileColor: _parseProfileColor(colorValue),
+      profileColorSecondary: _parseProfileColor(
+        profile.additionalProperties[_profileColorSecondaryField],
+      ),
       extensibleFieldsSupported: capability?.enabled == true,
       blocked: _matrix.ignoredUsers.contains(userId),
     );
@@ -83,6 +87,7 @@ extension _MatrixProfiles on MatrixBackend {
     String? timezone,
     String? statusMessage,
     int? profileColor,
+    int? profileColorSecondary,
     Uint8List? bannerBytes,
     required bool removeBanner,
   }) async {
@@ -138,6 +143,13 @@ extension _MatrixProfiles on MatrixBackend {
           '#${profileColor.toRadixString(16).padLeft(8, '0').substring(2)}',
         );
         _profileColor = profileColor;
+      }
+      if (profileColorSecondary != null &&
+          supports(_profileColorSecondaryField)) {
+        await setText(
+          _profileColorSecondaryField,
+          '#${profileColorSecondary.toRadixString(16).padLeft(8, '0').substring(2)}',
+        );
       }
       if (removeBanner) {
         if (!supports(_profileBannerField)) unsupported(_profileBannerField);

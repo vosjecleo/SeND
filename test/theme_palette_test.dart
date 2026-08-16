@@ -14,6 +14,7 @@ void main() {
         palette.surface,
         palette.elevated,
         palette.input,
+        palette.island,
         palette.hover,
       },
       {const Color(0xff000000)},
@@ -22,5 +23,13 @@ void main() {
 
   test('new installs start at half compactness', () {
     expect(const AppPreferences().compactness, 0.5);
+  });
+
+  test('dark mode darkens panels while preserving input islands', () {
+    final palette = DeltiecordPalette.forMode(DeltiecordThemeMode.dark);
+    expect(palette.background, const Color(0xff26272c));
+    expect(palette.panel, const Color(0xff202125));
+    expect(palette.input, const Color(0xff1e1f22));
+    expect(palette.island, const Color(0xff1e1f22));
   });
 }
