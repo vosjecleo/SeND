@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/services.dart';
 
 import '../models/chat_models.dart';
+import 'desktop_platform.dart';
 
 class DesktopWindowService {
   DesktopWindowService._();
@@ -11,7 +10,7 @@ class DesktopWindowService {
   static AppPreferences? _applied;
 
   static Future<void> apply(AppPreferences preferences) async {
-    if ((!Platform.isLinux && !Platform.isWindows) ||
+    if (!DesktopPlatformCapabilities.current.supportsDesktopWindowChannel ||
         _sameWindowSettings(_applied, preferences)) {
       return;
     }
@@ -27,7 +26,9 @@ class DesktopWindowService {
   }
 
   static Future<void> present() async {
-    if (!Platform.isLinux && !Platform.isWindows) return;
+    if (!DesktopPlatformCapabilities.current.supportsDesktopWindowChannel) {
+      return;
+    }
     try {
       await _channel.invokeMethod<void>('present');
     } on MissingPluginException {

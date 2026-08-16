@@ -12,6 +12,28 @@ class NotificationTarget {
   final String eventId;
 }
 
+String encodeNotificationTarget(NotificationTarget target) =>
+    jsonEncode({'room_id': target.roomId, 'event_id': target.eventId});
+
+NotificationTarget? decodeNotificationTarget(String? payload) {
+  if (payload == null || payload.length > 8192) return null;
+  try {
+    final data = jsonDecode(payload);
+    if (data is! Map<String, dynamic>) return null;
+    final roomId = data['room_id'];
+    final eventId = data['event_id'];
+    if (roomId is! String || roomId.isEmpty || roomId.length > 1024) {
+      return null;
+    }
+    if (eventId is! String || eventId.isEmpty || eventId.length > 1024) {
+      return null;
+    }
+    return NotificationTarget(roomId: roomId, eventId: eventId);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Platform boundary for notifications emitted by the Matrix backend.
 abstract interface class ChatNotificationSink {
   Stream<NotificationTarget> get activations;
@@ -35,17 +57,10 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
   bool _initialized = false;
 
   void _activatePayload(String? payload) {
-    if (payload == null) return;
-    try {
-      final data = jsonDecode(payload) as Map<String, Object?>;
-      final roomId = data['room_id'] as String?;
-      final eventId = data['event_id'] as String?;
-      if (roomId == null || eventId == null) return;
-      _activations.add(NotificationTarget(roomId: roomId, eventId: eventId));
-      unawaited(DesktopWindowService.present());
-    } catch (_) {
-      // Ignore stale or malformed notification payloads.
-    }
+    final target = decodeNotificationTarget(payload);
+    if (target == null) return;
+    _activations.add(target);
+    unawaited(DesktopWindowService.present());
   }
 
   @override
@@ -91,7 +106,9 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
     id: _nextId++,
     title: title,
     body: body,
-    payload: jsonEncode({'room_id': roomId, 'event_id': eventId}),
+    payload: encodeNotificationTarget(
+      NotificationTarget(roomId: roomId, eventId: eventId),
+    ),
     notificationDetails: NotificationDetails(
       linux: LinuxNotificationDetails(
         category: LinuxNotificationCategory.imReceived,
