@@ -975,6 +975,21 @@ void main() {
     expect(backend.startedDirectMessageWith, '@newfriend:example.org');
   });
 
+  testWidgets('search close button does not reopen the room search', (
+    tester,
+  ) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.tap(find.byTooltip('Search direct messages and groups'));
+    await tester.pump();
+    expect(find.byKey(const Key('room-search-popup')), findsOneWidget);
+    await tester.tap(find.byTooltip('Search direct messages and groups'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('room-search-popup')), findsNothing);
+  });
+
   testWidgets('bottom user island exposes status, presence, mute, and deafen', (
     tester,
   ) async {
@@ -995,9 +1010,26 @@ void main() {
     await tester.tap(find.byTooltip('Mute'));
     await tester.pump();
     expect(backend.muted, isTrue);
+    final mutedButton = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byIcon(Icons.mic_off),
+        matching: find.byType(IconButton),
+      ),
+    );
+    final errorColor = Theme.of(tester.element(find.byIcon(Icons.mic_off)))
+        .colorScheme
+        .error;
+    expect(mutedButton.style?.foregroundColor?.resolve({}), errorColor);
     await tester.tap(find.byTooltip('Deafen'));
     await tester.pump();
     expect(backend.deafened, isTrue);
+    final deafenedButton = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byIcon(Icons.headset_off),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(deafenedButton.style?.foregroundColor?.resolve({}), errorColor);
   });
 
   testWidgets('room panel width can be resized from its main-screen border', (
@@ -1177,6 +1209,51 @@ void main() {
     expect(find.text('@alice:example.org'), findsOneWidget);
     expect(find.text('Matrix enthusiast'), findsOneWidget);
     expect(find.text('View full profile'), findsOneWidget);
+  });
+
+  testWidgets('server rooms show a collapsible member side panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:example.org'
+      ..spaceList = const [
+        SpaceSummary(id: '!space:example.org', name: 'Deltie'),
+      ]
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'General',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..memberList = const [
+        RoomMemberSummary(
+          userId: '@admin:example.org',
+          displayName: 'Admin',
+          powerLevel: 100,
+        ),
+        RoomMemberSummary(userId: '@alice:example.org', displayName: 'Alice'),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('General'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
+    expect(find.text('Members — 2'), findsOneWidget);
+    expect(find.text('Administrator'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('side-panel-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.chevron_left), findsOneWidget);
+    await tester.tap(find.byKey(const Key('side-panel-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
   });
 
   testWidgets('right clicking a DM exposes edit and leave actions', (

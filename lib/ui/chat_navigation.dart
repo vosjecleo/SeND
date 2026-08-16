@@ -340,6 +340,7 @@ class _RoomPanel extends StatefulWidget {
 
 class _RoomPanelState extends State<_RoomPanel> {
   final _roomSearchController = TextEditingController();
+  final _roomSearchTapGroup = Object();
   String _roomQuery = '';
   bool _roomSearchVisible = false;
 
@@ -504,16 +505,19 @@ class _RoomPanelState extends State<_RoomPanel> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: backend.selectedSpaceId == null
-                              ? 'Search direct messages and groups'
-                              : 'Search rooms',
-                          onPressed: () => setState(
-                            () => _roomSearchVisible = !_roomSearchVisible,
-                          ),
-                          icon: Icon(
-                            _roomSearchVisible ? Icons.close : Icons.search,
-                            size: 19,
+                        TapRegion(
+                          groupId: _roomSearchTapGroup,
+                          child: IconButton(
+                            tooltip: backend.selectedSpaceId == null
+                                ? 'Search direct messages and groups'
+                                : 'Search rooms',
+                            onPressed: () => setState(
+                              () => _roomSearchVisible = !_roomSearchVisible,
+                            ),
+                            icon: Icon(
+                              _roomSearchVisible ? Icons.close : Icons.search,
+                              size: 19,
+                            ),
                           ),
                         ),
                         PopupMenuButton<String>(
@@ -594,6 +598,7 @@ class _RoomPanelState extends State<_RoomPanel> {
                   left: 8,
                   right: 8,
                   child: TapRegion(
+                    groupId: _roomSearchTapGroup,
                     onTapOutside: (_) =>
                         setState(() => _roomSearchVisible = false),
                     child: Material(
@@ -749,6 +754,7 @@ class _CurrentUserPanel extends StatelessWidget {
                     tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
                     onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
                     icon: backend.voiceMuted ? Icons.mic_off : Icons.mic,
+                    disabled: backend.voiceMuted,
                   ),
                   _UserControlButton(
                     tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
@@ -757,6 +763,7 @@ class _CurrentUserPanel extends StatelessWidget {
                     icon: backend.voiceDeafened
                         ? Icons.headset_off
                         : Icons.headphones,
+                    disabled: backend.voiceDeafened,
                   ),
                   _UserControlButton(
                     tooltip: 'Settings',
@@ -778,11 +785,13 @@ class _UserControlButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     required this.icon,
+    this.disabled = false,
   });
 
   final String tooltip;
   final VoidCallback onPressed;
   final IconData icon;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
@@ -792,6 +801,14 @@ class _UserControlButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(),
       onPressed: onPressed,
+      style: IconButton.styleFrom(
+        foregroundColor: disabled
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.primary,
+        backgroundColor: disabled
+            ? Theme.of(context).colorScheme.error.withValues(alpha: 0.14)
+            : Colors.transparent,
+      ),
       icon: Icon(icon, size: 18),
     ),
   );

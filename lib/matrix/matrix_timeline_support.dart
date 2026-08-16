@@ -85,6 +85,18 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _hydrateTimelineMetadata(Timeline timeline) async {
+    final retainedEventIds = timeline.events
+        .map((event) => event.eventId)
+        .toSet();
+    _replyPreviews.removeWhere(
+      (eventId, _) => !retainedEventIds.contains(eventId),
+    );
+    _linkPreviews.removeWhere(
+      (eventId, _) => !retainedEventIds.contains(eventId),
+    );
+    _mediaPlaybackSources.removeWhere(
+      (eventId, _) => !retainedEventIds.contains(eventId),
+    );
     await _hydrateSenderAvatars(timeline);
     await _hydrateReplies(timeline);
     await _hydrateLinkPreviews(timeline);

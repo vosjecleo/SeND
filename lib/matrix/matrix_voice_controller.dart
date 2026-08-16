@@ -333,13 +333,20 @@ class MatrixVoiceController extends ChangeNotifier {
           room: room,
           client: _client,
           purpose: SDPStreamMetadataPurpose.Usermedia,
-          audioMuted: false,
+          audioMuted: _muted,
           videoMuted: !_cameraEnabled,
           isGroupCall: true,
           voip: voip,
         ),
       );
       _status = VoiceConnectionStatus.connected;
+      if (_muted) {
+        await call.backend.setDeviceMuted(
+          call,
+          true,
+          MediaInputKind.audioinput,
+        );
+      }
       _startInputMeter();
       await _applyLocalInputVolume();
       await _applyRemoteAudioSettings();
@@ -552,11 +559,18 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> setMuted(bool muted) async {
-    final call = _activeCall;
-    if (call == null || _disposed) return;
-    await call.backend.setDeviceMuted(call, muted, MediaInputKind.audioinput);
+    if (_disposed) return;
     _muted = muted;
     notifyListeners();
+    final call = _activeCall;
+    if (call == null) return;
+    try {
+      await call.backend.setDeviceMuted(call, muted, MediaInputKind.audioinput);
+    } catch (exception) {
+      _error = friendlyError(exception);
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> leave() async {
@@ -577,8 +591,6 @@ class MatrixVoiceController extends ChangeNotifier {
       _callSubscription = null;
       _activeCall = null;
       _activeSpeakerUserId = null;
-      _muted = false;
-      _deafened = false;
       _screenSharing = false;
       _status = _rejoining
           ? VoiceConnectionStatus.reconnecting

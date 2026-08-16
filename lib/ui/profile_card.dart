@@ -284,6 +284,7 @@ class _ProfileHeader extends StatelessWidget {
                     : Image.memory(
                         profile.bannerBytes!,
                         fit: BoxFit.cover,
+                        cacheWidth: 1440,
                         gaplessPlayback: true,
                         filterQuality: FilterQuality.high,
                       ),
@@ -318,6 +319,8 @@ class _ProfileHeader extends StatelessWidget {
                           : Image.memory(
                               profile.avatarBytes!,
                               fit: BoxFit.cover,
+                              cacheWidth: 256,
+                              cacheHeight: 256,
                               gaplessPlayback: true,
                               filterQuality: FilterQuality.high,
                             ),

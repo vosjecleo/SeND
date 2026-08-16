@@ -25,11 +25,12 @@ void main() {
     expect(const AppPreferences().compactness, 0.5);
   });
 
-  test('dark mode darkens panels while preserving input islands', () {
+  test('dark mode distinguishes floating control islands', () {
     final palette = DeltiecordPalette.forMode(DeltiecordThemeMode.dark);
     expect(palette.background, const Color(0xff26272c));
     expect(palette.panel, const Color(0xff202125));
     expect(palette.input, const Color(0xff1e1f22));
-    expect(palette.island, const Color(0xff1e1f22));
+    expect(palette.island, const Color(0xff2b2d31));
+    expect(palette.island, isNot(palette.background));
   });
 }

@@ -216,7 +216,7 @@ class _MessageRowState extends State<_MessageRow> {
                 children: [
                   Padding(
                     padding: EdgeInsets.fromLTRB(
-                      20,
+                      16,
                       widget.startsGroup ? groupTop : continuationTop,
                       20,
                       rowBottom,
@@ -225,7 +225,7 @@ class _MessageRowState extends State<_MessageRow> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(width: 34),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -434,9 +434,9 @@ class _MessageRowState extends State<_MessageRow> {
                   ),
                   if (widget.startsGroup)
                     Positioned(
-                      // The text column begins at x=64. A 32px avatar at x=16
-                      // is optically centered in the gutter before it.
-                      left: 16,
+                      // The text column begins at x=56. A 32px avatar at x=12
+                      // stays centered in that gutter while reclaiming space.
+                      left: 12,
                       top: groupTop,
                       child: GestureDetector(
                         key: ValueKey('message-avatar-${message.id}'),

@@ -39,6 +39,7 @@ part 'message_composer.dart';
 part 'message_row.dart';
 part 'message_media.dart';
 part 'recipient_profile_panel.dart';
+part 'member_sidebar.dart';
 
 // The two bottom panels meet across separate widget trees. Keeping their
 // geometry shared prevents one-pixel seams when either side is refactored.
@@ -95,6 +96,7 @@ class _ChatShellState extends State<ChatShell> {
   final Map<String, _RoomDraft> _memoryDrafts = {};
   String? _draftRoomId;
   bool _restoringDraft = false;
+  bool _sidePanelVisible = true;
 
   @override
   void initState() {
@@ -522,8 +524,12 @@ class _ChatShellState extends State<ChatShell> {
                         }
                       }
                     }
-                    final showRecipientProfile =
-                        directRecipient != null && constraints.maxWidth >= 1100;
+                    final serverMembers =
+                        selectedRoom != null &&
+                        widget.backend.selectedSpaceId != null;
+                    final hasSidePanel =
+                        constraints.maxWidth >= 1100 &&
+                        (directRecipient != null || serverMembers);
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
                     final panelWidth = preferredPanel.clamp(
@@ -627,13 +633,24 @@ class _ChatShellState extends State<ChatShell> {
                                             ),
                                       ),
                               ),
-                              if (showRecipientProfile)
-                                SizedBox(
-                                  width: 310,
-                                  child: _RecipientProfilePanel(
-                                    backend: widget.backend,
-                                    member: directRecipient,
+                              if (hasSidePanel)
+                                _SidePanelRegion(
+                                  visible: _sidePanelVisible,
+                                  onToggle: () => setState(
+                                    () =>
+                                        _sidePanelVisible = !_sidePanelVisible,
                                   ),
+                                  child: directRecipient != null
+                                      ? _RecipientProfilePanel(
+                                          backend: widget.backend,
+                                          member: directRecipient,
+                                        )
+                                      : _MemberSidebar(
+                                          backend: widget.backend,
+                                          members: widget
+                                              .backend
+                                              .selectedRoomMembers,
+                                        ),
                                 ),
                             ],
                           ),

@@ -107,6 +107,7 @@ class _RecipientProfileContents extends StatelessWidget {
                             : Image.memory(
                                 profile.bannerBytes!,
                                 fit: BoxFit.cover,
+                                cacheWidth: 720,
                                 filterQuality: FilterQuality.medium,
                               ),
                       ),
@@ -244,7 +245,9 @@ class _RecipientAvatar extends StatelessWidget {
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(color: panelColor, shape: BoxShape.circle),
           child: CircleAvatar(
-            backgroundImage: bytes == null ? null : MemoryImage(bytes),
+            backgroundImage: bytes == null
+                ? null
+                : ResizeImage(MemoryImage(bytes), width: 192, height: 192),
             child: bytes == null
                 ? Text(
                     profile.displayName.trim().isEmpty

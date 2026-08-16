@@ -63,7 +63,7 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
       surface: Color(0xff26272c),
       elevated: Color(0xff202125),
       input: Color(0xff1e1f22),
-      island: Color(0xff1e1f22),
+      island: Color(0xff2b2d31),
       hover: Color(0xff202125),
       divider: Color(0xff17181b),
       text: Color(0xfff2f3f5),

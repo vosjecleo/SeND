@@ -9,6 +9,12 @@ import 'services/chat_notifications.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Desktop Flutter defaults to a 100 MiB decoded-image cache. Deltiecord also
+  // keeps bounded Matrix timeline data, WebRTC, and video decoders resident,
+  // so a smaller cache avoids retaining old media previews unnecessarily.
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 250
+    ..maximumSizeBytes = 48 * 1024 * 1024;
   MediaKit.ensureInitialized();
   timezone_data.initializeTimeZones();
   // Matrix only constructs its E2EE engine when Vodozemac is ready first.

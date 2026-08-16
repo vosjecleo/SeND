@@ -438,6 +438,11 @@ class _VoiceBottomBar extends StatelessWidget {
           onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
           icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
           label: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: backend.voiceMuted
+                ? Theme.of(context).colorScheme.error
+                : null,
+          ),
         ),
         OutlinedButton.icon(
           onPressed: () => backend.setVoiceDeafened(!backend.voiceDeafened),
@@ -445,6 +450,11 @@ class _VoiceBottomBar extends StatelessWidget {
             backend.voiceDeafened ? Icons.headset_off : Icons.headphones,
           ),
           label: Text(backend.voiceDeafened ? 'Undeafen' : 'Deafen'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: backend.voiceDeafened
+                ? Theme.of(context).colorScheme.error
+                : null,
+          ),
         ),
         OutlinedButton.icon(
           onPressed: () =>

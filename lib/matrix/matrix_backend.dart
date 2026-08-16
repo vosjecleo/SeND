@@ -622,6 +622,10 @@ class MatrixBackend extends ChatBackend {
     _timelineGeneration++;
     _timeline?.cancelSubscriptions();
     _timeline = null;
+    _replyPreviews.clear();
+    _linkPreviews.clear();
+    _mediaPlaybackSources.clear();
+    _mediaRangeProxy.clear();
   }
 
   String _friendlyError(Object exception) {
