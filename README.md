@@ -186,7 +186,7 @@ The work between 0.9 and 1.0 is primarily bug fixing, testing, performance work,
 
 ## Known bugs
 
-Known issues are tracked in `KNOWN_BUGS.md`.
+Known issues are tracked in `KNOWN_ISSUES.md`.
 
 If something feels strange (particularly timeline scrolling, RTC/device handling, media behavior or an unusual UI interaction) please check there before reporting it.
 
@@ -226,7 +226,7 @@ Linux builds include:
 Windows builds include:
 
 - portable archive
-- setup.exe installer 
+- setup.exe installer
 
 Package-manager repositories and automatic update distribution are also planned.
 
