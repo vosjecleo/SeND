@@ -31,10 +31,7 @@ class _RecipientProfilePanelState extends State<_RecipientProfilePanel> {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     key: const Key('recipient-profile-panel'),
-    decoration: BoxDecoration(
-      color: context.deltiecord.panel,
-      border: Border(left: BorderSide(color: context.deltiecord.divider)),
-    ),
+    decoration: BoxDecoration(color: context.deltiecord.panel),
     child: FutureBuilder<UserProfileSummary>(
       future: _profile,
       builder: (context, snapshot) {
@@ -206,13 +203,31 @@ class _RecipientProfileContents extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonal(
-              onPressed: () => showFullMemberProfile(context, backend, member),
-              child: const Text('View full profile'),
+        SizedBox(
+          height: _bottomPanelHeightFor(context),
+          child: ColoredBox(
+            color: palette.panel,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: _bottomPanelVerticalInset,
+              ),
+              child: SizedBox(
+                key: const Key('view-full-profile-island'),
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.island,
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () =>
+                      showFullMemberProfile(context, backend, member),
+                  child: const Text('View full profile'),
+                ),
+              ),
             ),
           ),
         ),

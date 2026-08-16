@@ -57,6 +57,216 @@ class _SpaceBar extends StatelessWidget {
     builder: (context) => _SpaceSearchDialog(backend: backend),
   );
 
+  Future<void> _editSpace(BuildContext context, SpaceSummary space) async {
+    final name = TextEditingController(text: space.name);
+    final topic = TextEditingController(text: space.topic);
+    Uint8List? avatar;
+    var removeAvatar = false;
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('${space.name} settings'),
+          content: SizedBox(
+            width: 430,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: name,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Space name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: topic,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Topic'),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await FilePicker.pickFiles(
+                          type: FileType.image,
+                          withData: true,
+                        );
+                        final bytes = result?.files.single.bytes;
+                        if (bytes != null) {
+                          setDialogState(() {
+                            avatar = bytes;
+                            removeAvatar = false;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.image_outlined),
+                      label: const Text('Choose picture'),
+                    ),
+                    if (space.avatarBytes != null || avatar != null)
+                      TextButton(
+                        onPressed: () => setDialogState(() {
+                          avatar = null;
+                          removeAvatar = true;
+                        }),
+                        child: const Text('Remove picture'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: Navigator.of(context).pop,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final newName = name.text.trim();
+    final newTopic = topic.text.trim();
+    name.dispose();
+    topic.dispose();
+    if (save != true) return;
+    if (newName.isNotEmpty && newName != space.name) {
+      await backend.renameRoom(space.id, newName);
+    }
+    if (newTopic != space.topic) {
+      await backend.setRoomTopic(space.id, newTopic);
+    }
+    if (avatar != null || removeAvatar) {
+      await backend.setRoomAvatar(space.id, avatar);
+    }
+  }
+
+  Future<void> _confirmLeaveSpace(
+    BuildContext context,
+    SpaceSummary space,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Leave ${space.name}?'),
+        content: const Text(
+          'Rooms in the Space are not left automatically. You may need '
+          'another invitation to rejoin the Space itself.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Leave Space'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await backend.leaveRoom(space.id);
+  }
+
+  Future<void> _showSpaceNotificationSettings(
+    BuildContext context,
+    SpaceSummary space,
+  ) async {
+    final muted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${space.name} notifications'),
+        content: RadioGroup<bool>(
+          groupValue: space.muted,
+          onChanged: (value) => Navigator.of(context).pop(value),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<bool>(value: false, title: Text('Notify normally')),
+              RadioListTile<bool>(value: true, title: Text('Mute Space')),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (muted != null) await backend.setRoomMuted(space.id, muted);
+  }
+
+  Future<void> _showSpaceMenu(
+    BuildContext context,
+    SpaceSummary space,
+    Offset position,
+  ) async {
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(1, 1),
+        Offset.zero & MediaQuery.sizeOf(context),
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'mute',
+          child: _RoomContextMenuEntry(
+            icon: space.muted
+                ? Icons.notifications_outlined
+                : Icons.notifications_off_outlined,
+            label: space.muted ? 'Unmute Space' : 'Mute Space',
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'notifications',
+          child: _RoomContextMenuEntry(
+            icon: Icons.tune,
+            label: 'Notification settings',
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'settings',
+          child: _RoomContextMenuEntry(
+            icon: Icons.settings_outlined,
+            label: 'Space settings',
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy-link',
+          child: _RoomContextMenuEntry(
+            icon: Icons.link,
+            label: 'Copy Space link',
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'leave',
+          child: _RoomContextMenuEntry(
+            icon: Icons.logout,
+            label: 'Leave Space',
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      ],
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case 'mute':
+        await backend.setRoomMuted(space.id, !space.muted);
+      case 'notifications':
+        await _showSpaceNotificationSettings(context, space);
+      case 'settings':
+        await _editSpace(context, space);
+      case 'copy-link':
+        await Clipboard.setData(
+          ClipboardData(text: 'https://matrix.to/#/${space.id}'),
+        );
+      case 'leave':
+        await _confirmLeaveSpace(context, space);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -97,6 +307,11 @@ class _SpaceBar extends StatelessWidget {
                       tooltip: space.name,
                       selected: backend.selectedSpaceId == space.id,
                       onTap: () => backend.selectSpace(space.id),
+                      onSecondaryTapDown: (details) => _showSpaceMenu(
+                        context,
+                        space,
+                        details.globalPosition,
+                      ),
                       child: space.avatarBytes == null
                           ? Text(
                               _initials(space.name),
@@ -296,12 +511,14 @@ class _SpaceButton extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.child,
+    this.onSecondaryTapDown,
   });
 
   final String tooltip;
   final bool selected;
   final VoidCallback onTap;
   final Widget child;
+  final GestureTapDownCallback? onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
@@ -317,10 +534,14 @@ class _SpaceButton extends StatelessWidget {
                 : context.deltiecord.elevated,
             borderRadius: BorderRadius.circular(4),
             clipBehavior: Clip.hardEdge,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(4),
-              child: Center(child: child),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onSecondaryTapDown: onSecondaryTapDown,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(4),
+                child: Center(child: child),
+              ),
             ),
           ),
         ),
@@ -1179,13 +1400,22 @@ class _RoomContextMenuEntry extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 18, color: color),
-      const SizedBox(width: 10),
-      Text(label, style: TextStyle(color: color)),
-    ],
+  Widget build(BuildContext context) => SizedBox(
+    width: 200,
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color),
+          ),
+        ),
+      ],
+    ),
   );
 }
 

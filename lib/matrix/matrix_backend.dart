@@ -146,6 +146,8 @@ class MatrixBackend extends ChatBackend {
           id: room.id,
           name: room.getLocalizedDisplayname(),
           avatarBytes: _avatarBytes[room.id],
+          topic: room.topic,
+          muted: room.pushRuleState == PushRuleState.dontNotify,
         ),
       )
       .toList(growable: false);
@@ -506,6 +508,10 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> leaveRoom(String roomId) => _leaveRoom(roomId);
+
+  @override
+  Future<void> setRoomMuted(String roomId, bool muted) =>
+      _setRoomMuted(roomId, muted);
 
   @override
   Future<void> setMemberPowerLevel(String userId, int powerLevel) =>

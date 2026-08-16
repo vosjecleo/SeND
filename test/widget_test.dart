@@ -197,6 +197,31 @@ void main() {
     expect(find.text('Deltie Club'), findsOneWidget);
   });
 
+  testWidgets('right clicking a Space exposes its management actions', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..spaceList = const [
+        SpaceSummary(id: '!space:example.org', name: 'Deltie'),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.tap(
+      find.byKey(const ValueKey('space-button-Deltie')),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mute Space'), findsOneWidget);
+    expect(find.text('Notification settings'), findsOneWidget);
+    expect(find.text('Space settings'), findsOneWidget);
+    expect(find.text('Leave Space'), findsOneWidget);
+    await tester.tap(find.text('Mute Space'));
+    await tester.pumpAndSettle();
+    expect(backend.mutedRooms, [('!space:example.org', true)]);
+  });
+
   testWidgets('opens voice rooms without exposing a message composer', (
     tester,
   ) async {
@@ -377,7 +402,9 @@ void main() {
     expect(find.textContaining('> <'), findsNothing);
 
     await _revealMessageActions(tester, find.text('My actual reply'));
-    await tester.tap(find.byTooltip('Reply'));
+    tester
+        .widget<IconButton>(find.byKey(const Key('message-action-reply')))
+        .onPressed!();
     await tester.pump();
     expect(find.text('Replying to Alice'), findsOneWidget);
     await _enterComposer(tester, 'A second reply');
@@ -440,22 +467,21 @@ void main() {
     expect(find.byTooltip('Reply'), findsNothing);
 
     await _revealMessageActions(tester, find.text('Original').last);
-    await tester.tap(find.byTooltip('Message actions'));
+    tester
+        .widget<IconButton>(find.byKey(const Key('message-action-react')))
+        .onPressed!();
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 1100));
-    await tester.tap(find.text('Add reaction'));
+    expect(find.text('Emoji'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'tada');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('🎉'));
+    await tester.tap(find.byKey(const ValueKey('emoji-picker-result-🎉')));
     await tester.pumpAndSettle();
     expect(backend.toggledReactions, [(r'$own', '👍'), (r'$own', '🎉')]);
 
     await _revealMessageActions(tester, find.text('Original').last);
-    await tester.tap(find.byTooltip('Message actions'));
-    await tester.pumpAndSettle();
-    // Moving from the row into the popup used to dismiss the owning overlay
-    // before the selected callback could run.
-    await tester.pump(const Duration(milliseconds: 1100));
-    await tester.tap(find.text('Edit message'));
+    tester
+        .widget<IconButton>(find.byKey(const Key('message-action-edit')))
+        .onPressed!();
     await tester.pump();
     expect(find.text('Editing message'), findsOneWidget);
     await _enterComposer(tester, 'Changed');
@@ -464,10 +490,9 @@ void main() {
     expect(backend.lastEditMessageId, r'$own');
 
     await _revealMessageActions(tester, find.text('Original').last);
-    await tester.tap(find.byTooltip('Message actions'));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 1100));
-    await tester.tap(find.text('Delete message'));
+    tester
+        .widget<IconButton>(find.byKey(const Key('message-action-delete')))
+        .onPressed!();
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
@@ -785,7 +810,43 @@ void main() {
     expect(find.byTooltip('Read by Alice'), findsOneWidget);
   });
 
-  testWidgets('bottom panels align and typing does not resize the composer', (
+  testWidgets('chat timestamps default to 24-hour time and allow AM/PM', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!time:example.org',
+          name: 'time',
+          lastMessage: 'clock',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$time',
+          sender: 'Alice',
+          body: 'clock',
+          timestamp: DateTime(2026, 8, 16, 13, 5),
+          pending: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('time'));
+    await tester.pump();
+
+    expect(find.text('13:05'), findsOneWidget);
+    backend.currentPreferences = backend.preferences.copyWith(
+      use24HourTime: false,
+    );
+    backend.notifyListeners();
+    await tester.pump();
+    expect(find.text('1:05 PM'), findsOneWidget);
+  });
+
+  testWidgets('bottom panels align and typing indicator keeps their geometry', (
     tester,
   ) async {
     final backend = FakeBackend()
@@ -842,6 +903,41 @@ void main() {
       tester.getSize(find.byKey(const Key('typing-indicator'))).width,
       tester.getSize(find.byKey(const Key('conversation-timeline-area'))).width,
     );
+  });
+
+  testWidgets('multiline composer grows but remains within lower third', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!multiline:example.org',
+          name: 'multiline',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('multiline'));
+    await tester.pumpAndSettle();
+
+    final composerPanel = find.byKey(const Key('message-composer-panel'));
+    final initialHeight = tester.getSize(composerPanel).height;
+    await _enterComposer(
+      tester,
+      List.generate(12, (index) => 'Line ${index + 1}').join('\n'),
+    );
+    await tester.pumpAndSettle();
+
+    final expandedHeight = tester.getSize(composerPanel).height;
+    expect(expandedHeight, greaterThan(initialHeight));
+    expect(expandedHeight, lessThanOrEqualTo((900 - 56) / 3 + 0.1));
   });
 
   testWidgets('emoji completion overlays without resizing the composer', (
@@ -1163,6 +1259,10 @@ void main() {
     expect(find.text('Matrix enthusiast'), findsOneWidget);
     final compactPopup = find.byKey(const Key('compact-profile-popup'));
     expect(compactPopup, findsOneWidget);
+    final compactGradient = tester.widget<DecoratedBox>(
+      find.byKey(const Key('compact-profile-gradient')),
+    );
+    expect((compactGradient.decoration as BoxDecoration).gradient, isNotNull);
     expect(
       tester.getTopLeft(compactPopup).dx,
       greaterThan(senderTapPosition.dx),
@@ -1255,6 +1355,10 @@ void main() {
     expect(find.text('@alice:example.org'), findsOneWidget);
     expect(find.text('Matrix enthusiast'), findsOneWidget);
     expect(find.text('View full profile'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('view-full-profile-island'))).dy,
+      tester.getTopLeft(find.byKey(const Key('message-composer-island'))).dy,
+    );
   });
 
   testWidgets('server rooms show a collapsible member side panel', (
@@ -1294,8 +1398,10 @@ void main() {
     expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
     expect(find.text('Members — 2'), findsOneWidget);
     expect(find.text('Administrator'), findsOneWidget);
-    await tester.drag(
-      find.byKey(const Key('side-panel-resize-handle')),
+    final resizeHandle = find.byKey(const Key('side-panel-resize-handle'));
+    final resizeTopLeft = tester.getTopLeft(resizeHandle);
+    await tester.dragFrom(
+      resizeTopLeft + const Offset(2, 100),
       const Offset(-40, 0),
     );
     await tester.pumpAndSettle();
@@ -1457,6 +1563,7 @@ class FakeBackend extends ChatBackend {
   final List<String?> sentAttachmentRoomIds = [];
   final List<String> redactedMessageIds = [];
   final List<(String, String)> toggledReactions = [];
+  final List<(String, bool)> mutedRooms = [];
   String? lastReplyToMessageId;
   String? lastEditMessageId;
   String? removedDeviceId;
@@ -1613,6 +1720,11 @@ class FakeBackend extends ChatBackend {
 
   @override
   Future<void> setSelectedRoomMuted(bool muted) async {}
+  @override
+  Future<void> setRoomMuted(String roomId, bool muted) async {
+    mutedRooms.add((roomId, muted));
+  }
+
   @override
   Future<void> setRoomPresentation(
     String roomId,

@@ -265,173 +265,192 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
       );
       return Material(
         key: const Key('compact-profile-popup'),
-        color: context.deltiecord.surface,
+        color: Colors.transparent,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: accent.withValues(alpha: 0.72), width: 2),
           borderRadius: BorderRadius.circular(5),
         ),
         clipBehavior: Clip.antiAlias,
         elevation: 14,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                height: 142,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      bottom: 40,
-                      child: profile.bannerBytes == null
-                          ? DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [accent, secondary],
-                                ),
-                              ),
-                            )
-                          : Image.memory(
-                              profile.bannerBytes!,
-                              fit: BoxFit.cover,
-                              cacheWidth: 680,
-                            ),
-                    ),
-                    Positioned(
-                      left: 18,
-                      bottom: 5,
-                      child: Container(
-                        width: 82,
-                        height: 82,
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: context.deltiecord.surface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: CircleAvatar(
-                          backgroundColor: context.deltiecord.elevated,
-                          backgroundImage: profile.avatarBytes == null
-                              ? null
-                              : ResizeImage(
-                                  MemoryImage(profile.avatarBytes!),
-                                  width: 164,
-                                  height: 164,
-                                ),
-                          child: profile.avatarBytes == null
-                              ? Text(
-                                  profile.displayName.characters.firstOrNull
-                                          ?.toUpperCase() ??
-                                      '?',
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 84,
-                      bottom: 8,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: _popoverPresenceColour(profile.presence),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: context.deltiecord.surface,
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+        child: DecoratedBox(
+          key: const Key('compact-profile-gradient'),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.alphaBlend(
+                  accent.withValues(alpha: 0.34),
+                  context.deltiecord.surface,
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          profile.displayName,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        if (profile.pronouns?.trim().isNotEmpty == true)
-                          Text(
-                            profile.pronouns!,
-                            style: TextStyle(color: context.deltiecord.muted),
+                Color.alphaBlend(
+                  secondary.withValues(alpha: 0.4),
+                  context.deltiecord.surface,
+                ),
+              ],
+            ),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 142,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        bottom: 40,
+                        child: profile.bannerBytes == null
+                            ? DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [accent, secondary],
+                                  ),
+                                ),
+                              )
+                            : Image.memory(
+                                profile.bannerBytes!,
+                                fit: BoxFit.cover,
+                                cacheWidth: 680,
+                              ),
+                      ),
+                      Positioned(
+                        left: 18,
+                        bottom: 5,
+                        child: Container(
+                          width: 82,
+                          height: 82,
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: context.deltiecord.surface,
+                            shape: BoxShape.circle,
                           ),
+                          child: CircleAvatar(
+                            backgroundColor: context.deltiecord.elevated,
+                            backgroundImage: profile.avatarBytes == null
+                                ? null
+                                : ResizeImage(
+                                    MemoryImage(profile.avatarBytes!),
+                                    width: 164,
+                                    height: 164,
+                                  ),
+                            child: profile.avatarBytes == null
+                                ? Text(
+                                    profile.displayName.characters.firstOrNull
+                                            ?.toUpperCase() ??
+                                        '?',
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 84,
+                        bottom: 8,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: _popoverPresenceColour(profile.presence),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: context.deltiecord.surface,
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            profile.displayName,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          if (profile.pronouns?.trim().isNotEmpty == true)
+                            Text(
+                              profile.pronouns!,
+                              style: TextStyle(color: context.deltiecord.muted),
+                            ),
+                        ],
+                      ),
+                      Text(
+                        profile.userId,
+                        style: TextStyle(color: context.deltiecord.muted),
+                      ),
+                      if (profile.statusMessage?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.deltiecord.elevated,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            profile.statusMessage!,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
-                    ),
-                    Text(
-                      profile.userId,
-                      style: TextStyle(color: context.deltiecord.muted),
-                    ),
-                    if (profile.statusMessage?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.deltiecord.elevated,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          profile.statusMessage!,
-                          maxLines: 3,
+                      if (profile.bio?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          profile.bio!,
+                          maxLines: 4,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                    if (profile.bio?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        profile.bio!,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    if (widget.own)
+                      ],
+                      const SizedBox(height: 14),
+                      if (widget.own)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _edit(profile),
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Edit profile'),
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await widget.backend.startDirectChat(
+                                widget.member.userId,
+                              );
+                            },
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text('Message'),
+                          ),
+                        ),
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _edit(profile),
-                          icon: const Icon(Icons.edit_outlined),
-                          label: const Text('Edit profile'),
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                            await widget.backend.startDirectChat(
-                              widget.member.userId,
-                            );
-                          },
-                          icon: const Icon(Icons.chat_bubble_outline),
-                          label: const Text('Message'),
+                        child: TextButton(
+                          onPressed: _openFullProfile,
+                          child: const Text('View full profile'),
                         ),
                       ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: _openFullProfile,
-                        child: const Text('View full profile'),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

@@ -394,7 +394,11 @@ extension _MatrixRoomOperations on MatrixBackend {
   }
 
   Future<void> _setSelectedRoomMuted(bool muted) async {
-    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+    await _setRoomMuted(_selectedRoomId ?? '', muted);
+  }
+
+  Future<void> _setRoomMuted(String roomId, bool muted) async {
+    final room = _matrix.getRoomById(roomId);
     if (room == null) return;
     try {
       await room.setPushRuleState(

@@ -23,78 +23,101 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
   bool _resizing = false;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (widget.visible)
-        MouseRegion(
-          cursor: SystemMouseCursors.resizeColumn,
-          child: GestureDetector(
-            key: const Key('side-panel-resize-handle'),
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) => setState(() => _resizing = true),
-            onHorizontalDragUpdate: (details) =>
-                widget.onResize(details.delta.dx),
-            onHorizontalDragEnd: (_) => setState(() => _resizing = false),
-            onHorizontalDragCancel: () => setState(() => _resizing = false),
-            child: SizedBox(
-              width: 5,
-              child: Center(
-                child: VerticalDivider(
-                  width: 1,
-                  color: context.deltiecord.divider,
-                ),
-              ),
-            ),
-          ),
-        ),
-      SizedBox(
-        width: 24,
-        child: Align(
-          alignment: Alignment.center,
-          child: Material(
-            color: context.deltiecord.elevated,
-            shape: RoundedRectangleBorder(
-              side: BorderSide(color: context.deltiecord.divider),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: InkWell(
-              key: const Key('side-panel-toggle'),
-              onTap: widget.onToggle,
-              child: SizedBox(
-                width: 20,
-                height: 42,
-                child: Icon(
-                  widget.visible ? Icons.chevron_right : Icons.chevron_left,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      TweenAnimationBuilder<double>(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final dividerHitbox = widget.visible ? 5.0 : 1.0;
+      return TweenAnimationBuilder<double>(
         key: const Key('side-panel-width'),
         tween: Tween(end: widget.visible ? widget.width : 0),
         duration: _resizing ? Duration.zero : const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         child: widget.child,
-        builder: (context, width, panel) => ClipRect(
-          child: SizedBox(
-            width: width,
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: widget.width,
-              maxWidth: widget.width,
-              child: Transform.translate(
-                offset: Offset(widget.width - width, 0),
-                child: panel,
+        builder: (context, animatedWidth, panel) => SizedBox(
+          width: dividerHitbox + animatedWidth,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (widget.visible)
+                    MouseRegion(
+                      cursor: SystemMouseCursors.resizeColumn,
+                      child: GestureDetector(
+                        key: const Key('side-panel-resize-handle'),
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragStart: (_) =>
+                            setState(() => _resizing = true),
+                        onHorizontalDragUpdate: (details) =>
+                            widget.onResize(details.delta.dx),
+                        onHorizontalDragEnd: (_) =>
+                            setState(() => _resizing = false),
+                        onHorizontalDragCancel: () =>
+                            setState(() => _resizing = false),
+                        child: SizedBox(
+                          width: dividerHitbox,
+                          child: Center(
+                            child: VerticalDivider(
+                              width: 1,
+                              color: context.deltiecord.divider,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    VerticalDivider(
+                      width: dividerHitbox,
+                      color: context.deltiecord.divider,
+                    ),
+                  ClipRect(
+                    child: SizedBox(
+                      width: animatedWidth,
+                      child: OverflowBox(
+                        alignment: Alignment.centerLeft,
+                        minWidth: widget.width,
+                        maxWidth: widget.width,
+                        child: Transform.translate(
+                          offset: Offset(widget.width - animatedWidth, 0),
+                          child: panel,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
+              Positioned(
+                left: (dividerHitbox - 22) / 2,
+                top: (constraints.maxHeight - 42) / 2,
+                child: Material(
+                  color: context.deltiecord.elevated,
+                  elevation: 6,
+                  shadowColor: Colors.black54,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(color: context.deltiecord.divider),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: InkWell(
+                    key: const Key('side-panel-toggle'),
+                    onTap: widget.onToggle,
+                    child: SizedBox(
+                      width: 22,
+                      height: 42,
+                      child: Icon(
+                        widget.visible
+                            ? Icons.chevron_right
+                            : Icons.chevron_left,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-    ],
+      );
+    },
   );
 }
 
@@ -114,10 +137,7 @@ class _MemberSidebar extends StatelessWidget {
         .toList(growable: false);
     return DecoratedBox(
       key: const Key('member-side-panel'),
-      decoration: BoxDecoration(
-        color: context.deltiecord.panel,
-        border: Border(left: BorderSide(color: context.deltiecord.divider)),
-      ),
+      decoration: BoxDecoration(color: context.deltiecord.panel),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

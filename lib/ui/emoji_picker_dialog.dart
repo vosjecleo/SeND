@@ -23,10 +23,23 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
 
   Future<void> _search() async {
     final generation = ++_generation;
-    final results = await EmojiRepository.instance.search(
+    final familiar = EmojiRepository.instance.familiarMatches(
       _query.text,
       limit: 160,
     );
+    if (mounted && generation == _generation && familiar.isNotEmpty) {
+      setState(() => _results = familiar);
+    }
+    final catalog = await EmojiRepository.instance.search(
+      _query.text,
+      limit: 160,
+    );
+    final results = [
+      ...familiar,
+      ...catalog.where(
+        (entry) => !familiar.any((match) => match.emoji == entry.emoji),
+      ),
+    ];
     if (mounted && generation == _generation) {
       setState(() => _results = results);
     }
@@ -69,6 +82,7 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
                 return Tooltip(
                   message: entry.name,
                   child: InkWell(
+                    key: ValueKey('emoji-picker-result-${entry.emoji}'),
                     onTap: () => Navigator.of(context).pop(entry.emoji),
                     child: Center(
                       child: Text(

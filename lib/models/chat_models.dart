@@ -43,6 +43,7 @@ class AppPreferences {
     this.themeMode = DeltiecordThemeMode.dark,
     this.interfaceScale = 1,
     this.fontScale = 1,
+    this.use24HourTime = true,
     this.roomPanelWidth = 280,
     this.sidePanelWidth = 310,
     this.reducedMotion = false,
@@ -79,6 +80,7 @@ class AppPreferences {
   final DeltiecordThemeMode themeMode;
   final double interfaceScale;
   final double fontScale;
+  final bool use24HourTime;
   final double roomPanelWidth;
   final double sidePanelWidth;
   final bool reducedMotion;
@@ -115,6 +117,7 @@ class AppPreferences {
     DeltiecordThemeMode? themeMode,
     double? interfaceScale,
     double? fontScale,
+    bool? use24HourTime,
     double? roomPanelWidth,
     double? sidePanelWidth,
     bool? reducedMotion,
@@ -150,6 +153,7 @@ class AppPreferences {
     themeMode: themeMode ?? this.themeMode,
     interfaceScale: interfaceScale ?? this.interfaceScale,
     fontScale: fontScale ?? this.fontScale,
+    use24HourTime: use24HourTime ?? this.use24HourTime,
     roomPanelWidth: roomPanelWidth ?? this.roomPanelWidth,
     sidePanelWidth: sidePanelWidth ?? this.sidePanelWidth,
     reducedMotion: reducedMotion ?? this.reducedMotion,
@@ -216,11 +220,19 @@ class EncryptionSetupState {
 }
 
 class SpaceSummary {
-  const SpaceSummary({required this.id, required this.name, this.avatarBytes});
+  const SpaceSummary({
+    required this.id,
+    required this.name,
+    this.avatarBytes,
+    this.topic = '',
+    this.muted = false,
+  });
 
   final String id;
   final String name;
   final Uint8List? avatarBytes;
+  final String topic;
+  final bool muted;
 }
 
 enum RoomPresentation { text, voice }

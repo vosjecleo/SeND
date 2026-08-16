@@ -490,6 +490,7 @@ extension _MatrixSession on MatrixBackend {
           1,
       fontScale:
           (content?['font_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ?? 1,
+      use24HourTime: content?.tryGet<bool>('use_24_hour_time') ?? true,
       roomPanelWidth:
           (content?['room_panel_width'] as num?)?.toDouble().clamp(220, 420) ??
           280,
@@ -601,6 +602,7 @@ extension _MatrixSession on MatrixBackend {
           'theme_mode': preferences.themeMode.name,
           'interface_scale': preferences.interfaceScale,
           'font_scale': preferences.fontScale,
+          'use_24_hour_time': preferences.use24HourTime,
           'room_panel_width': preferences.roomPanelWidth,
           'side_panel_width': preferences.sidePanelWidth,
           'reduced_motion': preferences.reducedMotion,

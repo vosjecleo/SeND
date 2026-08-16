@@ -225,19 +225,9 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _pickReaction(ChatMessage message) async {
-    final box = context.findRenderObject() as RenderBox?;
-    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final emoji = await showMenu<String>(
+    final emoji = await showDialog<String>(
       context: context,
-      position: RelativeRect.fromLTRB(origin.dx + 360, origin.dy + 120, 0, 0),
-      items: const ['👍', '❤️', '😂', '🎉', '👀', '❓']
-          .map(
-            (emoji) => PopupMenuItem(
-              value: emoji,
-              child: Text(emoji, style: const TextStyle(fontSize: 22)),
-            ),
-          )
-          .toList(growable: false),
+      builder: (context) => const EmojiPickerDialog(),
     );
     if (emoji != null) await widget.backend.toggleReaction(message.id, emoji);
     _focusComposerAfterBuild();
@@ -785,6 +775,10 @@ class _ConversationState extends State<_Conversation> {
                   mentionSelectionIndex: widget.mentionSelectionIndex,
                   onMentionSelected: widget.onMentionSelected,
                   onMentionSelectionChanged: widget.onMentionSelectionChanged,
+                  maxHeight: max(
+                    _bottomPanelHeightFor(context),
+                    (MediaQuery.sizeOf(context).height - 56) / 3,
+                  ),
                 ),
               ],
             ),

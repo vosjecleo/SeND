@@ -131,6 +131,7 @@ abstract class ChatBackend extends ChangeNotifier {
   List<ChatMessage> searchMessages(String query);
   Future<List<ChatMessage>> searchRoomHistory(String query);
   Future<void> setSelectedRoomMuted(bool muted);
+  Future<void> setRoomMuted(String roomId, bool muted);
   Future<void> setNotificationPreviewsEnabled(bool enabled);
   Future<void> updatePreferences(AppPreferences preferences);
   Future<void> loadMoreHistory();

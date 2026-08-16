@@ -1,5 +1,14 @@
 part of 'chat_shell.dart';
 
+String _formatMessageClock(DateTime value, {required bool use24HourTime}) {
+  final minutes = value.minute.toString().padLeft(2, '0');
+  if (use24HourTime) {
+    return '${value.hour.toString().padLeft(2, '0')}:$minutes';
+  }
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  return '$hour:$minutes ${value.hour < 12 ? 'AM' : 'PM'}';
+}
+
 class _MessageRow extends StatefulWidget {
   const _MessageRow({
     required this.message,
@@ -40,7 +49,6 @@ class _MessageRowState extends State<_MessageRow> {
   final _actionsOverlay = OverlayPortalController();
   bool _hovered = false;
   bool _actionsHovered = false;
-  bool _actionsMenuOpen = false;
   Offset _actionsPosition = Offset.zero;
   Offset? _profileAnchorPosition;
 
@@ -81,7 +89,7 @@ class _MessageRowState extends State<_MessageRow> {
     setState(() {
       _actionsHovered = false;
       _actionsPosition = Offset(
-        globalPosition.dx.clamp(0, viewport.width - 96),
+        globalPosition.dx.clamp(0, max(0, viewport.width - 224)),
         globalPosition.dy.clamp(0, viewport.height - 48),
       );
     });
@@ -92,7 +100,6 @@ class _MessageRowState extends State<_MessageRow> {
 
   void _hideActions() {
     _dismissActionsTimer?.cancel();
-    _actionsMenuOpen = false;
     _actionsHovered = false;
     _actionsOverlay.hide();
   }
@@ -109,27 +116,16 @@ class _MessageRowState extends State<_MessageRow> {
 
   void _scheduleActionsDismissal() {
     _dismissActionsTimer?.cancel();
-    if (_actionsMenuOpen) return;
     _dismissActionsTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted && !_actionsHovered && !_actionsMenuOpen) {
+      if (mounted && !_actionsHovered) {
         _actionsOverlay.hide();
       }
     });
   }
 
-  void _actionsMenuOpened() {
-    _dismissActionsTimer?.cancel();
-    _actionsMenuOpen = true;
-  }
-
-  void _actionsMenuClosed() {
-    _actionsMenuOpen = false;
-    if (!_actionsHovered) _scheduleActionsDismissal();
-  }
-
-  void _reply() {
+  void _performAction(VoidCallback? action) {
+    action?.call();
     _hideActions();
-    widget.onReply();
   }
 
   @override
@@ -146,7 +142,10 @@ class _MessageRowState extends State<_MessageRow> {
     final rowBottom = 3 - (compactness * 2);
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
-    final clock = TimeOfDay.fromDateTime(local).format(context);
+    final clock = _formatMessageClock(
+      local,
+      use24HourTime: widget.backend.preferences.use24HourTime,
+    );
     final time =
         local.year == now.year &&
             local.month == now.month &&
@@ -183,14 +182,22 @@ class _MessageRowState extends State<_MessageRow> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: _MessageActions(
-                onReply: _reply,
-                onEdit: widget.onEdit,
-                onDelete: widget.onDelete,
-                onReact: widget.onReact,
-                onRetry: widget.onRetry,
-                onCancel: widget.onCancel,
-                onMenuOpened: _actionsMenuOpened,
-                onMenuClosed: _actionsMenuClosed,
+                onReply: () => _performAction(widget.onReply),
+                onEdit: widget.onEdit == null
+                    ? null
+                    : () => _performAction(widget.onEdit),
+                onDelete: widget.onDelete == null
+                    ? null
+                    : () => _performAction(widget.onDelete),
+                onReact: widget.onReact == null
+                    ? null
+                    : () => _performAction(widget.onReact),
+                onRetry: widget.onRetry == null
+                    ? null
+                    : () => _performAction(widget.onRetry),
+                onCancel: widget.onCancel == null
+                    ? null
+                    : () => _performAction(widget.onCancel),
               ),
             ),
           ),
@@ -218,7 +225,7 @@ class _MessageRowState extends State<_MessageRow> {
                 children: [
                   Padding(
                     padding: EdgeInsets.fromLTRB(
-                      16,
+                      10,
                       widget.startsGroup ? groupTop : continuationTop,
                       20,
                       rowBottom,
@@ -226,8 +233,8 @@ class _MessageRowState extends State<_MessageRow> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(width: 34),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 40),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -439,9 +446,9 @@ class _MessageRowState extends State<_MessageRow> {
                   ),
                   if (widget.startsGroup)
                     Positioned(
-                      // The text column begins at x=56. A 32px avatar at x=12
-                      // stays centered in that gutter while reclaiming space.
-                      left: 12,
+                      // The 40px avatar remains centred in the 60px author
+                      // gutter while the text column stays close to the edge.
+                      left: 10,
                       top: groupTop,
                       child: GestureDetector(
                         key: ValueKey('message-avatar-${message.id}'),
@@ -449,7 +456,7 @@ class _MessageRowState extends State<_MessageRow> {
                             _profileAnchorPosition = details.globalPosition,
                         onTap: _showSenderProfile,
                         child: CircleAvatar(
-                          radius: 16,
+                          radius: 20,
                           backgroundColor: context.deltiecord.elevated,
                           backgroundImage: message.avatarBytes == null
                               ? null
@@ -513,8 +520,6 @@ class _MessageActions extends StatelessWidget {
     required this.onReact,
     required this.onRetry,
     required this.onCancel,
-    required this.onMenuOpened,
-    required this.onMenuClosed,
   });
 
   final VoidCallback onReply;
@@ -523,55 +528,60 @@ class _MessageActions extends StatelessWidget {
   final VoidCallback? onReact;
   final VoidCallback? onRetry;
   final VoidCallback? onCancel;
-  final VoidCallback onMenuOpened;
-  final VoidCallback onMenuClosed;
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       IconButton(
+        key: const Key('message-action-reply'),
         visualDensity: VisualDensity.compact,
         tooltip: 'Reply',
         onPressed: onReply,
         icon: const Icon(Icons.reply, size: 16),
       ),
-      PopupMenuButton<String>(
-        tooltip: 'Message actions',
-        iconSize: 17,
-        onOpened: onMenuOpened,
-        onCanceled: onMenuClosed,
-        onSelected: (action) {
-          switch (action) {
-            case 'react':
-              onReact?.call();
-            case 'edit':
-              onEdit?.call();
-            case 'delete':
-              onDelete?.call();
-            case 'retry':
-              onRetry?.call();
-            case 'cancel':
-              onCancel?.call();
-          }
-          onMenuClosed();
-        },
-        itemBuilder: (context) => [
-          if (onReact != null)
-            const PopupMenuItem(value: 'react', child: Text('Add reaction')),
-          if (onEdit != null)
-            const PopupMenuItem(value: 'edit', child: Text('Edit message')),
-          if (onDelete != null)
-            const PopupMenuItem(value: 'delete', child: Text('Delete message')),
-          if (onRetry != null)
-            const PopupMenuItem(value: 'retry', child: Text('Retry send')),
-          if (onCancel != null)
-            const PopupMenuItem(
-              value: 'cancel',
-              child: Text('Remove failed send'),
-            ),
-        ],
-      ),
+      if (onReact != null)
+        IconButton(
+          key: const Key('message-action-react'),
+          visualDensity: VisualDensity.compact,
+          tooltip: 'React',
+          onPressed: onReact,
+          icon: const Icon(Icons.add_reaction_outlined, size: 16),
+        ),
+      if (onEdit != null)
+        IconButton(
+          key: const Key('message-action-edit'),
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Edit',
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 16),
+        ),
+      if (onDelete != null)
+        IconButton(
+          key: const Key('message-action-delete'),
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Delete',
+          onPressed: onDelete,
+          icon: Icon(
+            Icons.delete_outline,
+            size: 16,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      if (onRetry != null)
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Retry send',
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh, size: 16),
+        ),
+      if (onCancel != null)
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Remove failed send',
+          onPressed: onCancel,
+          icon: const Icon(Icons.close, size: 16),
+        ),
     ],
   );
 }

@@ -810,6 +810,16 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       const Text('Changes text size without enlarging the rest of the UI.'),
       const SizedBox(height: 12),
       SwitchListTile(
+        key: const Key('use-24-hour-time'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Use 24-hour timestamps'),
+        subtitle: const Text('Turn off to show chat timestamps with AM/PM.'),
+        value: preferences.use24HourTime,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(use24HourTime: value),
+        ),
+      ),
+      SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Reduce motion'),
         subtitle: const Text('Avoid non-essential interface animation.'),
