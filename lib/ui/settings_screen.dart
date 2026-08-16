@@ -5,6 +5,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
 import '../services/app_sounds.dart';
+import '../services/secret_redaction.dart';
 import 'accent_color_picker.dart';
 import 'security_center.dart';
 import 'app_shortcuts.dart';
@@ -927,11 +928,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       await action();
     } catch (exception) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(exception.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(safeErrorMessage(exception))));
     }
   }
 }

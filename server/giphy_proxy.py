@@ -15,6 +15,8 @@ PORT = int(os.environ.get("PORT", "8091"))
 KEY_FILE = os.environ.get("GIPHY_API_KEY_FILE", "/etc/deltiecord/giphy-api-key")
 RATE_LIMIT = int(os.environ.get("RATE_LIMIT", "60"))
 RATE_WINDOW_SECONDS = 60
+MAX_UPSTREAM_BYTES = 2 * 1024 * 1024
+VERSION = os.environ.get("DELTIECORD_VERSION", "0.9.15")
 _requests = defaultdict(deque)
 _requests_lock = threading.Lock()
 
@@ -48,10 +50,21 @@ def _giphy_request(query=None):
     params = urlencode(parameters)
     request = urllib.request.Request(
         f"https://api.giphy.com/v1/gifs/{endpoint}?" + params,
-        headers={"User-Agent": "Deltiecord-Giphy-Proxy/1.0"},
+        headers={"User-Agent": f"Deltiecord-Giphy-Proxy/{VERSION}"},
     )
     with urllib.request.urlopen(request, timeout=8) as response:
-        return json.load(response)
+        if response.status != 200:
+            raise RuntimeError("unexpected GIPHY status")
+        content_type = response.headers.get_content_type()
+        if content_type != "application/json":
+            raise RuntimeError("unexpected GIPHY content type")
+        declared_length = response.headers.get("Content-Length")
+        if declared_length and int(declared_length) > MAX_UPSTREAM_BYTES:
+            raise RuntimeError("GIPHY response too large")
+        body = response.read(MAX_UPSTREAM_BYTES + 1)
+        if len(body) > MAX_UPSTREAM_BYTES:
+            raise RuntimeError("GIPHY response too large")
+        return json.loads(body)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -81,6 +94,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, payload, status=200):
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        if len(body) > MAX_UPSTREAM_BYTES:
+            payload = {"error": "GIF search response too large"}
+            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+            status = 502
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Cache-Control", "no-store")

@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as timezone_data;
 import 'app.dart';
 import 'matrix/matrix_backend.dart';
 import 'services/chat_notifications.dart';
+import 'services/temporary_attachment_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,9 +18,27 @@ Future<void> main() async {
     ..maximumSizeBytes = 48 * 1024 * 1024;
   MediaKit.ensureInitialized();
   timezone_data.initializeTimeZones();
+  final temporaryAttachments = TemporaryAttachmentStore.instance;
+  await temporaryAttachments.initialize();
+  WidgetsBinding.instance.addObserver(
+    _TemporaryAttachmentLifecycle(temporaryAttachments),
+  );
   // Matrix only constructs its E2EE engine when Vodozemac is ready first.
   await vodozemac.init();
   final backend = MatrixBackend(notifications: DesktopChatNotificationSink());
   runApp(DeltiecordApp(backend: backend));
   await backend.initialize();
+}
+
+class _TemporaryAttachmentLifecycle with WidgetsBindingObserver {
+  _TemporaryAttachmentLifecycle(this.store);
+
+  final TemporaryAttachmentStore store;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      store.cleanup();
+    }
+  }
 }

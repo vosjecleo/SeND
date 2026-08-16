@@ -185,7 +185,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
       await player.open(Media(widget.uri.toString()), play: true);
       _opened = true;
     } catch (exception) {
-      _error = exception.toString();
+      _error = safeErrorMessage(exception);
       await player.dispose();
       _player = null;
       _controller = null;
@@ -612,22 +612,17 @@ class _AttachmentViewState extends State<_AttachmentView> {
     setState(() => _opening = true);
     try {
       final bytes = await widget.backend.downloadAttachment(widget.messageId);
-      final directory = await getTemporaryDirectory();
-      final name = path.basename(widget.attachment.name);
-      final file = File(
-        path.join(
-          directory.path,
-          '${widget.messageId.hashCode}_${name.isEmpty ? 'attachment' : name}',
-        ),
+      final file = await TemporaryAttachmentStore.instance.create(
+        bytes: bytes,
+        displayName: widget.attachment.name,
       );
-      await file.writeAsBytes(bytes, flush: true);
       if (!await launchUrl(Uri.file(file.path))) {
         throw StateError('No application is available to open this file.');
       }
-    } catch (exception) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open attachment: $exception')),
+          const SnackBar(content: Text('Could not open that attachment.')),
         );
       }
     } finally {
@@ -982,7 +977,7 @@ class _InlineVideoState extends State<_InlineVideo> {
       );
       _opened = true;
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = safeErrorMessage(exception));
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -1148,15 +1143,10 @@ class _MediaLightboxState extends State<_MediaLightbox> {
 
   Future<void> _open() async {
     final bytes = await widget.backend.downloadAttachment(_message.id);
-    final directory = await getTemporaryDirectory();
-    final safeName = path.basename(_attachment.name);
-    final file = File(
-      path.join(
-        directory.path,
-        '${_message.id.hashCode}_${safeName.isEmpty ? 'attachment' : safeName}',
-      ),
+    final file = await TemporaryAttachmentStore.instance.create(
+      bytes: bytes,
+      displayName: _attachment.name,
     );
-    await file.writeAsBytes(bytes, flush: true);
     await launchUrl(Uri.file(file.path));
   }
 
@@ -1335,7 +1325,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
       );
       if (mounted) setState(() => _opened = true);
     } catch (exception) {
-      if (mounted) setState(() => _error = exception.toString());
+      if (mounted) setState(() => _error = safeErrorMessage(exception));
     }
   }
 
@@ -1407,7 +1397,7 @@ class _InlineAudioState extends State<_InlineAudio> {
       );
       _opened = true;
     } catch (exception) {
-      _error = exception.toString();
+      _error = safeErrorMessage(exception);
     } finally {
       if (mounted) setState(() => _opening = false);
     }

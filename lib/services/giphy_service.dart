@@ -5,6 +5,10 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../version.dart';
+import 'bounded_http.dart';
+import 'public_network_address.dart';
+
 class GifSearchResult {
   const GifSearchResult({
     required this.title,
@@ -50,7 +54,13 @@ class GiphyService {
     'GIPHY_PROXY_URL',
     defaultValue: 'https://deltie.net/api/servers/giphy/search',
   );
-  final HttpClient _http = HttpClient();
+  static const _maximumSearchBytes = 2 * 1024 * 1024;
+  static const _maximumGifBytes = 25 * 1024 * 1024;
+  static const _requestTimeout = Duration(seconds: 10);
+  final HttpClient _http = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 8)
+    ..idleTimeout = const Duration(seconds: 10)
+    ..userAgent = 'Deltiecord/$deltiecordVersion';
   File? _favoritesFile;
   List<GifSearchResult>? _favorites;
 
@@ -75,12 +85,30 @@ class GiphyService {
       throw StateError('The GIF search proxy must use HTTPS.');
     }
     final uri = base.replace(queryParameters: queryParameters);
-    final request = await _http.getUrl(uri);
-    final response = await request.close();
-    final body = await utf8.decodeStream(response);
+    final request = await _http.getUrl(uri).timeout(_requestTimeout);
+    request
+      ..followRedirects = false
+      ..headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final response = await request.close().timeout(_requestTimeout);
     if (response.statusCode != HttpStatus.ok) {
+      await response.drain<void>();
       throw HttpException('GIF search returned ${response.statusCode}.');
     }
+    if (!hasContentType(response, const ['application/json'])) {
+      await response.drain<void>();
+      throw const HttpException('GIF search returned an unexpected response.');
+    }
+    if (response.contentLength > _maximumSearchBytes) {
+      await response.drain<void>();
+      throw const HttpException('GIF search response is too large.');
+    }
+    final body = utf8.decode(
+      await readBoundedResponse(
+        response,
+        maximumBytes: _maximumSearchBytes,
+        inactivityTimeout: _requestTimeout,
+      ),
+    );
     final json = jsonDecode(body) as Map<String, Object?>;
     final data = json['data'];
     if (data is! List) return const [];
@@ -155,18 +183,63 @@ class GiphyService {
         !(uri.host == 'giphy.com' || uri.host.endsWith('.giphy.com'))) {
       throw StateError('GIPHY returned an unexpected media URL.');
     }
-    final request = await _http.getUrl(uri);
-    final response = await request.close();
+    final response = await _openGiphyMedia(uri);
     if (response.statusCode != HttpStatus.ok) {
       await response.drain<void>();
       throw HttpException('GIPHY media returned ${response.statusCode}.');
     }
-    final bytes = BytesBuilder(copy: false);
-    await for (final chunk in response) {
-      bytes.add(chunk);
+    if (!hasContentType(response, const ['image'])) {
+      await response.drain<void>();
+      throw const HttpException('GIPHY returned unexpected media content.');
     }
-    return bytes.takeBytes();
+    if (response.contentLength > _maximumGifBytes) {
+      await response.drain<void>();
+      throw const HttpException('GIPHY media exceeds the 25 MiB safety limit.');
+    }
+    return readBoundedResponse(
+      response,
+      maximumBytes: _maximumGifBytes,
+      inactivityTimeout: _requestTimeout,
+    );
   }
+
+  Future<HttpClientResponse> _openGiphyMedia(Uri initialUri) async {
+    var uri = initialUri;
+    for (var redirects = 0; redirects <= 3; redirects++) {
+      if (!_isGiphyMediaUri(uri)) {
+        throw const HttpException('GIPHY redirected to an untrusted host.');
+      }
+      final addresses = await InternetAddress.lookup(uri.host)
+          .timeout(_requestTimeout);
+      if (addresses.isEmpty || !addresses.every(isPublicInternetAddress)) {
+        throw const HttpException('GIPHY media resolved to a private address.');
+      }
+      final request = await _http.getUrl(uri).timeout(_requestTimeout);
+      request
+        ..followRedirects = false
+        ..headers.set(HttpHeaders.acceptHeader, 'image/gif,image/*;q=0.8');
+      final response = await request.close().timeout(_requestTimeout);
+      if (!_isRedirect(response.statusCode)) return response;
+      final location = response.headers.value(HttpHeaders.locationHeader);
+      await response.drain<void>();
+      if (location == null || redirects == 3) {
+        throw const HttpException('GIPHY returned an invalid redirect.');
+      }
+      uri = uri.resolve(location);
+    }
+    throw const HttpException('Too many GIPHY redirects.');
+  }
+
+  bool _isGiphyMediaUri(Uri uri) =>
+      uri.scheme == 'https' &&
+      (uri.host == 'giphy.com' || uri.host.endsWith('.giphy.com'));
+
+  bool _isRedirect(int status) =>
+      status == HttpStatus.movedPermanently ||
+      status == HttpStatus.found ||
+      status == HttpStatus.seeOther ||
+      status == HttpStatus.temporaryRedirect ||
+      status == HttpStatus.permanentRedirect;
 
   void dispose() => _http.close(force: true);
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/giphy_service.dart';
+import '../services/secret_redaction.dart';
 import 'deltiecord_theme.dart';
 
 class GiphyDialog extends StatefulWidget {
@@ -65,7 +66,7 @@ class _GiphyDialogState extends State<GiphyDialog> {
       });
     } catch (exception) {
       if (mounted && generation == _generation) {
-        setState(() => _error = exception.toString());
+        setState(() => _error = safeErrorMessage(exception));
       }
     } finally {
       if (mounted && generation == _generation) {

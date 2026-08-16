@@ -4,15 +4,15 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:html/parser.dart' as html_parser;
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
-import '../services/public_network_address.dart';
 import '../services/message_search.dart';
+import '../services/link_preview_policy.dart';
+import '../services/secret_redaction.dart';
 import '../services/timeline_window_policy.dart';
 import 'matrix_client_factory.dart';
 import 'media_range_proxy.dart';
@@ -73,8 +73,6 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
   final Map<String, LinkPreview?> _linkPreviews = {};
-  final HttpClient _previewHttpClient = HttpClient()
-    ..userAgent = 'Deltiecord/0.3 link preview';
   final Set<String> _outboundSessionsReset = {};
   bool _refreshingRoomMetadata = false;
   bool _roomMetadataRefreshRequested = false;
@@ -646,8 +644,7 @@ class MatrixBackend extends ChatBackend {
   }
 
   String _friendlyError(Object exception) {
-    final message = exception.toString().replaceFirst('Exception: ', '');
-    return message.length > 240 ? '${message.substring(0, 240)}…' : message;
+    return safeErrorMessage(exception);
   }
 
   @override
@@ -666,7 +663,6 @@ class MatrixBackend extends ChatBackend {
     _client?.dispose();
     unawaited(_notifications.dispose());
     unawaited(_mediaRangeProxy.close());
-    _previewHttpClient.close(force: true);
     _offlineSendRooms.clear();
     super.dispose();
   }

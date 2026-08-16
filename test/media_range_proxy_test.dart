@@ -60,6 +60,10 @@ void main() {
         request.response
           ..statusCode = HttpStatus.partialContent
           ..headers.contentLength = bytes.length
+          ..headers.set(
+            HttpHeaders.contentRangeHeader,
+            'bytes $start-$end/${ciphertext.length}',
+          )
           ..add(bytes);
         await request.response.close();
       });
@@ -106,6 +110,10 @@ void main() {
       final end = int.parse(match.group(2)!);
       request.response
         ..statusCode = HttpStatus.partialContent
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-$end/${plaintext.length}',
+        )
         ..add(plaintext.sublist(start, end + 1));
       await request.response.close();
     });
@@ -148,6 +156,10 @@ void main() {
       final end = int.parse(match.group(2)!);
       request.response
         ..statusCode = HttpStatus.partialContent
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-$end/${plaintext.length}',
+        )
         ..add(plaintext.sublist(start, end + 1));
       await request.response.close();
     });
@@ -186,10 +198,18 @@ void main() {
     final releaseUpstream = Completer<void>();
     final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     upstream.listen((request) async {
+      final range = RegExp(r'bytes=(\d+)-(\d+)')
+          .firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
+      final start = int.parse(range.group(1)!);
+      final end = int.parse(range.group(2)!);
       request.response
         ..bufferOutput = false
         ..statusCode = HttpStatus.partialContent
         ..headers.contentLength = plaintext.length
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-$end/${plaintext.length}',
+        )
         ..add(plaintext.sublist(0, 64));
       await request.response.flush();
       await releaseUpstream.future;
@@ -234,5 +254,116 @@ void main() {
     releaseUpstream.complete();
     await finished.future;
     expect(received.takeBytes(), plaintext);
+  });
+
+  test('fails a nonzero seek when upstream ignores Range', () async {
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    upstream.listen((request) async {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentLength = 1024 * 1024;
+      for (var index = 0; index < 1024; index++) {
+        request.response.add(Uint8List(1024));
+        await request.response.flush();
+      }
+      await request.response.close();
+    });
+    final proxy = MediaRangeProxy(decryptor: (input, _, _, _) => input);
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final local = await proxy.register(
+      upstream: Uri.parse('http://127.0.0.1:${upstream.port}/media'),
+      accessToken: 'token',
+      key: Uint8List(32),
+      iv: Uint8List(16),
+      size: 1024 * 1024,
+      mimeType: 'video/mp4',
+    );
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    final request = await client.getUrl(local);
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=524288-525311');
+    final response = await request.close();
+    expect(response.statusCode, HttpStatus.badGateway);
+    expect(await response.fold<int>(0, (sum, chunk) => sum + chunk.length), 0);
+  });
+
+  test('rejects malformed Content-Range and truncated upstream data', () async {
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var malformed = true;
+    upstream.listen((request) async {
+      request.response
+        ..statusCode = HttpStatus.partialContent
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          malformed ? 'nonsense' : 'bytes 0-31/64',
+        )
+        ..add(Uint8List(malformed ? 64 : 16));
+      await request.response.close();
+    });
+    final proxy = MediaRangeProxy(decryptor: (input, _, _, _) => input);
+    addTearDown(() async {
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final local = await proxy.register(
+      upstream: Uri.parse('http://127.0.0.1:${upstream.port}/media'),
+      accessToken: 'token',
+      key: Uint8List(32),
+      iv: Uint8List(16),
+      size: 64,
+      mimeType: 'video/mp4',
+    );
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+
+    Future<HttpClientResponse> fetch() async {
+      final request = await client.getUrl(local);
+      request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-31');
+      return request.close();
+    }
+
+    final malformedResponse = await fetch();
+    expect(malformedResponse.statusCode, HttpStatus.badGateway);
+    await malformedResponse.drain<void>();
+    malformed = false;
+    final truncatedResponse = await fetch();
+    expect(truncatedResponse.statusCode, HttpStatus.partialContent);
+    await expectLater(
+      truncatedResponse.drain<void>(),
+      throwsA(isA<HttpException>()),
+    );
+  });
+
+  test('supports HEAD, rejects invalid ranges, and expires entries', () async {
+    final proxy = MediaRangeProxy(
+      decryptor: (input, _, _, _) => input,
+      entryTtl: const Duration(milliseconds: 20),
+    );
+    addTearDown(proxy.close);
+    final local = await proxy.register(
+      upstream: Uri.parse('http://127.0.0.1:9/media'),
+      accessToken: 'token',
+      key: Uint8List(32),
+      iv: Uint8List(16),
+      size: 64,
+      mimeType: 'video/mp4',
+    );
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    final head = await (await client.openUrl('HEAD', local)).close();
+    expect(head.statusCode, HttpStatus.ok);
+    expect(head.contentLength, 64);
+
+    final invalidRequest = await client.getUrl(local);
+    invalidRequest.headers.set(HttpHeaders.rangeHeader, 'bytes=99-100');
+    final invalid = await invalidRequest.close();
+    expect(invalid.statusCode, HttpStatus.requestedRangeNotSatisfiable);
+
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final expired = await (await client.getUrl(local)).close();
+    expect(expired.statusCode, HttpStatus.notFound);
   });
 }

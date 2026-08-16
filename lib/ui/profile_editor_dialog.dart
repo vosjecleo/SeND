@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/timezone_catalog.dart';
+import '../services/secret_redaction.dart';
 import 'accent_color_picker.dart';
 import 'profile_card.dart';
 import 'profile_image_cropper.dart';
@@ -196,9 +197,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (exception) {
       if (mounted) {
-        setState(
-          () => _error = exception.toString().replaceFirst('Exception: ', ''),
-        );
+        setState(() => _error = safeErrorMessage(exception));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

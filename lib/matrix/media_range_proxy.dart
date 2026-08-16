@@ -20,14 +20,25 @@ typedef RangeDecryptor = Uint8List Function(
 /// keeps seeking and playback streaming without exposing credentials or keys
 /// in a URL visible outside the loopback interface.
 class MediaRangeProxy {
-  MediaRangeProxy({RangeDecryptor? decryptor})
-    : _decryptor = decryptor ?? _decryptAesCtrRange;
+  MediaRangeProxy({
+    RangeDecryptor? decryptor,
+    this.entryTtl = const Duration(minutes: 30),
+    this.maximumEntries = 32,
+  }) : assert(maximumEntries > 0),
+       _decryptor = decryptor ?? _decryptAesCtrRange {
+    _upstream
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..idleTimeout = const Duration(seconds: 15);
+  }
 
   final RangeDecryptor _decryptor;
+  final Duration entryTtl;
+  final int maximumEntries;
   HttpServer? _server;
   final HttpClient _upstream = HttpClient();
   final Map<String, _EncryptedMedia> _entries = {};
   final Random _random = Random.secure();
+  Timer? _cleanupTimer;
 
   Future<Uri> register({
     required Uri upstream,
@@ -38,6 +49,13 @@ class MediaRangeProxy {
     required String mimeType,
   }) async {
     final server = await _ensureServer();
+    _removeExpired();
+    while (_entries.length >= maximumEntries) {
+      final oldest = _entries.entries.reduce(
+        (a, b) => a.value.lastAccess.isBefore(b.value.lastAccess) ? a : b,
+      );
+      _removeEntry(oldest.key);
+    }
     final token = List.generate(24, (_) => _random.nextInt(256));
     final id = base64UrlEncode(token).replaceAll('=', '');
     _entries[id] = _EncryptedMedia(
@@ -47,6 +65,7 @@ class MediaRangeProxy {
       iv: iv,
       size: size,
       mimeType: mimeType,
+      lastAccess: DateTime.now(),
     );
     return Uri.parse('http://127.0.0.1:${server.port}/media/$id');
   }
@@ -56,6 +75,16 @@ class MediaRangeProxy {
     if (existing != null) return existing;
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _server = server;
+    final cleanupEvery = Duration(
+      microseconds: max(
+        const Duration(seconds: 1).inMicroseconds,
+        min(
+          const Duration(minutes: 1).inMicroseconds,
+          entryTtl.inMicroseconds ~/ 2,
+        ),
+      ),
+    );
+    _cleanupTimer = Timer.periodic(cleanupEvery, (_) => _removeExpired());
     unawaited(server.forEach(_handle));
     return server;
   }
@@ -66,6 +95,7 @@ class MediaRangeProxy {
             request.uri.pathSegments.first == 'media'
         ? request.uri.pathSegments.last
         : null;
+    _removeExpired();
     final media = id == null ? null : _entries[id];
     if (media == null ||
         (request.method != 'GET' && request.method != 'HEAD')) {
@@ -73,12 +103,31 @@ class MediaRangeProxy {
       await request.response.close();
       return;
     }
+    media.lastAccess = DateTime.now();
 
     try {
-      final requested = _parseRange(request.headers.value('range'), media.size);
+      final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+      if (request.method == 'HEAD' && rangeHeader == null) {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.set(HttpHeaders.acceptRangesHeader, 'bytes')
+          ..headers.set(HttpHeaders.contentTypeHeader, media.mimeType)
+          ..headers.set(HttpHeaders.contentLengthHeader, media.size);
+        await request.response.close();
+        return;
+      }
+      final requested = _parseRange(rangeHeader, media.size);
       final start = requested.$1;
       final end = requested.$2;
       final length = end - start + 1;
+      final alignedStart = start - (start % 16);
+      final upstreamResponse = request.method == 'HEAD'
+          ? null
+          : await _openEncryptedRange(
+              media,
+              fetchStart: alignedStart,
+              requestedEnd: end,
+            );
       final response = request.response
         ..bufferOutput = false
         ..statusCode = HttpStatus.partialContent
@@ -94,15 +143,25 @@ class MediaRangeProxy {
         return;
       }
 
-      final alignedStart = start - (start % 16);
       await _streamDecryptedRange(
         media,
+        upstreamResponse: upstreamResponse!,
         fetchStart: alignedStart,
         requestedStart: start,
         requestedEnd: end,
         downstream: response,
       );
       await response.close();
+    } on FormatException {
+      try {
+        request.response
+          ..statusCode = HttpStatus.requestedRangeNotSatisfiable
+          ..headers.set(
+            HttpHeaders.contentRangeHeader,
+            'bytes */${media.size}',
+          );
+        await request.response.close();
+      } catch (_) {}
     } catch (_) {
       // A streaming response may already have sent its headers. In that case
       // changing the status is no longer legal, but closing it still lets the
@@ -153,20 +212,13 @@ class MediaRangeProxy {
   /// before playback received any data, producing long startup stalls.
   Future<void> _streamDecryptedRange(
     _EncryptedMedia media, {
+    required HttpClientResponse upstreamResponse,
     required int fetchStart,
     required int requestedStart,
     required int requestedEnd,
     required HttpResponse downstream,
   }) async {
-    final request = await _upstream.getUrl(media.upstream);
-    request.headers
-      ..set(HttpHeaders.authorizationHeader, 'Bearer ${media.accessToken}')
-      ..set(HttpHeaders.rangeHeader, 'bytes=$fetchStart-$requestedEnd');
-    final response = await request.close();
-    if (response.statusCode != HttpStatus.ok &&
-        response.statusCode != HttpStatus.partialContent) {
-      throw HttpException('Media server returned ${response.statusCode}');
-    }
+    final response = upstreamResponse;
 
     final cipherLength = requestedEnd - fetchStart + 1;
     final requestedLength = requestedEnd - requestedStart + 1;
@@ -176,7 +228,9 @@ class MediaRangeProxy {
     var emitted = 0;
     var pending = Uint8List(0);
 
-    await for (final rawChunk in response) {
+    await for (final rawChunk in response.timeout(
+      const Duration(seconds: 15),
+    )) {
       var rawOffset = 0;
       if (upstreamSkip > 0) {
         final skipped = min(upstreamSkip, rawChunk.length);
@@ -191,8 +245,6 @@ class MediaRangeProxy {
         ..setRange(pending.length, pending.length + take, rawChunk, rawOffset);
       cipherRemaining -= take;
 
-      // Keep a partial AES block until the next upstream chunk. At the end of
-      // the requested range AES-CTR can safely decrypt the final partial block.
       final processLength = cipherRemaining == 0
           ? combined.length
           : combined.length - (combined.length % 16);
@@ -217,8 +269,6 @@ class MediaRangeProxy {
           Uint8List.sublistView(decrypted, outputStart, outputEnd),
         );
         emitted += outputEnd - outputStart;
-        // bufferOutput is disabled, so media_kit sees this block immediately
-        // without serializing every upstream chunk behind a flush round trip.
       }
       cipherOffset += processLength;
       pending = processLength == combined.length
@@ -234,10 +284,103 @@ class MediaRangeProxy {
     }
   }
 
-  void clear() => _entries.clear();
+  Future<HttpClientResponse> _openEncryptedRange(
+    _EncryptedMedia media, {
+    required int fetchStart,
+    required int requestedEnd,
+  }) async {
+    final request = await _upstream
+        .getUrl(media.upstream)
+        .timeout(const Duration(seconds: 10));
+    request.followRedirects = false;
+    request.headers
+      ..set(HttpHeaders.authorizationHeader, 'Bearer ${media.accessToken}')
+      ..set(HttpHeaders.rangeHeader, 'bytes=$fetchStart-$requestedEnd');
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    if (response.statusCode != HttpStatus.ok &&
+        response.statusCode != HttpStatus.partialContent) {
+      throw HttpException('Media server returned ${response.statusCode}');
+    }
+    if (response.statusCode == HttpStatus.ok && fetchStart != 0) {
+      // Never consume and discard a complete multi-gigabyte response to reach
+      // a seek offset. The player may retry or use a separately bounded full
+      // download path, but this streaming request fails without reading it.
+      final subscription = response.listen((_) {});
+      await subscription.cancel();
+      throw const HttpException('Media server ignored the requested range');
+    }
+    if (response.statusCode == HttpStatus.partialContent) {
+      _validateContentRange(
+        response.headers.value(HttpHeaders.contentRangeHeader),
+        expectedStart: fetchStart,
+        maximumEnd: requestedEnd,
+        expectedSize: media.size,
+      );
+    }
+
+    return response;
+  }
+
+  void _validateContentRange(
+    String? value, {
+    required int expectedStart,
+    required int maximumEnd,
+    required int expectedSize,
+  }) {
+    final match = value == null
+        ? null
+        : RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(value.trim());
+    final start = int.tryParse(match?.group(1) ?? '');
+    final end = int.tryParse(match?.group(2) ?? '');
+    final size = int.tryParse(match?.group(3) ?? '');
+    if (start != expectedStart ||
+        end == null ||
+        end < expectedStart ||
+        end > maximumEnd ||
+        size != expectedSize) {
+      throw const HttpException(
+        'Media server returned malformed range metadata',
+      );
+    }
+  }
+
+  void unregister(Uri localUri) {
+    if (localUri.host != InternetAddress.loopbackIPv4.address ||
+        localUri.pathSegments.length != 2 ||
+        localUri.pathSegments.first != 'media') {
+      return;
+    }
+    _removeEntry(localUri.pathSegments.last);
+  }
+
+  void _removeExpired() {
+    final cutoff = DateTime.now().subtract(entryTtl);
+    for (final id
+        in _entries.entries
+            .where((entry) => entry.value.lastAccess.isBefore(cutoff))
+            .map((entry) => entry.key)
+            .toList(growable: false)) {
+      _removeEntry(id);
+    }
+  }
+
+  void _removeEntry(String id) {
+    final media = _entries.remove(id);
+    if (media == null) return;
+    media.key.fillRange(0, media.key.length, 0);
+    media.iv.fillRange(0, media.iv.length, 0);
+  }
+
+  void clear() {
+    for (final id in _entries.keys.toList(growable: false)) {
+      _removeEntry(id);
+    }
+  }
 
   Future<void> close() async {
-    _entries.clear();
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
+    clear();
     _upstream.close(force: true);
     await _server?.close(force: true);
     _server = null;
@@ -265,13 +408,14 @@ Uint8List _counterAt(Uint8List iv, int blockOffset) {
 }
 
 class _EncryptedMedia {
-  const _EncryptedMedia({
+  _EncryptedMedia({
     required this.upstream,
     required this.accessToken,
     required this.key,
     required this.iv,
     required this.size,
     required this.mimeType,
+    required this.lastAccess,
   });
 
   final Uri upstream;
@@ -280,4 +424,5 @@ class _EncryptedMedia {
   final Uint8List iv;
   final int size;
   final String mimeType;
+  DateTime lastAccess;
 }
