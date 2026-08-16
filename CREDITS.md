@@ -46,10 +46,6 @@ an external dependency under its own license.
 - [GIPHY](https://developers.giphy.com/) supplies GIF search results through its
   public API. Deltiecord contains its own small client; a rate-limited HTTPS
   proxy holds the shared API key so client binaries never contain it.
-- [FxTwitter/FxEmbed](https://github.com/FixTweet/FxTwitter) supplies public
-  preview metadata for X links when the Matrix URL-preview response is
-  insufficient. Deltiecord calls the service API; it does not include FxTwitter
-  code.
 - [Jome](https://github.com/eepp/jome) supplies the local Unicode emoji name
   and keyword dataset used for offline emoji search and colon completion.
   Deltiecord vendors only `emojis.json`; Jome is MIT licensed.

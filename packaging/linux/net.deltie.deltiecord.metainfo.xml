@@ -4,7 +4,7 @@
   <name>Deltiecord</name>
   <summary>A compact, old-school Matrix desktop client</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>AGPL-3.0-or-later</project_license>
   <developer id="net.deltie">
     <name>Deltiecord contributors</name>
   </developer>

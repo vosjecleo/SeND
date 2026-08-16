@@ -4,6 +4,10 @@ Deltiecord is a lightweight Matrix client with a compact, old-school desktop
 interface. It is built with Flutter and the Matrix Dart SDK so the application
 and backend architecture can later be reused on Android.
 
+Deltiecord is free software licensed under the GNU Affero General Public
+License v3.0 or later. See `LICENSE`; third-party acknowledgements and license
+links are maintained in `CREDITS.md`.
+
 ## V0 features
 
 - Configurable Matrix homeserver and password login

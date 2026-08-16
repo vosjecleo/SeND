@@ -11,11 +11,33 @@ linuxdeploy="$tools_dir/linuxdeploy-x86_64.AppImage"
 plugin="$tools_dir/linuxdeploy-plugin-appimage-x86_64.AppImage"
 mkdir -p "$tools_dir" "$repo_root/dist"
 
-# Release assembly uses the upstream linuxdeploy/AppImage tools verbatim.
-# Project and license attribution is recorded in ../../CREDITS.md.
-download() { test -x "$1" || { curl -fL --retry 3 "$2" -o "$1"; chmod +x "$1"; }; }
-download "$linuxdeploy" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-download "$plugin" "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+# Release tooling is pinned to immutable upstream tags and verified before it is
+# ever made executable. Updating a tool requires reviewing the release and
+# changing both its tag and checksum here.
+linuxdeploy_url="https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage"
+linuxdeploy_sha256="c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d"
+plugin_url="https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage"
+plugin_sha256="992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3"
+
+ensure_tool() {
+  local destination="$1" url="$2" expected="$3" temporary="${1}.download"
+  if test -f "$destination" && echo "$expected  $destination" | sha256sum --check --status; then
+    chmod 0755 "$destination"
+    return
+  fi
+  rm -f "$temporary"
+  curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$url" -o "$temporary"
+  echo "$expected  $temporary" | sha256sum --check --status || {
+    rm -f "$temporary"
+    echo "Refusing unverified release tool: $url" >&2
+    exit 1
+  }
+  chmod 0755 "$temporary"
+  mv "$temporary" "$destination"
+}
+
+ensure_tool "$linuxdeploy" "$linuxdeploy_url" "$linuxdeploy_sha256"
+ensure_tool "$plugin" "$plugin_url" "$plugin_sha256"
 "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
 
 export ARCH=x86_64
