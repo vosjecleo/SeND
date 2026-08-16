@@ -24,9 +24,7 @@ Future<void> showOwnProfile(BuildContext context, ChatBackend backend) {
         userId: userId,
         displayName: backend.profileDisplayName ?? _localpart(userId),
         avatarBytes: backend.profileAvatarBytes,
-        presence: backend.preferences.sharePresence
-            ? UserPresence.online
-            : UserPresence.offline,
+        presence: backend.profilePresence,
       ),
       own: true,
     ),

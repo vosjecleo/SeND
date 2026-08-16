@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
 import 'package:matrix/matrix.dart';
 
 import '../models/chat_models.dart';
+import '../services/app_sounds.dart';
 import 'deltiecord_webrtc_delegate.dart';
 
 /// Owns MatrixRTC/WebRTC resources independently from session and timeline
@@ -39,6 +40,12 @@ class MatrixVoiceController extends ChangeNotifier {
   bool _samplingInput = false;
   bool _rejoining = false;
   bool _disposed = false;
+  bool _echoCancellation = true;
+  bool _noiseSuppression = true;
+  bool _autoGainControl = true;
+  double _microphoneVolume = 1;
+  double _outputVolume = 1;
+  bool _callSound = true;
 
   VoiceConnectionStatus get status => _status;
   String? get activeRoomId => _activeCall?.room.id;
@@ -89,6 +96,16 @@ class MatrixVoiceController extends ChangeNotifier {
       _locallyMutedParticipants.contains(userId);
 
   void applyPreferences(AppPreferences preferences) {
+    final processingChanged =
+        _echoCancellation != preferences.echoCancellation ||
+        _noiseSuppression != preferences.noiseSuppression ||
+        _autoGainControl != preferences.autoGainControl;
+    _echoCancellation = preferences.echoCancellation;
+    _noiseSuppression = preferences.noiseSuppression;
+    _autoGainControl = preferences.autoGainControl;
+    _microphoneVolume = preferences.microphoneVolume.clamp(0, 1);
+    _outputVolume = preferences.outputVolume.clamp(0, 1);
+    _callSound = preferences.callSound;
     final inputId = preferences.preferredAudioInputId;
     final outputId = preferences.preferredAudioOutputId;
     final cameraId = preferences.preferredCameraId;
@@ -121,6 +138,11 @@ class MatrixVoiceController extends ChangeNotifier {
       );
     }
     unawaited(_applyRemoteAudioSettings());
+    unawaited(_applyLocalInputVolume());
+    final roomId = activeRoomId;
+    if (processingChanged && roomId != null) {
+      unawaited(_rejoinPreservingState(roomId));
+    }
     notifyListeners();
   }
 
@@ -269,9 +291,10 @@ class MatrixVoiceController extends ChangeNotifier {
         _handleCallEvent,
       );
       final audioConstraints = <String, dynamic>{
-        'echoCancellation': true,
-        'noiseSuppression': true,
-        'autoGainControl': true,
+        'echoCancellation': _echoCancellation,
+        'noiseSuppression': _noiseSuppression,
+        'autoGainControl': _autoGainControl,
+        'volume': _microphoneVolume,
         if (_selectedAudioInputId != null)
           'deviceId': {'exact': _selectedAudioInputId},
       };
@@ -318,7 +341,9 @@ class MatrixVoiceController extends ChangeNotifier {
       );
       _status = VoiceConnectionStatus.connected;
       _startInputMeter();
+      await _applyLocalInputVolume();
       await _applyRemoteAudioSettings();
+      if (_callSound && !_rejoining) unawaited(AppSounds.callConnected());
     } catch (exception) {
       try {
         await joiningCall?.leave();
@@ -456,12 +481,28 @@ class MatrixVoiceController extends ChangeNotifier {
           _deafened ||
               _locallyMutedParticipants.contains(wrapped.participant.userId)
           ? 0.0
-          : participantVolume(wrapped.participant.userId);
+          : participantVolume(wrapped.participant.userId) * _outputVolume;
       for (final track in wrapped.stream?.getAudioTracks() ?? const []) {
         try {
           await flutter_webrtc.Helper.setVolume(volume, track);
         } catch (_) {
           // Some Linux audio backends do not expose per-track volume.
+        }
+      }
+    }
+  }
+
+  Future<void> _applyLocalInputVolume() async {
+    final call = _activeCall;
+    if (call == null) return;
+    for (final wrapped in call.backend.userMediaStreams.where(
+      (stream) => stream.isLocal(),
+    )) {
+      for (final track in wrapped.stream?.getAudioTracks() ?? const []) {
+        try {
+          await flutter_webrtc.Helper.setVolume(_microphoneVolume, track);
+        } catch (_) {
+          // Some Linux capture backends expose processing but not gain.
         }
       }
     }
@@ -525,6 +566,7 @@ class MatrixVoiceController extends ChangeNotifier {
         ? VoiceConnectionStatus.reconnecting
         : VoiceConnectionStatus.disconnecting;
     if (!_disposed) notifyListeners();
+    final playDisconnectSound = _callSound && !_rejoining && !_disposed;
     try {
       await call.leave();
     } finally {
@@ -542,6 +584,7 @@ class MatrixVoiceController extends ChangeNotifier {
           ? VoiceConnectionStatus.reconnecting
           : VoiceConnectionStatus.disconnected;
       if (!_disposed) notifyListeners();
+      if (playDisconnectSound) unawaited(AppSounds.callDisconnected());
     }
   }
 

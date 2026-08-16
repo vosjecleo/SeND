@@ -25,7 +25,6 @@ import '../services/emoji_completion.dart';
 import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
 import 'emoji_picker_dialog.dart';
-import 'security_center.dart';
 import 'settings_screen.dart';
 import 'profile_dialog.dart';
 import 'app_shortcuts.dart';
@@ -506,8 +505,6 @@ class _ChatShellState extends State<ChatShell> {
         child: Scaffold(
           body: Column(
             children: [
-              if (widget.backend.encryptionSetup.needsAttention)
-                _SecurityBanner(backend: widget.backend),
               if (widget.backend.connectionStatus != ConnectionStatus.online)
                 _ConnectionBanner(status: widget.backend.connectionStatus),
               Expanded(
@@ -533,7 +530,36 @@ class _ChatShellState extends State<ChatShell> {
                           width: panelWidth,
                           child: _RoomPanel(backend: widget.backend),
                         ),
-                        const VerticalDivider(width: 1),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.resizeColumn,
+                          child: GestureDetector(
+                            key: const Key('room-panel-resize-handle'),
+                            behavior: HitTestBehavior.opaque,
+                            onHorizontalDragUpdate: (details) {
+                              final width =
+                                  (widget.backend.preferences.roomPanelWidth +
+                                          details.delta.dx)
+                                      .clamp(
+                                        220.0,
+                                        constraints.maxWidth * 0.46,
+                                      );
+                              widget.backend.updatePreferences(
+                                widget.backend.preferences.copyWith(
+                                  roomPanelWidth: width,
+                                ),
+                              );
+                            },
+                            child: SizedBox(
+                              width: 5,
+                              child: Center(
+                                child: VerticalDivider(
+                                  width: 1,
+                                  color: context.deltiecord.divider,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                         Expanded(
                           child: widget.backend.selectedRoom == null
                               ? const _EmptyConversation()

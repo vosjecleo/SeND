@@ -294,13 +294,20 @@ void main() {
       );
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
-    expect(find.text('Fix encryption'), findsOneWidget);
-    await tester.tap(find.text('Fix encryption'));
+    expect(find.text('Fix encryption'), findsNothing);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Encryption'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recovery required'), findsOneWidget);
+    expect(
+      find.widgetWithText(AlertDialog, 'Recovery required'),
+      findsOneWidget,
+    );
     expect(find.text('Recover & verify'), findsOneWidget);
-    expect(find.text('Encrypted key backup'), findsOneWidget);
+    expect(find.text('Encrypted key backup'), findsWidgets);
   });
 
   testWidgets('requires saving a newly generated recovery key', (tester) async {
@@ -310,7 +317,11 @@ void main() {
         status: EncryptionSetupStatus.needsSetup,
       );
     await tester.pumpWidget(DeltiecordApp(backend: backend));
-    await tester.tap(find.text('Fix encryption'));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Encryption'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Set up encryption'));
     await tester.pumpAndSettle();
@@ -792,13 +803,8 @@ void main() {
 
     final accountPanel = find.byKey(const Key('current-user-panel'));
     final composerPanel = find.byKey(const Key('message-composer-panel'));
-    final createSpacePanel = find.byKey(const Key('create-space-panel'));
     expect(
       tester.getTopLeft(accountPanel).dy,
-      tester.getTopLeft(composerPanel).dy,
-    );
-    expect(
-      tester.getTopLeft(createSpacePanel).dy,
       tester.getTopLeft(composerPanel).dy,
     );
     final composerTop = tester.getTopLeft(composerPanel).dy;
@@ -902,6 +908,91 @@ void main() {
     expect(find.text('See you tomorrow'), findsOneWidget);
   });
 
+  testWidgets('room panel filters rooms and starts a new direct message', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!alice:example.org',
+          name: 'Alice',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+        ),
+        RoomSummary(
+          id: '!garden:example.org',
+          name: 'Garden club',
+          lastMessage: 'plants',
+          unreadCount: 0,
+          usesChannelIcon: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.enterText(find.byKey(const Key('room-list-search')), 'garden');
+    await tester.pump();
+    expect(find.text('Garden club'), findsOneWidget);
+    expect(find.text('Alice'), findsNothing);
+
+    await tester.tap(find.byTooltip('Clear room search'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Start chat or create room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start direct message'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('new-direct-message-id')),
+      '@newfriend:example.org',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Message'));
+    await tester.pumpAndSettle();
+
+    expect(backend.startedDirectMessageWith, '@newfriend:example.org');
+  });
+
+  testWidgets('bottom user island exposes status, presence, mute, and deafen', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..testProfile = const UserProfileSummary(
+        userId: '@deltie:example.org',
+        displayName: 'Deltie',
+        statusMessage: 'Building strange software',
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    expect(find.text('Building strange software'), findsOneWidget);
+    expect(
+      find.byKey(const Key('current-user-presence-online')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Mute'));
+    await tester.pump();
+    expect(backend.muted, isTrue);
+    await tester.tap(find.byTooltip('Deafen'));
+    await tester.pump();
+    expect(backend.deafened, isTrue);
+  });
+
+  testWidgets('room panel width can be resized from its main-screen border', (
+    tester,
+  ) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    await tester.drag(
+      find.byKey(const Key('room-panel-resize-handle')),
+      const Offset(40, 0),
+    );
+    await tester.pump();
+
+    expect(backend.preferences.roomPanelWidth, greaterThan(280));
+  });
+
   testWidgets('Space buttons remain square without selected side strips', (
     tester,
   ) async {
@@ -914,7 +1005,10 @@ void main() {
       tester.getSize(find.byKey(const Key('space-button-Test'))),
       const Size.square(48),
     );
-    expect(tester.widget<Icon>(find.byIcon(Icons.add_box_outlined)).size, 27);
+    expect(
+      tester.getSize(find.byKey(const Key('space-button-Create Space'))),
+      const Size.square(48),
+    );
   });
 
   testWidgets('offers jump to present after scrolling away from recent chat', (
@@ -1082,6 +1176,7 @@ class FakeBackend extends ChatBackend {
   VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
   String? currentActiveVoiceId;
   bool deafened = false;
+  bool muted = false;
   bool cameraEnabled = false;
   Completer<void>? sendGate;
   int historyRequests = 0;
@@ -1095,6 +1190,7 @@ class FakeBackend extends ChatBackend {
   String? lastEditMessageId;
   String? removedDeviceId;
   String? removalPassword;
+  String? startedDirectMessageWith;
   UserProfileSummary? testProfile;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
@@ -1113,6 +1209,12 @@ class FakeBackend extends ChatBackend {
   String? get profileDisplayName => 'Deltie';
   @override
   Uint8List? get profileAvatarBytes => null;
+  @override
+  UserPresence get profilePresence => UserPresence.online;
+  @override
+  String? get profileStatusMessage => testProfile?.statusMessage;
+  @override
+  int? get profileColor => testProfile?.profileColor;
   @override
   bool get profileLoading => false;
   @override
@@ -1174,7 +1276,7 @@ class FakeBackend extends ChatBackend {
   @override
   String? get activeVoiceRoomId => currentActiveVoiceId;
   @override
-  bool get voiceMuted => false;
+  bool get voiceMuted => muted;
   @override
   bool get voiceDeafened => deafened;
   @override
@@ -1269,11 +1371,21 @@ class FakeBackend extends ChatBackend {
     String? bio,
     String? pronouns,
     String? timezone,
+    String? statusMessage,
+    int? profileColor,
     Uint8List? bannerBytes,
     bool removeBanner = false,
   }) async {}
   @override
-  Future<void> startDirectChat(String userId) async {}
+  Future<void> startDirectChat(String userId) async {
+    startedDirectMessageWith = userId;
+  }
+
+  @override
+  Future<List<SpaceDirectoryEntry>> searchPublicSpaces(String query) async =>
+      const [];
+  @override
+  Future<void> joinPublicSpace(String roomId) async {}
   @override
   Future<void> setUserBlocked(String userId, bool blocked) async {}
   @override
@@ -1332,7 +1444,11 @@ class FakeBackend extends ChatBackend {
   @override
   Future<void> leaveVoiceRoom() async {}
   @override
-  Future<void> setVoiceMuted(bool muted) async {}
+  Future<void> setVoiceMuted(bool value) async {
+    muted = value;
+    notifyListeners();
+  }
+
   @override
   Future<void> setVoiceDeafened(bool value) async {
     deafened = value;

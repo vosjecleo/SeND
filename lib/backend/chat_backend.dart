@@ -15,6 +15,9 @@ abstract class ChatBackend extends ChangeNotifier {
   Uri? get homeserver;
   String? get profileDisplayName;
   Uint8List? get profileAvatarBytes;
+  UserPresence get profilePresence;
+  String? get profileStatusMessage;
+  int? get profileColor;
   bool get profileLoading;
   AppPreferences get preferences;
   EncryptionSetupState get encryptionSetup;
@@ -89,10 +92,14 @@ abstract class ChatBackend extends ChangeNotifier {
     String? bio,
     String? pronouns,
     String? timezone,
+    String? statusMessage,
+    int? profileColor,
     Uint8List? bannerBytes,
     bool removeBanner,
   });
   Future<void> startDirectChat(String userId);
+  Future<List<SpaceDirectoryEntry>> searchPublicSpaces(String query);
+  Future<void> joinPublicSpace(String roomId);
   Future<void> setUserBlocked(String userId, bool blocked);
   Future<void> refreshAudioInputs();
   Future<void> selectAudioInput(String? deviceId);

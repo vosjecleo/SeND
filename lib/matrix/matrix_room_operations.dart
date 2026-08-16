@@ -1,6 +1,52 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixRoomOperations on MatrixBackend {
+  Future<List<SpaceDirectoryEntry>> _searchPublicSpaces(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty || !_matrix.isLogged()) return const [];
+    try {
+      final response = await _matrix.queryPublicRooms(
+        filter: PublicRoomQueryFilter(
+          genericSearchTerm: normalized,
+          roomTypes: const ['m.space'],
+        ),
+        limit: 30,
+      );
+      final entries = <SpaceDirectoryEntry>[];
+      for (final room in response.chunk.where(
+        (entry) => entry.roomType == 'm.space',
+      )) {
+        entries.add(
+          SpaceDirectoryEntry(
+            roomId: room.roomId,
+            name: room.name?.trim().isNotEmpty == true
+                ? room.name!.trim()
+                : room.canonicalAlias ?? room.roomId,
+            memberCount: room.numJoinedMembers,
+            topic: room.topic ?? '',
+            avatarBytes: await _profileMedia(room.avatarUrl, 96, 96),
+          ),
+        );
+      }
+      return entries;
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> _joinPublicSpace(String roomId) async {
+    try {
+      final joinedRoomId = await _matrix.joinRoom(roomId);
+      _selectSpace(joinedRoomId);
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
+    }
+  }
+
   void _selectSpace(String? spaceId) {
     if (_selectedSpaceId == spaceId) return;
     _selectedSpaceId = spaceId;

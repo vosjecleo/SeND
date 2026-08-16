@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
+import '../services/app_sounds.dart';
 import 'accent_color_picker.dart';
 import 'security_center.dart';
 import 'app_shortcuts.dart';
@@ -212,6 +213,68 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           onChanged: backend.selectCamera,
         ),
       ],
+      const SizedBox(height: 18),
+      Text(
+        'Microphone volume — '
+        '${(backend.preferences.microphoneVolume * 100).round()}%',
+      ),
+      Slider(
+        key: const Key('microphone-volume-slider'),
+        value: backend.preferences.microphoneVolume,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(microphoneVolume: value),
+        ),
+      ),
+      Text(
+        'Output volume — ${(backend.preferences.outputVolume * 100).round()}%',
+      ),
+      Slider(
+        key: const Key('output-volume-slider'),
+        value: backend.preferences.outputVolume,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(outputVolume: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Echo cancellation'),
+        subtitle: const Text('Reduce feedback from speakers into your mic.'),
+        value: backend.preferences.echoCancellation,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(echoCancellation: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Background noise suppression'),
+        subtitle: const Text('Filter steady room and equipment noise.'),
+        value: backend.preferences.noiseSuppression,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(noiseSuppression: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Automatic microphone gain'),
+        value: backend.preferences.autoGainControl,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(autoGainControl: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Call sounds'),
+        subtitle: const Text('Play a cue when connecting or disconnecting.'),
+        value: backend.preferences.callSound,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(callSound: value),
+        ),
+      ),
+      OutlinedButton.icon(
+        onPressed: AppSounds.callConnected,
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('Test call sound'),
+      ),
       const SizedBox(height: 12),
       const Text(
         'Screen selection uses the standard desktop portal on Linux/Wayland.',
@@ -226,6 +289,11 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(notificationsEnabled: value),
         ),
+      ),
+      OutlinedButton.icon(
+        onPressed: AppSounds.notification,
+        icon: const Icon(Icons.notifications_active_outlined),
+        label: const Text('Test notification sound'),
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,

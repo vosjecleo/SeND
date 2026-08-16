@@ -36,10 +36,31 @@ extension _MatrixMessages on MatrixBackend {
         limit: max(100, _preferences.timelineChunkSize),
       );
       if (_selectedRoomId != roomId) return const [];
-      return result.events
-          .where((event) => event.type == EventTypes.Message)
-          .map(_searchResultFromEvent)
-          .toList(growable: false);
+      final matches = <String, ChatMessage>{
+        for (final message in searchMessages(normalized)) message.id: message,
+      };
+      for (var event in result.events) {
+        if (event.type == EventTypes.Encrypted && _matrix.encryption != null) {
+          try {
+            event = await _matrix.encryption!.decryptRoomEvent(event);
+          } catch (_) {
+            continue;
+          }
+        }
+        if (event.type != EventTypes.Message) continue;
+        final message = _searchResultFromEvent(event);
+        if (!matchesMessageSearch(
+          body: message.body,
+          sender: message.sender,
+          query: normalized,
+        )) {
+          continue;
+        }
+        matches[message.id] = message;
+      }
+      final sorted = matches.values.toList(growable: false)
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return sorted;
     } catch (exception) {
       if (_selectedRoomId == roomId) {
         _error = _friendlyError(exception);

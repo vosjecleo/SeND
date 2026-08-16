@@ -1,37 +1,5 @@
 part of 'chat_shell.dart';
 
-class _SecurityBanner extends StatelessWidget {
-  const _SecurityBanner({required this.backend});
-
-  final ChatBackend backend;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xff4b3c19),
-    child: InkWell(
-      onTap: () => showSecurityCenter(context, backend),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, size: 19),
-            const SizedBox(width: 9),
-            const Expanded(
-              child: Text(
-                'Encrypted history is not fully protected on this device.',
-              ),
-            ),
-            TextButton(
-              onPressed: () => showSecurityCenter(context, backend),
-              child: const Text('Fix encryption'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
 class _SpaceBar extends StatelessWidget {
   const _SpaceBar({required this.backend});
 
@@ -83,6 +51,11 @@ class _SpaceBar extends StatelessWidget {
       await backend.createSpace(name: spaceName, topic: spaceTopic);
     }
   }
+
+  Future<void> _searchSpaces(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (context) => _SpaceSearchDialog(backend: backend),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -143,19 +116,23 @@ class _SpaceBar extends StatelessWidget {
                             ),
                     ),
                   ),
+                Padding(
+                  key: const Key('create-space-panel'),
+                  padding: const EdgeInsets.only(top: 2, bottom: 6),
+                  child: _SpaceButton(
+                    tooltip: 'Create Space',
+                    selected: false,
+                    onTap: () => _createSpace(context),
+                    child: const Icon(Icons.add, size: 25),
+                  ),
+                ),
+                _SpaceButton(
+                  tooltip: 'Search for Spaces',
+                  selected: false,
+                  onTap: () => _searchSpaces(context),
+                  child: const Icon(Icons.travel_explore_outlined, size: 23),
+                ),
               ],
-            ),
-          ),
-          const Divider(height: 1),
-          SizedBox(
-            key: const Key('create-space-panel'),
-            height: _bottomPanelHeightFor(context),
-            child: Center(
-              child: IconButton(
-                tooltip: 'Create Space',
-                onPressed: () => _createSpace(context),
-                icon: const Icon(Icons.add_box_outlined, size: 27),
-              ),
             ),
           ),
         ],
@@ -168,6 +145,142 @@ class _SpaceBar extends StatelessWidget {
     if (words.isEmpty || words.first.isEmpty) return '?';
     return words.take(2).map((word) => word[0].toUpperCase()).join();
   }
+}
+
+class _SpaceSearchDialog extends StatefulWidget {
+  const _SpaceSearchDialog({required this.backend});
+
+  final ChatBackend backend;
+
+  @override
+  State<_SpaceSearchDialog> createState() => _SpaceSearchDialogState();
+}
+
+class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
+  final _query = TextEditingController();
+  List<SpaceDirectoryEntry> _results = const [];
+  bool _searching = false;
+  String? _error;
+  int _generation = 0;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _query.text.trim();
+    if (query.isEmpty) return;
+    final generation = ++_generation;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.backend.searchPublicSpaces(query);
+      if (!mounted || generation != _generation) return;
+      setState(() => _results = results);
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() => _error = 'The Space directory search failed.');
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _searching = false);
+      }
+    }
+  }
+
+  Future<void> _join(String roomId) async {
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      await widget.backend.joinPublicSpace(roomId);
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _searching = false;
+          _error = 'Deltiecord could not join that Space.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Search for Spaces'),
+    content: SizedBox(
+      width: 520,
+      height: 430,
+      child: Column(
+        children: [
+          TextField(
+            controller: _query,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Search the public Matrix Space directory',
+              prefixIcon: const Icon(Icons.travel_explore_outlined),
+              suffixIcon: IconButton(
+                tooltip: 'Search',
+                onPressed: _searching ? null : _search,
+                icon: const Icon(Icons.search),
+              ),
+            ),
+            onSubmitted: (_) => _search(),
+          ),
+          if (_searching) const LinearProgressIndicator(minHeight: 2),
+          if (_error case final error?)
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text(error)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _results.isEmpty && !_searching
+                ? const Center(child: Text('No public Spaces found yet.'))
+                : ListView.builder(
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                      final space = _results[index];
+                      return ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          backgroundImage: space.avatarBytes == null
+                              ? null
+                              : MemoryImage(space.avatarBytes!),
+                          child: space.avatarBytes == null
+                              ? const Icon(Icons.workspaces_outline, size: 18)
+                              : null,
+                        ),
+                        title: Text(space.name),
+                        subtitle: Text(
+                          [
+                            '${space.memberCount} members',
+                            if (space.topic.trim().isNotEmpty) space.topic,
+                          ].join(' · '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: TextButton(
+                          onPressed: _searching
+                              ? null
+                              : () => _join(space.roomId),
+                          child: const Text('Join'),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: Navigator.of(context).pop,
+        child: const Text('Close'),
+      ),
+    ],
+  );
 }
 
 class _SpaceButton extends StatelessWidget {
@@ -209,10 +322,26 @@ class _SpaceButton extends StatelessWidget {
   }
 }
 
-class _RoomPanel extends StatelessWidget {
+class _RoomPanel extends StatefulWidget {
   const _RoomPanel({required this.backend});
 
   final ChatBackend backend;
+
+  @override
+  State<_RoomPanel> createState() => _RoomPanelState();
+}
+
+class _RoomPanelState extends State<_RoomPanel> {
+  final _roomSearchController = TextEditingController();
+  String _roomQuery = '';
+
+  ChatBackend get backend => widget.backend;
+
+  @override
+  void dispose() {
+    _roomSearchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _createRoom(BuildContext context) async {
     final name = TextEditingController();
@@ -297,10 +426,30 @@ class _RoomPanel extends StatelessWidget {
     }
   }
 
+  Future<void> _startDirectMessage(BuildContext context) async {
+    final matrixId = await showDialog<String>(
+      context: context,
+      builder: (context) => const _StartDirectMessageDialog(),
+    );
+    if (matrixId != null && RegExp(r'^@[^:]+:.+$').hasMatch(matrixId)) {
+      await backend.startDirectChat(matrixId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textRooms = backend.rooms.where((room) => !room.isVoice).toList();
-    final voiceRooms = backend.rooms.where((room) => room.isVoice).toList();
+    final query = _roomQuery.trim().toLowerCase();
+    final visibleRooms = query.isEmpty
+        ? backend.rooms
+        : backend.rooms
+              .where(
+                (room) =>
+                    room.name.toLowerCase().contains(query) ||
+                    room.topic.toLowerCase().contains(query),
+              )
+              .toList(growable: false);
+    final textRooms = visibleRooms.where((room) => !room.isVoice).toList();
+    final voiceRooms = visibleRooms.where((room) => room.isVoice).toList();
     return Material(
       color: context.deltiecord.panel,
       child: Column(
@@ -335,17 +484,77 @@ class _RoomPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Create room',
-                  onPressed: () => _createRoom(context),
+                PopupMenuButton<String>(
+                  tooltip: backend.selectedSpaceId == null
+                      ? 'Start chat or create room'
+                      : 'Create room',
                   icon: const Icon(Icons.add, size: 20),
+                  onSelected: (value) {
+                    if (value == 'direct') _startDirectMessage(context);
+                    if (value == 'room') _createRoom(context);
+                  },
+                  itemBuilder: (context) => [
+                    if (backend.selectedSpaceId == null)
+                      const PopupMenuItem(
+                        value: 'direct',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.person_add_alt_1_outlined),
+                          title: Text('Start direct message'),
+                        ),
+                      ),
+                    PopupMenuItem(
+                      value: 'room',
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.add_comment_outlined),
+                        title: Text(
+                          backend.selectedSpaceId == null
+                              ? 'Create group chat'
+                              : 'Create room',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 7, 8, 3),
+            child: SizedBox(
+              height: 34,
+              child: TextField(
+                key: const Key('room-list-search'),
+                controller: _roomSearchController,
+                decoration: InputDecoration(
+                  hintText: backend.selectedSpaceId == null
+                      ? 'Search direct messages and groups'
+                      : 'Search rooms',
+                  prefixIcon: const Icon(Icons.search, size: 17),
+                  suffixIcon: _roomQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear room search',
+                          onPressed: () {
+                            _roomSearchController.clear();
+                            setState(() => _roomQuery = '');
+                          },
+                          icon: const Icon(Icons.close, size: 15),
+                        ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                ),
+                onChanged: (value) => setState(() => _roomQuery = value),
+              ),
+            ),
+          ),
           Expanded(
-            child: backend.rooms.isEmpty
-                ? const Center(child: Text('No joined rooms'))
+            child: visibleRooms.isEmpty
+                ? Center(
+                    child: Text(
+                      query.isEmpty ? 'No joined rooms' : 'No matching rooms',
+                    ),
+                  )
                 : ListView(
                     padding: EdgeInsets.symmetric(
                       vertical: _densityBetween(
@@ -371,72 +580,208 @@ class _RoomPanel extends StatelessWidget {
           SizedBox(
             key: const Key('current-user-panel'),
             height: _bottomPanelHeightFor(context),
-            child: InkWell(
-              onTap: () => showOwnProfile(context, backend),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    ClipOval(
-                      child: SizedBox.square(
-                        dimension: 34,
-                        child: backend.profileAvatarBytes == null
-                            ? ColoredBox(
-                                color: context.deltiecord.elevated,
-                                child: const Icon(Icons.person, size: 19),
-                              )
-                            : Image.memory(
-                                backend.profileAvatarBytes!,
-                                fit: BoxFit.cover,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+              child: Material(
+                color: context.deltiecord.rail,
+                borderRadius: BorderRadius.circular(10),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => showOwnProfile(context, backend),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SizedBox.square(
+                          dimension: 36,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: ClipOval(
+                                  child: backend.profileAvatarBytes == null
+                                      ? ColoredBox(
+                                          color: context.deltiecord.elevated,
+                                          child: const Icon(
+                                            Icons.person,
+                                            size: 19,
+                                          ),
+                                        )
+                                      : Image.memory(
+                                          backend.profileAvatarBytes!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
                               ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        backend.profileDisplayName ??
-                            backend.userId
-                                ?.split(':')
-                                .first
-                                .replaceFirst('@', '') ??
-                            'Matrix account',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    SizedBox.square(
-                      dimension: 36,
-                      child: IconButton(
-                        tooltip: 'Encryption & recovery',
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          backend.encryptionSetup.status ==
-                                  EncryptionSetupStatus.ready
-                              ? Icons.verified_user
-                              : Icons.gpp_maybe,
-                          size: 19,
+                              Positioned(
+                                left: -1,
+                                bottom: -1,
+                                child: Container(
+                                  key: ValueKey(
+                                    'current-user-presence-'
+                                    '${backend.profilePresence.name}',
+                                  ),
+                                  width: 11,
+                                  height: 11,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: switch (backend.profilePresence) {
+                                      UserPresence.online => const Color(
+                                        0xff43b581,
+                                      ),
+                                      UserPresence.away => const Color(
+                                        0xffffc857,
+                                      ),
+                                      UserPresence.offline => const Color(
+                                        0xff747680,
+                                      ),
+                                    },
+                                    border: Border.all(
+                                      color: context.deltiecord.rail,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        onPressed: () => showSecurityCenter(context, backend),
-                      ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                backend.profileDisplayName ??
+                                    backend.userId
+                                        ?.split(':')
+                                        .first
+                                        .replaceFirst('@', '') ??
+                                    'Matrix account',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (backend.profileStatusMessage
+                                  case final status?)
+                                Text(
+                                  status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: context.deltiecord.muted,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        SizedBox.square(
+                          dimension: 32,
+                          child: IconButton(
+                            tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () =>
+                                backend.setVoiceMuted(!backend.voiceMuted),
+                            icon: Icon(
+                              backend.voiceMuted ? Icons.mic_off : Icons.mic,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        SizedBox.square(
+                          dimension: 32,
+                          child: IconButton(
+                            tooltip: backend.voiceDeafened
+                                ? 'Undeafen'
+                                : 'Deafen',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => backend.setVoiceDeafened(
+                              !backend.voiceDeafened,
+                            ),
+                            icon: Icon(
+                              backend.voiceDeafened
+                                  ? Icons.headset_off
+                                  : Icons.headphones,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        SizedBox.square(
+                          dimension: 32,
+                          child: IconButton(
+                            tooltip: 'Settings',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () =>
+                                showDeltiecordSettings(context, backend),
+                            icon: const Icon(Icons.settings_outlined, size: 18),
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox.square(
-                      dimension: 36,
-                      child: IconButton(
-                        tooltip: 'Settings',
-                        padding: EdgeInsets.zero,
-                        onPressed: () =>
-                            showDeltiecordSettings(context, backend),
-                        icon: const Icon(Icons.settings_outlined, size: 19),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StartDirectMessageDialog extends StatefulWidget {
+  const _StartDirectMessageDialog();
+
+  @override
+  State<_StartDirectMessageDialog> createState() =>
+      _StartDirectMessageDialogState();
+}
+
+class _StartDirectMessageDialogState extends State<_StartDirectMessageDialog> {
+  final _userIdController = TextEditingController();
+
+  @override
+  void dispose() {
+    _userIdController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_userIdController.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Start direct message'),
+      content: SizedBox(
+        width: 420,
+        child: TextField(
+          key: const Key('new-direct-message-id'),
+          controller: _userIdController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Matrix ID',
+            hintText: '@person:example.org',
+          ),
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: Navigator.of(context).pop,
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Message')),
+      ],
     );
   }
 }
@@ -663,8 +1008,8 @@ class _HomeRoomListTile extends StatelessWidget {
           constraints: BoxConstraints(
             minHeight: _densityBetween(
               backend.preferences.compactness,
-              roomy: 66,
-              compact: 52,
+              roomy: 62,
+              compact: 48,
             ),
           ),
           child: Padding(
@@ -672,21 +1017,21 @@ class _HomeRoomListTile extends StatelessWidget {
               12,
               _densityBetween(
                 backend.preferences.compactness,
-                roomy: 9,
-                compact: 5,
+                roomy: 6,
+                compact: 3,
               ),
               10,
               _densityBetween(
                 backend.preferences.compactness,
-                roomy: 9,
-                compact: 5,
+                roomy: 6,
+                compact: 3,
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _RoomIcon(room: room, size: 34, showPresence: room.isDirect),
-                const SizedBox(width: 12),
+                _RoomIcon(room: room, size: 40, showPresence: room.isDirect),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

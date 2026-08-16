@@ -127,6 +127,9 @@ extension _MatrixSession on MatrixBackend {
       _deviceSessions = const [];
       _profileDisplayName = null;
       _profileAvatarBytes = null;
+      _profilePresence = UserPresence.offline;
+      _profileStatusMessage = null;
+      _profileColor = null;
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _mediaRangeProxy.clear();
@@ -244,6 +247,23 @@ extension _MatrixSession on MatrixBackend {
         maxCacheAge: Duration.zero,
       );
       _profileDisplayName = profile.displayname ?? userId;
+      _profileColor = _parseProfileColor(
+        profile.additionalProperties[_profileColorField],
+      );
+      try {
+        final presence = await _matrix.fetchCurrentPresence(userId);
+        _profilePresence = switch (presence.presence) {
+          PresenceType.online => UserPresence.online,
+          PresenceType.unavailable => UserPresence.away,
+          _ => UserPresence.offline,
+        };
+        _profileStatusMessage = presence.statusMsg?.trim().isEmpty == true
+            ? null
+            : presence.statusMsg;
+      } catch (_) {
+        _profilePresence = UserPresence.offline;
+        _profileStatusMessage = null;
+      }
       final avatar = profile.avatarUrl;
       if (avatar == null || !avatar.isScheme('mxc')) {
         _profileAvatarBytes = null;
@@ -457,7 +477,7 @@ extension _MatrixSession on MatrixBackend {
           : InterfaceDensity.compact,
       compactness:
           (content?['compactness'] as num?)?.toDouble().clamp(0, 1) ??
-          (content?.tryGet<String>('density') == 'cozy' ? 0.15 : 0.4),
+          (content?.tryGet<String>('density') == 'cozy' ? 0.15 : 0.5),
       themeMode:
           DeltiecordThemeMode.values
               .where(
@@ -500,6 +520,14 @@ extension _MatrixSession on MatrixBackend {
       preferredAudioOutputId:
           content?.tryGet<String>('preferred_audio_output') ?? '',
       preferredCameraId: content?.tryGet<String>('preferred_camera') ?? '',
+      echoCancellation: content?.tryGet<bool>('echo_cancellation') ?? true,
+      noiseSuppression: content?.tryGet<bool>('noise_suppression') ?? true,
+      autoGainControl: content?.tryGet<bool>('auto_gain_control') ?? true,
+      microphoneVolume:
+          (content?['microphone_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
+      outputVolume:
+          (content?['output_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
+      callSound: content?.tryGet<bool>('call_sound') ?? true,
       participantVolumes:
           content
               ?.tryGetMap<String, Object?>('participant_volumes')
@@ -539,11 +567,13 @@ extension _MatrixSession on MatrixBackend {
               preferences.sharePresence
                   ? PresenceType.online
                   : PresenceType.offline,
+              statusMsg: _profileStatusMessage,
             )
             .catchError((_) {}),
       );
     }
     _preferences = preferences;
+    _voice?.applyPreferences(preferences);
     _pendingPreferences = preferences;
     _settingsSaveTimer?.cancel();
     _settingsSaveTimer = Timer(const Duration(milliseconds: 300), () {
@@ -592,6 +622,12 @@ extension _MatrixSession on MatrixBackend {
           'preferred_audio_input': preferences.preferredAudioInputId,
           'preferred_audio_output': preferences.preferredAudioOutputId,
           'preferred_camera': preferences.preferredCameraId,
+          'echo_cancellation': preferences.echoCancellation,
+          'noise_suppression': preferences.noiseSuppression,
+          'auto_gain_control': preferences.autoGainControl,
+          'microphone_volume': preferences.microphoneVolume,
+          'output_volume': preferences.outputVolume,
+          'call_sound': preferences.callSound,
           'participant_volumes': preferences.participantVolumes,
         },
       );

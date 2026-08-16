@@ -12,6 +12,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
 import '../services/public_network_address.dart';
+import '../services/message_search.dart';
 import '../services/timeline_window_policy.dart';
 import 'matrix_client_factory.dart';
 import 'media_range_proxy.dart';
@@ -88,6 +89,9 @@ class MatrixBackend extends ChatBackend {
   bool _devicesLoading = false;
   String? _profileDisplayName;
   Uint8List? _profileAvatarBytes;
+  UserPresence _profilePresence = UserPresence.offline;
+  String? _profileStatusMessage;
+  int? _profileColor;
   bool _profileLoading = false;
   ProfileFieldsCapability? _profileFieldsCapability;
   bool _profileFieldsCapabilityLoaded = false;
@@ -117,6 +121,12 @@ class MatrixBackend extends ChatBackend {
   String? get profileDisplayName => _profileDisplayName;
   @override
   Uint8List? get profileAvatarBytes => _profileAvatarBytes;
+  @override
+  UserPresence get profilePresence => _profilePresence;
+  @override
+  String? get profileStatusMessage => _profileStatusMessage;
+  @override
+  int? get profileColor => _profileColor;
   @override
   bool get profileLoading => _profileLoading;
   @override
@@ -285,9 +295,11 @@ class MatrixBackend extends ChatBackend {
     if (normalized.isEmpty) return const [];
     return messages
         .where(
-          (message) =>
-              message.body.toLowerCase().contains(normalized) ||
-              message.sender.toLowerCase().contains(normalized),
+          (message) => matchesMessageSearch(
+            body: message.body,
+            sender: message.sender,
+            query: normalized,
+          ),
         )
         .toList(growable: false);
   }
@@ -507,15 +519,26 @@ class MatrixBackend extends ChatBackend {
     String? bio,
     String? pronouns,
     String? timezone,
+    String? statusMessage,
+    int? profileColor,
     Uint8List? bannerBytes,
     bool removeBanner = false,
   }) => _updateOwnProfileFields(
     bio: bio,
     pronouns: pronouns,
     timezone: timezone,
+    statusMessage: statusMessage,
+    profileColor: profileColor,
     bannerBytes: bannerBytes,
     removeBanner: removeBanner,
   );
+
+  @override
+  Future<List<SpaceDirectoryEntry>> searchPublicSpaces(String query) =>
+      _searchPublicSpaces(query);
+
+  @override
+  Future<void> joinPublicSpace(String roomId) => _joinPublicSpace(roomId);
 
   @override
   Future<void> startDirectChat(String userId) => _startDirectChat(userId);

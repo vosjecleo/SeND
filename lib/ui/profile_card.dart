@@ -26,13 +26,15 @@ class DeltiecordProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.deltiecord;
-    final accent = Theme.of(context).colorScheme.primary;
+    final accent = Color(
+      profile.profileColor ?? Theme.of(context).colorScheme.primary.toARGB32(),
+    );
     final timezone = profile.timezone;
     return Container(
       key: const Key('profile-card'),
       decoration: BoxDecoration(
         color: palette.surface,
-        border: Border.all(color: palette.divider),
+        border: Border.all(color: accent.withValues(alpha: 0.75), width: 2),
         borderRadius: BorderRadius.circular(5),
         boxShadow: const [
           BoxShadow(color: Color(0x44000000), blurRadius: 18, spreadRadius: 2),
@@ -70,6 +72,39 @@ class DeltiecordProfileCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: Text(profile.pronouns!),
+                      ),
+                    if (profile.statusMessage?.trim().isNotEmpty == true)
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.14),
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.58),
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 15,
+                              color: accent,
+                            ),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                profile.statusMessage!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),
@@ -148,6 +183,9 @@ class DeltiecordProfileCard extends StatelessWidget {
                             onPressed: onMessage,
                             icon: const Icon(Icons.chat_bubble_outline),
                             label: const Text('Message'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: accent,
+                            ),
                           ),
                         ),
                       if (onMessage != null && onBlock != null)

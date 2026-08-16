@@ -291,241 +291,252 @@ class _RichComposerState extends State<_RichComposer> {
         link: _emojiAnchor,
         child: Padding(
           key: const Key('message-composer-panel'),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              SizedBox(
-                width: 40,
-                height: controlHeight,
-                child: PopupMenuButton<String>(
-                  tooltip: 'Add content',
-                  enabled: widget.enabled,
-                  padding: EdgeInsets.zero,
-                  icon: Icon(
-                    Icons.add_circle_outline,
-                    size: 25,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  onSelected: (action) {
-                    switch (action) {
-                      case 'file':
-                        widget.onAttach();
-                      case 'emoji':
-                        showEmojiPicker();
-                      case 'gif':
-                        widget.onGif();
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'file',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.insert_drive_file_outlined),
-                        title: Text('Add file'),
-                      ),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            decoration: BoxDecoration(
+              color: context.deltiecord.rail,
+              border: Border.all(color: context.deltiecord.divider),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: controlHeight,
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Add content',
+                    enabled: widget.enabled,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.add_circle_outline,
+                      size: 25,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                    PopupMenuItem(
-                      value: 'emoji',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.emoji_emotions_outlined),
-                        title: Text('Emoji'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'gif',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.gif_box_outlined),
-                        title: Text('Sticker / GIF'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: context.deltiecord.input,
-                    border: Border.all(color: context.deltiecord.divider),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (widget.pendingAttachments.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (
-                                var index = 0;
-                                index < widget.pendingAttachments.length;
-                                index++
-                              )
-                                _PendingAttachmentTile(
-                                  attachment: widget.pendingAttachments[index],
-                                  onRemove: () =>
-                                      widget.onRemoveAttachment(index),
-                                  onToggleSpoiler: () =>
-                                      widget.onToggleAttachmentSpoiler(index),
-                                ),
-                            ],
-                          ),
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'file':
+                          widget.onAttach();
+                        case 'emoji':
+                          showEmojiPicker();
+                        case 'gif':
+                          widget.onGif();
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'file',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.insert_drive_file_outlined),
+                          title: Text('Add file'),
                         ),
-                      DefaultTextStyle.merge(
-                        style: const TextStyle(fontSize: 15),
-                        child: SizedBox(
-                          // Quill otherwise applies scaled line metrics on top
-                          // of its minimum and silently makes this row taller
-                          // than the adjacent bottom panels.
-                          height: editorHeight,
-                          child: QuillEditor(
-                            controller: widget.controller,
-                            focusNode: widget.focusNode,
-                            scrollController: _scrollController,
-                            config: QuillEditorConfig(
-                              autoFocus: false,
-                              minHeight: editorHeight,
-                              maxHeight: editorHeight,
-                              customStyles: const DefaultStyles(
-                                paragraph: DefaultTextBlockStyle(
-                                  TextStyle(fontSize: 15, height: 1.2),
-                                  HorizontalSpacing.zero,
-                                  VerticalSpacing.zero,
-                                  VerticalSpacing.zero,
-                                  null,
-                                ),
-                                placeHolder: DefaultTextBlockStyle(
-                                  TextStyle(
-                                    fontSize: 15,
-                                    height: 1.2,
-                                    color: Color(0x99989aa5),
-                                  ),
-                                  HorizontalSpacing.zero,
-                                  VerticalSpacing.zero,
-                                  VerticalSpacing.zero,
-                                  null,
-                                ),
-                              ),
-                              // Keep the compact composer while seating its text
-                              // cleanly alongside the attachment and send controls.
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 7,
-                              ),
-                              placeholder: 'Message #${widget.roomName}',
-                              // ignore: experimental_member_use
-                              onKeyPressed: (event, _) {
-                                if (event is KeyDownEvent &&
-                                    _emojiMatches.isNotEmpty) {
-                                  if (event.logicalKey ==
-                                      LogicalKeyboardKey.tab) {
-                                    setState(
-                                      () => _emojiSelection =
-                                          (_emojiSelection + 1) %
-                                          _emojiMatches.length,
-                                    );
-                                    return KeyEventResult.handled;
-                                  }
-                                  if (event.logicalKey ==
-                                      LogicalKeyboardKey.enter) {
-                                    _acceptEmoji(
-                                      _emojiMatches[_emojiSelection],
-                                    );
-                                    return KeyEventResult.handled;
-                                  }
-                                  if (event.logicalKey ==
-                                      LogicalKeyboardKey.escape) {
-                                    _clearEmojiCompletion();
-                                    return KeyEventResult.handled;
-                                  }
-                                }
-                                if (event is KeyDownEvent &&
-                                    event.logicalKey ==
-                                        LogicalKeyboardKey.keyV &&
-                                    (HardwareKeyboard
-                                            .instance
-                                            .isControlPressed ||
-                                        HardwareKeyboard
-                                            .instance
-                                            .isMetaPressed)) {
-                                  unawaited(widget.onPasteImage());
-                                  return KeyEventResult.ignored;
-                                }
-                                if (event is KeyDownEvent &&
-                                    widget.mentionSuggestions.isNotEmpty) {
-                                  if (event.logicalKey ==
-                                      LogicalKeyboardKey.arrowDown) {
-                                    widget.onMentionSelectionChanged(
-                                      (widget.mentionSelectionIndex + 1) %
-                                          widget.mentionSuggestions.length,
-                                    );
-                                    return KeyEventResult.handled;
-                                  }
-                                  if (event.logicalKey ==
-                                      LogicalKeyboardKey.arrowUp) {
-                                    widget.onMentionSelectionChanged(
-                                      (widget.mentionSelectionIndex - 1) %
-                                          widget.mentionSuggestions.length,
-                                    );
-                                    return KeyEventResult.handled;
-                                  }
-                                  if (event.logicalKey ==
-                                          LogicalKeyboardKey.enter &&
-                                      !HardwareKeyboard
-                                          .instance
-                                          .isShiftPressed) {
-                                    widget.onMentionSelected(
-                                      widget
-                                          .mentionSuggestions[widget
-                                              .mentionSelectionIndex]
-                                          .matrixId,
-                                    );
-                                    return KeyEventResult.handled;
-                                  }
-                                }
-                                if (event is KeyDownEvent &&
-                                    event.logicalKey ==
-                                        LogicalKeyboardKey.enter &&
-                                    !HardwareKeyboard.instance.isShiftPressed &&
-                                    (widget.sendWithCtrlEnter ==
-                                        HardwareKeyboard
-                                            .instance
-                                            .isControlPressed)) {
-                                  widget.onSend();
-                                  return KeyEventResult.handled;
-                                }
-                                return KeyEventResult.ignored;
-                              },
-                            ),
-                          ),
+                      ),
+                      PopupMenuItem(
+                        value: 'emoji',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.emoji_emotions_outlined),
+                          title: Text('Emoji'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'gif',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.gif_box_outlined),
+                          title: Text('Sticker / GIF'),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 40,
-                height: controlHeight,
-                child: IconButton(
-                  tooltip: 'Send',
-                  padding: EdgeInsets.zero,
-                  onPressed: widget.enabled ? widget.onSend : null,
-                  icon: Icon(
-                    Icons.send,
-                    size: 25,
-                    color: Theme.of(context).colorScheme.primary,
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.deltiecord.input,
+                      border: Border.all(color: context.deltiecord.divider),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.pendingAttachments.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < widget.pendingAttachments.length;
+                                  index++
+                                )
+                                  _PendingAttachmentTile(
+                                    attachment:
+                                        widget.pendingAttachments[index],
+                                    onRemove: () =>
+                                        widget.onRemoveAttachment(index),
+                                    onToggleSpoiler: () =>
+                                        widget.onToggleAttachmentSpoiler(index),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        DefaultTextStyle.merge(
+                          style: const TextStyle(fontSize: 15),
+                          child: SizedBox(
+                            // Quill otherwise applies scaled line metrics on top
+                            // of its minimum and silently makes this row taller
+                            // than the adjacent bottom panels.
+                            height: editorHeight,
+                            child: QuillEditor(
+                              controller: widget.controller,
+                              focusNode: widget.focusNode,
+                              scrollController: _scrollController,
+                              config: QuillEditorConfig(
+                                autoFocus: false,
+                                minHeight: editorHeight,
+                                maxHeight: editorHeight,
+                                customStyles: const DefaultStyles(
+                                  paragraph: DefaultTextBlockStyle(
+                                    TextStyle(fontSize: 15, height: 1.2),
+                                    HorizontalSpacing.zero,
+                                    VerticalSpacing.zero,
+                                    VerticalSpacing.zero,
+                                    null,
+                                  ),
+                                  placeHolder: DefaultTextBlockStyle(
+                                    TextStyle(
+                                      fontSize: 15,
+                                      height: 1.2,
+                                      color: Color(0x99989aa5),
+                                    ),
+                                    HorizontalSpacing.zero,
+                                    VerticalSpacing.zero,
+                                    VerticalSpacing.zero,
+                                    null,
+                                  ),
+                                ),
+                                // Keep the compact composer while seating its text
+                                // cleanly alongside the attachment and send controls.
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                placeholder: 'Message #${widget.roomName}',
+                                // ignore: experimental_member_use
+                                onKeyPressed: (event, _) {
+                                  if (event is KeyDownEvent &&
+                                      _emojiMatches.isNotEmpty) {
+                                    if (event.logicalKey ==
+                                        LogicalKeyboardKey.tab) {
+                                      setState(
+                                        () => _emojiSelection =
+                                            (_emojiSelection + 1) %
+                                            _emojiMatches.length,
+                                      );
+                                      return KeyEventResult.handled;
+                                    }
+                                    if (event.logicalKey ==
+                                        LogicalKeyboardKey.enter) {
+                                      _acceptEmoji(
+                                        _emojiMatches[_emojiSelection],
+                                      );
+                                      return KeyEventResult.handled;
+                                    }
+                                    if (event.logicalKey ==
+                                        LogicalKeyboardKey.escape) {
+                                      _clearEmojiCompletion();
+                                      return KeyEventResult.handled;
+                                    }
+                                  }
+                                  if (event is KeyDownEvent &&
+                                      event.logicalKey ==
+                                          LogicalKeyboardKey.keyV &&
+                                      (HardwareKeyboard
+                                              .instance
+                                              .isControlPressed ||
+                                          HardwareKeyboard
+                                              .instance
+                                              .isMetaPressed)) {
+                                    unawaited(widget.onPasteImage());
+                                    return KeyEventResult.ignored;
+                                  }
+                                  if (event is KeyDownEvent &&
+                                      widget.mentionSuggestions.isNotEmpty) {
+                                    if (event.logicalKey ==
+                                        LogicalKeyboardKey.arrowDown) {
+                                      widget.onMentionSelectionChanged(
+                                        (widget.mentionSelectionIndex + 1) %
+                                            widget.mentionSuggestions.length,
+                                      );
+                                      return KeyEventResult.handled;
+                                    }
+                                    if (event.logicalKey ==
+                                        LogicalKeyboardKey.arrowUp) {
+                                      widget.onMentionSelectionChanged(
+                                        (widget.mentionSelectionIndex - 1) %
+                                            widget.mentionSuggestions.length,
+                                      );
+                                      return KeyEventResult.handled;
+                                    }
+                                    if (event.logicalKey ==
+                                            LogicalKeyboardKey.enter &&
+                                        !HardwareKeyboard
+                                            .instance
+                                            .isShiftPressed) {
+                                      widget.onMentionSelected(
+                                        widget
+                                            .mentionSuggestions[widget
+                                                .mentionSelectionIndex]
+                                            .matrixId,
+                                      );
+                                      return KeyEventResult.handled;
+                                    }
+                                  }
+                                  if (event is KeyDownEvent &&
+                                      event.logicalKey ==
+                                          LogicalKeyboardKey.enter &&
+                                      !HardwareKeyboard
+                                          .instance
+                                          .isShiftPressed &&
+                                      (widget.sendWithCtrlEnter ==
+                                          HardwareKeyboard
+                                              .instance
+                                              .isControlPressed)) {
+                                    widget.onSend();
+                                    return KeyEventResult.handled;
+                                  }
+                                  return KeyEventResult.ignored;
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  width: 40,
+                  height: controlHeight,
+                  child: IconButton(
+                    tooltip: 'Send',
+                    padding: EdgeInsets.zero,
+                    onPressed: widget.enabled ? widget.onSend : null,
+                    icon: Icon(
+                      Icons.send,
+                      size: 25,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

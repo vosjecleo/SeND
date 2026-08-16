@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/timezone_catalog.dart';
+import 'accent_color_picker.dart';
 import 'profile_card.dart';
 import 'profile_image_cropper.dart';
 import 'timezone_picker_dialog.dart';
@@ -43,6 +44,10 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     text: widget.initialProfile.pronouns,
   );
   late final _bio = TextEditingController(text: widget.initialProfile.bio);
+  late final _status = TextEditingController(
+    text: widget.initialProfile.statusMessage,
+  );
+  late int _profileColor = widget.initialProfile.profileColor ?? 0xff6975d9;
   String? _timezone;
   Uint8List? _avatar;
   Uint8List? _banner;
@@ -63,6 +68,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     _displayName.addListener(_refreshPreview);
     _pronouns.addListener(_refreshPreview);
     _bio.addListener(_refreshPreview);
+    _status.addListener(_refreshPreview);
   }
 
   void _refreshPreview() => setState(() {});
@@ -72,6 +78,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     _displayName.dispose();
     _pronouns.dispose();
     _bio.dispose();
+    _status.dispose();
     super.dispose();
   }
 
@@ -86,6 +93,8 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     bio: _bio.text,
     pronouns: _pronouns.text,
     timezone: _timezone,
+    statusMessage: _status.text,
+    profileColor: _profileColor,
     extensibleFieldsSupported: widget.initialProfile.extensibleFieldsSupported,
   );
 
@@ -168,15 +177,18 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
           mimeType: _avatarMime,
         );
       }
-      if (widget.initialProfile.extensibleFieldsSupported) {
-        await widget.backend.updateOwnProfileFields(
-          bio: _bio.text.trim(),
-          pronouns: _pronouns.text.trim(),
-          timezone: _timezone?.trim() ?? '',
-          bannerBytes: _bannerChanged && !_removeBanner ? _banner : null,
-          removeBanner: _removeBanner,
-        );
-      }
+      final extensible = widget.initialProfile.extensibleFieldsSupported;
+      await widget.backend.updateOwnProfileFields(
+        bio: extensible ? _bio.text.trim() : null,
+        pronouns: extensible ? _pronouns.text.trim() : null,
+        timezone: extensible ? _timezone?.trim() ?? '' : null,
+        statusMessage: _status.text.trim(),
+        profileColor: extensible ? _profileColor : null,
+        bannerBytes: extensible && _bannerChanged && !_removeBanner
+            ? _banner
+            : null,
+        removeBanner: extensible && _removeBanner,
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (exception) {
       if (mounted) {
@@ -261,6 +273,22 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                             labelText: 'About me',
                             alignLabelWithHint: true,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: _status,
+                          maxLength: 120,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            hintText: 'What are you up to?',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('Profile colour'),
+                        AccentColorPicker(
+                          color: _profileColor,
+                          onChanged: (color) =>
+                              setState(() => _profileColor = color),
                         ),
                         const SizedBox(height: 4),
                         OutlinedButton.icon(

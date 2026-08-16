@@ -26,12 +26,19 @@ class DeltiecordApp extends StatelessWidget {
           );
         }
         final contrast = preferences.highContrast;
-        final palette = DeltiecordPalette.forMode(preferences.themeMode);
+        final basePalette = DeltiecordPalette.forMode(preferences.themeMode);
+        final accent = Color(preferences.accentColor);
+        final palette = contrast
+            ? basePalette.copyWith(
+                divider: accent,
+                hover: accent.withValues(alpha: 0.18),
+              )
+            : basePalette;
         final brightness = preferences.themeMode == DeltiecordThemeMode.light
             ? Brightness.light
             : Brightness.dark;
         final colorScheme = ColorScheme.fromSeed(
-          seedColor: Color(preferences.accentColor),
+          seedColor: accent,
           brightness: brightness,
           contrastLevel: contrast ? 1 : 0,
         ).copyWith(surface: palette.surface, onSurface: palette.text);

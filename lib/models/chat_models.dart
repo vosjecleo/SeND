@@ -39,7 +39,7 @@ const defaultShortcutBindings = <AppShortcutAction, String>{
 class AppPreferences {
   const AppPreferences({
     this.density = InterfaceDensity.compact,
-    this.compactness = 0.4,
+    this.compactness = 0.5,
     this.themeMode = DeltiecordThemeMode.dark,
     this.interfaceScale = 1,
     this.fontScale = 1,
@@ -64,6 +64,12 @@ class AppPreferences {
     this.preferredAudioInputId = '',
     this.preferredAudioOutputId = '',
     this.preferredCameraId = '',
+    this.echoCancellation = true,
+    this.noiseSuppression = true,
+    this.autoGainControl = true,
+    this.microphoneVolume = 1,
+    this.outputVolume = 1,
+    this.callSound = true,
     this.participantVolumes = const {},
   });
 
@@ -93,6 +99,12 @@ class AppPreferences {
   final String preferredAudioInputId;
   final String preferredAudioOutputId;
   final String preferredCameraId;
+  final bool echoCancellation;
+  final bool noiseSuppression;
+  final bool autoGainControl;
+  final double microphoneVolume;
+  final double outputVolume;
+  final bool callSound;
   final Map<String, double> participantVolumes;
 
   AppPreferences copyWith({
@@ -122,6 +134,12 @@ class AppPreferences {
     String? preferredAudioInputId,
     String? preferredAudioOutputId,
     String? preferredCameraId,
+    bool? echoCancellation,
+    bool? noiseSuppression,
+    bool? autoGainControl,
+    double? microphoneVolume,
+    double? outputVolume,
+    bool? callSound,
     Map<String, double>? participantVolumes,
   }) => AppPreferences(
     density: density ?? this.density,
@@ -153,6 +171,12 @@ class AppPreferences {
     preferredAudioOutputId:
         preferredAudioOutputId ?? this.preferredAudioOutputId,
     preferredCameraId: preferredCameraId ?? this.preferredCameraId,
+    echoCancellation: echoCancellation ?? this.echoCancellation,
+    noiseSuppression: noiseSuppression ?? this.noiseSuppression,
+    autoGainControl: autoGainControl ?? this.autoGainControl,
+    microphoneVolume: microphoneVolume ?? this.microphoneVolume,
+    outputVolume: outputVolume ?? this.outputVolume,
+    callSound: callSound ?? this.callSound,
     participantVolumes: participantVolumes ?? this.participantVolumes,
   );
 }
@@ -288,6 +312,8 @@ class UserProfileSummary {
     this.bio,
     this.pronouns,
     this.timezone,
+    this.statusMessage,
+    this.profileColor,
     this.extensibleFieldsSupported = true,
     this.blocked = false,
   });
@@ -300,8 +326,26 @@ class UserProfileSummary {
   final String? bio;
   final String? pronouns;
   final String? timezone;
+  final String? statusMessage;
+  final int? profileColor;
   final bool extensibleFieldsSupported;
   final bool blocked;
+}
+
+class SpaceDirectoryEntry {
+  const SpaceDirectoryEntry({
+    required this.roomId,
+    required this.name,
+    required this.memberCount,
+    this.topic = '',
+    this.avatarBytes,
+  });
+
+  final String roomId;
+  final String name;
+  final int memberCount;
+  final String topic;
+  final Uint8List? avatarBytes;
 }
 
 class VoiceParticipantSummary {

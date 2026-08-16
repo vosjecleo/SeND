@@ -3,6 +3,7 @@ part of 'matrix_backend.dart';
 const _profileBioField = 'net.deltiecord.bio';
 const _profilePronounsField = 'net.deltiecord.pronouns';
 const _profileBannerField = 'net.deltiecord.banner';
+const _profileColorField = 'net.deltiecord.profile_color';
 
 extension _MatrixProfiles on MatrixBackend {
   Future<UserProfileSummary> _getUserProfile(String userId) async {
@@ -16,15 +17,20 @@ extension _MatrixProfiles on MatrixBackend {
     );
     final bannerBytes = await _profileOriginalMedia(bannerUri);
     final capability = await _profileCapability();
-    // ignore: deprecated_member_use
-    final presence = _matrix.presences[userId]?.presence;
+    CachedPresence? presence;
+    try {
+      presence = await _matrix.fetchCurrentPresence(userId);
+    } catch (_) {
+      // Profiles remain useful on homeservers with presence disabled.
+    }
+    final colorValue = profile.additionalProperties[_profileColorField];
     return UserProfileSummary(
       userId: userId,
       displayName:
           profile.displayname ?? userId.split(':').first.replaceFirst('@', ''),
       avatarBytes: avatarBytes,
       bannerBytes: bannerBytes,
-      presence: switch (presence) {
+      presence: switch (presence?.presence) {
         PresenceType.online => UserPresence.online,
         PresenceType.unavailable => UserPresence.away,
         _ => UserPresence.offline,
@@ -32,6 +38,8 @@ extension _MatrixProfiles on MatrixBackend {
       bio: profile.additionalProperties[_profileBioField] as String?,
       pronouns: profile.additionalProperties[_profilePronounsField] as String?,
       timezone: profile.mTz,
+      statusMessage: presence?.statusMsg,
+      profileColor: _parseProfileColor(colorValue),
       extensibleFieldsSupported: capability?.enabled == true,
       blocked: _matrix.ignoredUsers.contains(userId),
     );
@@ -73,6 +81,8 @@ extension _MatrixProfiles on MatrixBackend {
     String? bio,
     String? pronouns,
     String? timezone,
+    String? statusMessage,
+    int? profileColor,
     Uint8List? bannerBytes,
     required bool removeBanner,
   }) async {
@@ -106,9 +116,29 @@ extension _MatrixProfiles on MatrixBackend {
     }
 
     try {
+      if (statusMessage != null) {
+        final normalizedStatus = statusMessage.trim();
+        await _matrix.setPresence(
+          userId,
+          _preferences.sharePresence
+              ? PresenceType.online
+              : PresenceType.offline,
+          statusMsg: normalizedStatus,
+        );
+        _profileStatusMessage = normalizedStatus.isEmpty
+            ? null
+            : normalizedStatus;
+      }
       await setText(_profileBioField, bio);
       await setText(_profilePronounsField, pronouns);
       await setText('m.tz', timezone);
+      if (profileColor != null) {
+        await setText(
+          _profileColorField,
+          '#${profileColor.toRadixString(16).padLeft(8, '0').substring(2)}',
+        );
+        _profileColor = profileColor;
+      }
       if (removeBanner) {
         if (!supports(_profileBannerField)) unsupported(_profileBannerField);
         try {
@@ -137,6 +167,16 @@ extension _MatrixProfiles on MatrixBackend {
       _notifyBackendListeners();
       rethrow;
     }
+  }
+
+  int? _parseProfileColor(Object? value) {
+    if (value is int) return value;
+    if (value is! String) return null;
+    final normalized = value.trim().replaceFirst('#', '');
+    if (normalized.length != 6 && normalized.length != 8) return null;
+    final parsed = int.tryParse(normalized, radix: 16);
+    if (parsed == null) return null;
+    return normalized.length == 6 ? 0xff000000 | parsed : parsed;
   }
 
   Future<ProfileFieldsCapability?> _profileCapability() async {

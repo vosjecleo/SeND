@@ -361,6 +361,49 @@ class _DeviceSelectors extends StatelessWidget {
               backend.selectCamera(id?.isEmpty == true ? null : id),
         ),
       ],
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          const Icon(Icons.mic_outlined, size: 17),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Slider(
+              value: backend.preferences.microphoneVolume,
+              onChanged: (value) => backend.updatePreferences(
+                backend.preferences.copyWith(microphoneVolume: value),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 38,
+            child: Text(
+              '${(backend.preferences.microphoneVolume * 100).round()}%',
+              style: const TextStyle(fontSize: 10),
+            ),
+          ),
+        ],
+      ),
+      Row(
+        children: [
+          const Icon(Icons.volume_up_outlined, size: 17),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Slider(
+              value: backend.preferences.outputVolume,
+              onChanged: (value) => backend.updatePreferences(
+                backend.preferences.copyWith(outputVolume: value),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 38,
+            child: Text(
+              '${(backend.preferences.outputVolume * 100).round()}%',
+              style: const TextStyle(fontSize: 10),
+            ),
+          ),
+        ],
+      ),
     ],
   );
 }
