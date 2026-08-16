@@ -26,4 +26,29 @@ void main() {
     );
     expect(events, List.generate(120, (index) => index));
   });
+
+  test(
+    'database pagination advances beyond the bounded materialized window',
+    () {
+      var offset = 30;
+      final materialized = List.generate(30, (index) => index);
+      for (var page = 0; page < 4; page++) {
+        final fetched = List.generate(30, (index) => offset + index);
+        offset = TimelineWindowPolicy.advanceDatabaseOffset(
+          offset,
+          fetched.length,
+        );
+        materialized.addAll(fetched);
+        TimelineWindowPolicy.trimNewestFirst(
+          materialized,
+          hardCap: 90,
+          loaded: TimelinePageDirection.older,
+        );
+      }
+
+      expect(materialized.length, 90);
+      expect(offset, 150);
+      expect(offset, greaterThan(materialized.length));
+    },
+  );
 }

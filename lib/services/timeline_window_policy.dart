@@ -11,6 +11,11 @@ abstract final class TimelineWindowPolicy {
   static int hardCap({required int chunkSize, required int chunkCap}) =>
       min(120, max(1, chunkSize) * max(1, chunkCap));
 
+  /// Database pagination must advance by fetched rows, independently of the
+  /// bounded number of events Deltiecord keeps materialized in the timeline.
+  static int advanceDatabaseOffset(int currentOffset, int fetchedCount) =>
+      currentOffset + max(0, fetchedCount);
+
   static void trimNewestFirst<T>(
     List<T> events, {
     required int hardCap,

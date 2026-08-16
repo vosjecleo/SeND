@@ -211,7 +211,7 @@ class _RecipientProfileContents extends StatelessWidget {
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.tonal(
-              onPressed: () => showMemberProfile(context, backend, member),
+              onPressed: () => showFullMemberProfile(context, backend, member),
               child: const Text('View full profile'),
             ),
           ),

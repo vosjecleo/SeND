@@ -1112,9 +1112,13 @@ void main() {
     expect(find.text('Jump to present'), findsNothing);
   });
 
-  testWidgets('opens extensible profile details from a message sender', (
+  testWidgets('opens an anchored card then full profile from a sender', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
       ..roomList = const [
@@ -1149,18 +1153,29 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.text('profiles'));
     await tester.pump();
-    await tester.tap(find.text('Alice').last);
+    final senderName = find.text('Alice').last;
+    final senderTapPosition = tester.getCenter(senderName);
+    await tester.tap(senderName);
     await tester.pumpAndSettle();
 
     expect(find.text('@alice:example.org'), findsOneWidget);
-    expect(find.text('Online'), findsOneWidget);
     expect(find.text('she/her'), findsOneWidget);
+    expect(find.text('Matrix enthusiast'), findsOneWidget);
+    final compactPopup = find.byKey(const Key('compact-profile-popup'));
+    expect(compactPopup, findsOneWidget);
+    expect(
+      tester.getTopLeft(compactPopup).dx,
+      greaterThan(senderTapPosition.dx),
+    );
+    expect(find.byKey(const Key('profile-side-panel')), findsNothing);
+    await tester.tap(find.text('View full profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Online'), findsOneWidget);
     expect(find.byIcon(Icons.schedule), findsOneWidget);
     expect(
       find.textContaining('Europe/Amsterdam', skipOffstage: false),
       findsNothing,
     );
-    expect(find.text('Matrix enthusiast'), findsOneWidget);
     final dialog = tester.widget<Dialog>(
       find.byKey(const Key('profile-side-panel')),
     );
@@ -1173,6 +1188,29 @@ void main() {
     await tester.tap(find.byKey(const Key('profile-close-button')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('profile-side-panel')), findsNothing);
+  });
+
+  testWidgets('own profile card opens above the lower user panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+
+    final userIsland = find.byKey(const Key('current-user-island'));
+    await tester.tap(userIsland);
+    await tester.pumpAndSettle();
+
+    final popup = find.byKey(const Key('compact-profile-popup'));
+    expect(popup, findsOneWidget);
+    expect(
+      tester.getBottomLeft(popup).dy,
+      lessThan(tester.getTopLeft(userIsland).dy),
+    );
+    expect(find.text('Edit profile'), findsOneWidget);
   });
 
   testWidgets('shows the direct recipient profile beside a wide conversation', (

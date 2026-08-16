@@ -42,6 +42,7 @@ class _MessageRowState extends State<_MessageRow> {
   bool _actionsHovered = false;
   bool _actionsMenuOpen = false;
   Offset _actionsPosition = Offset.zero;
+  Offset? _profileAnchorPosition;
 
   ChatMessage get message => widget.message;
 
@@ -62,6 +63,7 @@ class _MessageRowState extends State<_MessageRow> {
             avatarBytes: message.avatarBytes,
             presence: UserPresence.offline,
           ),
+      anchor: _profileAnchorPosition,
     );
   }
 
@@ -235,6 +237,9 @@ class _MessageRowState extends State<_MessageRow> {
                                   children: [
                                     Flexible(
                                       child: InkWell(
+                                        onTapDown: (details) =>
+                                            _profileAnchorPosition =
+                                                details.globalPosition,
                                         onTap: _showSenderProfile,
                                         child: Text(
                                           message.sender,
@@ -440,6 +445,8 @@ class _MessageRowState extends State<_MessageRow> {
                       top: groupTop,
                       child: GestureDetector(
                         key: ValueKey('message-avatar-${message.id}'),
+                        onTapDown: (details) =>
+                            _profileAnchorPosition = details.globalPosition,
                         onTap: _showSenderProfile,
                         child: CircleAvatar(
                           radius: 16,

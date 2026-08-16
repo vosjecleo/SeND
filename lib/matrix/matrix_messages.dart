@@ -87,18 +87,27 @@ extension _MatrixMessages on MatrixBackend {
 
   Future<void> _loadMoreHistory() async {
     final timeline = _timeline;
-    if (timeline == null || _historyLoading || !timeline.canRequestHistory) {
+    if (timeline == null ||
+        _historyLoading ||
+        _timelineServerExhausted ||
+        !timeline.canRequestHistory) {
       return;
     }
     _historyLoading = true;
     _notifyBackendListeners();
     try {
-      await timeline.requestHistory(
-        historyCount: _preferences.timelineChunkSize,
-      );
+      final pageSize = _preferences.timelineChunkSize;
+      var loaded = 0;
+      if (!_timelineDatabaseExhausted) {
+        loaded = await _appendStoredHistory(timeline, pageSize);
+      }
+      if (loaded == 0 && _timelineDatabaseExhausted) {
+        loaded = await _appendServerHistory(timeline, pageSize);
+      }
       if (!identical(timeline, _timeline)) return;
+      if (loaded == 0) return;
       final hardCap = TimelineWindowPolicy.hardCap(
-        chunkSize: _preferences.timelineChunkSize,
+        chunkSize: pageSize,
         chunkCap: _preferences.timelineChunkCap,
       );
       TimelineWindowPolicy.trimNewestFirst(
@@ -115,6 +124,54 @@ extension _MatrixMessages on MatrixBackend {
       _historyLoading = false;
       _notifyBackendListeners();
     }
+  }
+
+  Future<int> _appendStoredHistory(Timeline timeline, int pageSize) async {
+    var added = 0;
+    final knownEventIds = timeline.events.map((event) => event.eventId).toSet();
+    while (added < pageSize && !_timelineDatabaseExhausted) {
+      final requested = pageSize - added;
+      final stored = await _matrix.database.getEventList(
+        timeline.room,
+        start: _timelineDatabaseOffset,
+        limit: requested,
+      );
+      _timelineDatabaseOffset = TimelineWindowPolicy.advanceDatabaseOffset(
+        _timelineDatabaseOffset,
+        stored.length,
+      );
+      if (stored.length < requested) _timelineDatabaseExhausted = true;
+      if (stored.isEmpty) break;
+      for (final event in stored) {
+        if (!knownEventIds.add(event.eventId)) continue;
+        timeline.addAggregatedEvent(event);
+        timeline.events.add(event);
+        added++;
+      }
+    }
+    return added;
+  }
+
+  Future<int> _appendServerHistory(Timeline timeline, int pageSize) async {
+    if (timeline.chunk.prevBatch.isEmpty) {
+      timeline.chunk.prevBatch = timeline.room.prev_batch ?? '';
+    }
+    if (timeline.chunk.prevBatch.isEmpty) {
+      _timelineServerExhausted = true;
+      return 0;
+    }
+    // Once local history is consumed, paginate with the chunk token directly.
+    // The SDK's normal database offset is based on events.length; that offset
+    // repeats pages after Deltiecord trims the list to its bounded hard cap.
+    timeline.isFragmentedTimeline = true;
+    final loaded = await timeline.getRoomEvents(
+      historyCount: pageSize,
+      direction: Direction.b,
+    );
+    if (loaded == 0 || timeline.chunk.prevBatch.isEmpty) {
+      _timelineServerExhausted = true;
+    }
+    return loaded;
   }
 
   Future<void> _loadMoreFuture() async {

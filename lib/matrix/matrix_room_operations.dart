@@ -161,6 +161,7 @@ extension _MatrixRoomOperations on MatrixBackend {
         return;
       }
       _timeline = timeline;
+      _timelineDatabaseOffset = timeline.events.length;
       _captureFirstUnread(room, timeline);
       await _decryptTimelineEvents(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
@@ -206,6 +207,8 @@ extension _MatrixRoomOperations on MatrixBackend {
         return;
       }
       _timeline = timeline;
+      _timelineDatabaseOffset = timeline.events.length;
+      _timelineDatabaseExhausted = true;
       await _decryptTimelineEvents(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
       await _hydrateTimelineMetadata(timeline);
