@@ -111,7 +111,9 @@ class MediaRangeProxy {
   }
 
   (int, int) _parseRange(String? header, int size) {
-    const maxChunk = 4 * 1024 * 1024;
+    // Larger sequential ranges substantially reduce proxy/upstream round trips
+    // for high-bitrate video while remaining bounded for encrypted playback.
+    const maxChunk = 16 * 1024 * 1024;
     if (size <= 0) throw const FormatException('Empty media');
     if (header == null || !header.startsWith('bytes=')) {
       return (0, min(size, maxChunk) - 1);

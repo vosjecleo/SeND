@@ -53,6 +53,10 @@ an external dependency under its own license.
 - [Jome](https://github.com/eepp/jome) supplies the local Unicode emoji name
   and keyword dataset used for offline emoji search and colon completion.
   Deltiecord vendors only `emojis.json`; Jome is MIT licensed.
+- Liberation Sans is bundled as Deltiecord's portable interface font under the
+  SIL Open Font License. Noto Color Emoji is bundled as the default emoji
+  fallback under the SIL Open Font License. Their license texts are shipped in
+  `assets/fonts/licenses/`.
 
 Additional Dart and Flutter packages are declared in `pubspec.yaml` and retain
 their upstream copyright notices and licenses.

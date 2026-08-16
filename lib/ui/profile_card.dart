@@ -53,7 +53,7 @@ class DeltiecordProfileCard extends StatelessWidget {
           colors: [gradientTop, gradientBottom],
         ),
         border: Border.all(color: accent.withValues(alpha: 0.75), width: 2),
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: DeltiecordCorners.borderRadius,
         boxShadow: const [
           BoxShadow(color: Color(0x44000000), blurRadius: 18, spreadRadius: 2),
         ],
@@ -93,42 +93,14 @@ class DeltiecordProfileCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.32),
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: DeltiecordCorners.borderRadius,
                         ),
                         child: Text(profile.pronouns!),
                       ),
                     if (profile.statusMessage?.trim().isNotEmpty == true)
-                      Container(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.14),
-                          border: Border.all(
-                            color: accent.withValues(alpha: 0.58),
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 15,
-                              color: accent,
-                            ),
-                            const SizedBox(width: 7),
-                            Flexible(
-                              child: Text(
-                                profile.statusMessage!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                      ProfileStatusBubble(
+                        status: profile.statusMessage!,
+                        accent: accent,
                       ),
                   ],
                 ),
@@ -174,7 +146,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: palette.background,
                     border: Border.all(color: palette.divider),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: DeltiecordCorners.borderRadius,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,6 +212,44 @@ class DeltiecordProfileCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class ProfileStatusBubble extends StatelessWidget {
+  const ProfileStatusBubble({
+    required this.status,
+    required this.accent,
+    this.expanded = false,
+    super.key,
+  });
+
+  final String status;
+  final Color accent;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: expanded ? double.infinity : null,
+    constraints: const BoxConstraints(maxWidth: 360),
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+    decoration: BoxDecoration(
+      color: Color.alphaBlend(
+        accent.withValues(alpha: 0.18),
+        context.deltiecord.elevated,
+      ),
+      border: Border.all(color: accent.withValues(alpha: 0.58)),
+      borderRadius: DeltiecordCorners.borderRadius,
+    ),
+    child: Row(
+      mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        Icon(Icons.chat_bubble_outline, size: 15, color: accent),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(status, maxLines: 3, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ProfileHeader extends StatelessWidget {
@@ -357,7 +367,7 @@ class _ProfileHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: palette.elevated,
                     border: Border.all(color: palette.divider),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: DeltiecordCorners.borderRadius,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

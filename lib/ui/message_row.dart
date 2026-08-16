@@ -179,7 +179,7 @@ class _MessageRowState extends State<_MessageRow> {
               decoration: BoxDecoration(
                 color: context.deltiecord.elevated,
                 border: Border.all(color: context.deltiecord.divider),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: DeltiecordCorners.borderRadius,
               ),
               child: _MessageActions(
                 onReply: () => _performAction(widget.onReply),
@@ -267,6 +267,7 @@ class _MessageRowState extends State<_MessageRow> {
                                           .textTheme
                                           .labelSmall
                                           ?.copyWith(
+                                            fontSize: DeltiecordTypeScale.small,
                                             color: context.deltiecord.muted,
                                           ),
                                     ),
@@ -429,8 +430,21 @@ class _MessageRowState extends State<_MessageRow> {
                                           backgroundColor: reaction.reactedByMe
                                               ? const Color(0xff424a78)
                                               : const Color(0xff303139),
-                                          label: Text(
-                                            '${reaction.key} ${reaction.count}',
+                                          label: Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                TextSpan(
+                                                  text: reaction.key,
+                                                  style: TextStyle(
+                                                    fontFamily: context
+                                                        .deltiecordEmojiFont,
+                                                  ),
+                                                ),
+                                                TextSpan(
+                                                  text: ' ${reaction.count}',
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           onPressed: () => widget
                                               .onToggleReaction(reaction.key),

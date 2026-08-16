@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/emoji_repository.dart';
+import 'deltiecord_theme.dart';
 
 class EmojiPickerDialog extends StatefulWidget {
   const EmojiPickerDialog({super.key});
@@ -87,7 +88,10 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
                     child: Center(
                       child: Text(
                         entry.emoji,
-                        style: const TextStyle(fontSize: 25),
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontFamily: context.deltiecordEmojiFont,
+                        ),
                       ),
                     ),
                   ),

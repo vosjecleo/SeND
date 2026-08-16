@@ -172,7 +172,7 @@ class _RecipientProfileContents extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: palette.surface,
                             border: Border.all(color: palette.divider),
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: DeltiecordCorners.borderRadius,
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
@@ -220,7 +220,7 @@ class _RecipientProfileContents extends StatelessWidget {
                     backgroundColor: palette.island,
                     foregroundColor: Theme.of(context).colorScheme.onSurface,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: DeltiecordCorners.borderRadius,
                     ),
                   ),
                   onPressed: () =>

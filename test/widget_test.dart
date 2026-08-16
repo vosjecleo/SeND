@@ -1311,6 +1311,8 @@ void main() {
       lessThan(tester.getTopLeft(userIsland).dy),
     );
     expect(find.text('Edit profile'), findsOneWidget);
+    expect(find.text('Message'), findsNothing);
+    expect(find.text('Block'), findsNothing);
   });
 
   testWidgets('shows the direct recipient profile beside a wide conversation', (

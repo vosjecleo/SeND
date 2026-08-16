@@ -62,7 +62,9 @@ class _MentionPicker extends StatelessWidget {
       color: context.deltiecord.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.deltiecord.divider),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+        borderRadius: const BorderRadius.vertical(
+          top: DeltiecordCorners.corner,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
@@ -273,7 +275,7 @@ class _RichComposerState extends State<_RichComposer> {
                 color: context.deltiecord.surface,
                 shape: RoundedRectangleBorder(
                   side: BorderSide(color: context.deltiecord.divider),
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: DeltiecordCorners.borderRadius,
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Column(
@@ -298,8 +300,21 @@ class _RichComposerState extends State<_RichComposer> {
                             horizontal: 10,
                             vertical: 7,
                           ),
-                          child: Text(
-                            '${_emojiMatches[index].emoji}  :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: _emojiMatches[index].emoji,
+                                  style: TextStyle(
+                                    fontFamily: context.deltiecordEmojiFont,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text:
+                                      '  :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                                ),
+                              ],
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -329,7 +344,7 @@ class _RichComposerState extends State<_RichComposer> {
                 ),
                 decoration: BoxDecoration(
                   color: context.deltiecord.island,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: DeltiecordCorners.borderRadius,
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -657,7 +672,7 @@ class _PendingAttachmentTile extends StatelessWidget {
                   ? Theme.of(context).colorScheme.primary
                   : context.deltiecord.divider,
             ),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: DeltiecordCorners.borderRadius,
           ),
           child: Stack(
             fit: StackFit.expand,

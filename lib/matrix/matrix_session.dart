@@ -508,7 +508,11 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<bool>('send_typing_notifications') ?? true,
       sharePresence: content?.tryGet<bool>('share_presence') ?? true,
       accentColor: content?.tryGet<int>('accent_color') ?? 0xff6975d9,
-      fontFamily: content?.tryGet<String>('font_family') ?? 'System',
+      fontFamily: _supportedInterfaceFont(
+        content?.tryGet<String>('font_family'),
+      ),
+      emojiFontFamily:
+          content?.tryGet<String>('emoji_font_family') ?? 'Deltiecord Emoji',
       showNativeTitleBar:
           content?.tryGet<bool>('show_native_title_bar') ?? true,
       rememberWindowState:
@@ -545,6 +549,17 @@ extension _MatrixSession on MatrixBackend {
     );
     _voice?.applyPreferences(_preferences);
   }
+
+  String _supportedInterfaceFont(String? stored) =>
+      const {
+        'System',
+        'Noto Sans',
+        'DejaVu Sans',
+        'Liberation Sans',
+        'monospace',
+      }.contains(stored)
+      ? stored!
+      : 'Liberation Sans';
 
   Map<AppShortcutAction, String> _shortcutBindingsFrom(
     Map<String, Object?>? content,
@@ -615,6 +630,7 @@ extension _MatrixSession on MatrixBackend {
           'share_presence': preferences.sharePresence,
           'accent_color': preferences.accentColor,
           'font_family': preferences.fontFamily,
+          'emoji_font_family': preferences.emojiFontFamily,
           'show_native_title_bar': preferences.showNativeTitleBar,
           'remember_window_state': preferences.rememberWindowState,
           'shortcut_bindings': {

@@ -43,53 +43,59 @@ class DeltiecordApp extends StatelessWidget {
           contrastLevel: contrast ? 1 : 0,
         ).copyWith(surface: palette.surface, onSurface: palette.text);
         final baseText = ThemeData(brightness: brightness).textTheme;
-        final textTheme = baseText.copyWith(
-          displayLarge: baseText.displayLarge?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          displayMedium: baseText.displayMedium?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          displaySmall: baseText.displaySmall?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          headlineLarge: baseText.headlineLarge?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          headlineMedium: baseText.headlineMedium?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          headlineSmall: baseText.headlineSmall?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          titleLarge: baseText.titleLarge?.copyWith(
-            fontSize: DeltiecordTypeScale.bigUi,
-          ),
-          titleMedium: baseText.titleMedium?.copyWith(
-            fontSize: DeltiecordTypeScale.bigChat,
-          ),
-          titleSmall: baseText.titleSmall?.copyWith(
-            fontSize: DeltiecordTypeScale.bigChat,
-          ),
-          bodyLarge: baseText.bodyLarge?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-          bodyMedium: baseText.bodyMedium?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-          bodySmall: baseText.bodySmall?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-          labelLarge: baseText.labelLarge?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-          labelMedium: baseText.labelMedium?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-          labelSmall: baseText.labelSmall?.copyWith(
-            fontSize: DeltiecordTypeScale.normal,
-          ),
-        );
+        final textTheme = baseText
+            .copyWith(
+              displayLarge: baseText.displayLarge?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              displayMedium: baseText.displayMedium?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              displaySmall: baseText.displaySmall?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              headlineLarge: baseText.headlineLarge?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              headlineMedium: baseText.headlineMedium?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              headlineSmall: baseText.headlineSmall?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              titleLarge: baseText.titleLarge?.copyWith(
+                fontSize: DeltiecordTypeScale.bigUi,
+              ),
+              titleMedium: baseText.titleMedium?.copyWith(
+                fontSize: DeltiecordTypeScale.bigChat,
+              ),
+              titleSmall: baseText.titleSmall?.copyWith(
+                fontSize: DeltiecordTypeScale.bigChat,
+              ),
+              bodyLarge: baseText.bodyLarge?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+              bodyMedium: baseText.bodyMedium?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+              bodySmall: baseText.bodySmall?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+              labelLarge: baseText.labelLarge?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+              labelMedium: baseText.labelMedium?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+              labelSmall: baseText.labelSmall?.copyWith(
+                fontSize: DeltiecordTypeScale.normal,
+              ),
+            )
+            .apply(
+              fontFamily: preferences.fontFamily == 'System'
+                  ? null
+                  : preferences.fontFamily,
+            );
         return MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
@@ -106,8 +112,21 @@ class DeltiecordApp extends StatelessWidget {
             scaffoldBackgroundColor: palette.background,
             canvasColor: palette.surface,
             cardColor: palette.elevated,
+            cardTheme: CardThemeData(
+              color: palette.elevated,
+              shape: RoundedRectangleBorder(
+                borderRadius: DeltiecordCorners.borderRadius,
+              ),
+            ),
             dividerColor: palette.divider,
-            extensions: [palette],
+            extensions: [
+              palette,
+              DeltiecordEmojiTypography(
+                fontFamily: preferences.emojiFontFamily == 'System'
+                    ? null
+                    : preferences.emojiFontFamily,
+              ),
+            ],
             textTheme: textTheme,
             fontFamily: preferences.fontFamily == 'System'
                 ? null
@@ -125,10 +144,36 @@ class DeltiecordApp extends StatelessWidget {
                   )
                 : const PageTransitionsTheme(),
             useMaterial3: true,
+            filledButtonTheme: FilledButtonThemeData(
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: DeltiecordCorners.borderRadius,
+                ),
+              ),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: DeltiecordCorners.borderRadius,
+                ),
+              ),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: DeltiecordCorners.borderRadius,
+                ),
+              ),
+            ),
+            chipTheme: ChipThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: DeltiecordCorners.borderRadius,
+              ),
+            ),
             dialogTheme: DialogThemeData(
               backgroundColor: palette.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(3)),
+                borderRadius: DeltiecordCorners.borderRadius,
                 side: BorderSide(color: palette.divider),
               ),
             ),
@@ -142,7 +187,7 @@ class DeltiecordApp extends StatelessWidget {
               fillColor: palette.input,
               border: OutlineInputBorder(
                 borderSide: BorderSide(color: palette.divider),
-                borderRadius: const BorderRadius.all(Radius.circular(3)),
+                borderRadius: DeltiecordCorners.borderRadius,
               ),
             ),
             menuTheme: MenuThemeData(
@@ -150,7 +195,7 @@ class DeltiecordApp extends StatelessWidget {
                 backgroundColor: WidgetStatePropertyAll(palette.elevated),
                 shape: WidgetStatePropertyAll(
                   RoundedRectangleBorder(
-                    borderRadius: const BorderRadius.all(Radius.circular(2)),
+                    borderRadius: DeltiecordCorners.borderRadius,
                     side: BorderSide(color: palette.divider),
                   ),
                 ),
@@ -162,7 +207,7 @@ class DeltiecordApp extends StatelessWidget {
             popupMenuTheme: PopupMenuThemeData(
               color: palette.elevated,
               shape: RoundedRectangleBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(2)),
+                borderRadius: DeltiecordCorners.borderRadius,
                 side: BorderSide(color: palette.divider),
               ),
             ),

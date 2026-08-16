@@ -22,7 +22,15 @@ void main() {
   });
 
   test('new installs start at half compactness', () {
-    expect(const AppPreferences().compactness, 0.5);
+    const preferences = AppPreferences();
+    expect(preferences.compactness, 0.5);
+    expect(preferences.fontFamily, 'Liberation Sans');
+    expect(preferences.emojiFontFamily, 'Deltiecord Emoji');
+  });
+
+  test('rectangular surfaces share one corner radius', () {
+    expect(DeltiecordCorners.radius, 12);
+    expect(DeltiecordTypeScale.small, DeltiecordTypeScale.normal - 2);
   });
 
   test('dark mode distinguishes floating control islands', () {

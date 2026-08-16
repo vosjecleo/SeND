@@ -55,7 +55,8 @@ class AppPreferences {
     this.sendTypingNotifications = true,
     this.sharePresence = true,
     this.accentColor = 0xff6975d9,
-    this.fontFamily = 'System',
+    this.fontFamily = 'Liberation Sans',
+    this.emojiFontFamily = 'Deltiecord Emoji',
     this.showNativeTitleBar = true,
     this.rememberWindowState = true,
     this.shortcutBindings = defaultShortcutBindings,
@@ -93,6 +94,7 @@ class AppPreferences {
   final bool sharePresence;
   final int accentColor;
   final String fontFamily;
+  final String emojiFontFamily;
   final bool showNativeTitleBar;
   final bool rememberWindowState;
   final Map<AppShortcutAction, String> shortcutBindings;
@@ -130,6 +132,7 @@ class AppPreferences {
     bool? sharePresence,
     int? accentColor,
     String? fontFamily,
+    String? emojiFontFamily,
     bool? showNativeTitleBar,
     bool? rememberWindowState,
     Map<AppShortcutAction, String>? shortcutBindings,
@@ -167,6 +170,7 @@ class AppPreferences {
     sharePresence: sharePresence ?? this.sharePresence,
     accentColor: accentColor ?? this.accentColor,
     fontFamily: fontFamily ?? this.fontFamily,
+    emojiFontFamily: emojiFontFamily ?? this.emojiFontFamily,
     showNativeTitleBar: showNativeTitleBar ?? this.showNativeTitleBar,
     rememberWindowState: rememberWindowState ?? this.rememberWindowState,
     shortcutBindings: shortcutBindings ?? this.shortcutBindings,

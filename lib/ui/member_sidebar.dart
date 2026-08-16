@@ -95,7 +95,7 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
                   shadowColor: Colors.black54,
                   shape: RoundedRectangleBorder(
                     side: BorderSide(color: context.deltiecord.divider),
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: DeltiecordCorners.borderRadius,
                   ),
                   child: InkWell(
                     key: const Key('side-panel-toggle'),

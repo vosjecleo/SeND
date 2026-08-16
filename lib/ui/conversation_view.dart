@@ -275,6 +275,11 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _jumpToEvent(String eventId) async {
+    final existing = _messageKeys[eventId]?.currentContext;
+    if (existing != null) {
+      await Scrollable.ensureVisible(existing, alignment: 0.5);
+      return;
+    }
     await widget.backend.jumpToEvent(eventId);
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {

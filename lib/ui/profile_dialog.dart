@@ -17,7 +17,7 @@ Future<void> showMemberProfile(
   context,
   backend,
   member,
-  own: false,
+  own: member.userId == backend.userId,
   anchor: anchor == null
       ? _profileAnchorRect(context)
       : Rect.fromCenter(center: anchor, width: 1, height: 1),
@@ -47,7 +47,11 @@ Future<void> showFullMemberProfile(
   RoomMemberSummary member,
 ) => showDialog<void>(
   context: context,
-  builder: (context) => _ProfileDialog(backend: backend, member: member),
+  builder: (context) => _ProfileDialog(
+    backend: backend,
+    member: member,
+    own: member.userId == backend.userId,
+  ),
 );
 
 Future<void> showFullOwnProfile(BuildContext context, ChatBackend backend) {
@@ -268,7 +272,7 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
         color: Colors.transparent,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: accent.withValues(alpha: 0.72), width: 2),
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: DeltiecordCorners.borderRadius,
         ),
         clipBehavior: Clip.antiAlias,
         elevation: 14,
@@ -390,21 +394,10 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
                       ),
                       if (profile.statusMessage?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 10),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: context.deltiecord.elevated,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            profile.statusMessage!,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        ProfileStatusBubble(
+                          status: profile.statusMessage!,
+                          accent: accent,
+                          expanded: true,
                         ),
                       ],
                       if (profile.bio?.trim().isNotEmpty == true) ...[

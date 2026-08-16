@@ -351,6 +351,30 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]),
     _SettingsPage.shortcuts => _shortcuts(),
     _SettingsPage.advanced => _section('Advanced diagnostics', [
+      DropdownButtonFormField<String>(
+        initialValue: backend.preferences.emojiFontFamily,
+        decoration: const InputDecoration(
+          labelText: 'Fallback emoji font',
+          helperText:
+              'Bundled Noto Color Emoji matches the desktop emoji style.',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: 'Deltiecord Emoji',
+            child: Text('Bundled Noto Color Emoji'),
+          ),
+          DropdownMenuItem(value: 'System', child: Text('System emoji font')),
+        ],
+        onChanged: (font) {
+          if (font != null) {
+            backend.updatePreferences(
+              backend.preferences.copyWith(emojiFontFamily: font),
+            );
+          }
+        },
+      ),
+      const SizedBox(height: 18),
       _value('Deltiecord', 'v$deltiecordVersion ($deltiecordBuildNumber)'),
       _value('Session', backend.status.name),
       _value('Connection', backend.connectionStatus.name),

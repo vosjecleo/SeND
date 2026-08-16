@@ -7,9 +7,18 @@ import '../models/chat_models.dart';
 /// Feature widgets should choose a semantic tier instead of inventing a new
 /// point size. Font scaling remains available through accessibility settings.
 abstract final class DeltiecordTypeScale {
+  static const double small = 12;
   static const double normal = 14;
   static const double bigChat = 15;
   static const double bigUi = 17;
+}
+
+/// The single corner radius used by Deltiecord's rectangular surfaces.
+/// Circular avatars and deliberately pill-shaped status controls are exempt.
+abstract final class DeltiecordCorners {
+  static const double radius = 12;
+  static const Radius corner = Radius.circular(radius);
+  static const BorderRadius borderRadius = BorderRadius.all(corner);
 }
 
 @immutable
@@ -130,7 +139,28 @@ class DeltiecordPalette extends ThemeExtension<DeltiecordPalette> {
   }
 }
 
+@immutable
+class DeltiecordEmojiTypography
+    extends ThemeExtension<DeltiecordEmojiTypography> {
+  const DeltiecordEmojiTypography({required this.fontFamily});
+
+  final String? fontFamily;
+
+  @override
+  DeltiecordEmojiTypography copyWith({String? fontFamily}) =>
+      DeltiecordEmojiTypography(fontFamily: fontFamily ?? this.fontFamily);
+
+  @override
+  DeltiecordEmojiTypography lerp(
+    covariant DeltiecordEmojiTypography? other,
+    double t,
+  ) => other ?? this;
+}
+
 extension DeltiecordThemeContext on BuildContext {
   DeltiecordPalette get deltiecord =>
       Theme.of(this).extension<DeltiecordPalette>()!;
+
+  String? get deltiecordEmojiFont =>
+      Theme.of(this).extension<DeltiecordEmojiTypography>()?.fontFamily;
 }

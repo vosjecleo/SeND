@@ -68,13 +68,13 @@ class _LinkPreviewCard extends StatelessWidget {
         width: mediaWidth,
         child: InkWell(
           onTap: () => launchUrl(preview.url),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: DeltiecordCorners.borderRadius,
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: context.deltiecord.elevated,
               border: Border.all(color: context.deltiecord.divider),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: DeltiecordCorners.borderRadius,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -155,48 +155,300 @@ class _LinkVideoPlayer extends StatefulWidget {
 }
 
 class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
-  late final Player _player = Player();
-  late final VideoController _controller = VideoController(_player);
+  Player? _player;
+  VideoController? _controller;
   bool _opened = false;
+  bool _opening = false;
+  String? _error;
 
   Future<void> _toggle() async {
-    if (!_opened) {
-      await _player.open(Media(widget.uri.toString()), play: true);
-      _opened = true;
-    } else {
-      await _player.playOrPause();
+    final existing = _player;
+    if (_opened && existing != null) {
+      await existing.playOrPause();
+      return;
     }
-    if (mounted) setState(() {});
+    if (_opening) return;
+    final player =
+        existing ??
+        Player(
+          configuration: const PlayerConfiguration(
+            bufferSize: 64 * 1024 * 1024,
+          ),
+        );
+    _player = player;
+    _controller ??= VideoController(player);
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    try {
+      await player.open(Media(widget.uri.toString()), play: true);
+      _opened = true;
+    } catch (exception) {
+      _error = exception.toString();
+      await player.dispose();
+      _player = null;
+      _controller = null;
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AspectRatio(
-    aspectRatio: 16 / 9,
+  Widget build(BuildContext context) {
+    final player = _player;
+    final controller = _controller;
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: player == null || controller == null
+          ? _VideoPoster(
+              onPlay: _toggle,
+              thumbnail: widget.thumbnail == null
+                  ? null
+                  : Image.memory(widget.thumbnail!, fit: BoxFit.cover),
+              tooltip: 'Play embedded video',
+              error: _error,
+            )
+          : _DeltiecordVideoSurface(
+              player: player,
+              controller: controller,
+              opened: _opened,
+              loading: _opening,
+              onToggle: _toggle,
+              thumbnail: widget.thumbnail == null
+                  ? null
+                  : Image.memory(widget.thumbnail!, fit: BoxFit.cover),
+              playTooltip: 'Play embedded video',
+            ),
+    );
+  }
+}
+
+class _VideoPoster extends StatelessWidget {
+  const _VideoPoster({
+    required this.onPlay,
+    required this.tooltip,
+    this.thumbnail,
+    this.error,
+  });
+
+  final Future<void> Function() onPlay;
+  final String tooltip;
+  final Widget? thumbnail;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: DeltiecordCorners.borderRadius,
     child: ColoredBox(
       color: Colors.black,
       child: Stack(
-        alignment: Alignment.center,
+        fit: StackFit.expand,
         children: [
-          if (!_opened)
-            if (widget.thumbnail case final thumbnail?)
-              Positioned.fill(
-                child: Image.memory(thumbnail, fit: BoxFit.cover),
-              ),
-          if (_opened) Video(controller: _controller),
-          if (!_player.state.playing)
-            IconButton.filled(
-              tooltip: 'Play embedded video',
-              onPressed: _toggle,
+          ?thumbnail,
+          Center(
+            child: IconButton.filled(
+              tooltip: tooltip,
+              onPressed: onPlay,
               icon: const Icon(Icons.play_arrow),
+            ),
+          ),
+          if (error != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Text(
+                error!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70),
+              ),
             ),
         ],
       ),
+    ),
+  );
+}
+
+/// A bounded video surface with controls that always remain inside the media.
+/// media_kit's desktop controls assume a wider viewport and can overflow on
+/// portrait clips, so Deltiecord owns this compact overlay instead.
+class _DeltiecordVideoSurface extends StatelessWidget {
+  const _DeltiecordVideoSurface({
+    required this.player,
+    required this.controller,
+    required this.opened,
+    required this.onToggle,
+    required this.playTooltip,
+    this.thumbnail,
+    this.loading = false,
+    this.onFullscreen,
+  });
+
+  final Player player;
+  final VideoController controller;
+  final bool opened;
+  final Future<void> Function() onToggle;
+  final String playTooltip;
+  final Widget? thumbnail;
+  final bool loading;
+  final VoidCallback? onFullscreen;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: DeltiecordCorners.borderRadius,
+    child: ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (!opened && thumbnail != null) thumbnail!,
+          if (opened)
+            Video(
+              controller: controller,
+              fit: BoxFit.contain,
+              controls: NoVideoControls,
+            ),
+          StreamBuilder<bool>(
+            stream: player.stream.playing,
+            initialData: player.state.playing,
+            builder: (context, playingSnapshot) {
+              final playing = playingSnapshot.data ?? false;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (!playing)
+                    Center(
+                      child: IconButton.filled(
+                        tooltip: playTooltip,
+                        onPressed: loading ? null : onToggle,
+                        icon: loading
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.play_arrow),
+                      ),
+                    ),
+                  if (opened)
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: _CompactVideoControls(
+                        player: player,
+                        playing: playing,
+                        onToggle: onToggle,
+                        onFullscreen: onFullscreen,
+                      ),
+                    ),
+                  StreamBuilder<bool>(
+                    stream: player.stream.buffering,
+                    initialData: player.state.buffering,
+                    builder: (context, snapshot) =>
+                        snapshot.data == true && playing
+                        ? const Center(
+                            child: SizedBox.square(
+                              dimension: 28,
+                              child: CircularProgressIndicator(strokeWidth: 3),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CompactVideoControls extends StatelessWidget {
+  const _CompactVideoControls({
+    required this.player,
+    required this.playing,
+    required this.onToggle,
+    this.onFullscreen,
+  });
+
+  final Player player;
+  final bool playing;
+  final Future<void> Function() onToggle;
+  final VoidCallback? onFullscreen;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 34,
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    color: const Color(0xaa000000),
+    child: Row(
+      children: [
+        SizedBox.square(
+          dimension: 30,
+          child: IconButton(
+            tooltip: playing ? 'Pause' : 'Play',
+            padding: EdgeInsets.zero,
+            color: Colors.white,
+            onPressed: onToggle,
+            icon: Icon(playing ? Icons.pause : Icons.play_arrow, size: 20),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<Duration>(
+            stream: player.stream.duration,
+            initialData: player.state.duration,
+            builder: (context, durationSnapshot) => StreamBuilder<Duration>(
+              stream: player.stream.position,
+              initialData: player.state.position,
+              builder: (context, positionSnapshot) {
+                final duration = durationSnapshot.data ?? Duration.zero;
+                final position = positionSnapshot.data ?? Duration.zero;
+                final maximum = max(1, duration.inMilliseconds).toDouble();
+                return SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 4,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 8,
+                    ),
+                  ),
+                  child: Slider(
+                    value: position.inMilliseconds
+                        .clamp(0, maximum.toInt())
+                        .toDouble(),
+                    max: maximum,
+                    onChanged: duration == Duration.zero
+                        ? null
+                        : (value) => player.seek(
+                            Duration(milliseconds: value.round()),
+                          ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (onFullscreen != null)
+          SizedBox.square(
+            dimension: 30,
+            child: IconButton(
+              tooltip: 'View fullscreen',
+              padding: EdgeInsets.zero,
+              color: Colors.white,
+              onPressed: onFullscreen,
+              icon: const Icon(Icons.fullscreen, size: 20),
+            ),
+          ),
+      ],
     ),
   );
 }
@@ -342,7 +594,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
           height: 116,
           child: Material(
             color: context.deltiecord.input,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: DeltiecordCorners.borderRadius,
             child: InkWell(
               onTap: () => setState(() => _revealed = true),
               child: const Center(
@@ -545,7 +797,7 @@ class _FileTile extends StatelessWidget {
     decoration: BoxDecoration(
       color: context.deltiecord.elevated,
       border: Border.all(color: context.deltiecord.divider),
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: DeltiecordCorners.borderRadius,
     ),
     child: Row(
       children: [
@@ -628,8 +880,8 @@ class _InlineVideo extends StatefulWidget {
 }
 
 class _InlineVideoState extends State<_InlineVideo> {
-  late final Player _player = Player();
-  late final VideoController _controller = VideoController(_player);
+  Player? _player;
+  VideoController? _controller;
   bool _opening = false;
   bool _opened = false;
   String? _error;
@@ -639,10 +891,20 @@ class _InlineVideoState extends State<_InlineVideo> {
 
   Future<void> _play() async {
     if (_opening) return;
-    if (_opened) {
-      await _player.playOrPause();
+    final existing = _player;
+    if (_opened && existing != null) {
+      await existing.playOrPause();
       return;
     }
+    final player =
+        existing ??
+        Player(
+          configuration: const PlayerConfiguration(
+            bufferSize: 64 * 1024 * 1024,
+          ),
+        );
+    _player = player;
+    _controller ??= VideoController(player);
     setState(() {
       _opening = true;
       _error = null;
@@ -654,7 +916,7 @@ class _InlineVideoState extends State<_InlineVideo> {
       if (source == null) {
         throw StateError('Encrypted streaming is still being prepared.');
       }
-      await _player.open(
+      await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
       );
@@ -672,7 +934,7 @@ class _InlineVideoState extends State<_InlineVideo> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
@@ -690,70 +952,64 @@ class _InlineVideoState extends State<_InlineVideo> {
         ? maxHeight * aspectRatio
         : maxWidth;
     final height = width / aspectRatio;
+    final player = _player;
+    final controller = _controller;
+    final thumbnail = _thumbnail == null
+        ? null
+        : FutureBuilder<Uint8List>(
+            future: _thumbnail,
+            builder: (context, snapshot) => snapshot.data == null
+                ? const SizedBox.shrink()
+                : Image.memory(snapshot.data!, fit: BoxFit.contain),
+          );
     return Align(
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: width,
         height: height,
-        child: ColoredBox(
-          color: Colors.black,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onDoubleTap: _showFullscreen,
-                onSecondaryTapDown: (details) => widget.onContextMenu(
-                  details.globalPosition,
-                  _showFullscreen,
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (!_opened)
-                      if (_thumbnail case final thumbnail?)
-                        FutureBuilder<Uint8List>(
-                          future: thumbnail,
-                          builder: (context, snapshot) => snapshot.data == null
-                              ? const SizedBox.shrink()
-                              : Image.memory(
-                                  snapshot.data!,
-                                  fit: BoxFit.contain,
-                                ),
-                        ),
-                    if (_opened) Video(controller: _controller),
-                  ],
-                ),
-              ),
-              if (!_player.state.playing)
-                IconButton.filled(
-                  tooltip: 'Stream video',
-                  onPressed: _opening ? null : _play,
-                  icon: _opening
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.play_arrow),
-                ),
-              if (_error case final error?)
-                Positioned(
-                  left: 3,
-                  right: 3,
-                  bottom: 2,
-                  child: Text(
-                    error,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: DeltiecordTypeScale.normal,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onDoubleTap: _showFullscreen,
+              onSecondaryTapDown: (details) =>
+                  widget.onContextMenu(details.globalPosition, _showFullscreen),
+              child: player == null || controller == null
+                  ? _VideoPoster(
+                      onPlay: _play,
+                      thumbnail: thumbnail,
+                      tooltip: 'Stream video',
+                      error: _error,
+                    )
+                  : _DeltiecordVideoSurface(
+                      player: player,
+                      controller: controller,
+                      opened: _opened,
+                      loading: _opening,
+                      onToggle: _play,
+                      onFullscreen: _showFullscreen,
+                      playTooltip: 'Stream video',
+                      thumbnail: thumbnail,
                     ),
+            ),
+            if (_error case final error?)
+              Positioned(
+                left: 3,
+                right: 3,
+                bottom: 36,
+                child: Text(
+                  error,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: DeltiecordTypeScale.normal,
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -915,10 +1171,15 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                 left: 12,
                 top: 0,
                 bottom: 0,
-                child: IconButton.filledTonal(
-                  tooltip: 'Previous attachment',
-                  onPressed: _previous,
-                  icon: const Icon(Icons.chevron_left),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 46,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Previous attachment',
+                      onPressed: _previous,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                  ),
                 ),
               ),
             if (_index > 0)
@@ -926,10 +1187,15 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                 right: 12,
                 top: 0,
                 bottom: 0,
-                child: IconButton.filledTonal(
-                  tooltip: 'Next attachment',
-                  onPressed: _next,
-                  icon: const Icon(Icons.chevron_right),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 46,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Next attachment',
+                      onPressed: _next,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ),
                 ),
               ),
             Positioned(
@@ -984,9 +1250,12 @@ class _LightboxVideo extends StatefulWidget {
 }
 
 class _LightboxVideoState extends State<_LightboxVideo> {
-  late final Player _player = Player();
+  late final Player _player = Player(
+    configuration: const PlayerConfiguration(bufferSize: 64 * 1024 * 1024),
+  );
   late final VideoController _controller = VideoController(_player);
   String? _error;
+  bool _opened = false;
 
   @override
   void initState() {
@@ -1004,6 +1273,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
       );
+      if (mounted) setState(() => _opened = true);
     } catch (exception) {
       if (mounted) setState(() => _error = exception.toString());
     }
@@ -1016,9 +1286,22 @@ class _LightboxVideoState extends State<_LightboxVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => _error == null
-      ? Video(controller: _controller, fit: BoxFit.contain)
-      : Center(child: Text(_error!));
+  Widget build(BuildContext context) => _error != null
+      ? Center(child: Text(_error!))
+      : !_opened
+      ? const Center(child: CircularProgressIndicator())
+      : Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints.tight(MediaQuery.sizeOf(context)),
+            child: _DeltiecordVideoSurface(
+              player: _player,
+              controller: _controller,
+              opened: true,
+              onToggle: _player.playOrPause,
+              playTooltip: 'Play video',
+            ),
+          ),
+        );
 }
 
 class _InlineAudio extends StatefulWidget {
@@ -1083,7 +1366,7 @@ class _InlineAudioState extends State<_InlineAudio> {
     decoration: BoxDecoration(
       color: context.deltiecord.elevated,
       border: Border.all(color: context.deltiecord.divider),
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: DeltiecordCorners.borderRadius,
     ),
     child: StreamBuilder<bool>(
       stream: _player.stream.playing,

@@ -532,14 +532,14 @@ class _SpaceButton extends StatelessWidget {
             color: selected
                 ? Theme.of(context).colorScheme.primaryContainer
                 : context.deltiecord.elevated,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: DeltiecordCorners.borderRadius,
             clipBehavior: Clip.hardEdge,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onSecondaryTapDown: onSecondaryTapDown,
               child: InkWell(
                 onTap: onTap,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: DeltiecordCorners.borderRadius,
                 child: Center(child: child),
               ),
             ),
@@ -826,7 +826,7 @@ class _RoomPanelState extends State<_RoomPanel> {
                       elevation: 12,
                       color: context.deltiecord.elevated,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: DeltiecordCorners.borderRadius,
                         side: BorderSide(color: context.deltiecord.divider),
                       ),
                       child: Padding(
@@ -893,7 +893,7 @@ class _CurrentUserPanel extends StatelessWidget {
         child: Material(
           key: const Key('current-user-island'),
           color: context.deltiecord.island,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: DeltiecordCorners.borderRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => showOwnProfile(context, backend),

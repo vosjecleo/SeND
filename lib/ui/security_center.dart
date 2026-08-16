@@ -336,7 +336,7 @@ class _GeneratedKey extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xff191a1e),
           border: Border.all(color: const Color(0xff4a4c56)),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: DeltiecordCorners.borderRadius,
         ),
         child: SelectableText(
           recoveryKey,
