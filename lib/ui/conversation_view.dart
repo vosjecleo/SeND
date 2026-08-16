@@ -58,6 +58,7 @@ class _ConversationState extends State<_Conversation> {
   static const _jumpToPresentScrollThreshold = 360.0;
 
   final _scrollController = ScrollController();
+  final _timelineViewportKey = GlobalKey();
   final Map<String, GlobalKey> _messageKeys = {};
   String? _roomId;
   bool _loadingAnchoredHistory = false;
@@ -81,22 +82,30 @@ class _ConversationState extends State<_Conversation> {
 
   void _loadTimelineNearEdges() {
     if (!_scrollController.hasClients) return;
-    final scrolledAway =
-        _scrollController.position.pixels > _jumpToPresentScrollThreshold;
+    final position = _scrollController.position;
+    final scrolledAway = position.pixels > _jumpToPresentScrollThreshold;
     if (scrolledAway != _scrolledAwayFromPresent && mounted) {
       setState(() => _scrolledAwayFromPresent = scrolledAway);
     }
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 240) {
+    // Content insertion, eviction, and anchor restoration all update scroll
+    // metrics. Only paginate automatically while the user is actively moving
+    // toward that edge; otherwise one page can recursively trigger another.
+    if (position.userScrollDirection == ScrollDirection.reverse &&
+        position.pixels >= position.maxScrollExtent - 240) {
       _loadOlderAnchored();
-    } else if (_scrollController.position.pixels <= 240 &&
+    } else if (position.userScrollDirection == ScrollDirection.forward &&
+        position.pixels <= 240 &&
         widget.backend.canLoadMoreFuture) {
       _loadNewerAnchored();
     }
   }
 
   (String, double)? _captureVisibleAnchor() {
-    final viewportCenter = MediaQuery.sizeOf(context).height / 2;
+    final viewport = _timelineViewportKey.currentContext?.findRenderObject();
+    if (viewport is! RenderBox || !viewport.attached) return null;
+    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+    final viewportBottom = viewportTop + viewport.size.height;
+    final viewportCenter = (viewportTop + viewportBottom) / 2;
     (String, double)? closest;
     var closestDistance = double.infinity;
     for (final entry in _messageKeys.entries) {
@@ -104,7 +113,7 @@ class _ConversationState extends State<_Conversation> {
       if (renderObject is! RenderBox || !renderObject.attached) continue;
       final offset = renderObject.localToGlobal(Offset.zero);
       final bottom = offset.dy + renderObject.size.height;
-      if (bottom < 56 || offset.dy > MediaQuery.sizeOf(context).height - 56) {
+      if (bottom < viewportTop || offset.dy > viewportBottom) {
         continue;
       }
       final distance = (offset.dy - viewportCenter).abs();
@@ -137,12 +146,18 @@ class _ConversationState extends State<_Conversation> {
     try {
       await load();
       if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _restoreVisibleAnchor(anchor);
-        _loadingAnchoredHistory = false;
-      });
+      // The backend can notify once for decrypted events and again for media,
+      // replies, and previews. Restore after both layout passes so the same
+      // event remains under the reader's eyes throughout the page swap.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      _restoreVisibleAnchor(anchor);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      _restoreVisibleAnchor(anchor);
     } catch (_) {
+      // The backend reports its user-facing pagination error separately.
+    } finally {
       _loadingAnchoredHistory = false;
     }
   }
@@ -563,112 +578,135 @@ class _ConversationState extends State<_Conversation> {
                     key: const Key('conversation-timeline-area'),
                     children: [
                       Positioned.fill(
-                        child: backend.timelineLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : backend.messages.isEmpty
-                            ? const Center(child: Text('No messages yet'))
-                            : ListView.builder(
-                                key: const Key('message-timeline'),
-                                controller: _scrollController,
-                                reverse: true,
-                                padding: const EdgeInsets.fromLTRB(
-                                  0,
-                                  10,
-                                  0,
-                                  14,
-                                ),
-                                itemCount:
-                                    messages.length +
-                                    (backend.historyLoading ||
-                                            backend.canLoadMoreHistory
-                                        ? 1
-                                        : 0),
-                                itemBuilder: (context, index) {
-                                  if (index == messages.length) {
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      child: Center(
-                                        child: backend.historyLoading
-                                            ? const SizedBox.square(
-                                                dimension: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                              )
-                                            : TextButton.icon(
-                                                onPressed: _loadOlderAnchored,
-                                                icon: const Icon(
-                                                  Icons.history,
-                                                  size: 17,
-                                                ),
-                                                label: const Text(
-                                                  'Load older messages',
-                                                ),
-                                              ),
-                                      ),
+                        child: KeyedSubtree(
+                          key: _timelineViewportKey,
+                          child: backend.timelineLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : backend.messages.isEmpty
+                              ? const Center(child: Text('No messages yet'))
+                              : ListView.builder(
+                                  key: const Key('message-timeline'),
+                                  controller: _scrollController,
+                                  reverse: true,
+                                  physics: const RangeMaintainingScrollPhysics(
+                                    parent: ClampingScrollPhysics(),
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    0,
+                                    10,
+                                    0,
+                                    14,
+                                  ),
+                                  itemCount:
+                                      messages.length +
+                                      (backend.historyLoading ||
+                                              backend.canLoadMoreHistory
+                                          ? 1
+                                          : 0),
+                                  findChildIndexCallback: (key) {
+                                    String? messageId;
+                                    for (final entry in _messageKeys.entries) {
+                                      if (identical(entry.value, key)) {
+                                        messageId = entry.key;
+                                        break;
+                                      }
+                                    }
+                                    if (messageId == null) return null;
+                                    final index = messages.indexWhere(
+                                      (message) => message.id == messageId,
                                     );
-                                  }
-                                  final message = messages[index];
-                                  final older = index + 1 < messages.length
-                                      ? messages[index + 1]
-                                      : null;
-                                  final startsGroup =
-                                      older == null ||
-                                      older.sender != message.sender ||
-                                      message.timestamp.difference(
-                                            older.timestamp,
-                                          ) >
-                                          const Duration(minutes: 7) ||
-                                      message.reply != null;
-                                  return Column(
-                                    key: _messageKeys.putIfAbsent(
-                                      message.id,
-                                      GlobalKey.new,
-                                    ),
-                                    children: [
-                                      if (message.id ==
-                                          backend.firstUnreadMessageId)
-                                        const _UnreadDivider(),
-                                      _MessageRow(
-                                        message: message,
-                                        startsGroup: startsGroup,
-                                        onReply: () => widget.onReply(message),
-                                        onEdit: message.own && !message.redacted
-                                            ? () => widget.onEdit(message)
-                                            : null,
-                                        onDelete: message.canRedact
-                                            ? () => _deleteMessage(message)
-                                            : null,
-                                        onReact:
-                                            message.redacted || message.system
-                                            ? null
-                                            : () => _pickReaction(message),
-                                        onRetry: message.failed
-                                            ? () => backend.retryMessage(
-                                                message.id,
-                                              )
-                                            : null,
-                                        onCancel:
-                                            message.pending || message.failed
-                                            ? () =>
-                                                  backend.cancelPendingMessage(
-                                                    message.id,
-                                                  )
-                                            : null,
-                                        onToggleReaction: (key) => backend
-                                            .toggleReaction(message.id, key),
-                                        onJumpToReply: _jumpToEvent,
-                                        mediaMessages: mediaMessages,
-                                        backend: backend,
-                                        onActionsShown: _registerMessageActions,
+                                    return index < 0 ? null : index;
+                                  },
+                                  itemBuilder: (context, index) {
+                                    if (index == messages.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        child: Center(
+                                          child: backend.historyLoading
+                                              ? const SizedBox.square(
+                                                  dimension: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                )
+                                              : TextButton.icon(
+                                                  onPressed: _loadOlderAnchored,
+                                                  icon: const Icon(
+                                                    Icons.history,
+                                                    size: 17,
+                                                  ),
+                                                  label: const Text(
+                                                    'Load older messages',
+                                                  ),
+                                                ),
+                                        ),
+                                      );
+                                    }
+                                    final message = messages[index];
+                                    final older = index + 1 < messages.length
+                                        ? messages[index + 1]
+                                        : null;
+                                    final startsGroup =
+                                        older == null ||
+                                        older.sender != message.sender ||
+                                        message.timestamp.difference(
+                                              older.timestamp,
+                                            ) >
+                                            const Duration(minutes: 7) ||
+                                        message.reply != null;
+                                    return Column(
+                                      key: _messageKeys.putIfAbsent(
+                                        message.id,
+                                        GlobalKey.new,
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
+                                      children: [
+                                        if (message.id ==
+                                            backend.firstUnreadMessageId)
+                                          const _UnreadDivider(),
+                                        _MessageRow(
+                                          message: message,
+                                          startsGroup: startsGroup,
+                                          onReply: () =>
+                                              widget.onReply(message),
+                                          onEdit:
+                                              message.own && !message.redacted
+                                              ? () => widget.onEdit(message)
+                                              : null,
+                                          onDelete: message.canRedact
+                                              ? () => _deleteMessage(message)
+                                              : null,
+                                          onReact:
+                                              message.redacted || message.system
+                                              ? null
+                                              : () => _pickReaction(message),
+                                          onRetry: message.failed
+                                              ? () => backend.retryMessage(
+                                                  message.id,
+                                                )
+                                              : null,
+                                          onCancel:
+                                              message.pending || message.failed
+                                              ? () => backend
+                                                    .cancelPendingMessage(
+                                                      message.id,
+                                                    )
+                                              : null,
+                                          onToggleReaction: (key) => backend
+                                              .toggleReaction(message.id, key),
+                                          onJumpToReply: _jumpToEvent,
+                                          mediaMessages: mediaMessages,
+                                          backend: backend,
+                                          onActionsShown:
+                                              _registerMessageActions,
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                        ),
                       ),
                       if (backend.canLoadMoreFuture)
                         Positioned(

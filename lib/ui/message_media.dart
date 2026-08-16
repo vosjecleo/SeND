@@ -400,7 +400,7 @@ class _DeltiecordVideoSurface extends StatelessWidget {
   );
 }
 
-class _CompactVideoControls extends StatelessWidget {
+class _CompactVideoControls extends StatefulWidget {
   const _CompactVideoControls({
     required this.player,
     required this.playing,
@@ -414,6 +414,29 @@ class _CompactVideoControls extends StatelessWidget {
   final VoidCallback? onFullscreen;
 
   @override
+  State<_CompactVideoControls> createState() => _CompactVideoControlsState();
+}
+
+class _CompactVideoControlsState extends State<_CompactVideoControls> {
+  double? _dragMilliseconds;
+  int _seekGeneration = 0;
+
+  Future<void> _commitSeek(double value) async {
+    final generation = ++_seekGeneration;
+    setState(() => _dragMilliseconds = value);
+    try {
+      await widget.player.seek(Duration(milliseconds: value.round()));
+    } catch (_) {
+      // A cancelled range during a second seek is harmless; the player keeps
+      // its prior position and remains usable for another attempt.
+    } finally {
+      if (mounted && generation == _seekGeneration) {
+        setState(() => _dragMilliseconds = null);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) => Container(
     height: 34,
     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -423,20 +446,23 @@ class _CompactVideoControls extends StatelessWidget {
         SizedBox.square(
           dimension: 30,
           child: IconButton(
-            tooltip: playing ? 'Pause' : 'Play',
+            tooltip: widget.playing ? 'Pause' : 'Play',
             padding: EdgeInsets.zero,
             color: Colors.white,
-            onPressed: onToggle,
-            icon: Icon(playing ? Icons.pause : Icons.play_arrow, size: 20),
+            onPressed: widget.onToggle,
+            icon: Icon(
+              widget.playing ? Icons.pause : Icons.play_arrow,
+              size: 20,
+            ),
           ),
         ),
         Expanded(
           child: StreamBuilder<Duration>(
-            stream: player.stream.duration,
-            initialData: player.state.duration,
+            stream: widget.player.stream.duration,
+            initialData: widget.player.state.duration,
             builder: (context, durationSnapshot) => StreamBuilder<Duration>(
-              stream: player.stream.position,
-              initialData: player.state.position,
+              stream: widget.player.stream.position,
+              initialData: widget.player.state.position,
               builder: (context, positionSnapshot) {
                 final duration = durationSnapshot.data ?? Duration.zero;
                 final position = positionSnapshot.data ?? Duration.zero;
@@ -452,29 +478,33 @@ class _CompactVideoControls extends StatelessWidget {
                     ),
                   ),
                   child: Slider(
-                    value: position.inMilliseconds
+                    value: (_dragMilliseconds ?? position.inMilliseconds)
                         .clamp(0, maximum.toInt())
                         .toDouble(),
                     max: maximum,
+                    onChangeStart: duration == Duration.zero
+                        ? null
+                        : (value) => setState(() => _dragMilliseconds = value),
                     onChanged: duration == Duration.zero
                         ? null
-                        : (value) => player.seek(
-                            Duration(milliseconds: value.round()),
-                          ),
+                        : (value) => setState(() => _dragMilliseconds = value),
+                    onChangeEnd: duration == Duration.zero
+                        ? null
+                        : (value) => unawaited(_commitSeek(value)),
                   ),
                 );
               },
             ),
           ),
         ),
-        if (onFullscreen != null)
+        if (widget.onFullscreen != null)
           SizedBox.square(
             dimension: 30,
             child: IconButton(
               tooltip: 'View fullscreen',
               padding: EdgeInsets.zero,
               color: Colors.white,
-              onPressed: onFullscreen,
+              onPressed: widget.onFullscreen,
               icon: const Icon(Icons.fullscreen, size: 20),
             ),
           ),
