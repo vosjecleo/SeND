@@ -529,6 +529,40 @@ void main() {
     expect(backend.historyRequests, 1);
   });
 
+  testWidgets('historical windows expose a load newer control', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..moreFuture = true
+      ..roomList = const [
+        RoomSummary(
+          id: '!history:example.org',
+          name: 'history',
+          lastMessage: 'Historical message',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ]
+      ..messageList = [
+        ChatMessage(
+          id: r'$historical',
+          sender: 'Alice',
+          body: 'Historical message',
+          timestamp: DateTime(2026, 8, 13, 12),
+          pending: false,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('history'));
+    await tester.pump();
+
+    expect(find.text('Load newer messages'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('load-newer-messages')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('load-newer-messages')));
+    await tester.pump();
+    expect(backend.futureRequests, 1);
+  });
+
   testWidgets('sends composer text and clears it after success', (
     tester,
   ) async {
@@ -555,6 +589,41 @@ void main() {
     expect(backend.sentMessages, ['hello from Deltiecord']);
     expect(find.text('hello from Deltiecord'), findsNothing);
     expect(composer.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('typing during an in-flight send preserves the next draft', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..sendGate = gate
+      ..roomList = const [
+        RoomSummary(
+          id: '!general:example.org',
+          name: 'general',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('general'));
+    await tester.pump();
+    await _enterComposer(tester, 'first message');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+
+    await _enterComposer(tester, 'next draft typed immediately');
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    expect(backend.sentMessages, ['first message']);
+    expect(
+      editor.controller.document.toPlainText(),
+      'next draft typed immediately\n',
+    );
   });
 
   testWidgets('an in-flight send keeps its original target room', (
@@ -1552,6 +1621,7 @@ class FakeBackend extends ChatBackend {
   List<String> typingNames = const [];
   AppPreferences currentPreferences = const AppPreferences();
   bool moreHistory = false;
+  bool moreFuture = false;
   VoiceConnectionStatus currentVoiceStatus = VoiceConnectionStatus.disconnected;
   String? currentActiveVoiceId;
   bool deafened = false;
@@ -1559,6 +1629,7 @@ class FakeBackend extends ChatBackend {
   bool cameraEnabled = false;
   Completer<void>? sendGate;
   int historyRequests = 0;
+  int futureRequests = 0;
   int jumpPresentRequests = 0;
   final List<String> sentMessages = [];
   final List<String?> sentMessageRoomIds = [];
@@ -1647,9 +1718,9 @@ class FakeBackend extends ChatBackend {
   @override
   bool get canLoadMoreHistory => moreHistory;
   @override
-  bool get canLoadMoreFuture => false;
+  bool get canLoadMoreFuture => moreFuture;
   @override
-  bool get atTimelinePresent => true;
+  bool get atTimelinePresent => !moreFuture;
   @override
   String? get firstUnreadMessageId => null;
   @override
@@ -1793,7 +1864,10 @@ class FakeBackend extends ChatBackend {
   }
 
   @override
-  Future<void> loadMoreFuture() async {}
+  Future<void> loadMoreFuture() async {
+    futureRequests++;
+  }
+
   @override
   Future<List<ChatMessage>> loadPinnedMessages() async => pinnedMessages;
   @override

@@ -255,16 +255,38 @@ class _ChatShellState extends State<ChatShell> {
     final serialized = serializeRichMessage(_message.document);
     final text = serialized.plainText.trim();
     if ((text.isEmpty && _pendingAttachments.isEmpty) || _sending) return;
+    final submittedDelta = _message.document.toDelta().toJson();
     final attachments = List<AttachmentDraft>.from(_pendingAttachments);
-    setState(() => _sending = true);
+    final submittedReply = _replyingTo;
+    final submittedEdit = _editingMessage;
+
+    // Detach the submitted draft before awaiting the homeserver. Text entered
+    // while this send is in flight now belongs to the next message and must
+    // never be cleared by completion of the previous request.
+    _restoringDraft = true;
+    try {
+      _message.clear();
+    } finally {
+      _restoringDraft = false;
+    }
+    setState(() {
+      _sending = true;
+      _pendingAttachments.clear();
+      _replyingTo = null;
+      _editingMessage = null;
+    });
+    if (sendingRoomId != null) {
+      _memoryDrafts.remove(sendingRoomId);
+      _draftStore.remove(sendingRoomId);
+    }
     try {
       if (attachments.isEmpty) {
         await widget.backend.sendMessage(
           text,
           roomId: sendingRoomId,
           formattedBody: serialized.html,
-          replyToMessageId: _replyingTo?.id,
-          editMessageId: _editingMessage?.id,
+          replyToMessageId: submittedReply?.id,
+          editMessageId: submittedEdit?.id,
         );
       } else {
         for (var index = 0; index < attachments.length; index++) {
@@ -278,27 +300,43 @@ class _ChatShellState extends State<ChatShell> {
               caption: index == 0 && text.isNotEmpty ? text : null,
             ),
             roomId: sendingRoomId,
-            replyToMessageId: index == 0 ? _replyingTo?.id : null,
+            replyToMessageId: index == 0 ? submittedReply?.id : null,
           );
         }
       }
-      if (mounted && widget.backend.selectedRoom?.id == sendingRoomId) {
-        _message.clear();
-        setState(() {
-          _pendingAttachments.clear();
-          _replyingTo = null;
-          _editingMessage = null;
-        });
-        if (sendingRoomId != null) {
-          _memoryDrafts.remove(sendingRoomId);
-          _draftStore.remove(sendingRoomId);
-        }
-      } else if (sendingRoomId != null) {
-        _memoryDrafts.remove(sendingRoomId);
-        _draftStore.remove(sendingRoomId);
-      }
     } catch (_) {
-      // Leave the document intact so a failed send can be retried.
+      final failedDraft = _RoomDraft(
+        delta: submittedDelta,
+        attachments: attachments,
+        replyingTo: submittedReply,
+        editingMessage: submittedEdit,
+      );
+      if (mounted && widget.backend.selectedRoom?.id == sendingRoomId) {
+        final nextDelta = _message.document.toDelta();
+        _restoringDraft = true;
+        try {
+          _message.document = Document.fromDelta(
+            Document.fromJson(submittedDelta).toDelta().concat(nextDelta),
+          );
+          _message.updateSelection(
+            TextSelection.collapsed(
+              offset: max(0, _message.document.length - 1),
+            ),
+            ChangeSource.local,
+          );
+        } finally {
+          _restoringDraft = false;
+        }
+        setState(() {
+          _pendingAttachments.insertAll(0, attachments);
+          _replyingTo ??= submittedReply;
+          _editingMessage ??= submittedEdit;
+        });
+        _storeCurrentDraft();
+      } else if (sendingRoomId != null) {
+        _memoryDrafts[sendingRoomId] = failedDraft;
+        _draftStore.write(sendingRoomId, submittedDelta);
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }

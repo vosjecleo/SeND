@@ -243,6 +243,20 @@ class _VideoPoster extends StatelessWidget {
   final Widget? thumbnail;
   final String? error;
 
+  ButtonStyle _playButtonStyle(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final foreground =
+        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return IconButton.styleFrom(
+      backgroundColor: accent,
+      foregroundColor: foreground,
+      disabledBackgroundColor: accent.withValues(alpha: 0.75),
+      disabledForegroundColor: foreground.withValues(alpha: 0.75),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: DeltiecordCorners.borderRadius,
@@ -256,6 +270,7 @@ class _VideoPoster extends StatelessWidget {
             child: IconButton.filled(
               tooltip: tooltip,
               onPressed: onPlay,
+              style: _playButtonStyle(context),
               icon: const Icon(Icons.play_arrow),
             ),
           ),
@@ -299,6 +314,20 @@ class _DeltiecordVideoSurface extends StatelessWidget {
   final bool loading;
   final VoidCallback? onFullscreen;
 
+  ButtonStyle _playButtonStyle(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final foreground =
+        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return IconButton.styleFrom(
+      backgroundColor: accent,
+      foregroundColor: foreground,
+      disabledBackgroundColor: accent.withValues(alpha: 0.75),
+      disabledForegroundColor: foreground.withValues(alpha: 0.75),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: DeltiecordCorners.borderRadius,
@@ -327,6 +356,7 @@ class _DeltiecordVideoSurface extends StatelessWidget {
                       child: IconButton.filled(
                         tooltip: playTooltip,
                         onPressed: loading ? null : onToggle,
+                        style: _playButtonStyle(context),
                         icon: loading
                             ? const SizedBox.square(
                                 dimension: 18,

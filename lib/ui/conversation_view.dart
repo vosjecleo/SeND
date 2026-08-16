@@ -670,6 +670,26 @@ class _ConversationState extends State<_Conversation> {
                                 },
                               ),
                       ),
+                      if (backend.canLoadMoreFuture)
+                        Positioned(
+                          right: 16,
+                          bottom: 58,
+                          child: FilledButton.tonalIcon(
+                            key: const Key('load-newer-messages'),
+                            onPressed: backend.historyLoading
+                                ? null
+                                : _loadNewerAnchored,
+                            icon: backend.historyLoading
+                                ? const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.update, size: 17),
+                            label: const Text('Load newer messages'),
+                          ),
+                        ),
                       if (!backend.atTimelinePresent ||
                           _scrolledAwayFromPresent)
                         Positioned(
@@ -767,6 +787,8 @@ class _ConversationState extends State<_Conversation> {
                   controller: widget.controller,
                   focusNode: widget.composerFocus,
                   roomName: room.name,
+                  // The editor remains live while this only gates attachment
+                  // and submit controls for the in-flight request.
                   enabled: !widget.sending,
                   sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
                   onSend: widget.onSend,

@@ -20,7 +20,7 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
-    <release version="0.9.13" date="2026-08-16" type="development">
+    <release version="0.9.14" date="2026-08-16" type="development">
       <description>
         <p>Adds context-aware profile cards and fixes bounded history pagination repeating pages.</p>
       </description>

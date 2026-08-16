@@ -25,7 +25,9 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final dividerHitbox = widget.visible ? 5.0 : 1.0;
+      // Keep the complete collapsed toggle inside this region's hit-test
+      // bounds. A one-pixel region left it underneath the timeline scrollbar.
+      final dividerHitbox = widget.visible ? 5.0 : 28.0;
       return TweenAnimationBuilder<double>(
         key: const Key('side-panel-width'),
         tween: Tween(end: widget.visible ? widget.width : 0),
@@ -87,7 +89,7 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
                 ],
               ),
               Positioned(
-                left: (dividerHitbox - 22) / 2,
+                left: widget.visible ? (dividerHitbox - 22) / 2 : 2,
                 top: (constraints.maxHeight - 42) / 2,
                 child: Material(
                   color: context.deltiecord.elevated,
