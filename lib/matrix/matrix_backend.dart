@@ -501,6 +501,9 @@ class MatrixBackend extends ChatBackend {
       _setRoomAvatar(roomId, bytes);
 
   @override
+  Future<void> leaveRoom(String roomId) => _leaveRoom(roomId);
+
+  @override
   Future<void> setMemberPowerLevel(String userId, int powerLevel) =>
       _setMemberPowerLevel(userId, powerLevel);
 

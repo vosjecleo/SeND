@@ -351,6 +351,25 @@ extension _MatrixRoomOperations on MatrixBackend {
     }
   }
 
+  Future<void> _leaveRoom(String roomId) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) throw StateError('That room is no longer available.');
+    try {
+      if (_voice?.activeRoomId == roomId) await _leaveVoiceRoom();
+      await room.leave();
+      if (_selectedRoomId == roomId) {
+        _selectedRoomId = null;
+        await _closeTimeline();
+      }
+      unawaited(_refreshRoomMetadata());
+    } catch (exception) {
+      _error = _friendlyError(exception);
+      rethrow;
+    } finally {
+      _notifyBackendListeners();
+    }
+  }
+
   Future<void> _setMemberPowerLevel(String userId, int powerLevel) async {
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (room == null) throw StateError('No room is selected.');

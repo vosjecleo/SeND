@@ -983,155 +983,285 @@ class _RoomListTile extends StatelessWidget {
     }
   }
 
+  Future<void> _confirmLeave(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Leave ${room.name}?'),
+        content: const Text(
+          'You may need another invitation to return to this room.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Leave room'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await backend.leaveRoom(room.id);
+  }
+
+  Future<void> _showContextMenu(BuildContext context, Offset position) async {
+    final screen = MediaQuery.sizeOf(context);
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(1, 1),
+        Offset.zero & screen,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'settings',
+          child: _RoomContextMenuEntry(
+            icon: Icons.edit_outlined,
+            label: room.isDirect ? 'Edit DM name' : 'Room settings',
+          ),
+        ),
+        if (backend.selectedRoom?.id == room.id)
+          PopupMenuItem(
+            value: 'mute',
+            child: _RoomContextMenuEntry(
+              icon: backend.selectedRoomMuted
+                  ? Icons.notifications_outlined
+                  : Icons.notifications_off_outlined,
+              label: backend.selectedRoomMuted ? 'Unmute room' : 'Mute room',
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'copy-link',
+          child: _RoomContextMenuEntry(
+            icon: Icons.link,
+            label: 'Copy room link',
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'leave',
+          child: _RoomContextMenuEntry(
+            icon: Icons.logout,
+            label: 'Leave room',
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      ],
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case 'settings':
+        await _edit(context);
+      case 'mute':
+        await backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
+      case 'copy-link':
+        await Clipboard.setData(
+          ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+        );
+      case 'leave':
+        await _confirmLeave(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final participantCount = room.voiceParticipants.length;
     if (backend.selectedSpaceId == null && !room.isVoice) {
-      return _HomeRoomListTile(backend: backend, room: room);
+      return _HomeRoomListTile(
+        backend: backend,
+        room: room,
+        onSecondaryTapDown: (details) =>
+            _showContextMenu(context, details.globalPosition),
+      );
     }
     final compactness = backend.preferences.compactness;
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity(vertical: -1 - (compactness * 2)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-      minVerticalPadding: 0,
-      selected: backend.selectedRoom?.id == room.id,
-      leading: _RoomIcon(room: room, size: 26),
-      title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: room.isVoice
-          ? participantCount == 0
-                ? null
-                : Text('$participantCount connected')
-          : backend.selectedSpaceId == null
-          ? Text(room.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : null,
-      trailing: backend.selectedSpaceId == null
-          ? room.unreadCount > 0
-                ? Badge(label: Text('${room.unreadCount}'))
-                : null
-          : PopupMenuButton<String>(
-              tooltip: 'Edit room',
-              iconSize: 17,
-              onSelected: (action) {
-                switch (action) {
-                  case 'rename':
-                    _edit(context);
-                  case 'text':
-                    backend.setRoomPresentation(room.id, RoomPresentation.text);
-                  case 'voice':
-                    backend.setRoomPresentation(
-                      room.id,
-                      RoomPresentation.voice,
-                    );
-                }
-              },
-              itemBuilder: (context) => [
-                CheckedPopupMenuItem(
-                  value: 'text',
-                  checked: !room.isVoice,
-                  child: const Text('Text room'),
-                ),
-                CheckedPopupMenuItem(
-                  value: 'voice',
-                  checked: room.isVoice,
-                  child: const Text('Voice room'),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'rename',
-                  child: Text('Room settings'),
-                ),
-              ],
-            ),
-      onTap: () => backend.selectRoom(room.id),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: (details) =>
+          _showContextMenu(context, details.globalPosition),
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity(vertical: -1 - (compactness * 2)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        minVerticalPadding: 0,
+        selected: backend.selectedRoom?.id == room.id,
+        leading: _RoomIcon(room: room, size: 26),
+        title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: room.isVoice
+            ? participantCount == 0
+                  ? null
+                  : Text('$participantCount connected')
+            : backend.selectedSpaceId == null
+            ? Text(
+                room.lastMessage,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : null,
+        trailing: backend.selectedSpaceId == null
+            ? room.unreadCount > 0
+                  ? Badge(label: Text('${room.unreadCount}'))
+                  : null
+            : PopupMenuButton<String>(
+                tooltip: 'Edit room',
+                iconSize: 17,
+                onSelected: (action) {
+                  switch (action) {
+                    case 'rename':
+                      _edit(context);
+                    case 'text':
+                      backend.setRoomPresentation(
+                        room.id,
+                        RoomPresentation.text,
+                      );
+                    case 'voice':
+                      backend.setRoomPresentation(
+                        room.id,
+                        RoomPresentation.voice,
+                      );
+                  }
+                },
+                itemBuilder: (context) => [
+                  CheckedPopupMenuItem(
+                    value: 'text',
+                    checked: !room.isVoice,
+                    child: const Text('Text room'),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: 'voice',
+                    checked: room.isVoice,
+                    child: const Text('Voice room'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Text('Room settings'),
+                  ),
+                ],
+              ),
+        onTap: () => backend.selectRoom(room.id),
+      ),
     );
   }
 }
 
+class _RoomContextMenuEntry extends StatelessWidget {
+  const _RoomContextMenuEntry({
+    required this.icon,
+    required this.label,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18, color: color),
+      const SizedBox(width: 10),
+      Text(label, style: TextStyle(color: color)),
+    ],
+  );
+}
+
 class _HomeRoomListTile extends StatelessWidget {
-  const _HomeRoomListTile({required this.backend, required this.room});
+  const _HomeRoomListTile({
+    required this.backend,
+    required this.room,
+    required this.onSecondaryTapDown,
+  });
 
   final ChatBackend backend;
   final RoomSummary room;
+  final GestureTapDownCallback onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
     final selected = backend.selectedRoom?.id == room.id;
-    return Material(
-      color: selected
-          ? Theme.of(context).colorScheme.primaryContainer
-                .withValues(alpha: 0.42)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: () => backend.selectRoom(room.id),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: _densityBetween(
-              backend.preferences.compactness,
-              roomy: 62,
-              compact: 48,
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              12,
-              _densityBetween(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: onSecondaryTapDown,
+      child: Material(
+        color: selected
+            ? Theme.of(context).colorScheme.primaryContainer
+                  .withValues(alpha: 0.42)
+            : Colors.transparent,
+        child: InkWell(
+          onTap: () => backend.selectRoom(room.id),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: _densityBetween(
                 backend.preferences.compactness,
-                roomy: 6,
-                compact: 3,
-              ),
-              10,
-              _densityBetween(
-                backend.preferences.compactness,
-                roomy: 6,
-                compact: 3,
+                roomy: 62,
+                compact: 48,
               ),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _RoomIcon(room: room, size: 40, showPresence: room.isDirect),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        room.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: DeltiecordTypeScale.bigChat,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
-                      ),
-                      SizedBox(
-                        height: _densityBetween(
-                          backend.preferences.compactness,
-                          roomy: 6,
-                          compact: 3,
-                        ),
-                      ),
-                      Text(
-                        room.lastMessage,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.deltiecord.muted,
-                          fontSize: DeltiecordTypeScale.normal,
-                          height: 1.05,
-                        ),
-                      ),
-                    ],
-                  ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                _densityBetween(
+                  backend.preferences.compactness,
+                  roomy: 6,
+                  compact: 3,
                 ),
-                if (room.unreadCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Badge(label: Text('${room.unreadCount}')),
+                10,
+                _densityBetween(
+                  backend.preferences.compactness,
+                  roomy: 6,
+                  compact: 3,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _RoomIcon(room: room, size: 40, showPresence: room.isDirect),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          room.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: DeltiecordTypeScale.bigChat,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                        SizedBox(
+                          height: _densityBetween(
+                            backend.preferences.compactness,
+                            roomy: 6,
+                            compact: 3,
+                          ),
+                        ),
+                        Text(
+                          room.lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.deltiecord.muted,
+                            fontSize: DeltiecordTypeScale.normal,
+                            height: 1.05,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (room.unreadCount > 0) ...[
+                    const SizedBox(width: 8),
+                    Badge(label: Text('${room.unreadCount}')),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

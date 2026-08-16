@@ -1135,6 +1135,80 @@ void main() {
     expect((profileCard.decoration! as BoxDecoration).gradient, isNotNull);
   });
 
+  testWidgets('shows the direct recipient profile beside a wide conversation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!direct:example.org',
+          name: 'Alice',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+        ),
+      ]
+      ..memberList = const [
+        RoomMemberSummary(userId: '@deltie:example.org', displayName: 'Deltie'),
+        RoomMemberSummary(
+          userId: '@alice:example.org',
+          displayName: 'Alice',
+          presence: UserPresence.online,
+        ),
+      ]
+      ..testProfile = const UserProfileSummary(
+        userId: '@alice:example.org',
+        displayName: 'Alice',
+        presence: UserPresence.online,
+        bio: 'Matrix enthusiast',
+        statusMessage: 'Building things',
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Alice').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('recipient-profile-panel')), findsOneWidget);
+    expect(find.text('@alice:example.org'), findsOneWidget);
+    expect(find.text('Matrix enthusiast'), findsOneWidget);
+    expect(find.text('View full profile'), findsOneWidget);
+  });
+
+  testWidgets('right clicking a DM exposes edit and leave actions', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!direct:example.org',
+          name: 'Alice',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+        ),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await _revealMessageActions(tester, find.text('Alice'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit DM name'), findsOneWidget);
+    expect(find.text('Copy room link'), findsOneWidget);
+    expect(find.text('Leave room'), findsOneWidget);
+    await tester.tap(find.text('Leave room'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Leave room'));
+    await tester.pumpAndSettle();
+
+    expect(backend.leftRoomId, '!direct:example.org');
+  });
+
   testWidgets('converts a closed local emoji alias in the composer', (
     tester,
   ) async {
@@ -1202,6 +1276,7 @@ class FakeBackend extends ChatBackend {
   List<ChatMessage> messageList = const [];
   List<DeviceSessionSummary> deviceList = const [];
   List<MentionSuggestion> mentionList = const [];
+  List<RoomMemberSummary> memberList = const [];
   List<String> typingNames = const [];
   AppPreferences currentPreferences = const AppPreferences();
   bool moreHistory = false;
@@ -1223,6 +1298,7 @@ class FakeBackend extends ChatBackend {
   String? removedDeviceId;
   String? removalPassword;
   String? startedDirectMessageWith;
+  String? leftRoomId;
   UserProfileSummary? testProfile;
   EncryptionSetupState security = const EncryptionSetupState(
     status: EncryptionSetupStatus.ready,
@@ -1266,7 +1342,7 @@ class FakeBackend extends ChatBackend {
   }
 
   @override
-  List<RoomMemberSummary> get selectedRoomMembers => const [];
+  List<RoomMemberSummary> get selectedRoomMembers => memberList;
   @override
   int get storageUsageBytes => 0;
   @override
@@ -1393,6 +1469,14 @@ class FakeBackend extends ChatBackend {
   Future<void> setRoomTopic(String roomId, String topic) async {}
   @override
   Future<void> setRoomAvatar(String roomId, Uint8List? bytes) async {}
+  @override
+  Future<void> leaveRoom(String roomId) async {
+    leftRoomId = roomId;
+    roomList = roomList.where((room) => room.id != roomId).toList();
+    if (currentRoom?.id == roomId) currentRoom = null;
+    notifyListeners();
+  }
+
   @override
   Future<void> setMemberPowerLevel(String userId, int powerLevel) async {}
   @override

@@ -38,6 +38,7 @@ part 'conversation_view.dart';
 part 'message_composer.dart';
 part 'message_row.dart';
 part 'message_media.dart';
+part 'recipient_profile_panel.dart';
 
 // The two bottom panels meet across separate widget trees. Keeping their
 // geometry shared prevents one-pixel seams when either side is refactored.
@@ -511,6 +512,18 @@ class _ChatShellState extends State<ChatShell> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final showSpaceRail = constraints.maxWidth >= 760;
+                    final selectedRoom = widget.backend.selectedRoom;
+                    RoomMemberSummary? directRecipient;
+                    if (selectedRoom?.isDirect == true) {
+                      for (final member in widget.backend.selectedRoomMembers) {
+                        if (member.userId != widget.backend.userId) {
+                          directRecipient = member;
+                          break;
+                        }
+                      }
+                    }
+                    final showRecipientProfile =
+                        directRecipient != null && constraints.maxWidth >= 1100;
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
                     final panelWidth = preferredPanel.clamp(
@@ -571,14 +584,14 @@ class _ChatShellState extends State<ChatShell> {
                                 ),
                               ),
                               Expanded(
-                                child: widget.backend.selectedRoom == null
+                                child: selectedRoom == null
                                     ? const _EmptyConversation()
-                                    : widget.backend.selectedRoom!.isVoice ||
+                                    : selectedRoom.isVoice ||
                                           widget.backend.activeVoiceRoomId ==
-                                              widget.backend.selectedRoom!.id
+                                              selectedRoom.id
                                     ? VoiceRoomView(
                                         backend: widget.backend,
-                                        room: widget.backend.selectedRoom!,
+                                        room: selectedRoom,
                                       )
                                     : _Conversation(
                                         key: _conversationKey,
@@ -614,6 +627,14 @@ class _ChatShellState extends State<ChatShell> {
                                             ),
                                       ),
                               ),
+                              if (showRecipientProfile)
+                                SizedBox(
+                                  width: 310,
+                                  child: _RecipientProfilePanel(
+                                    backend: widget.backend,
+                                    member: directRecipient,
+                                  ),
+                                ),
                             ],
                           ),
                         ),

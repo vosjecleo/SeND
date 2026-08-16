@@ -86,6 +86,7 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> renameRoom(String roomId, String name);
   Future<void> setRoomTopic(String roomId, String topic);
   Future<void> setRoomAvatar(String roomId, Uint8List? bytes);
+  Future<void> leaveRoom(String roomId);
   Future<void> setMemberPowerLevel(String userId, int powerLevel);
   Future<UserProfileSummary> getUserProfile(String userId);
   Future<void> updateOwnProfileFields({
