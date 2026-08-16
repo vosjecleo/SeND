@@ -110,11 +110,12 @@ extension _MatrixMessages on MatrixBackend {
         chunkSize: pageSize,
         chunkCap: _preferences.timelineChunkCap,
       );
-      TimelineWindowPolicy.trimNewestFirst(
+      final evicted = TimelineWindowPolicy.trimNewestFirst(
         timeline.events,
         hardCap: hardCap,
         loaded: TimelinePageDirection.older,
       );
+      if (evicted > 0) _timelineHasPrunedNewerEvents = true;
       await _decryptTimelineEvents(timeline);
       if (!identical(timeline, _timeline)) return;
       await _hydrateTimelineMetadata(timeline);
@@ -176,28 +177,62 @@ extension _MatrixMessages on MatrixBackend {
 
   Future<void> _loadMoreFuture() async {
     final timeline = _timeline;
-    if (timeline == null || _historyLoading || !timeline.canRequestFuture) {
+    if (timeline == null ||
+        _historyLoading ||
+        (!_timelineHasPrunedNewerEvents && !timeline.canRequestFuture)) {
       return;
     }
     _historyLoading = true;
     _notifyBackendListeners();
     try {
-      await timeline.requestFuture(
-        historyCount: _preferences.timelineChunkSize,
-      );
-      if (!identical(timeline, _timeline)) return;
+      // A live SDK timeline cannot request the future, even after Deltiecord
+      // evicts its newest events to keep the moving window bounded. Rebuild a
+      // fragmented timeline around the newest retained event first. Its
+      // forward token lets subsequent pages move toward the live end without
+      // jumping all the way to present.
+      var activeTimeline = timeline;
+      if (_timelineHasPrunedNewerEvents && !timeline.canRequestFuture) {
+        if (timeline.events.isEmpty) return;
+        final anchorId = timeline.events.first.eventId;
+        final chunk = await timeline.room.getEventContext(anchorId);
+        if (!identical(timeline, _timeline) || chunk == null) return;
+        final generation = _timelineGeneration;
+        final replacement = Timeline(
+          room: timeline.room,
+          chunk: chunk,
+          onUpdate: () => _onTimelineUpdate(generation),
+        );
+        if (!identical(timeline, _timeline)) {
+          replacement.cancelSubscriptions();
+          return;
+        }
+        timeline.cancelSubscriptions();
+        _timeline = replacement;
+        _timelineDatabaseOffset = replacement.events.length;
+        _timelineDatabaseExhausted = true;
+        _timelineServerExhausted = replacement.chunk.prevBatch.isEmpty;
+        activeTimeline = replacement;
+      }
+
+      if (activeTimeline.canRequestFuture) {
+        await activeTimeline.requestFuture(
+          historyCount: _preferences.timelineChunkSize,
+        );
+      }
+      if (!identical(activeTimeline, _timeline)) return;
       final hardCap = TimelineWindowPolicy.hardCap(
         chunkSize: _preferences.timelineChunkSize,
         chunkCap: _preferences.timelineChunkCap,
       );
       TimelineWindowPolicy.trimNewestFirst(
-        timeline.events,
+        activeTimeline.events,
         hardCap: hardCap,
         loaded: TimelinePageDirection.newer,
       );
-      await _decryptTimelineEvents(timeline);
-      if (!identical(timeline, _timeline)) return;
-      await _hydrateTimelineMetadata(timeline);
+      _timelineHasPrunedNewerEvents = activeTimeline.canRequestFuture;
+      await _decryptTimelineEvents(activeTimeline);
+      if (!identical(activeTimeline, _timeline)) return;
+      await _hydrateTimelineMetadata(activeTimeline);
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {

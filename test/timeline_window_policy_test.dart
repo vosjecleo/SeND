@@ -9,21 +9,23 @@ void main() {
 
   test('loading older retains the oldest side of a newest-first window', () {
     final events = List.generate(150, (index) => index);
-    TimelineWindowPolicy.trimNewestFirst(
+    final evicted = TimelineWindowPolicy.trimNewestFirst(
       events,
       hardCap: 120,
       loaded: TimelinePageDirection.older,
     );
+    expect(evicted, 30);
     expect(events, List.generate(120, (index) => index + 30));
   });
 
   test('loading newer retains the newest side of a newest-first window', () {
     final events = List.generate(150, (index) => index);
-    TimelineWindowPolicy.trimNewestFirst(
+    final evicted = TimelineWindowPolicy.trimNewestFirst(
       events,
       hardCap: 120,
       loaded: TimelinePageDirection.newer,
     );
+    expect(evicted, 30);
     expect(events, List.generate(120, (index) => index));
   });
 
@@ -51,4 +53,16 @@ void main() {
       expect(offset, greaterThan(materialized.length));
     },
   );
+
+  test('reports no eviction while the window remains below its cap', () {
+    final events = List.generate(30, (index) => index);
+    expect(
+      TimelineWindowPolicy.trimNewestFirst(
+        events,
+        hardCap: 90,
+        loaded: TimelinePageDirection.older,
+      ),
+      0,
+    );
+  });
 }

@@ -80,6 +80,7 @@ class MediaRangeProxy {
       final end = requested.$2;
       final length = end - start + 1;
       final response = request.response
+        ..bufferOutput = false
         ..statusCode = HttpStatus.partialContent
         ..headers.set(HttpHeaders.acceptRangesHeader, 'bytes')
         ..headers.set(HttpHeaders.contentTypeHeader, media.mimeType)
@@ -94,19 +95,24 @@ class MediaRangeProxy {
       }
 
       final alignedStart = start - (start % 16);
-      final prefix = start - alignedStart;
-      final encrypted = await _fetchRange(media, alignedStart, end);
-      final decrypted = _decryptor(
-        encrypted,
-        media.key,
-        media.iv,
-        alignedStart ~/ 16,
+      await _streamDecryptedRange(
+        media,
+        fetchStart: alignedStart,
+        requestedStart: start,
+        requestedEnd: end,
+        downstream: response,
       );
-      response.add(decrypted.sublist(prefix, prefix + length));
       await response.close();
     } catch (_) {
-      request.response.statusCode = HttpStatus.badGateway;
-      await request.response.close();
+      // A streaming response may already have sent its headers. In that case
+      // changing the status is no longer legal, but closing it still lets the
+      // player retry the failed range safely.
+      try {
+        request.response.statusCode = HttpStatus.badGateway;
+      } catch (_) {}
+      try {
+        await request.response.close();
+      } catch (_) {}
     }
   }
 
@@ -140,55 +146,92 @@ class MediaRangeProxy {
     return (start, end);
   }
 
-  Future<Uint8List> _fetchRange(
-    _EncryptedMedia media,
-    int start,
-    int end,
-  ) async {
+  /// Streams an independently decryptable AES-CTR range to the player.
+  ///
+  /// Only an incomplete cipher block is buffered between upstream chunks.
+  /// Previously the full (up to 16 MiB) range was downloaded and decrypted
+  /// before playback received any data, producing long startup stalls.
+  Future<void> _streamDecryptedRange(
+    _EncryptedMedia media, {
+    required int fetchStart,
+    required int requestedStart,
+    required int requestedEnd,
+    required HttpResponse downstream,
+  }) async {
     final request = await _upstream.getUrl(media.upstream);
     request.headers
       ..set(HttpHeaders.authorizationHeader, 'Bearer ${media.accessToken}')
-      ..set(HttpHeaders.rangeHeader, 'bytes=$start-$end');
+      ..set(HttpHeaders.rangeHeader, 'bytes=$fetchStart-$requestedEnd');
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok &&
         response.statusCode != HttpStatus.partialContent) {
       throw HttpException('Media server returned ${response.statusCode}');
     }
 
-    final needed = end - start + 1;
-    var skip = response.statusCode == HttpStatus.ok ? start : 0;
-    final bytes = BytesBuilder(copy: false);
-    late StreamSubscription<List<int>> subscription;
-    final done = Completer<void>();
-    subscription = response.listen(
-      (chunk) {
-        var offset = 0;
-        if (skip > 0) {
-          final skipped = min(skip, chunk.length);
-          skip -= skipped;
-          offset += skipped;
-        }
-        if (offset < chunk.length && bytes.length < needed) {
-          final take = min(needed - bytes.length, chunk.length - offset);
-          bytes.add(chunk.sublist(offset, offset + take));
-        }
-        if (bytes.length >= needed && !done.isCompleted) {
-          done.complete();
-          unawaited(subscription.cancel());
-        }
-      },
-      onError: done.completeError,
-      onDone: () {
-        if (!done.isCompleted) done.complete();
-      },
-      cancelOnError: true,
-    );
-    await done.future;
-    final result = bytes.takeBytes();
-    if (result.length != needed) {
+    final cipherLength = requestedEnd - fetchStart + 1;
+    final requestedLength = requestedEnd - requestedStart + 1;
+    var upstreamSkip = response.statusCode == HttpStatus.ok ? fetchStart : 0;
+    var cipherRemaining = cipherLength;
+    var cipherOffset = fetchStart;
+    var emitted = 0;
+    var pending = Uint8List(0);
+
+    await for (final rawChunk in response) {
+      var rawOffset = 0;
+      if (upstreamSkip > 0) {
+        final skipped = min(upstreamSkip, rawChunk.length);
+        upstreamSkip -= skipped;
+        rawOffset += skipped;
+      }
+      if (rawOffset >= rawChunk.length || cipherRemaining == 0) continue;
+
+      final take = min(cipherRemaining, rawChunk.length - rawOffset);
+      final combined = Uint8List(pending.length + take)
+        ..setRange(0, pending.length, pending)
+        ..setRange(pending.length, pending.length + take, rawChunk, rawOffset);
+      cipherRemaining -= take;
+
+      // Keep a partial AES block until the next upstream chunk. At the end of
+      // the requested range AES-CTR can safely decrypt the final partial block.
+      final processLength = cipherRemaining == 0
+          ? combined.length
+          : combined.length - (combined.length % 16);
+      if (processLength == 0) {
+        pending = combined;
+        continue;
+      }
+
+      final encrypted = Uint8List.sublistView(combined, 0, processLength);
+      final decrypted = _decryptor(
+        encrypted,
+        media.key,
+        media.iv,
+        cipherOffset ~/ 16,
+      );
+      final segmentStart = cipherOffset;
+      final segmentEnd = cipherOffset + processLength;
+      final outputStart = max(requestedStart, segmentStart) - segmentStart;
+      final outputEnd = min(requestedEnd + 1, segmentEnd) - segmentStart;
+      if (outputEnd > outputStart) {
+        downstream.add(
+          Uint8List.sublistView(decrypted, outputStart, outputEnd),
+        );
+        emitted += outputEnd - outputStart;
+        // bufferOutput is disabled, so media_kit sees this block immediately
+        // without serializing every upstream chunk behind a flush round trip.
+      }
+      cipherOffset += processLength;
+      pending = processLength == combined.length
+          ? Uint8List(0)
+          : Uint8List.sublistView(combined, processLength);
+      if (cipherRemaining == 0) break;
+    }
+
+    if (cipherRemaining != 0 ||
+        pending.isNotEmpty ||
+        emitted != requestedLength) {
       throw const HttpException('Incomplete encrypted media range');
     }
-    return result;
   }
 
   void clear() => _entries.clear();

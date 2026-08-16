@@ -64,6 +64,7 @@ class MatrixBackend extends ChatBackend {
   int _timelineDatabaseOffset = 0;
   bool _timelineDatabaseExhausted = false;
   bool _timelineServerExhausted = false;
+  bool _timelineHasPrunedNewerEvents = false;
   final Set<String> _loadedBackupRoomIds = {};
   final Map<String, Uint8List> _avatarBytes = {};
   final Map<String, Uri?> _avatarUris = {};
@@ -159,9 +160,11 @@ class MatrixBackend extends ChatBackend {
   bool get canLoadMoreHistory =>
       !_timelineServerExhausted && (_timeline?.canRequestHistory ?? false);
   @override
-  bool get canLoadMoreFuture => _timeline?.canRequestFuture ?? false;
+  bool get canLoadMoreFuture =>
+      _timelineHasPrunedNewerEvents || (_timeline?.canRequestFuture ?? false);
   @override
-  bool get atTimelinePresent => !(_timeline?.canRequestFuture ?? false);
+  bool get atTimelinePresent =>
+      !_timelineHasPrunedNewerEvents && !(_timeline?.canRequestFuture ?? false);
   @override
   String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
   @override
@@ -635,6 +638,7 @@ class MatrixBackend extends ChatBackend {
     _timelineDatabaseOffset = 0;
     _timelineDatabaseExhausted = false;
     _timelineServerExhausted = false;
+    _timelineHasPrunedNewerEvents = false;
     _replyPreviews.clear();
     _linkPreviews.clear();
     _mediaPlaybackSources.clear();

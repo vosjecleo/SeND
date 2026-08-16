@@ -16,12 +16,17 @@ abstract final class TimelineWindowPolicy {
   static int advanceDatabaseOffset(int currentOffset, int fetchedCount) =>
       currentOffset + max(0, fetchedCount);
 
-  static void trimNewestFirst<T>(
+  /// Trims the window and returns how many events were evicted.
+  ///
+  /// Callers use the result to distinguish an SDK timeline that is genuinely
+  /// at the live end from one whose newest events Deltiecord deliberately
+  /// evicted to stay within the bounded materialized window.
+  static int trimNewestFirst<T>(
     List<T> events, {
     required int hardCap,
     required TimelinePageDirection loaded,
   }) {
-    if (events.length <= hardCap) return;
+    if (events.length <= hardCap) return 0;
     final overflow = events.length - hardCap;
     switch (loaded) {
       case TimelinePageDirection.older:
@@ -29,5 +34,6 @@ abstract final class TimelineWindowPolicy {
       case TimelinePageDirection.newer:
         events.removeRange(hardCap, events.length);
     }
+    return overflow;
   }
 }

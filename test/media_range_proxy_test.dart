@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -131,5 +132,62 @@ void main() {
       (builder, value) => builder..add(value),
     );
     expect(bytes.takeBytes(), plaintext.sublist(plaintext.length - 64));
+  });
+
+  test('streams the first decrypted block before upstream completes', () async {
+    final plaintext = Uint8List.fromList(
+      List.generate(512, (index) => index % 251),
+    );
+    final releaseUpstream = Completer<void>();
+    final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    upstream.listen((request) async {
+      request.response
+        ..bufferOutput = false
+        ..statusCode = HttpStatus.partialContent
+        ..headers.contentLength = plaintext.length
+        ..add(plaintext.sublist(0, 64));
+      await request.response.flush();
+      await releaseUpstream.future;
+      request.response.add(plaintext.sublist(64));
+      await request.response.close();
+    });
+    final proxy = MediaRangeProxy(decryptor: (input, _, _, _) => input);
+    addTearDown(() async {
+      if (!releaseUpstream.isCompleted) releaseUpstream.complete();
+      await proxy.close();
+      await upstream.close(force: true);
+    });
+    final local = await proxy.register(
+      upstream: Uri.parse('http://127.0.0.1:${upstream.port}/media'),
+      accessToken: 'token',
+      key: Uint8List(32),
+      iv: Uint8List(16),
+      size: plaintext.length,
+      mimeType: 'video/mp4',
+    );
+
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    final request = await client.getUrl(local);
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-511');
+    final response = await request.close();
+    final received = BytesBuilder(copy: false);
+    final firstChunk = Completer<void>();
+    final finished = Completer<void>();
+    response.listen(
+      (chunk) {
+        received.add(chunk);
+        if (!firstChunk.isCompleted) firstChunk.complete();
+      },
+      onError: finished.completeError,
+      onDone: finished.complete,
+    );
+
+    await firstChunk.future.timeout(const Duration(seconds: 2));
+    expect(received.length, greaterThanOrEqualTo(64));
+    expect(received.length, lessThan(plaintext.length));
+    releaseUpstream.complete();
+    await finished.future;
+    expect(received.takeBytes(), plaintext);
   });
 }
