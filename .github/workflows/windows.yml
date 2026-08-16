@@ -1,0 +1,85 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_ARCHIVE: https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.47.0-stable.zip
+  FLUTTER_SHA256: 9f96d393cdfad05bea0b4b42c603ffda027af11adadc8e4cf3ac87e49110c1ca
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install verified Flutter SDK
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'flutter.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'flutter-sdk'
+          Invoke-WebRequest -Uri $env:FLUTTER_ARCHIVE -OutFile $archive
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:FLUTTER_SHA256) {
+            throw "Flutter SDK checksum mismatch: $actual"
+          }
+          Expand-Archive -Path $archive -DestinationPath $destination
+          (Join-Path $destination 'flutter\bin') | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package portable release
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches.Groups[1].Value
+          $release = (Resolve-Path 'build/windows/x64/runner/Release').Path
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item LICENSE, CREDITS.md -Destination $release
+          Compress-Archive -Path "$release/*" -DestinationPath "dist/Deltiecord-$version-windows-x64-portable.zip" -CompressionLevel Optimal
+          "DELTIECORD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DELTIECORD_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build per-user installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            throw 'The pinned Windows runner image does not contain Inno Setup 6.'
+          }
+          & $iscc "/DMyAppVersion=$env:DELTIECORD_VERSION" "/DSourceDir=$env:DELTIECORD_RELEASE" "/DOutputDir=$pwd\dist" packaging/windows/deltiecord.iss
+
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content dist/SHA256SUMS
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Deltiecord-${{ env.DELTIECORD_VERSION }}-windows-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

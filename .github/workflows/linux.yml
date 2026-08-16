@@ -1,0 +1,84 @@
+name: Linux packages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_ARCHIVE: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.0-stable.tar.xz
+  FLUTTER_SHA256: 26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296
+
+jobs:
+  debian:
+    runs-on: ubuntu-24.04
+    container: debian:12
+    timeout-minutes: 75
+    steps:
+      - name: Install Debian build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl xz-utils git clang cmake ninja-build pkg-config fakeroot binutils file patchelf libgtk-3-dev libsecret-1-dev libpulse-dev libasound2-dev libv4l-dev libmpv-dev libpipewire-0.3-dev appstream
+      - uses: actions/checkout@v4
+      - name: Install verified Flutter SDK
+        run: |
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$FLUTTER_ARCHIVE" -o /tmp/flutter.tar.xz
+          echo "$FLUTTER_SHA256  /tmp/flutter.tar.xz" | sha256sum --check --strict
+          tar -C /opt -xf /tmp/flutter.tar.xz
+          git config --global --add safe.directory /opt/flutter
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          echo /opt/flutter/bin >> "$GITHUB_PATH"
+      - name: Validate and build Debian/AppImage releases
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed .
+          flutter analyze
+          flutter test
+          flutter build linux --release
+          packaging/linux/build-deb.sh
+          packaging/linux/build-appimage.sh
+          version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+          cp packaging/README.md dist/README.txt
+          printf 'Deltiecord %s\nGit commit: %s\n' "$version" "$GITHUB_SHA" >dist/BUILD-INFO.txt
+          (cd dist && sha256sum -- *.deb *.AppImage >SHA256SUMS)
+      - name: Upload Debian and AppImage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Deltiecord-linux-debian12-x86_64
+          path: dist/*
+          if-no-files-found: error
+
+  arch:
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 75
+    steps:
+      - name: Install Arch build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed ca-certificates curl xz git clang cmake ninja pkgconf gtk3 libsecret libpulse alsa-lib libv4l mpv pipewire xdg-desktop-portal
+      - uses: actions/checkout@v4
+      - name: Create unprivileged package user
+        run: |
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+      - name: Install verified Flutter SDK
+        run: |
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$FLUTTER_ARCHIVE" -o /tmp/flutter.tar.xz
+          echo "$FLUTTER_SHA256  /tmp/flutter.tar.xz" | sha256sum --check --strict
+          tar -C /opt -xf /tmp/flutter.tar.xz
+          chown -R builder:builder /opt/flutter
+      - name: Build native Arch package
+        run: |
+          runuser -u builder -- env PATH="/opt/flutter/bin:$PATH" HOME=/home/builder bash -lc "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory /opt/flutter && git config --global --add safe.directory '$GITHUB_WORKSPACE' && flutter pub get && dart format --output=none --set-exit-if-changed . && flutter analyze && flutter test && packaging/arch/build-package.sh"
+          cd dist
+          sha256sum -- *.pkg.tar.zst >SHA256SUMS
+      - name: Upload Arch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Deltiecord-linux-arch-x86_64
+          path: dist/*
+          if-no-files-found: error

@@ -4,8 +4,9 @@ Run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from the
 repository root. GIF search uses Deltiecord's HTTPS proxy; the GIPHY key exists
 only on that server and is never compiled into release binaries.
 The script creates the Debian package, AppImage, checksums, and build metadata in
-`dist/`. Generated artifacts and downloaded packaging tools are intentionally
-ignored by Git.
+`dist/`. On Arch hosts with `makepkg`, it also creates a native
+`.pkg.tar.zst`. Generated artifacts and downloaded packaging tools are
+intentionally ignored by Git.
 
 Install the Debian package with `sudo apt install ./dist/deltiecord_0.9.15_amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
@@ -29,3 +30,5 @@ metadata before packaging.
 
 The Arch recipe is in `packaging/arch/PKGBUILD` and intentionally builds from the
 local checkout so it can be used for test packages before a public source release.
+Run `FLUTTER_BIN=/path/to/flutter packaging/arch/build-package.sh` through a
+shell whose `PATH` contains that Flutter SDK to create the package in `dist/`.

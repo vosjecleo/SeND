@@ -9,6 +9,11 @@ mkdir -p dist
 "$flutter_bin" build linux --release
 packaging/linux/build-deb.sh
 packaging/linux/build-appimage.sh
+if command -v makepkg >/dev/null; then
+  packaging/arch/build-package.sh
+else
+  echo 'Skipping Arch package: makepkg is unavailable on this host.' >&2
+fi
 version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
 commit="$(git rev-parse HEAD)"
 {
@@ -18,4 +23,8 @@ commit="$(git rev-parse HEAD)"
   echo "Architecture: x86_64"
 } >dist/BUILD-INFO.txt
 cp packaging/README.md dist/README.txt
-(cd dist && sha256sum -- *.deb *.AppImage >SHA256SUMS)
+(
+  cd dist
+  find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.pkg.tar.zst' \) \
+    -printf '%f\n' | sort | xargs -r sha256sum -- >SHA256SUMS
+)

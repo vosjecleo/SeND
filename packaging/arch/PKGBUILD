@@ -10,6 +10,10 @@ makedepends=('flutter' 'cmake' 'clang' 'ninja')
 source=()
 sha256sums=()
 
+pkgver() {
+  sed -n 's/^version: \([^+]*\).*/\1/p' "$startdir/../../pubspec.yaml"
+}
+
 build() {
   cd "$startdir/../.."
   flutter pub get
