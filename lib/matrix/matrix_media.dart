@@ -34,6 +34,7 @@ extension _MatrixMedia on MatrixBackend {
 
   Future<void> _clearMediaCache() async {
     _mediaPlaybackSources.clear();
+    _mediaPlaybackReferences.clear();
     _mediaRangeProxy.clear();
     _linkPreviews.clear();
     _notifyBackendListeners();
@@ -158,7 +159,10 @@ extension _MatrixMedia on MatrixBackend {
       return null;
     }
     final cached = _mediaPlaybackSources[messageId];
-    if (cached != null) return cached;
+    if (cached != null) {
+      _mediaPlaybackReferences.update(messageId, (value) => value + 1);
+      return cached;
+    }
     if (event.isAttachmentEncrypted) {
       final file = event.content.tryGetMap<String, Object?>('file');
       final mxc = Uri.tryParse(file?.tryGet<String>('url') ?? '');
@@ -188,6 +192,7 @@ extension _MatrixMedia on MatrixBackend {
       );
       final source = MediaPlaybackSource(uri: localUri, headers: const {});
       _mediaPlaybackSources[messageId] = source;
+      _mediaPlaybackReferences[messageId] = 1;
       return source;
     }
     final uri = await event.getAttachmentUri(skipScanner: false);
@@ -200,6 +205,18 @@ extension _MatrixMedia on MatrixBackend {
       },
     );
     _mediaPlaybackSources[messageId] = source;
+    _mediaPlaybackReferences[messageId] = 1;
     return source;
+  }
+
+  void _releaseMediaPlaybackSource(String messageId) {
+    final references = _mediaPlaybackReferences[messageId];
+    if (references != null && references > 1) {
+      _mediaPlaybackReferences[messageId] = references - 1;
+      return;
+    }
+    _mediaPlaybackReferences.remove(messageId);
+    final source = _mediaPlaybackSources.remove(messageId);
+    if (source != null) _mediaRangeProxy.unregister(source.uri);
   }
 }

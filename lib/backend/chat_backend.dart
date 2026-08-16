@@ -160,5 +160,10 @@ abstract class ChatBackend extends ChangeNotifier {
     bool thumbnail = false,
   });
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId);
+
+  /// Releases credentials and local proxy capability state held for playback.
+  ///
+  /// Backends without retained playback resources may keep the default no-op.
+  Future<void> releaseMediaPlaybackSource(String messageId) async {}
   Future<String?> getAttachmentReference(String messageId);
 }

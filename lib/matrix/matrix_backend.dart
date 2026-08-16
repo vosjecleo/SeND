@@ -101,6 +101,7 @@ class MatrixBackend extends ChatBackend {
   bool _storageLoading = false;
   final MediaRangeProxy _mediaRangeProxy = MediaRangeProxy();
   final Map<String, MediaPlaybackSource> _mediaPlaybackSources = {};
+  final Map<String, int> _mediaPlaybackReferences = {};
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
     status: EncryptionSetupStatus.loading,
   );
@@ -626,6 +627,10 @@ class MatrixBackend extends ChatBackend {
       _getMediaPlaybackSource(messageId);
 
   @override
+  Future<void> releaseMediaPlaybackSource(String messageId) async =>
+      _releaseMediaPlaybackSource(messageId);
+
+  @override
   Future<String?> getAttachmentReference(String messageId) async =>
       _getAttachmentReference(messageId);
 
@@ -640,6 +645,7 @@ class MatrixBackend extends ChatBackend {
     _replyPreviews.clear();
     _linkPreviews.clear();
     _mediaPlaybackSources.clear();
+    _mediaPlaybackReferences.clear();
     _mediaRangeProxy.clear();
   }
 

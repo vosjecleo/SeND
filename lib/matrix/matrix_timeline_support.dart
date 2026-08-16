@@ -99,6 +99,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
             .where((eventId) => !retainedEventIds.contains(eventId))
             .toList(growable: false)) {
       final source = _mediaPlaybackSources.remove(eventId);
+      _mediaPlaybackReferences.remove(eventId);
       if (source != null) _mediaRangeProxy.unregister(source.uri);
     }
     await _hydrateSenderAvatars(timeline);

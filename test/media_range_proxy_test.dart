@@ -366,4 +366,39 @@ void main() {
     final expired = await (await client.getUrl(local)).close();
     expect(expired.statusCode, HttpStatus.notFound);
   });
+
+  test(
+    'unregister removes capabilities and LRU bounds retained entries',
+    () async {
+      final proxy = MediaRangeProxy(
+        decryptor: (input, _, _, _) => input,
+        maximumEntries: 2,
+      );
+      addTearDown(proxy.close);
+      final uris = <Uri>[];
+      for (var index = 0; index < 3; index++) {
+        uris.add(
+          await proxy.register(
+            upstream: Uri.parse('http://127.0.0.1:9/media/$index'),
+            accessToken: 'secret-$index',
+            key: Uint8List(32),
+            iv: Uint8List(16),
+            size: 64,
+            mimeType: 'video/mp4',
+          ),
+        );
+      }
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+
+      final evicted = await (await client.openUrl('HEAD', uris.first)).close();
+      expect(evicted.statusCode, HttpStatus.notFound);
+      final retained = await (await client.openUrl('HEAD', uris.last)).close();
+      expect(retained.statusCode, HttpStatus.ok);
+
+      proxy.unregister(uris.last);
+      final removed = await (await client.openUrl('HEAD', uris.last)).close();
+      expect(removed.statusCode, HttpStatus.notFound);
+    },
+  );
 }

@@ -124,6 +124,7 @@ extension _MatrixSession on MatrixBackend {
       _notificationsPrimed = false;
       _maximumUploadBytes = null;
       _mediaPlaybackSources.clear();
+      _mediaPlaybackReferences.clear();
       _deviceSessions = const [];
       _profileDisplayName = null;
       _profileAvatarBytes = null;

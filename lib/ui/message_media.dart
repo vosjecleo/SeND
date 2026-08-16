@@ -939,6 +939,7 @@ class _InlineVideoState extends State<_InlineVideo> {
   VideoController? _controller;
   bool _opening = false;
   bool _opened = false;
+  bool _sourceRetained = false;
   String? _error;
   late final Future<Uint8List>? _thumbnail = widget.attachment.hasThumbnail
       ? widget.backend.downloadAttachment(widget.messageId, thumbnail: true)
@@ -971,6 +972,7 @@ class _InlineVideoState extends State<_InlineVideo> {
       if (source == null) {
         throw StateError('Encrypted streaming is still being prepared.');
       }
+      _sourceRetained = true;
       await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
@@ -989,6 +991,9 @@ class _InlineVideoState extends State<_InlineVideo> {
 
   @override
   void dispose() {
+    if (_sourceRetained) {
+      unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
+    }
     _player?.dispose();
     super.dispose();
   }
@@ -1306,6 +1311,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
   late final VideoController _controller = VideoController(_player);
   String? _error;
   bool _opened = false;
+  bool _sourceRetained = false;
 
   @override
   void initState() {
@@ -1319,6 +1325,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
         widget.messageId,
       );
       if (source == null) throw StateError('Video playback is unavailable.');
+      _sourceRetained = true;
       await _player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
@@ -1331,6 +1338,9 @@ class _LightboxVideoState extends State<_LightboxVideo> {
 
   @override
   void dispose() {
+    if (_sourceRetained) {
+      unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
+    }
     _player.dispose();
     super.dispose();
   }
@@ -1377,6 +1387,7 @@ class _InlineAudioState extends State<_InlineAudio> {
   late final Player _player = Player();
   bool _opening = false;
   bool _opened = false;
+  bool _sourceRetained = false;
   String? _error;
 
   Future<void> _toggle() async {
@@ -1391,6 +1402,7 @@ class _InlineAudioState extends State<_InlineAudio> {
         widget.messageId,
       );
       if (source == null) throw StateError('Audio playback is unavailable.');
+      _sourceRetained = true;
       await _player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
@@ -1405,6 +1417,9 @@ class _InlineAudioState extends State<_InlineAudio> {
 
   @override
   void dispose() {
+    if (_sourceRetained) {
+      unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
+    }
     _player.dispose();
     super.dispose();
   }
