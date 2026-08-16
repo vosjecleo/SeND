@@ -22,11 +22,17 @@ with linuxdeploy. Official x86_64 artifacts are built inside Debian 12 so native
 plugins retain a glibc 2.36 baseline; building them directly on a newer rolling
 distribution produces packages that may not start on Debian.
 
-The Debian 12 build environment needs Flutter plus `clang`, `cmake`, `ninja`,
+The Debian 12 build environment needs Flutter plus `clang`, `cmake`, `make`, `ninja`,
 `pkg-config`, `fakeroot`, `patchelf`, and the development packages for GTK 3,
 libsecret, PulseAudio, ALSA, libv4l, libmpv, and PipeWire. `appstreamcli validate
 packaging/linux/net.deltie.deltiecord.metainfo.xml` validates the desktop
 metadata before packaging.
+
+Flutter 3.44.9, rustup 1.29.0, and Rust 1.97.1 are pinned in CI. Downloaded
+Flutter/rustup/AppImage executables are verified against committed SHA-256
+values before execution. Cargokit's `stable` toolchain name is locally aliased
+to the pinned Rust toolchain so a build cannot silently advance to a new Rust
+release.
 
 The Arch recipe is in `packaging/arch/PKGBUILD` and intentionally builds from the
 local checkout so it can be used for test packages before a public source release.
