@@ -59,6 +59,11 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
         linux: LinuxInitializationSettings(
           defaultActionName: 'Open Deltiecord',
         ),
+        windows: WindowsInitializationSettings(
+          appName: 'Deltiecord',
+          appUserModelId: 'Deltie.Deltiecord.Desktop',
+          guid: '2e5e8db4-f62b-4e91-b4c4-2ca41edcc91f',
+        ),
       ),
       onDidReceiveNotificationResponse: (response) =>
           _activatePayload(response.payload),
@@ -92,6 +97,9 @@ class DesktopChatNotificationSink implements ChatNotificationSink {
         category: LinuxNotificationCategory.imReceived,
         urgency: LinuxNotificationUrgency.normal,
         suppressSound: !sound,
+      ),
+      windows: WindowsNotificationDetails(
+        audio: sound ? null : WindowsNotificationAudio.silent(),
       ),
     ),
   );

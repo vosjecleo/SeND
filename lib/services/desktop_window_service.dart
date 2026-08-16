@@ -11,7 +11,10 @@ class DesktopWindowService {
   static AppPreferences? _applied;
 
   static Future<void> apply(AppPreferences preferences) async {
-    if (!Platform.isLinux || _sameWindowSettings(_applied, preferences)) return;
+    if ((!Platform.isLinux && !Platform.isWindows) ||
+        _sameWindowSettings(_applied, preferences)) {
+      return;
+    }
     _applied = preferences;
     try {
       await _channel.invokeMethod<void>('configure', {
@@ -24,7 +27,7 @@ class DesktopWindowService {
   }
 
   static Future<void> present() async {
-    if (!Platform.isLinux) return;
+    if (!Platform.isLinux && !Platform.isWindows) return;
     try {
       await _channel.invokeMethod<void>('present');
     } on MissingPluginException {
