@@ -1185,9 +1185,9 @@ void main() {
         matching: find.byType(IconButton),
       ),
     );
-    final errorColor = Theme.of(tester.element(find.byIcon(Icons.mic_off)))
-        .colorScheme
-        .error;
+    final errorColor = Theme.of(
+      tester.element(find.byIcon(Icons.mic_off)),
+    ).colorScheme.error;
     expect(mutedButton.style?.foregroundColor?.resolve({}), errorColor);
     await tester.tap(find.byTooltip('Deafen'));
     await tester.pump();

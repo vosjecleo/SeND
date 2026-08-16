@@ -1438,8 +1438,9 @@ class _HomeRoomListTile extends StatelessWidget {
       onSecondaryTapDown: onSecondaryTapDown,
       child: Material(
         color: selected
-            ? Theme.of(context).colorScheme.primaryContainer
-                  .withValues(alpha: 0.42)
+            ? Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.42)
             : Colors.transparent,
         child: InkWell(
           onTap: () => backend.selectRoom(room.id),

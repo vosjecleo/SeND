@@ -309,9 +309,9 @@ class _MessageRowState extends State<_MessageRow> {
                                       color: context.deltiecord.elevated,
                                       border: Border(
                                         left: BorderSide(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
                                           width: 3,
                                         ),
                                       ),
@@ -326,9 +326,9 @@ class _MessageRowState extends State<_MessageRow> {
                                             fontSize:
                                                 DeltiecordTypeScale.normal,
                                             fontWeight: FontWeight.w600,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                           ),
                                         ),
                                         Text(

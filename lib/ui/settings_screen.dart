@@ -928,8 +928,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       await action();
     } catch (exception) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(safeErrorMessage(exception))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(safeErrorMessage(exception))));
     }
   }
 }

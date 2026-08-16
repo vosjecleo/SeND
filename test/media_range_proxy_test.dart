@@ -104,8 +104,9 @@ void main() {
     final plaintext = Uint8List.fromList(List.generate(1024, (index) => index));
     final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     upstream.listen((request) async {
-      final match = RegExp(r'bytes=(\d+)-(\d+)')
-          .firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
+      final match = RegExp(
+        r'bytes=(\d+)-(\d+)',
+      ).firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
       final start = int.parse(match.group(1)!);
       final end = int.parse(match.group(2)!);
       request.response
@@ -198,8 +199,9 @@ void main() {
     final releaseUpstream = Completer<void>();
     final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     upstream.listen((request) async {
-      final range = RegExp(r'bytes=(\d+)-(\d+)')
-          .firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
+      final range = RegExp(
+        r'bytes=(\d+)-(\d+)',
+      ).firstMatch(request.headers.value(HttpHeaders.rangeHeader)!)!;
       final start = int.parse(range.group(1)!);
       final end = int.parse(range.group(2)!);
       request.response

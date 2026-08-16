@@ -36,7 +36,9 @@ so changes in eligible devices take effect before the next message is sent.
 
 ## Development
 
-Flutter 3.47 or newer is recommended.
+Flutter 3.44.9 is the pinned release SDK. Flutter 3.47/Dart 3.13 removed
+dynamic-link symbols still required by the current upstream vodozemac bridge,
+so release builds must remain on 3.44.9 until that dependency is compatible.
 
 ```sh
 flutter pub get

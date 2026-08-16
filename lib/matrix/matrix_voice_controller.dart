@@ -133,8 +133,9 @@ class MatrixVoiceController extends ChangeNotifier {
     final selectedOutputId = _selectedAudioOutputId;
     if (selectedOutputId != null) {
       unawaited(
-        flutter_webrtc.Helper.selectAudioOutput(selectedOutputId)
-            .catchError((_) {}),
+        flutter_webrtc.Helper.selectAudioOutput(
+          selectedOutputId,
+        ).catchError((_) {}),
       );
     }
     unawaited(_applyRemoteAudioSettings());

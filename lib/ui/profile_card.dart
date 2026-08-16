@@ -196,9 +196,9 @@ class DeltiecordProfileCard extends StatelessWidget {
                             icon: Icon(blocked ? Icons.undo : Icons.block),
                             label: Text(blocked ? 'Unblock' : 'Block'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .error,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.error,
                             ),
                           ),
                         ),

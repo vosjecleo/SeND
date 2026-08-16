@@ -6,12 +6,13 @@ import 'dart:typed_data';
 
 import 'package:vodozemac/vodozemac.dart';
 
-typedef RangeDecryptor = Uint8List Function(
-  Uint8List input,
-  Uint8List key,
-  Uint8List iv,
-  int blockOffset,
-);
+typedef RangeDecryptor =
+    Uint8List Function(
+      Uint8List input,
+      Uint8List key,
+      Uint8List iv,
+      int blockOffset,
+    );
 
 /// Serves encrypted Matrix media to a local player using bounded HTTP ranges.
 ///

@@ -209,8 +209,9 @@ class GiphyService {
       if (!_isGiphyMediaUri(uri)) {
         throw const HttpException('GIPHY redirected to an untrusted host.');
       }
-      final addresses = await InternetAddress.lookup(uri.host)
-          .timeout(_requestTimeout);
+      final addresses = await InternetAddress.lookup(
+        uri.host,
+      ).timeout(_requestTimeout);
       if (addresses.isEmpty || !addresses.every(isPublicInternetAddress)) {
         throw const HttpException('GIPHY media resolved to a private address.');
       }

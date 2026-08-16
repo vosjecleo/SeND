@@ -30,9 +30,9 @@ class _TimezonePickerDialogState extends State<TimezonePickerDialog> {
                 .where(
                   (zone) =>
                       zone.toLowerCase().contains(query) ||
-                      TimezoneCatalog.offsetLabel(zone)
-                          .toLowerCase()
-                          .contains(query),
+                      TimezoneCatalog.offsetLabel(
+                        zone,
+                      ).toLowerCase().contains(query),
                 )
                 .toList(growable: false);
     });

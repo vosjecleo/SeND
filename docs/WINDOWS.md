@@ -11,7 +11,7 @@ uninstalling does not delete Matrix sessions or other per-user application data.
 
 ## Build locally
 
-Use Flutter 3.47.0 with the Windows desktop workload and Visual Studio's
+Use Flutter 3.44.9 with the Windows desktop workload and Visual Studio's
 "Desktop development with C++" workload:
 
 ```powershell
