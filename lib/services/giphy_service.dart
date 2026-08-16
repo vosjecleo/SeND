@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+
 class GifSearchResult {
   const GifSearchResult({
     required this.title,
@@ -12,6 +15,29 @@ class GifSearchResult {
   final String title;
   final Uri previewUrl;
   final Uri shareUrl;
+
+  Map<String, String> toJson() => {
+    'title': title,
+    'preview_url': previewUrl.toString(),
+    'share_url': shareUrl.toString(),
+  };
+
+  static GifSearchResult? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final previewUrl = Uri.tryParse(value['preview_url']?.toString() ?? '');
+    final shareUrl = Uri.tryParse(value['share_url']?.toString() ?? '');
+    if (previewUrl == null ||
+        shareUrl == null ||
+        !previewUrl.hasScheme ||
+        !shareUrl.hasScheme) {
+      return null;
+    }
+    return GifSearchResult(
+      title: value['title']?.toString() ?? 'GIF',
+      previewUrl: previewUrl,
+      shareUrl: shareUrl,
+    );
+  }
 }
 
 /// Small client for GIPHY's public API (not adapted from a third-party picker).
@@ -25,13 +51,30 @@ class GiphyService {
     defaultValue: 'https://deltie.net/api/servers/giphy/search',
   );
   final HttpClient _http = HttpClient();
+  File? _favoritesFile;
+  List<GifSearchResult>? _favorites;
 
-  Future<List<GifSearchResult>> search(String query) async {
+  Future<List<GifSearchResult>> search(String query) => _request({'q': query});
+
+  Future<List<GifSearchResult>> trending() async {
+    try {
+      return await _request(const {'mode': 'trending'});
+    } on HttpException {
+      // Older deployments of the proxy only expose search. Keep the picker
+      // useful during a rolling server upgrade, albeit with approximate
+      // trending results.
+      return search('trending');
+    }
+  }
+
+  Future<List<GifSearchResult>> _request(
+    Map<String, String> queryParameters,
+  ) async {
     final base = Uri.parse(_proxyUrl);
     if (base.scheme != 'https') {
       throw StateError('The GIF search proxy must use HTTPS.');
     }
-    final uri = base.replace(queryParameters: {'q': query});
+    final uri = base.replace(queryParameters: queryParameters);
     final request = await _http.getUrl(uri);
     final response = await request.close();
     final body = await utf8.decodeStream(response);
@@ -56,6 +99,55 @@ class GiphyService {
         .where((gif) => gif.previewUrl.hasScheme && gif.shareUrl.hasScheme)
         .toList();
   }
+
+  Future<List<GifSearchResult>> favorites() async {
+    final loaded = _favorites;
+    if (loaded != null) return List.unmodifiable(loaded);
+    try {
+      final support = await getApplicationSupportDirectory();
+      _favoritesFile = File(
+        path.join(support.path, 'deltiecord', 'giphy_favorites.json'),
+      );
+      final file = _favoritesFile!;
+      if (!await file.exists()) {
+        _favorites = [];
+      } else {
+        final decoded = jsonDecode(await file.readAsString()) as List;
+        _favorites = decoded
+            .map(GifSearchResult.fromJson)
+            .whereType<GifSearchResult>()
+            .toList();
+      }
+    } catch (_) {
+      _favorites = [];
+    }
+    return List.unmodifiable(_favorites!);
+  }
+
+  Future<bool> toggleFavorite(GifSearchResult gif) async {
+    await favorites();
+    final existing = _favorites!.indexWhere(
+      (favorite) => favorite.shareUrl == gif.shareUrl,
+    );
+    final nowFavorite = existing < 0;
+    if (nowFavorite) {
+      _favorites!.insert(0, gif);
+    } else {
+      _favorites!.removeAt(existing);
+    }
+    final file = _favoritesFile;
+    if (file != null) {
+      await file.parent.create(recursive: true);
+      await file.writeAsString(
+        jsonEncode(_favorites!.map((favorite) => favorite.toJson()).toList()),
+        flush: true,
+      );
+    }
+    return nowFavorite;
+  }
+
+  bool isFavorite(GifSearchResult gif) =>
+      _favorites?.any((favorite) => favorite.shareUrl == gif.shareUrl) ?? false;
 
   Future<Uint8List> download(GifSearchResult gif) async {
     final uri = gif.shareUrl;

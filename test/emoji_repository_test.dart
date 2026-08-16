@@ -21,5 +21,26 @@ void main() {
 
   test('closed-form familiar aliases resolve exactly', () async {
     expect((await EmojiRepository.instance.exactAlias('sob'))?.emoji, '😭');
+    expect(
+      (await EmojiRepository.instance.exactAlias('loudly_crying'))?.emoji,
+      '😭',
+    );
+  });
+
+  test('emoji catalogue exposes browse categories', () async {
+    final entries = await EmojiRepository.instance.load();
+    expect(
+      entries.firstWhere((entry) => entry.emoji == '🐵').category,
+      EmojiCategory.animalsAndNature,
+    );
+    expect(
+      entries.firstWhere((entry) => entry.emoji == '🏁').category,
+      EmojiCategory.flags,
+    );
+  });
+
+  test('editable alias overrides provide the canonical display name', () async {
+    final crying = (await EmojiRepository.instance.search('sob')).first;
+    expect(crying.name, 'Loudly crying face');
   });
 }

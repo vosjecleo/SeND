@@ -36,18 +36,18 @@ def _allowed(client):
         return True
 
 
-def _search(query):
-    params = urlencode(
-        {
-            "api_key": _read_key(),
-            "q": query,
-            "limit": 24,
-            "rating": "pg-13",
-            "lang": "en",
-        }
-    )
+def _giphy_request(query=None):
+    parameters = {
+        "api_key": _read_key(),
+        "limit": 24,
+        "rating": "pg-13",
+    }
+    endpoint = "trending" if query is None else "search"
+    if query is not None:
+        parameters.update({"q": query, "lang": "en"})
+    params = urlencode(parameters)
     request = urllib.request.Request(
-        "https://api.giphy.com/v1/gifs/search?" + params,
+        f"https://api.giphy.com/v1/gifs/{endpoint}?" + params,
         headers={"User-Agent": "Deltiecord-Giphy-Proxy/1.0"},
     )
     with urllib.request.urlopen(request, timeout=8) as response:
@@ -67,12 +67,14 @@ class Handler(BaseHTTPRequestHandler):
         if not _allowed(client):
             self._json({"error": "rate limit exceeded"}, 429)
             return
-        query = parse_qs(parsed.query).get("q", [""])[0].strip()
-        if not query or len(query) > 100:
+        parameters = parse_qs(parsed.query)
+        trending = parameters.get("mode", [""])[0] == "trending"
+        query = parameters.get("q", [""])[0].strip()
+        if (not trending and not query) or len(query) > 100:
             self._json({"error": "invalid query"}, 400)
             return
         try:
-            self._json(_search(query))
+            self._json(_giphy_request(None if trending else query))
         except Exception:
             # Upstream details can contain request material; keep them server-side.
             self._json({"error": "GIF search unavailable"}, 502)
