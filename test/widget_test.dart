@@ -810,6 +810,10 @@ void main() {
       tester.getTopLeft(accountPanel).dy,
       tester.getTopLeft(composerPanel).dy,
     );
+    expect(
+      tester.getSize(accountPanel).height,
+      tester.getSize(composerPanel).height,
+    );
     final accountIsland = find.byKey(const Key('current-user-island'));
     final composerIsland = find.byKey(const Key('message-composer-island'));
     expect(
@@ -1161,10 +1165,14 @@ void main() {
       find.byKey(const Key('profile-side-panel')),
     );
     expect(dialog.alignment, Alignment.centerRight);
+    expect(dialog.backgroundColor, Colors.transparent);
     final profileCard = tester.widget<Container>(
       find.byKey(const Key('profile-card')),
     );
     expect((profileCard.decoration! as BoxDecoration).gradient, isNotNull);
+    await tester.tap(find.byKey(const Key('profile-close-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile-side-panel')), findsNothing);
   });
 
   testWidgets('shows the direct recipient profile beside a wide conversation', (
@@ -1248,12 +1256,53 @@ void main() {
     expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
     expect(find.text('Members — 2'), findsOneWidget);
     expect(find.text('Administrator'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const Key('side-panel-resize-handle')),
+      const Offset(-40, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(backend.preferences.sidePanelWidth, greaterThan(310));
     await tester.tap(find.byKey(const Key('side-panel-toggle')));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.chevron_left), findsOneWidget);
     await tester.tap(find.byKey(const Key('side-panel-toggle')));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+  });
+
+  testWidgets('group chats show their members in the right side panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!group:example.org',
+          name: 'Friends',
+          lastMessage: 'hello',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+        ),
+      ]
+      ..memberList = const [
+        RoomMemberSummary(userId: '@deltie:example.org', displayName: 'Deltie'),
+        RoomMemberSummary(userId: '@alice:example.org', displayName: 'Alice'),
+        RoomMemberSummary(userId: '@bob:example.org', displayName: 'Bob'),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.text('Friends'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('recipient-profile-panel')), findsNothing);
+    expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
+    expect(find.text('Members — 3'), findsOneWidget);
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('Bob'), findsOneWidget);
   });
 
   testWidgets('right clicking a DM exposes edit and leave actions', (

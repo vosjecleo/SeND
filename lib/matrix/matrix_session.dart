@@ -493,6 +493,9 @@ extension _MatrixSession on MatrixBackend {
       roomPanelWidth:
           (content?['room_panel_width'] as num?)?.toDouble().clamp(220, 420) ??
           280,
+      sidePanelWidth:
+          (content?['side_panel_width'] as num?)?.toDouble().clamp(260, 460) ??
+          310,
       reducedMotion: content?.tryGet<bool>('reduced_motion') ?? false,
       highContrast: content?.tryGet<bool>('high_contrast') ?? false,
       autoplayGifs: content?.tryGet<bool>('autoplay_gifs') ?? true,
@@ -599,6 +602,7 @@ extension _MatrixSession on MatrixBackend {
           'interface_scale': preferences.interfaceScale,
           'font_scale': preferences.fontScale,
           'room_panel_width': preferences.roomPanelWidth,
+          'side_panel_width': preferences.sidePanelWidth,
           'reduced_motion': preferences.reducedMotion,
           'high_contrast': preferences.highContrast,
           'autoplay_gifs': preferences.autoplayGifs,

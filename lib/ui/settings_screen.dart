@@ -605,6 +605,16 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           preferences.copyWith(roomPanelWidth: value),
         ),
       ),
+      Text('Side panel — ${preferences.sidePanelWidth.round()} px'),
+      Slider(
+        value: preferences.sidePanelWidth,
+        min: 260,
+        max: 460,
+        divisions: 10,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(sidePanelWidth: value),
+        ),
+      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Autoplay GIFs'),

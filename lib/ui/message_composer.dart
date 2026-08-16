@@ -293,10 +293,16 @@ class _RichComposerState extends State<_RichComposer> {
           color: context.deltiecord.panel,
           child: Padding(
             key: const Key('message-composer-panel'),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: _bottomPanelVerticalInset,
+            ),
             child: Container(
               key: const Key('message-composer-island'),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: _composerIslandVerticalInset,
+              ),
               decoration: BoxDecoration(
                 color: context.deltiecord.island,
                 borderRadius: BorderRadius.circular(12),

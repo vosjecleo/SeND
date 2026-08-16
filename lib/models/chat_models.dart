@@ -44,6 +44,7 @@ class AppPreferences {
     this.interfaceScale = 1,
     this.fontScale = 1,
     this.roomPanelWidth = 280,
+    this.sidePanelWidth = 310,
     this.reducedMotion = false,
     this.highContrast = false,
     this.autoplayGifs = true,
@@ -79,6 +80,7 @@ class AppPreferences {
   final double interfaceScale;
   final double fontScale;
   final double roomPanelWidth;
+  final double sidePanelWidth;
   final bool reducedMotion;
   final bool highContrast;
   final bool autoplayGifs;
@@ -114,6 +116,7 @@ class AppPreferences {
     double? interfaceScale,
     double? fontScale,
     double? roomPanelWidth,
+    double? sidePanelWidth,
     bool? reducedMotion,
     bool? highContrast,
     bool? autoplayGifs,
@@ -148,6 +151,7 @@ class AppPreferences {
     interfaceScale: interfaceScale ?? this.interfaceScale,
     fontScale: fontScale ?? this.fontScale,
     roomPanelWidth: roomPanelWidth ?? this.roomPanelWidth,
+    sidePanelWidth: sidePanelWidth ?? this.sidePanelWidth,
     reducedMotion: reducedMotion ?? this.reducedMotion,
     highContrast: highContrast ?? this.highContrast,
     autoplayGifs: autoplayGifs ?? this.autoplayGifs,

@@ -1,22 +1,53 @@
 part of 'chat_shell.dart';
 
-const double _sidePanelWidth = 310;
-
-class _SidePanelRegion extends StatelessWidget {
+class _SidePanelRegion extends StatefulWidget {
   const _SidePanelRegion({
     required this.visible,
+    required this.width,
     required this.onToggle,
+    required this.onResize,
     required this.child,
   });
 
   final bool visible;
+  final double width;
   final VoidCallback onToggle;
+  final ValueChanged<double> onResize;
   final Widget child;
+
+  @override
+  State<_SidePanelRegion> createState() => _SidePanelRegionState();
+}
+
+class _SidePanelRegionState extends State<_SidePanelRegion> {
+  bool _resizing = false;
 
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      if (widget.visible)
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: GestureDetector(
+            key: const Key('side-panel-resize-handle'),
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (_) => setState(() => _resizing = true),
+            onHorizontalDragUpdate: (details) =>
+                widget.onResize(details.delta.dx),
+            onHorizontalDragEnd: (_) => setState(() => _resizing = false),
+            onHorizontalDragCancel: () => setState(() => _resizing = false),
+            child: SizedBox(
+              width: 5,
+              child: Center(
+                child: VerticalDivider(
+                  width: 1,
+                  color: context.deltiecord.divider,
+                ),
+              ),
+            ),
+          ),
+        ),
       SizedBox(
         width: 24,
         child: Align(
@@ -29,12 +60,12 @@ class _SidePanelRegion extends StatelessWidget {
             ),
             child: InkWell(
               key: const Key('side-panel-toggle'),
-              onTap: onToggle,
+              onTap: widget.onToggle,
               child: SizedBox(
                 width: 20,
                 height: 42,
                 child: Icon(
-                  visible ? Icons.chevron_right : Icons.chevron_left,
+                  widget.visible ? Icons.chevron_right : Icons.chevron_left,
                   size: 18,
                 ),
               ),
@@ -44,19 +75,19 @@ class _SidePanelRegion extends StatelessWidget {
       ),
       TweenAnimationBuilder<double>(
         key: const Key('side-panel-width'),
-        tween: Tween(end: visible ? _sidePanelWidth : 0),
-        duration: const Duration(milliseconds: 180),
+        tween: Tween(end: widget.visible ? widget.width : 0),
+        duration: _resizing ? Duration.zero : const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        child: child,
+        child: widget.child,
         builder: (context, width, panel) => ClipRect(
           child: SizedBox(
             width: width,
             child: OverflowBox(
               alignment: Alignment.centerLeft,
-              minWidth: _sidePanelWidth,
-              maxWidth: _sidePanelWidth,
+              minWidth: widget.width,
+              maxWidth: widget.width,
               child: Transform.translate(
-                offset: Offset(_sidePanelWidth - width, 0),
+                offset: Offset(widget.width - width, 0),
                 child: panel,
               ),
             ),

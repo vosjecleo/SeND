@@ -20,6 +20,11 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.10" date="2026-08-16" type="development">
+      <description>
+        <p>Unifies lower panel geometry and adds resizable member sidebars plus a cleaner profile dialog.</p>
+      </description>
+    </release>
     <release version="0.9.9" date="2026-08-16" type="development">
       <description>
         <p>Adds a collapsible server member panel and tightens desktop interaction and memory behavior.</p>

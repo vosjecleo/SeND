@@ -665,7 +665,10 @@ class _CurrentUserPanel extends StatelessWidget {
     child: ColoredBox(
       color: context.deltiecord.panel,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: _bottomPanelVerticalInset,
+        ),
         child: Material(
           key: const Key('current-user-island'),
           color: context.deltiecord.island,

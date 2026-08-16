@@ -9,6 +9,7 @@ class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
     required this.profile,
     this.onEdit,
+    this.onClose,
     this.onMessage,
     this.onBlock,
     this.blocked = false,
@@ -18,6 +19,7 @@ class DeltiecordProfileCard extends StatelessWidget {
 
   final UserProfileSummary profile;
   final VoidCallback? onEdit;
+  final VoidCallback? onClose;
   final VoidCallback? onMessage;
   final VoidCallback? onBlock;
   final bool blocked;
@@ -66,6 +68,7 @@ class DeltiecordProfileCard extends StatelessWidget {
             accent: accent,
             secondaryAccent: secondaryAccent,
             onEdit: onEdit,
+            onClose: onClose,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(30, 4, 30, 26),
@@ -245,12 +248,14 @@ class _ProfileHeader extends StatelessWidget {
     required this.accent,
     required this.secondaryAccent,
     required this.onEdit,
+    required this.onClose,
   });
 
   final UserProfileSummary profile;
   final Color accent;
   final Color secondaryAccent;
   final VoidCallback? onEdit;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -373,12 +378,23 @@ class _ProfileHeader extends StatelessWidget {
               ),
               if (onEdit != null)
                 Positioned(
-                  right: 16,
+                  right: onClose == null ? 16 : 68,
                   top: 14,
                   child: IconButton.filledTonal(
                     tooltip: 'Edit profile',
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+              if (onClose != null)
+                Positioned(
+                  right: 16,
+                  top: 14,
+                  child: IconButton.filledTonal(
+                    key: const Key('profile-close-button'),
+                    tooltip: 'Close profile',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close),
                   ),
                 ),
             ],

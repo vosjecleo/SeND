@@ -76,6 +76,9 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     key: const Key('profile-side-panel'),
     alignment: widget.own ? Alignment.center : Alignment.centerRight,
     insetPadding: const EdgeInsets.all(12),
+    backgroundColor: Colors.transparent,
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
     child: ConstrainedBox(
       constraints: const BoxConstraints(
         minWidth: 620,
@@ -93,72 +96,56 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 avatarBytes: widget.member.avatarBytes,
                 presence: widget.member.presence,
               );
-          return Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      DeltiecordProfileCard(
-                        profile: profile,
-                        onEdit: widget.own ? () => _edit(profile) : null,
-                        onMessage: widget.own
-                            ? null
-                            : () async {
-                                Navigator.of(context).pop();
-                                await widget.backend.startDirectChat(
-                                  widget.member.userId,
-                                );
-                              },
-                        onBlock: widget.own ? null : _toggleBlock,
-                        blocked: widget.backend.blockedUserIds.contains(
-                          widget.member.userId,
-                        ),
-                      ),
-                      if (!widget.own || widget.member.canChangePowerLevel) ...[
-                        const SizedBox(height: 14),
-                        _RoomRolePanel(
-                          member: widget.member,
-                          saving: _saving,
-                          onChanged: widget.member.canChangePowerLevel
-                              ? (value) async {
-                                  setState(() => _saving = true);
-                                  try {
-                                    await widget.backend.setMemberPowerLevel(
-                                      widget.member.userId,
-                                      value,
-                                    );
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() => _saving = false);
-                                    }
-                                  }
-                                }
-                              : null,
-                        ),
-                      ],
-                      if (snapshot.connectionState == ConnectionState.waiting)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: LinearProgressIndicator(),
-                        ),
-                    ],
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DeltiecordProfileCard(
+                  profile: profile,
+                  onEdit: widget.own ? () => _edit(profile) : null,
+                  onClose: Navigator.of(context).pop,
+                  onMessage: widget.own
+                      ? null
+                      : () async {
+                          Navigator.of(context).pop();
+                          await widget.backend.startDirectChat(
+                            widget.member.userId,
+                          );
+                        },
+                  onBlock: widget.own ? null : _toggleBlock,
+                  blocked: widget.backend.blockedUserIds.contains(
+                    widget.member.userId,
                   ),
                 ),
-              ),
-              const Divider(height: 1),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: TextButton(
-                    onPressed: Navigator.of(context).pop,
-                    child: const Text('Close'),
+                if (!widget.own || widget.member.canChangePowerLevel) ...[
+                  const SizedBox(height: 14),
+                  _RoomRolePanel(
+                    member: widget.member,
+                    saving: _saving,
+                    onChanged: widget.member.canChangePowerLevel
+                        ? (value) async {
+                            setState(() => _saving = true);
+                            try {
+                              await widget.backend.setMemberPowerLevel(
+                                widget.member.userId,
+                                value,
+                              );
+                            } finally {
+                              if (mounted) {
+                                setState(() => _saving = false);
+                              }
+                            }
+                          }
+                        : null,
                   ),
-                ),
-              ),
-            ],
+                ],
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: LinearProgressIndicator(),
+                  ),
+              ],
+            ),
           );
         },
       ),

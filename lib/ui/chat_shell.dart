@@ -46,6 +46,8 @@ part 'member_sidebar.dart';
 const double _bottomPanelHeight = 68;
 const double _composerControlHeight = 38;
 const double _composerEditorHeight = 36;
+const double _bottomPanelVerticalInset = 8;
+const double _composerIslandVerticalInset = 7;
 
 double _composerEditorHeightFor(BuildContext context) => max(
   _composerEditorHeight,
@@ -58,8 +60,11 @@ double _composerControlHeightFor(BuildContext context) => max(
   _composerEditorHeightFor(context) + 2,
 );
 
-double _bottomPanelHeightFor(BuildContext context) =>
-    max(_bottomPanelHeight, _composerControlHeightFor(context) + 24);
+double _bottomPanelHeightFor(BuildContext context) => max(
+  _bottomPanelHeight,
+  _composerControlHeightFor(context) +
+      ((_bottomPanelVerticalInset + _composerIslandVerticalInset) * 2),
+);
 
 double _densityBetween(
   double value, {
@@ -515,21 +520,24 @@ class _ChatShellState extends State<ChatShell> {
                   builder: (context, constraints) {
                     final showSpaceRail = constraints.maxWidth >= 760;
                     final selectedRoom = widget.backend.selectedRoom;
+                    final roomMembers = widget.backend.selectedRoomMembers;
+                    final otherRoomMembers = roomMembers
+                        .where(
+                          (member) => member.userId != widget.backend.userId,
+                        )
+                        .toList(growable: false);
                     RoomMemberSummary? directRecipient;
-                    if (selectedRoom?.isDirect == true) {
-                      for (final member in widget.backend.selectedRoomMembers) {
-                        if (member.userId != widget.backend.userId) {
-                          directRecipient = member;
-                          break;
-                        }
-                      }
+                    if (selectedRoom?.isDirect == true &&
+                        otherRoomMembers.length == 1) {
+                      directRecipient = otherRoomMembers.single;
                     }
-                    final serverMembers =
+                    final showMemberSidebar =
                         selectedRoom != null &&
-                        widget.backend.selectedSpaceId != null;
+                        (widget.backend.selectedSpaceId != null ||
+                            otherRoomMembers.length > 1);
                     final hasSidePanel =
                         constraints.maxWidth >= 1100 &&
-                        (directRecipient != null || serverMembers);
+                        (directRecipient != null || showMemberSidebar);
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
                     final panelWidth = preferredPanel.clamp(
@@ -636,10 +644,32 @@ class _ChatShellState extends State<ChatShell> {
                               if (hasSidePanel)
                                 _SidePanelRegion(
                                   visible: _sidePanelVisible,
+                                  width: widget
+                                      .backend
+                                      .preferences
+                                      .sidePanelWidth
+                                      .clamp(
+                                        260,
+                                        min(460, constraints.maxWidth * 0.4),
+                                      ),
                                   onToggle: () => setState(
                                     () =>
                                         _sidePanelVisible = !_sidePanelVisible,
                                   ),
+                                  onResize: (delta) {
+                                    final width =
+                                        (widget
+                                                    .backend
+                                                    .preferences
+                                                    .sidePanelWidth -
+                                                delta)
+                                            .clamp(260.0, 460.0);
+                                    widget.backend.updatePreferences(
+                                      widget.backend.preferences.copyWith(
+                                        sidePanelWidth: width,
+                                      ),
+                                    );
+                                  },
                                   child: directRecipient != null
                                       ? _RecipientProfilePanel(
                                           backend: widget.backend,
@@ -647,9 +677,7 @@ class _ChatShellState extends State<ChatShell> {
                                         )
                                       : _MemberSidebar(
                                           backend: widget.backend,
-                                          members: widget
-                                              .backend
-                                              .selectedRoomMembers,
+                                          members: roomMembers,
                                         ),
                                 ),
                             ],
