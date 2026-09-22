@@ -23,6 +23,7 @@ class _RichComposer extends StatefulWidget {
     required this.onMentionSelectionChanged,
     required this.sendWithCtrlEnter,
     required this.maxHeight,
+    this.replyToMessageId,
     super.key,
   });
 
@@ -47,6 +48,7 @@ class _RichComposer extends StatefulWidget {
   final ValueChanged<int> onMentionSelectionChanged;
   final bool sendWithCtrlEnter;
   final double maxHeight;
+  final String? replyToMessageId;
 
   @override
   State<_RichComposer> createState() => _RichComposerState();
@@ -98,6 +100,7 @@ class _MentionPicker extends StatelessWidget {
 
 class _RichComposerState extends State<_RichComposer> {
   final _scrollController = ScrollController();
+  final _pickerGiphy = GiphyService();
   final _emojiOverlay = OverlayPortalController();
   final _emojiAnchor = LayerLink();
   List<EmojiEntry> _emojiMatches = const [];
@@ -262,21 +265,51 @@ class _RichComposerState extends State<_RichComposer> {
     final length = selection.isValid ? selection.end - selection.start : 0;
     _replaceEmoji(start, start + length, entry);
     _clearEmojiCompletion();
-    widget.focusNode.requestFocus();
   }
 
   Future<void> showEmojiPicker() async {
-    final emoji = await showDialog<EmojiEntry>(
-      context: context,
-      builder: (context) => EmojiPickerDialog(backend: widget.backend),
+    final roomId = widget.backend.selectedRoom?.id;
+    final replyTo = widget.replyToMessageId;
+    final result = await showExpressionPicker(
+      context,
+      widget.backend,
+      _pickerGiphy,
     );
-    if (emoji != null) _insertEmoji(emoji);
+    if (!mounted || widget.backend.selectedRoom?.id != roomId) return;
+    try {
+      if (result is EmojiEntry) {
+        _insertEmoji(result);
+      } else if (result is StickerSummary) {
+        await widget.backend.sendSticker(result, roomId: roomId);
+      } else if (result is GifSearchResult) {
+        final bytes = await _pickerGiphy.download(result);
+        await widget.backend.sendAttachment(
+          AttachmentDraft(
+            bytes: bytes,
+            name: 'giphy-${DateTime.now().millisecondsSinceEpoch}.gif',
+            mimeType: 'image/gif',
+            spoiler: false,
+          ),
+          roomId: roomId,
+          replyToMessageId: replyTo,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not send that item. Please try again.'),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_updateEmojiCompletion);
     _scrollController.dispose();
+    _pickerGiphy.dispose();
     super.dispose();
   }
 
@@ -649,6 +682,15 @@ class _RichComposerState extends State<_RichComposer> {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 40,
+                      height: controlHeight,
+                      child: IconButton(
+                        tooltip: 'Emoji, GIFs and stickers',
+                        onPressed: widget.enabled ? showEmojiPicker : null,
+                        icon: const Icon(Icons.emoji_emotions_outlined),
                       ),
                     ),
                     SizedBox(

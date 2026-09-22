@@ -152,20 +152,20 @@ Future<StickerSummary?> showStickerPicker(
     desktopHeight: 600,
     mobileHeightFactor: 0.82,
     surfaceKey: const ValueKey('sticker-picker-surface'),
-    builder: (context) => _StickerPickerContents(backend: backend),
+    builder: (context) => StickerPickerContents(backend: backend),
   );
 }
 
-class _StickerPickerContents extends StatefulWidget {
-  const _StickerPickerContents({required this.backend});
+class StickerPickerContents extends StatefulWidget {
+  const StickerPickerContents({required this.backend, super.key});
 
   final ChatBackend backend;
 
   @override
-  State<_StickerPickerContents> createState() => _StickerPickerContentsState();
+  State<StickerPickerContents> createState() => StickerPickerContentsState();
 }
 
-class _StickerPickerContentsState extends State<_StickerPickerContents> {
+class StickerPickerContentsState extends State<StickerPickerContents> {
   String _query = '';
 
   List<StickerPackSummary> _packs() {

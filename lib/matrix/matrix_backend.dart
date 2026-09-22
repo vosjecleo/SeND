@@ -213,6 +213,8 @@ class MatrixBackend extends ChatBackend {
   final LinkedHashMap<String, Uint8List> _attachmentBytesCache =
       LinkedHashMap();
   final Map<String, Future<Uint8List>> _attachmentDownloads = {};
+  // Cached room rows can mount before their new Timeline has loaded.
+  final LinkedHashMap<String, Event> _attachmentEvents = LinkedHashMap();
   int _attachmentBytesCacheSize = 0;
   int _attachmentCacheGeneration = 0;
   EncryptionSetupState _encryptionSetup = const EncryptionSetupState(
@@ -1249,6 +1251,7 @@ class MatrixBackend extends ChatBackend {
     _profileRequests.clear();
     _attachmentBytesCache.clear();
     _attachmentDownloads.clear();
+    _attachmentEvents.clear();
     _attachmentBytesCacheSize = 0;
     _attachmentCacheGeneration++;
     final voice = _voice;

@@ -633,27 +633,27 @@ class _ConversationState extends State<_Conversation> {
                           ],
                         ),
                       ),
-                      Text(
-                        '${backend.selectedRoomMembers.length}',
-                        style: TextStyle(
-                          fontSize: DeltiecordTypeScale.normal,
-                          color: context.deltiecord.muted,
-                        ),
-                      ),
-                      if (backend.firstUnreadMessageId != null)
-                        IconButton(
-                          tooltip: 'Jump to first unread',
-                          onPressed: _jumpToFirstUnread,
-                          icon: const Icon(
-                            Icons.mark_chat_unread_outlined,
-                            size: 19,
-                          ),
-                        ),
                       PopupMenuButton<String>(
                         tooltip: 'Room tools',
-                        icon: const Icon(Icons.more_horiz, size: 20),
+                        icon: const Icon(Icons.more_horiz, size: 22),
                         onSelected: (value) async {
                           switch (value) {
+                            case 'search':
+                              showSearch();
+                            case 'pins':
+                              _showPins();
+                            case 'members':
+                              widget.onShowMembers();
+                            case 'call':
+                              backend.joinVoiceRoom(room.id);
+                            case 'copy-link':
+                              Clipboard.setData(
+                                ClipboardData(
+                                  text: 'https://matrix.to/#/${room.id}',
+                                ),
+                              );
+                            case 'first-unread':
+                              _jumpToFirstUnread();
                             case 'saved':
                               await showSavedMessages(
                                 context,
@@ -685,69 +685,6 @@ class _ConversationState extends State<_Conversation> {
                                   }
                                 },
                               );
-                          }
-                        },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'saved',
-                            child: ListTile(
-                              leading: Icon(Icons.bookmarks_outlined),
-                              title: Text('Saved and scheduled'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'media',
-                            child: ListTile(
-                              leading: Icon(Icons.perm_media_outlined),
-                              title: Text('Media and links'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'inbox',
-                            child: ListTile(
-                              leading: Icon(Icons.inbox_outlined),
-                              title: Text('Inbox'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        tooltip: 'Search',
-                        onPressed: showSearch,
-                        icon: const Icon(Icons.search, size: 19),
-                      ),
-                      IconButton(
-                        tooltip: 'Pinned messages',
-                        onPressed: _showPins,
-                        icon: const Icon(Icons.push_pin_outlined, size: 18),
-                      ),
-                      IconButton(
-                        tooltip: 'Members',
-                        onPressed: widget.onShowMembers,
-                        icon: const Icon(Icons.people_outline, size: 20),
-                      ),
-                      IconButton(
-                        tooltip: 'Start MatrixRTC call',
-                        onPressed: () => backend.joinVoiceRoom(room.id),
-                        icon: const Icon(Icons.video_call_outlined, size: 20),
-                      ),
-                      IconButton(
-                        tooltip: 'Copy room link',
-                        onPressed: () => Clipboard.setData(
-                          ClipboardData(text: 'https://matrix.to/#/${room.id}'),
-                        ),
-                        icon: const Icon(Icons.link, size: 19),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Notification options',
-                        icon: Icon(
-                          backend.selectedRoomMuted
-                              ? Icons.notifications_off_outlined
-                              : Icons.notifications_none,
-                          size: 19,
-                        ),
-                        onSelected: (value) {
-                          switch (value) {
                             case 'all':
                               backend.setRoomNotificationMode(
                                 room.id,
@@ -790,6 +727,45 @@ class _ConversationState extends State<_Conversation> {
                           }
                         },
                         itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'search',
+                            child: Text('Search'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'pins',
+                            child: Text('Pinned messages'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'members',
+                            child: Text('Members'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'call',
+                            child: Text('Start call'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'copy-link',
+                            child: Text('Copy room link'),
+                          ),
+                          if (backend.firstUnreadMessageId != null)
+                            const PopupMenuItem(
+                              value: 'first-unread',
+                              child: Text('Jump to first unread'),
+                            ),
+                          const PopupMenuItem(
+                            value: 'media',
+                            child: Text('Media and links'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'saved',
+                            child: Text('Saved and scheduled'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'inbox',
+                            child: Text('Inbox'),
+                          ),
+                          const PopupMenuDivider(),
+
                           CheckedPopupMenuItem(
                             value: 'all',
                             checked:
@@ -1080,6 +1056,7 @@ class _ConversationState extends State<_Conversation> {
                   controller: widget.controller,
                   focusNode: widget.composerFocus,
                   roomName: room.name,
+                  replyToMessageId: widget.replyingTo?.id,
                   // The editor remains live while this only gates attachment
                   // and submit controls for the in-flight request.
                   enabled: !widget.sending,

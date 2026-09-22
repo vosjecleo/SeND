@@ -2674,7 +2674,9 @@ void main() {
     await tester.tap(find.text('Alice'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recipient-profile-panel')), findsOneWidget);
-    await tester.tap(find.byTooltip('Members'));
+    await tester.tap(find.byTooltip('Room tools'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Members'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
     final resizeHandle = find.byKey(const Key('side-panel-resize-handle'));

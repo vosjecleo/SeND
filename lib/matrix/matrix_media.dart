@@ -2,7 +2,7 @@ part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
   String? _getAttachmentReference(String messageId) {
-    final event = _eventById(messageId);
+    final event = _eventById(messageId) ?? _attachmentEvents[messageId];
     if (event == null || !event.hasAttachment) return null;
     final encryptedReference = event.content
         .tryGetMap<String, Object?>('file')
@@ -192,7 +192,7 @@ extension _MatrixMedia on MatrixBackend {
     required bool thumbnail,
     required int generation,
   }) async {
-    final event = _eventById(messageId);
+    final event = _eventById(messageId) ?? _attachmentEvents[messageId];
     if (event == null || !event.hasAttachment) {
       throw StateError('That attachment is no longer available.');
     }
@@ -220,7 +220,7 @@ extension _MatrixMedia on MatrixBackend {
   }
 
   Future<MediaPlaybackSource?> _getMediaPlaybackSource(String messageId) async {
-    final event = _eventById(messageId);
+    final event = _eventById(messageId) ?? _attachmentEvents[messageId];
     if (event == null || !event.hasAttachment) {
       return null;
     }

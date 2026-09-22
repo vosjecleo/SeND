@@ -4,8 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// GIF providers commonly expose a short MP4/WebM rendition as their OpenGraph
-/// video. It should retain GIF semantics and loop continuously.
+/// GIF providers also serve looping MP4/WebM renditions.
 bool shouldLoopLinkPreview(Uri pageUrl) {
   final host = pageUrl.host.toLowerCase();
   return host == 'giphy.com' ||
@@ -15,13 +14,9 @@ bool shouldLoopLinkPreview(Uri pageUrl) {
       pageUrl.path.toLowerCase().endsWith('.gif');
 }
 
-/// Displays animated bytes with a codec that is recreated after app resume.
-///
-/// Flutter's memory-image cache keys byte arrays by identity. Matrix's media
-/// cache deliberately returns that same array, so merely rebuilding after an
-/// Android freeze can reconnect to a decoder that is stopped at its last
-/// frame. Animated media gets a fresh byte identity on resume; static images
-/// keep the zero-copy path.
+/// Owns animated decoding independently of route/UI animation tickers.
+/// Callers resolve autoplay and reduced-motion preferences; backgrounding still
+/// stops decoding. Only the current frame is retained, never the full animation.
 class LifecycleMemoryImage extends StatefulWidget {
   const LifecycleMemoryImage({
     required this.bytes,
@@ -32,151 +27,139 @@ class LifecycleMemoryImage extends StatefulWidget {
     this.height,
     super.key,
   });
-
   final Uint8List bytes;
   final bool animated;
   final bool autoplay;
   final BoxFit fit;
   final double? width;
   final double? height;
-
   @override
   State<LifecycleMemoryImage> createState() => _LifecycleMemoryImageState();
 }
 
 class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
     with WidgetsBindingObserver {
-  late Uint8List _renderBytes = widget.bytes;
+  ui.Codec? _codec;
+  ui.Image? _frame;
+  Timer? _timer;
   int _generation = 0;
-
-  bool get _animated => widget.animated || _hasGifSignature(widget.bytes);
+  bool _foreground = true;
+  bool _failed = false;
+  bool get _animated =>
+      widget.animated ||
+      (widget.bytes.length >= 6 &&
+          widget.bytes[0] == 0x47 &&
+          widget.bytes[1] == 0x49 &&
+          widget.bytes[2] == 0x46 &&
+          widget.bytes[3] == 0x38);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    if (_animated) unawaited(_start());
+  }
+
+  void _stop() {
+    _generation++;
+    _timer?.cancel();
+    _timer = null;
+    _codec?.dispose();
+    _codec = null;
+  }
+
+  Future<void> _start() async {
+    _stop();
+    final generation = _generation;
+    try {
+      final codec = await ui.instantiateImageCodec(widget.bytes);
+      if (!mounted || generation != _generation) {
+        codec.dispose();
+        return;
+      }
+      _codec = codec;
+      await _advance(generation, codec);
+    } catch (_) {
+      if (mounted && generation == _generation) setState(() => _failed = true);
+    }
+  }
+
+  Future<void> _advance(int generation, ui.Codec codec) async {
+    try {
+      final next = await codec.getNextFrame();
+      if (!mounted || generation != _generation) {
+        next.image.dispose();
+        return;
+      }
+      final previous = _frame;
+      setState(() {
+        _frame = next.image;
+        _failed = false;
+      });
+      // RenderImage still owns the old frame until this rebuild is painted.
+      WidgetsBinding.instance.addPostFrameCallback((_) => previous?.dispose());
+      if (_foreground && widget.autoplay && codec.frameCount > 1) {
+        final duration = next.duration < const Duration(milliseconds: 20)
+            ? const Duration(milliseconds: 20)
+            : next.duration;
+        _timer = Timer(duration, () => unawaited(_advance(generation, codec)));
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) setState(() => _failed = true);
+    }
   }
 
   @override
   void didUpdateWidget(covariant LifecycleMemoryImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.bytes, widget.bytes)) {
-      _renderBytes = widget.bytes;
-      _generation++;
+    if (!identical(oldWidget.bytes, widget.bytes) ||
+        oldWidget.autoplay != widget.autoplay ||
+        oldWidget.animated != widget.animated) {
+      _stop();
+      if (_animated) unawaited(_start());
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || !_animated || !widget.autoplay) {
-      return;
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      _stop();
+    } else if (_animated) {
+      unawaited(_start());
     }
-    // Animated attachments are bounded by the Matrix media cache. Copying on
-    // resume is intentional: it produces a new MemoryImage cache key without
-    // evicting another visible widget that uses the same event bytes.
-    setState(() {
-      _renderBytes = Uint8List.fromList(widget.bytes);
-      _generation++;
-    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _stop();
+    _frame?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_animated && !widget.autoplay) {
-      return _FirstFrameMemoryImage(
-        bytes: _renderBytes,
+    if (!_animated) {
+      return Image.memory(
+        widget.bytes,
         fit: widget.fit,
         width: widget.width,
         height: widget.height,
+        gaplessPlayback: true,
       );
     }
-    return Image.memory(
-      _renderBytes,
-      key: ValueKey(_generation),
+    if (_failed && _frame == null) {
+      return const Icon(Icons.broken_image_outlined);
+    }
+    return RawImage(
+      image: _frame,
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
-      gaplessPlayback: true,
     );
   }
-
-  static bool _hasGifSignature(Uint8List bytes) =>
-      bytes.length >= 6 &&
-      bytes[0] == 0x47 &&
-      bytes[1] == 0x49 &&
-      bytes[2] == 0x46 &&
-      bytes[3] == 0x38 &&
-      (bytes[4] == 0x37 || bytes[4] == 0x39) &&
-      bytes[5] == 0x61;
-}
-
-class _FirstFrameMemoryImage extends StatefulWidget {
-  const _FirstFrameMemoryImage({
-    required this.bytes,
-    required this.fit,
-    this.width,
-    this.height,
-  });
-
-  final Uint8List bytes;
-  final BoxFit fit;
-  final double? width;
-  final double? height;
-
-  @override
-  State<_FirstFrameMemoryImage> createState() => _FirstFrameMemoryImageState();
-}
-
-class _FirstFrameMemoryImageState extends State<_FirstFrameMemoryImage> {
-  late Future<ui.Image> _frame = _decode();
-  ui.Image? _decoded;
-
-  Future<ui.Image> _decode() async {
-    final codec = await ui.instantiateImageCodec(widget.bytes);
-    try {
-      final frame = await codec.getNextFrame();
-      _decoded = frame.image;
-      return frame.image;
-    } finally {
-      codec.dispose();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _FirstFrameMemoryImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.bytes, widget.bytes)) {
-      _decoded?.dispose();
-      _decoded = null;
-      _frame = _decode();
-    }
-  }
-
-  @override
-  void dispose() {
-    _decoded?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<ui.Image>(
-    future: _frame,
-    builder: (context, snapshot) {
-      final image = snapshot.data;
-      return image == null
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : RawImage(
-              image: image,
-              fit: widget.fit,
-              width: widget.width,
-              height: widget.height,
-            );
-    },
-  );
 }

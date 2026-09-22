@@ -624,6 +624,17 @@ class _AttachmentViewState extends State<_AttachmentView> {
   bool _saving = false;
   bool _opening = false;
 
+  @override
+  void didUpdateWidget(covariant _AttachmentView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messageId != widget.messageId ||
+        oldWidget.attachment.mimeType != widget.attachment.mimeType) {
+      _imageBytes = null;
+      _decodedDimensions = null;
+      _revealed = false;
+    }
+  }
+
   Future<void> _copyReference() async {
     final reference = await widget.backend.getAttachmentReference(
       widget.messageId,

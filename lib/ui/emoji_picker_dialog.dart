@@ -7,7 +7,13 @@ import 'deltiecord_theme.dart';
 import 'matrix_html_text.dart';
 
 class EmojiPickerDialog extends StatefulWidget {
-  const EmojiPickerDialog({required this.backend, super.key});
+  const EmojiPickerDialog({
+    required this.backend,
+    this.embedded = false,
+    super.key,
+  });
+
+  final bool embedded;
 
   final ChatBackend backend;
 
@@ -100,102 +106,123 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
         customByPack[(id: pack.id, name: pack.name)] = entries;
       }
     }
+    final frequency = FavouriteReactionsStore.instance.emojiUsage;
+    final frequentEntries =
+        _results.where((e) => frequency.containsKey(e.favouriteKey)).toList()
+          ..sort(
+            (a, b) => frequency[b.favouriteKey]!.compareTo(
+              frequency[a.favouriteKey]!,
+            ),
+          );
     final favourites = FavouriteReactionsStore.instance.emoji;
     final favouriteEntries = _results
         .where((entry) => favourites.contains(entry.favouriteKey))
         .toList(growable: false);
-    return AlertDialog(
-      backgroundColor: context.deltiecord.surface,
-      surfaceTintColor: Colors.transparent,
-      title: const Text('Emoji'),
-      content: SizedBox(
-        width: 540,
-        height: 460,
-        child: Column(
-          children: [
-            TextField(
-              controller: _query,
-              autofocus: true,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search names and aliases',
-                border: InputBorder.none,
-              ),
+    final content = SizedBox(
+      width: 540,
+      height: 460,
+      child: Column(
+        children: [
+          TextField(
+            controller: _query,
+            autofocus: false,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Search names and aliases',
+              border: InputBorder.none,
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 42,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 42,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _CategoryButton(
+                  label: 'All emoji',
+                  icon: Icons.apps,
+                  selected: _selectedCategory == null,
+                  onTap: () => setState(() => _selectedCategory = null),
+                ),
+                for (final category in EmojiCategory.values)
                   _CategoryButton(
-                    label: 'All emoji',
-                    icon: Icons.apps,
-                    selected: _selectedCategory == null,
-                    onTap: () => setState(() => _selectedCategory = null),
+                    label: category.label,
+                    icon: _categoryIcon(category),
+                    selected: _selectedCategory == category,
+                    onTap: () => setState(() => _selectedCategory = category),
                   ),
-                  for (final category in EmojiCategory.values)
-                    _CategoryButton(
-                      label: category.label,
-                      icon: _categoryIcon(category),
-                      selected: _selectedCategory == category,
-                      onTap: () => setState(() => _selectedCategory = category),
-                    ),
-                ],
-              ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  if (_selectedCategory == null &&
-                      _query.text.trim().isEmpty &&
-                      favouriteEntries.isNotEmpty) ...[
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                if (_selectedCategory == null &&
+                    _query.text.trim().isEmpty &&
+                    favouriteEntries.isNotEmpty) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 8, 4, 5),
+                      child: Text(
+                        'Favourites',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                  ),
+                  _emojiGrid(favouriteEntries),
+                ],
+                if (_selectedCategory == null &&
+                    _query.text.trim().isEmpty &&
+                    frequentEntries.isNotEmpty) ...[
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text('Frequently used'),
+                    ),
+                  ),
+                  _emojiGrid(frequentEntries.take(32).toList()),
+                ],
+                if (_selectedCategory == null ||
+                    _selectedCategory == EmojiCategory.custom)
+                  for (final pack in customByPack.entries) ...[
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(4, 8, 4, 5),
                         child: Text(
-                          'Favourites',
+                          pack.key.name,
                           style: Theme.of(context).textTheme.labelLarge,
                         ),
                       ),
                     ),
-                    _emojiGrid(favouriteEntries),
+                    _emojiGrid(pack.value),
                   ],
-                  if (_selectedCategory == null ||
-                      _selectedCategory == EmojiCategory.custom)
-                    for (final pack in customByPack.entries) ...[
+                for (final category in EmojiCategory.values)
+                  if (category != EmojiCategory.custom)
+                    if (grouped[category] case final entries?) ...[
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(4, 8, 4, 5),
                           child: Text(
-                            pack.key.name,
+                            category.label,
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                         ),
                       ),
-                      _emojiGrid(pack.value),
+                      _emojiGrid(entries),
                     ],
-                  for (final category in EmojiCategory.values)
-                    if (category != EmojiCategory.custom)
-                      if (grouped[category] case final entries?) ...[
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(4, 8, 4, 5),
-                            child: Text(
-                              category.label,
-                              style: Theme.of(context).textTheme.labelLarge,
-                            ),
-                          ),
-                        ),
-                        _emojiGrid(entries),
-                      ],
-                ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+    if (widget.embedded) return content;
+    return AlertDialog(
+      backgroundColor: context.deltiecord.surface,
+      surfaceTintColor: Colors.transparent,
+      title: const Text('Emoji'),
+      content: content,
     );
   }
 
@@ -216,7 +243,10 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
             'Long-press to ${favourite ? 'unfavourite' : 'favourite'}',
         child: InkWell(
           key: ValueKey('emoji-picker-result-${entry.favouriteKey}'),
-          onTap: () => Navigator.of(context).pop(entry),
+          onTap: () {
+            FavouriteReactionsStore.instance.recordEmoji(entry.favouriteKey);
+            Navigator.of(context).pop(entry);
+          },
           onLongPress: () async {
             await FavouriteReactionsStore.instance.toggleEmoji(
               entry.favouriteKey,

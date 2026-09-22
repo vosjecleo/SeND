@@ -18,6 +18,8 @@ import '../../services/custom_emoji.dart';
 import '../../services/favourite_reactions_store.dart';
 import '../../services/giphy_service.dart';
 import '../deltiecord_theme.dart';
+import '../expression_picker.dart';
+import 'mobile_attachment_picker.dart';
 import '../advanced_chat_dialogs.dart';
 import '../advanced_chat_views.dart';
 import '../matrix_html_text.dart';
@@ -965,6 +967,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             },
             onAdd: _showAddMenu,
             onEmoji: _showEmojiPicker,
+            onPasteImage: _pasteClipboardImage,
             onSend: _send,
             onSchedule: _scheduleCurrentMessage,
             onContentInserted: _insertKeyboardContent,
@@ -1046,9 +1049,15 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     );
     _customEmojiSpans.clear();
     _previousComposerText = '';
-    // Keep the existing Android input connection alive. Reconnecting it here
-    // makes the keyboard visibly close and reopen after every sent message;
-    // clearing the composing range is sufficient for the next draft.
+    // Restart the editor session on the same visible Flutter view. Never hide
+    // and show the keyboard: that produces a flash and loses the draft focus.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _focus.hasFocus && _composer.text.isEmpty) {
+        const MethodChannel(
+          'net.deltie.deltiecord/composer',
+        ).invokeMethod<void>('newDraft').catchError((Object _) {});
+      }
+    });
     setState(() {
       _sending = true;
       _attachments.clear();
@@ -1138,73 +1147,27 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _showAddMenu() async {
-    final choice = await showModalBottomSheet<String>(
+    _focus.unfocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    if (!mounted) return;
+    final choice = await showModalBottomSheet<Object>(
       context: context,
-      showDragHandle: true,
+      isScrollControlled: true,
+      requestFocus: false,
       backgroundColor: context.deltiecord.surface,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.attach_file),
-              title: const Text('File'),
-              onTap: () => Navigator.pop(context, 'file'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Image or video'),
-              onTap: () => Navigator.pop(context, 'media'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.content_paste_outlined),
-              title: const Text('Paste image'),
-              onTap: () => Navigator.pop(context, 'paste-image'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
-              onTap: () => Navigator.pop(context, 'camera-photo'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Record video'),
-              onTap: () => Navigator.pop(context, 'camera-video'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.gif_box_outlined),
-              title: const Text('GIF'),
-              onTap: () => Navigator.pop(context, 'gif'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.poll_outlined),
-              title: const Text('Poll'),
-              onTap: () => Navigator.pop(context, 'poll'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Sticker pack'),
-              onTap: () => Navigator.pop(context, 'sticker'),
-            ),
-          ],
-        ),
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * .65,
+        child: const MobileAttachmentPicker(),
       ),
     );
     if (!mounted) return;
-    if (choice == 'gif') return _showGifPicker();
+    if (choice is List<AttachmentDraft>) {
+      setState(() => _attachments.addAll(choice));
+      return;
+    }
     if (choice == 'poll') {
       final poll = await showPollComposer(context);
       if (poll != null) await backend.sendPoll(poll, roomId: widget.room.id);
-      return;
-    }
-    if (choice == 'sticker') {
-      final sticker = await showStickerPicker(context, backend);
-      if (sticker != null) {
-        await backend.sendSticker(sticker, roomId: widget.room.id);
-      }
-      return;
-    }
-    if (choice == 'paste-image') {
-      await _pasteClipboardImage();
       return;
     }
     if (choice == null) return;
@@ -1212,12 +1175,43 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       await _captureMedia(video: choice == 'camera-video');
       return;
     }
+    if (choice == 'media') {
+      final files = await ImagePicker().pickMultipleMedia(limit: 20);
+      final drafts = <AttachmentDraft>[];
+      var total = 0;
+      for (final file in files) {
+        total += await file.length();
+        if (total > 64 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Select fewer items (64 MiB per selection).'),
+              ),
+            );
+          }
+          return;
+        }
+        final bytes = await file.readAsBytes();
+        drafts.add(
+          AttachmentDraft(
+            bytes: bytes,
+            name: file.name,
+            mimeType:
+                lookupMimeType(file.name, headerBytes: bytes) ??
+                'application/octet-stream',
+            spoiler: false,
+          ),
+        );
+      }
+      if (mounted) setState(() => _attachments.addAll(drafts));
+      return;
+    }
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: true,
-      type: choice == 'media' ? FileType.media : FileType.any,
+      type: FileType.any,
     );
-    if (result == null) return;
+    if (result == null || !mounted) return;
     final drafts = result.files
         .where((file) => file.bytes != null)
         .map(
@@ -1281,30 +1275,26 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _showEmojiPicker() async {
-    await backend.refreshStickerPacks();
-    if (!mounted) return;
-    final emoji = await showModalBottomSheet<EmojiEntry>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: context.deltiecord.surface,
-      builder: (context) => _MobileEmojiPicker(backend: backend),
-    );
-    if (emoji == null) return;
-    final selection = _composer.selection;
-    final offset = selection.isValid ? selection.start : _composer.text.length;
-    _replaceEmojiCompletion(offset, offset, emoji);
-    _focus.requestFocus();
+    final roomId = widget.room.id;
+    _focus.unfocus();
+    final result = await showExpressionPicker(context, backend, _giphy);
+    if (!mounted || widget.room.id != roomId) return;
+    if (result is EmojiEntry) {
+      final selection = _composer.selection;
+      final offset = selection.isValid
+          ? selection.start
+          : _composer.text.length;
+      _replaceEmojiCompletion(offset, offset, result);
+      // The picker is a keyboard alternative. Only tapping the draft reopens IME.
+      _focus.unfocus();
+    } else if (result is GifSearchResult) {
+      await _sendGif(result);
+    } else if (result is StickerSummary) {
+      await backend.sendSticker(result, roomId: roomId);
+    }
   }
 
-  Future<void> _showGifPicker() async {
-    final gif = await showModalBottomSheet<GifSearchResult>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => _MobileGifPicker(service: _giphy),
-    );
-    if (gif == null) return;
+  Future<void> _sendGif(GifSearchResult gif) async {
     final roomId = widget.room.id;
     final reply = _reply;
     setState(() => _sending = true);
@@ -1965,6 +1955,7 @@ class _MobileComposer extends StatefulWidget {
     required this.onToggleAttachmentSpoiler,
     required this.onAdd,
     required this.onEmoji,
+    required this.onPasteImage,
     required this.onSend,
     required this.onSchedule,
     required this.onContentInserted,
@@ -1989,6 +1980,7 @@ class _MobileComposer extends StatefulWidget {
   final ValueChanged<AttachmentDraft> onToggleAttachmentSpoiler;
   final VoidCallback onAdd;
   final VoidCallback onEmoji;
+  final VoidCallback onPasteImage;
   final VoidCallback onSend;
   final VoidCallback onSchedule;
   final ValueChanged<KeyboardInsertedContent> onContentInserted;
@@ -2230,6 +2222,20 @@ class _MobileComposerState extends State<_MobileComposer> {
                           maxLines: null,
                           keyboardType: TextInputType.multiline,
                           textCapitalization: TextCapitalization.sentences,
+                          contextMenuBuilder: (context, state) =>
+                              AdaptiveTextSelectionToolbar.buttonItems(
+                                anchors: state.contextMenuAnchors,
+                                buttonItems: [
+                                  ...state.contextMenuButtonItems,
+                                  ContextMenuButtonItem(
+                                    label: 'Paste image',
+                                    onPressed: () {
+                                      state.hideToolbar();
+                                      widget.onPasteImage();
+                                    },
+                                  ),
+                                ],
+                              ),
                           style: TextStyle(color: context.deltiecord.text),
                           cursorColor: Theme.of(context).colorScheme.primary,
                           contentInsertionConfiguration:
@@ -2695,137 +2701,4 @@ class _MobileEmojiCategoryButton extends StatelessWidget {
     icon: Icon(icon),
     selectedIcon: Icon(icon, color: Theme.of(context).colorScheme.primary),
   );
-}
-
-class _MobileGifPicker extends StatefulWidget {
-  const _MobileGifPicker({required this.service});
-  final GiphyService service;
-
-  @override
-  State<_MobileGifPicker> createState() => _MobileGifPickerState();
-}
-
-class _MobileGifPickerState extends State<_MobileGifPicker> {
-  Timer? _debounce;
-  Future<List<GifSearchResult>>? _results;
-  List<GifSearchResult> _favourites = const [];
-  String _query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _results = widget.service.trending();
-    widget.service.favorites().then((value) {
-      if (mounted) setState(() => _favourites = value);
-    });
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FractionallySizedBox(
-    heightFactor: 0.78,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          TextField(
-            autofocus: true,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Search GIFs',
-            ),
-            onChanged: (query) {
-              _query = query.trim();
-              _debounce?.cancel();
-              _debounce = Timer(const Duration(milliseconds: 300), () {
-                if (mounted) {
-                  setState(() {
-                    _results = _query.isEmpty
-                        ? widget.service.trending()
-                        : widget.service.search(_query);
-                  });
-                }
-              });
-            },
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: FutureBuilder<List<GifSearchResult>>(
-              future: _results,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('GIF search unavailable'));
-                }
-                final loaded = snapshot.data;
-                if (loaded == null) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final results = _query.isEmpty
-                    ? [
-                        ..._favourites,
-                        ...loaded.where(
-                          (gif) => !_favourites.any(
-                            (favorite) => favorite.shareUrl == gif.shareUrl,
-                          ),
-                        ),
-                      ]
-                    : loaded;
-                return GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                  ),
-                  itemCount: results.length,
-                  itemBuilder: (context, index) {
-                    final gif = results[index];
-                    final favourite = widget.service.isFavorite(gif);
-                    return InkWell(
-                      onTap: () => Navigator.pop(context, gif),
-                      onLongPress: () => _toggleFavourite(gif),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            gif.previewUrl.toString(),
-                            fit: BoxFit.cover,
-                          ),
-                          Positioned(
-                            top: 2,
-                            right: 2,
-                            child: IconButton.filledTonal(
-                              tooltip: favourite
-                                  ? 'Remove from favourites'
-                                  : 'Add to favourites',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => _toggleFavourite(gif),
-                              icon: Icon(
-                                favourite ? Icons.star : Icons.star_border,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Future<void> _toggleFavourite(GifSearchResult gif) async {
-    await widget.service.toggleFavorite(gif);
-    final favourites = await widget.service.favorites();
-    if (mounted) setState(() => _favourites = favourites);
-  }
 }

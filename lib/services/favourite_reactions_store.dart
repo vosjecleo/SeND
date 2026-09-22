@@ -20,6 +20,21 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   bool _loaded = false;
   final List<String> _emoji = [];
   final List<String> _stickers = [];
+  final Map<String, int> _emojiUsage = {};
+  Map<String, int> get emojiUsage => Map.unmodifiable(_emojiUsage);
+
+  Future<void> recordEmoji(String key) async {
+    await load();
+    _emojiUsage[key] = (_emojiUsage[key] ?? 0) + 1;
+    if (_emojiUsage.length > 200) {
+      final least = _emojiUsage.keys.reduce(
+        (a, b) => _emojiUsage[a]! <= _emojiUsage[b]! ? a : b,
+      );
+      _emojiUsage.remove(least);
+    }
+    notifyListeners();
+    await _save();
+  }
 
   List<String> get emoji => List.unmodifiable(_emoji);
   List<String> get stickers => List.unmodifiable(_stickers);
@@ -35,6 +50,14 @@ final class FavouriteReactionsStore extends ChangeNotifier {
       if (!await _file!.exists()) return;
       final value = jsonDecode(await _file!.readAsString());
       if (value is! Map) return;
+      final usage = value['usage'];
+      if (usage is Map) {
+        for (final entry in usage.entries.take(200)) {
+          if (entry.key is String && entry.value is int && entry.value > 0) {
+            _emojiUsage[entry.key as String] = entry.value as int;
+          }
+        }
+      }
       _emoji.addAll(
         (value['emoji'] as List? ?? const []).whereType<String>().take(
           _maximumPerKind,
@@ -81,7 +104,11 @@ final class FavouriteReactionsStore extends ChangeNotifier {
     if (file == null) return;
     await writePrivateTextFile(
       file,
-      jsonEncode({'emoji': _emoji, 'stickers': _stickers}),
+      jsonEncode({
+        'emoji': _emoji,
+        'stickers': _stickers,
+        'usage': _emojiUsage,
+      }),
     );
   }
 }

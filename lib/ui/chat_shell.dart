@@ -29,6 +29,7 @@ import '../services/custom_emoji.dart';
 import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
 import 'emoji_picker_dialog.dart';
+import 'expression_picker.dart';
 import 'settings_screen.dart';
 import 'profile_dialog.dart';
 import 'profile_card.dart';

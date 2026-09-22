@@ -228,6 +228,16 @@ extension _MatrixEventMapping on MatrixBackend {
   }
 
   ChatAttachment? _attachmentFor(Event event) {
+    // Room previews are rendered before their live Timeline has hydrated.
+    // Keep the event (including encryption metadata) available during that gap.
+    // This is memory-only, bounded, and cleared with the session/media cache.
+    if (event.hasAttachment || event.type == EventTypes.Sticker) {
+      _attachmentEvents.remove(event.eventId);
+      _attachmentEvents[event.eventId] = event;
+      while (_attachmentEvents.length > 512) {
+        _attachmentEvents.remove(_attachmentEvents.keys.first);
+      }
+    }
     if (event.type == EventTypes.Sticker) {
       final info = event.content.tryGetMap<String, Object?>('info');
       final pack = event.content.tryGetMap<String, Object?>(

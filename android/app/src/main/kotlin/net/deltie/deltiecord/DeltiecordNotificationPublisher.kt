@@ -132,8 +132,12 @@ object DeltiecordNotificationPublisher {
             expectedRoomGeneration != roomGeneration(context, data.roomId)
         ) return false
         val shouldAlert = shouldAlert(context, data)
-        val channelId = channelId(data, shouldAlert)
-        ensureChannel(context, channelId, data.sound && shouldAlert, data.vibrate && shouldAlert)
+        // A cooldown changes interruption, not channel importance. Moving an
+        // existing conversation to LOW hides its status-bar icon on Android.
+        val channelId = channelId(data)
+        ensureChannel(context, channelId,
+            data.sound && data.alertCadence != "silent",
+            data.vibrate && data.alertCadence != "silent")
         val avatarPath = data.senderAvatar?.let {
             writeBoundedFile(context, "avatar", data.eventId, it, ".png")
         }
@@ -302,8 +306,8 @@ object DeltiecordNotificationPublisher {
         return true
     }
 
-    private fun channelId(data: MessageData, alert: Boolean): String = when {
-        !alert -> "${CHANNEL_ID}_silent"
+    private fun channelId(data: MessageData): String = when {
+        data.alertCadence == "silent" || (!data.sound && !data.vibrate) -> "${CHANNEL_ID}_quiet_visible"
         data.sound && data.vibrate -> "${CHANNEL_ID}_sound_vibrate"
         data.sound -> "${CHANNEL_ID}_sound"
         else -> "${CHANNEL_ID}_vibrate"
@@ -553,7 +557,7 @@ object DeltiecordNotificationPublisher {
                 channelId,
                 "Messages",
                 if (sound || vibrate) NotificationManager.IMPORTANCE_HIGH
-                else NotificationManager.IMPORTANCE_LOW,
+                else NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Encrypted Matrix message notifications"
                 enableVibration(vibrate)

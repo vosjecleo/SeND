@@ -85,6 +85,10 @@ void main() {
       expect(publisher, contains('expectedAppGeneration'));
       expect(publisher, contains('expectedRoomGeneration'));
       expect(publisher, contains('fun resetAlertCadenceOnAppOpen'));
+      expect(publisher, contains('channelId(data)'));
+      expect(publisher, isNot(contains('channelId(data, shouldAlert)')));
+      expect(publisher, contains('.setOnlyAlertOnce(!shouldAlert)'));
+      expect(publisher, contains('quiet_visible'));
       expect(activity, contains('resetAlertCadenceOnAppOpen(this)'));
       expect(publisher, isNot(contains('deltiecord_notification_history')));
       expect(dartResolver, contains('declaredSize == null'));

@@ -257,6 +257,7 @@ extension _MatrixSession on MatrixBackend {
       _mediaPlaybackReferences.clear();
       _attachmentBytesCache.clear();
       _attachmentDownloads.clear();
+      _attachmentEvents.clear();
       _attachmentBytesCacheSize = 0;
       _attachmentCacheGeneration++;
       _deviceSessions = const [];

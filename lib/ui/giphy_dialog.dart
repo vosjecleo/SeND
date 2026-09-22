@@ -7,7 +7,9 @@ import '../services/secret_redaction.dart';
 import 'deltiecord_theme.dart';
 
 class GiphyDialog extends StatefulWidget {
-  const GiphyDialog({required this.service, super.key});
+  const GiphyDialog({required this.service, this.embedded = false, super.key});
+
+  final bool embedded;
 
   final GiphyService service;
 
@@ -92,16 +94,15 @@ class _GiphyDialogState extends State<GiphyDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Sticker / GIF'),
-    content: SizedBox(
+  Widget build(BuildContext context) {
+    final content = SizedBox(
       width: 620,
       height: 500,
       child: Column(
         children: [
           TextField(
             controller: _query,
-            autofocus: true,
+            autofocus: false,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) {
               _debounce?.cancel();
@@ -213,6 +214,9 @@ class _GiphyDialogState extends State<GiphyDialog> {
           ),
         ],
       ),
-    ),
-  );
+    );
+    return widget.embedded
+        ? content
+        : AlertDialog(title: const Text('GIFs'), content: content);
+  }
 }

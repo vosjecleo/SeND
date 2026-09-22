@@ -41,6 +41,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "net.deltie.deltiecord/composer").setMethodCallHandler { call, result ->
+            if (call.method == "newDraft") {
+                val view = findViewById<android.view.View>(FLUTTER_VIEW_ID)
+                if (view != null && view.hasFocus()) {
+                    // Reset IME shift/composition state without hiding the window.
+                    val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    imm.restartInput(view)
+                }
+                result.success(null)
+            } else result.notImplemented()
+        }
         configuredEngine = flutterEngine
         DeltiecordEngineRegistry.engine = flutterEngine
         unifiedPushChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)

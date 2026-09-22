@@ -1,5 +1,26 @@
 # Changelog
 
+## Deltiecord 0.9.29 build 98 — 2026-09-22
+
+- Give animated images their own bounded, lifecycle-aware frame decoder so GIF
+  playback is independent of paused UI tickers. Preserve autoplay/Reduce Motion
+  preferences and restart decoding after returning from the background.
+- Keep quiet Android notification updates on the same visible notification
+  channel instead of moving them into a low-importance silent channel.
+- Retain a bounded attachment-event cache across room switches, and reset image
+  loading state when a recycled message row receives a different attachment.
+- Consolidate desktop room tools into the three-dot menu and keep the emoji
+  button immediately beside Send.
+- Add a unified Emoji, GIFs, and Stickers picker, with emoji favourites and
+  frequently used sections and sticker/emoji pack management under Stickers.
+- Lower the mobile keyboard when opening the expression picker, without
+  automatically reopening it after selecting an emoji.
+- Replace mobile's long attachment menu with a paginated photo/video grid,
+  camera tile, and floating Picker/Poll/Files actions. Clipboard image paste
+  remains available from the composer's text-selection menu.
+- Request an Android IME draft-state reset after sending without hiding and
+  showing the keyboard window. Physical keyboard Caps Lock remains OS-managed.
+
 ## Deltiecord 0.9.29 build 97 — 2026-09-16
 
 - Reset every Android per-conversation alert cadence when Deltiecord opens, so
