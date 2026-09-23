@@ -20,6 +20,10 @@ Deployment is **not complete** until the chosen host has all of these:
   workers), HTTPS/WSS Matrix connections, media/blob images, and WebRTC. The
   marketing site's CSP/Permissions-Policy disables required app capabilities;
   do not change that site's global policy to accommodate this app.
+  The pinned flutter_rust_bridge loader calls `new Function`, so this app's
+  script policy currently needs `unsafe-eval` as well as WASM compilation.
+  This reduces CSP's defence-in-depth against script injection; third-party
+  scripts remain disallowed. Recheck removal when upgrading that dependency.
 - Same-origin `/api/servers/klipy/search` and Telegram media proxy routes.
   Keep old GIPHY routes working for older native builds. KLIPY's credential
   remains in a mode-0600 service file, never an environment variable embedded

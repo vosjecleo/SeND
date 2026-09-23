@@ -17,6 +17,7 @@ command -v nginx >/dev/null
 
 backup="/srv/storage/releases-archive/deltiecord/server-cutover-$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 0700 "$backup"
+printf 'Rollback backup directory: %s\n' "$backup"
 cp -p -- "$nginx_target" "$backup/matrix"
 cp -p -- "$api_root/app.py" "$api_root/deltiecord_media_proxy.py" "$backup/"
 cp -p -- "$site_root/index.html" "$site_root/cord.js" "$backup/"
