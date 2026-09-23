@@ -413,14 +413,8 @@ extension _MatrixRoomOperations on MatrixBackend {
         _notifyBackendListeners();
         return;
       }
-      // Room.getTimeline performs postLoad itself. Start key-backup hydration
-      // alongside it so a cold encrypted room does not serialize two database
-      // operations before it can publish any text.
-      final backupFuture = () async {
-        final timer = Stopwatch()..start();
-        await _loadRoomBackupKeys(room);
-        return timer.elapsedMilliseconds;
-      }();
+      // Publish locally available events before restoring only the sessions
+      // needed by this window. Never import a whole room's backup on entry.
       stageTimer.reset();
       if (!_isCurrentSelection(roomId, generation)) return;
       final timeline = await room.getTimeline(
@@ -445,7 +439,9 @@ extension _MatrixRoomOperations on MatrixBackend {
       // backup-backed events hydrate under the small loading strip.
       _roomMessageCache[roomId] = List.unmodifiable(_mappedMessages);
       _notifyBackendListeners();
-      keyBackupMs = await backupFuture;
+      final backupTimer = Stopwatch()..start();
+      await _loadRoomBackupKeys(room, timeline);
+      keyBackupMs = backupTimer.elapsedMilliseconds;
       if (!_isCurrentTimeline(timeline, generation)) return;
       stageTimer.reset();
       await _decryptTimelineEvents(timeline);

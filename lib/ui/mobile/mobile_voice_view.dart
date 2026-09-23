@@ -37,14 +37,22 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
   final Map<String, Future<UserProfileSummary>> _profiles = {};
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.backend,
+    builder: (context, _) => _buildVoice(context),
+  );
+
+  Widget _buildVoice(BuildContext context) {
     final backend = widget.backend;
+    final room = backend.selectedRoom?.id == widget.room.id
+        ? backend.selectedRoom!
+        : widget.room;
     final connected = backend.activeVoiceRoomId == widget.room.id;
     final streams = backend.rtcMediaStreams
         .where((item) => !item.videoMuted)
         .toList();
     final users = <String>{
-      ...widget.room.voiceParticipants.map((item) => item.userId),
+      ...room.voiceParticipants.map((item) => item.userId),
       ...streams.map((item) => item.userId),
       if (connected && backend.userId != null) backend.userId!,
     }.toList();
@@ -61,7 +69,7 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
             children: [
               const Icon(Icons.volume_up_outlined),
               const SizedBox(width: 10),
-              Expanded(child: Text(widget.room.name)),
+              Expanded(child: Text(room.name)),
             ],
           ),
         ),
@@ -155,7 +163,7 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
                       final stream = streams
                           .where((item) => item.userId == userId)
                           .firstOrNull;
-                      final participant = widget.room.voiceParticipants
+                      final participant = room.voiceParticipants
                           .where((item) => item.userId == userId)
                           .firstOrNull;
                       return _VoiceParticipantTile(

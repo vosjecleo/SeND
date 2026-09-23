@@ -18,6 +18,7 @@ import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
 import '../services/custom_emoji.dart';
 import '../services/avatar_media_pool.dart';
+import '../services/coalesced_callback.dart';
 import '../services/device_appearance_store.dart';
 import '../services/account_settings_sync.dart';
 import '../services/app_sounds.dart';
@@ -113,6 +114,19 @@ class MatrixBackend extends ChatBackend {
   Timeline? _timeline;
   MatrixVoiceController? _voice;
   Timer? _typingStopTimer;
+  late final _backendUpdates = CoalescedCallback(
+    notifyListeners,
+    enabled: kIsWeb,
+  );
+  int _inboxRequestRevision = 0;
+  @override
+  int get inboxRequestRevision => _inboxRequestRevision;
+  @override
+  int get pendingInviteCount =>
+      _client?.rooms
+          .where((room) => room.membership == Membership.invite)
+          .length ??
+      0;
   Timer? _settingsSaveTimer;
   AppPreferences? _pendingPreferences;
   String? _typingRoomId;
@@ -138,7 +152,6 @@ class MatrixBackend extends ChatBackend {
   bool _timelineHydrationRequested = false;
   bool _resumeTimelineRefreshRunning = false;
   bool _resumeTimelineRefreshRequested = false;
-  final Set<String> _loadedBackupRoomIds = {};
   final Map<String, Uint8List> _avatarBytes = {};
   final Map<String, Uri?> _avatarUris = {};
   final Map<String, Uint8List> _notificationAvatarBytes = {};
@@ -604,7 +617,11 @@ class MatrixBackend extends ChatBackend {
     }
   }
 
-  void _notifyBackendListeners() => notifyListeners();
+  void _notifyBackendListeners() {
+    // Key restoration can emit many synthetic syncs in a single frame. Publish
+    // the latest state once per frame-sized window, yielding to browser input.
+    _backendUpdates.request();
+  }
 
   @override
   Future<void> enableWebNotifications() async {
@@ -1269,6 +1286,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _backendUpdates.dispose();
     _typingStopTimer?.cancel();
     _settingsSaveTimer?.cancel();
     _desktopActivityLeaseTimer?.cancel();

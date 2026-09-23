@@ -784,9 +784,7 @@ class _RoomPanel extends StatefulWidget {
 
 class _RoomPanelState extends State<_RoomPanel> {
   final _roomSearchController = TextEditingController();
-  final _roomSearchTapGroup = Object();
   String _roomQuery = '';
-  bool _roomSearchVisible = false;
 
   ChatBackend get backend => widget.backend;
 
@@ -921,7 +919,12 @@ class _RoomPanelState extends State<_RoomPanel> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: backend,
+    builder: (context, _) => _buildPanel(context),
+  );
+
+  Widget _buildPanel(BuildContext context) {
     final query = _roomQuery.trim().toLowerCase();
     final visibleRooms = query.isEmpty
         ? backend.rooms
@@ -937,9 +940,8 @@ class _RoomPanelState extends State<_RoomPanel> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () {
-          if (_roomSearchVisible) {
-            setState(() => _roomSearchVisible = false);
-          }
+          _roomSearchController.clear();
+          setState(() => _roomQuery = '');
         },
       },
       child: Focus(
@@ -950,13 +952,14 @@ class _RoomPanelState extends State<_RoomPanel> {
               Column(
                 children: [
                   Container(
-                    height: 56,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 6, 6),
                     alignment: Alignment.centerLeft,
                     color: context.deltiecord.surface,
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
+                        Align(
+                          alignment: Alignment.centerLeft,
                           child: InkWell(
                             borderRadius: DeltiecordCorners.borderRadius,
                             onTap: backend.selectedSpaceId == null
@@ -981,76 +984,102 @@ class _RoomPanelState extends State<_RoomPanel> {
                                               .firstOrNull ??
                                           'Space',
                                 style: const TextStyle(
-                                  fontSize: DeltiecordTypeScale.bigUi,
+                                  fontSize: DeltiecordTypeScale.normal,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        TapRegion(
-                          groupId: _roomSearchTapGroup,
-                          child: IconButton(
-                            tooltip: backend.selectedSpaceId == null
-                                ? 'Search direct messages and groups'
-                                : 'Search rooms',
-                            onPressed: () => setState(
-                              () => _roomSearchVisible = !_roomSearchVisible,
-                            ),
-                            icon: Icon(
-                              _roomSearchVisible ? Icons.close : Icons.search,
-                              size: 19,
-                            ),
-                          ),
-                        ),
-                        PopupMenuButton<String>(
-                          tooltip: backend.selectedSpaceId == null
-                              ? 'Start chat or create room'
-                              : 'Create room',
-                          icon: const Icon(Icons.add, size: 20),
-                          onSelected: (value) {
-                            if (value == 'direct') _startDirectMessage(context);
-                            if (value == 'room') _createRoom(context);
-                            if (value == 'category') _createCategory(context);
-                          },
-                          itemBuilder: (context) => [
-                            if (backend.selectedSpaceId == null)
-                              const PopupMenuItem(
-                                value: 'direct',
-                                child: ListTile(
-                                  dense: true,
-                                  leading: Icon(
-                                    Icons.person_add_alt_1_outlined,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const Key('desktop-room-search'),
+                                controller: _roomSearchController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Search',
+                                  isDense: true,
+                                  prefixIcon: Icon(Icons.search, size: 18),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    vertical: 8,
                                   ),
-                                  title: Text('Start direct message'),
                                 ),
-                              ),
-                            PopupMenuItem(
-                              value: 'room',
-                              child: ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.add_comment_outlined),
-                                title: Text(
-                                  backend.selectedSpaceId == null
-                                      ? 'Create group chat'
-                                      : 'Create room',
-                                ),
+                                onChanged: (value) =>
+                                    setState(() => _roomQuery = value),
                               ),
                             ),
-                            if (backend.selectedSpaceId case final spaceId?
-                                when backend.canManageSpaceChannelLayout(
-                                  spaceId,
-                                ))
-                              const PopupMenuItem(
-                                value: 'category',
-                                child: ListTile(
-                                  dense: true,
-                                  leading: Icon(
-                                    Icons.create_new_folder_outlined,
-                                  ),
-                                  title: Text('Create category'),
-                                ),
+                            IconButton(
+                              key: const ValueKey('desktop-inbox'),
+                              tooltip: 'Inbox',
+                              icon: InboxIcon(backend: backend),
+                              onPressed: () => showUnifiedInbox(
+                                context,
+                                backend,
+                                onOpen: (item) async {
+                                  await backend.selectRoom(item.roomId);
+                                  if (item.eventId != null) {
+                                    await backend.jumpToEvent(item.eventId!);
+                                  }
+                                },
                               ),
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: backend.selectedSpaceId == null
+                                  ? 'Start chat or create room'
+                                  : 'Create room',
+                              icon: const Icon(Icons.add, size: 20),
+                              onSelected: (value) {
+                                if (value == 'direct') {
+                                  _startDirectMessage(context);
+                                }
+                                if (value == 'room') _createRoom(context);
+                                if (value == 'category') {
+                                  _createCategory(context);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                if (backend.selectedSpaceId == null)
+                                  const PopupMenuItem(
+                                    value: 'direct',
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: Icon(
+                                        Icons.person_add_alt_1_outlined,
+                                      ),
+                                      title: Text('Start direct message'),
+                                    ),
+                                  ),
+                                PopupMenuItem(
+                                  value: 'room',
+                                  child: ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      Icons.add_comment_outlined,
+                                    ),
+                                    title: Text(
+                                      backend.selectedSpaceId == null
+                                          ? 'Create group chat'
+                                          : 'Create room',
+                                    ),
+                                  ),
+                                ),
+                                if (backend.selectedSpaceId case final spaceId?
+                                    when backend.canManageSpaceChannelLayout(
+                                      spaceId,
+                                    ))
+                                  const PopupMenuItem(
+                                    value: 'category',
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: Icon(
+                                        Icons.create_new_folder_outlined,
+                                      ),
+                                      title: Text('Create category'),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ],
@@ -1096,59 +1125,6 @@ class _RoomPanelState extends State<_RoomPanel> {
                   SizedBox(height: _bottomPanelHeightFor(context)),
                 ],
               ),
-              if (_roomSearchVisible)
-                Positioned(
-                  key: const Key('room-search-popup'),
-                  top: 50,
-                  left: 8,
-                  right: 8,
-                  child: TapRegion(
-                    groupId: _roomSearchTapGroup,
-                    onTapOutside: (_) =>
-                        setState(() => _roomSearchVisible = false),
-                    child: Material(
-                      elevation: 12,
-                      color: context.deltiecord.elevated,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: DeltiecordCorners.borderRadius,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: SizedBox(
-                          height: 34,
-                          child: TextField(
-                            key: const Key('room-list-search'),
-                            controller: _roomSearchController,
-                            autofocus: true,
-                            decoration: InputDecoration(
-                              hintText: backend.selectedSpaceId == null
-                                  ? 'Search direct messages and groups'
-                                  : 'Search rooms',
-                              prefixIcon: const Icon(Icons.search, size: 17),
-                              suffixIcon: _roomQuery.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Clear room search',
-                                      onPressed: () {
-                                        _roomSearchController.clear();
-                                        setState(() => _roomQuery = '');
-                                      },
-                                      icon: const Icon(Icons.close, size: 15),
-                                    ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 6,
-                              ),
-                            ),
-                            onChanged: (value) =>
-                                setState(() => _roomQuery = value),
-                            onSubmitted: (_) =>
-                                setState(() => _roomSearchVisible = false),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

@@ -121,99 +121,103 @@ Future<void> showPinnedMessages(
   );
 }
 
+class InboxIcon extends StatelessWidget {
+  const InboxIcon({required this.backend, super.key});
+  final ChatBackend backend;
+
+  @override
+  Widget build(BuildContext context) => Badge(
+    key: const ValueKey('inbox-invite-badge'),
+    isLabelVisible: backend.pendingInviteCount > 0,
+    backgroundColor: Colors.red,
+    child: const Icon(Icons.inbox_outlined),
+  );
+}
+
 Future<void> showUnifiedInbox(
   BuildContext hostContext,
   ChatBackend backend, {
   required Future<void> Function(InboxItemSummary item) onOpen,
 }) => showDialog<void>(
   context: hostContext,
-  builder: (dialogContext) => Dialog(
-    child: SizedBox(
-      width: 680,
-      height: 640,
-      child: Column(
-        children: [
-          const ListTile(
-            leading: Icon(Icons.inbox_outlined),
-            title: Text('Inbox'),
-            subtitle: Text('Mentions, replies, reactions, calls, and invites'),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: backend.unifiedInbox.isEmpty
-                ? const Center(child: Text('You are all caught up.'))
-                : ListView.builder(
-                    itemCount: backend.unifiedInbox.length,
-                    itemBuilder: (context, index) {
-                      final item = backend.unifiedInbox[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: item.avatarBytes == null
-                              ? null
-                              : MemoryImage(item.avatarBytes!),
-                          child: item.avatarBytes == null
-                              ? Icon(_inboxIcon(item.kind))
-                              : null,
-                        ),
-                        title: Text(item.roomName),
-                        subtitle: Text(
-                          item.preview,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: item.kind == InboxItemKind.invite
-                            ? PopupMenuButton<String>(
-                                tooltip: 'Invitation actions',
-                                onSelected: (value) async {
-                                  if (value == 'accept') {
-                                    await _acceptInboxInvite(
-                                      hostContext,
-                                      dialogContext,
-                                      backend,
-                                      item,
-                                      onOpen,
-                                    );
-                                  } else {
-                                    await backend.rejectRoomInvite(item.roomId);
-                                    if (dialogContext.mounted) {
-                                      Navigator.pop(dialogContext);
-                                    }
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'accept',
-                                    child: Text('Accept'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'decline',
-                                    child: Text('Decline'),
-                                  ),
-                                ],
-                              )
-                            : Text(_inboxLabel(item.kind)),
-                        onTap: () async {
-                          if (item.kind == InboxItemKind.invite) {
-                            await _acceptInboxInvite(
-                              hostContext,
-                              dialogContext,
-                              backend,
-                              item,
-                              onOpen,
-                            );
-                          } else {
-                            if (!dialogContext.mounted) return;
-                            Navigator.pop(dialogContext);
-                            await onOpen(item);
-                          }
+  builder: (dialogContext) => ListenableBuilder(
+    listenable: backend,
+    builder: (context, _) {
+      final items = backend.unifiedInbox;
+      return Dialog(
+        child: SizedBox(
+          width: 680,
+          height: 640,
+          child: Column(
+            children: [
+              const ListTile(
+                leading: Icon(Icons.inbox_outlined),
+                title: Text('Inbox'),
+                subtitle: Text(
+                  'Mentions, replies, reactions, calls, and invites',
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: items.isEmpty
+                    ? const Center(child: Text('You are all caught up.'))
+                    : ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: item.avatarBytes == null
+                                  ? null
+                                  : MemoryImage(item.avatarBytes!),
+                              child: item.avatarBytes == null
+                                  ? Icon(_inboxIcon(item.kind))
+                                  : null,
+                            ),
+                            title: Text(item.roomName),
+                            subtitle: Text(
+                              item.preview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: item.kind == InboxItemKind.invite
+                                ? _InviteActions(
+                                    onAction: (value) async {
+                                      if (value == 'accept') {
+                                        await _acceptInboxInvite(
+                                          hostContext,
+                                          dialogContext,
+                                          backend,
+                                          item,
+                                          onOpen,
+                                        );
+                                      } else {
+                                        await backend.rejectRoomInvite(
+                                          item.roomId,
+                                        );
+                                        if (dialogContext.mounted) {
+                                          Navigator.pop(dialogContext);
+                                        }
+                                      }
+                                    },
+                                  )
+                                : Text(_inboxLabel(item.kind)),
+                            onTap: () async {
+                              if (item.kind != InboxItemKind.invite) {
+                                if (!dialogContext.mounted) return;
+                                Navigator.pop(dialogContext);
+                                await onOpen(item);
+                              }
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   ),
 );
 
@@ -237,6 +241,53 @@ Future<void> _acceptInboxInvite(
     return;
   }
   await onOpen(item);
+}
+
+class _InviteActions extends StatefulWidget {
+  const _InviteActions({required this.onAction});
+  final Future<void> Function(String action) onAction;
+  @override
+  State<_InviteActions> createState() => _InviteActionsState();
+}
+
+class _InviteActionsState extends State<_InviteActions> {
+  bool _busy = false;
+  String? _error;
+  Future<void> _run(String action) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.onAction(action);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not update invitation. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (_error != null)
+        Tooltip(message: _error!, child: const Icon(Icons.error_outline)),
+      IconButton(
+        tooltip: 'Ignore invitation',
+        onPressed: _busy ? null : () => _run('ignore'),
+        icon: const Icon(Icons.close),
+      ),
+      IconButton(
+        tooltip: 'Accept invitation',
+        onPressed: _busy ? null : () => _run('accept'),
+        icon: const Icon(Icons.check),
+      ),
+    ],
+  );
 }
 
 class _MessageList extends StatelessWidget {

@@ -121,27 +121,10 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
     // The event endpoint below can still resolve an event if sync is slow.
   }
   final room = client.getRoomById(roomId);
-  if (room == null || room.membership != Membership.join) {
+  if (room == null ||
+      (room.membership != Membership.join &&
+          room.membership != Membership.invite)) {
     return const {'resolutionStatus': 'event_unavailable'};
-  }
-
-  Event? event;
-  try {
-    event = await room.getEventById(eventId);
-  } catch (_) {
-    return const {'resolutionStatus': 'event_unavailable'};
-  }
-  if (event == null) {
-    return const {'resolutionStatus': 'event_unavailable'};
-  }
-  var displayEvent = event;
-  if (event.type == EventTypes.Encrypted && client.encryption != null) {
-    try {
-      displayEvent = await client.encryption!.decryptRoomEvent(event);
-    } catch (_) {
-      // A missing room key is represented honestly; later pushes can replace
-      // this placeholder after the key arrives.
-    }
   }
 
   final settings = client.accountData['net.deltiecord.settings']?.content;
@@ -163,6 +146,32 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
     currentDeviceId: client.deviceID,
   )) {
     return const {'resolutionStatus': 'suppressed_active_desktop'};
+  }
+  // Invited users cannot fetch room history, and invites do not carry joined
+  // room unread counters. Trust membership from authenticated sync, never the
+  // unauthenticated push payload, to decide whether an invitation is pending.
+  if (room.membership == Membership.invite) {
+    return invitationNotification(
+      roomId: room.id,
+      eventId: eventId,
+      roomName: room.getLocalizedDisplayname().take(160),
+      settings: settings,
+    );
+  }
+  Event? event;
+  try {
+    event = await room.getEventById(eventId);
+  } catch (_) {
+    return const {'resolutionStatus': 'event_unavailable'};
+  }
+  if (event == null) return const {'resolutionStatus': 'event_unavailable'};
+  var displayEvent = event;
+  if (event.type == EventTypes.Encrypted && client.encryption != null) {
+    try {
+      displayEvent = await client.encryption!.decryptRoomEvent(event);
+    } catch (_) {
+      // A missing key must not prevent a privacy-preserving generic alert.
+    }
   }
   // A notification can be opened or read while this background resolver is
   // still syncing/decrypting. Matrix remains the source of truth: do not let
@@ -260,6 +269,28 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
     'unreadCount': relevantUnreadCount,
   };
 }
+
+Map<String, Object?> invitationNotification({
+  required String roomId,
+  required String eventId,
+  required String roomName,
+  Map<String, Object?>? settings,
+}) => {
+  'roomId': roomId,
+  'eventId': eventId,
+  'roomName': roomName,
+  'senderName': 'Invitation',
+  'body':
+      'You were invited to a conversation. Open your inbox to accept or ignore.',
+  'timestamp': DateTime.now().millisecondsSinceEpoch,
+  'groupConversation': false,
+  'sound': settings?.tryGet<bool>('notification_sound') ?? true,
+  'vibrate': settings?.tryGet<bool>('notification_vibration') ?? true,
+  'alertCadence':
+      settings?.tryGet<String>('notification_alert_cadence') ??
+      'fiveMinuteCooldown',
+  'unreadCount': 1,
+};
 
 /// Whether another desktop device currently owns the user's notification UI.
 ///

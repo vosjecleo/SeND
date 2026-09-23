@@ -7,6 +7,7 @@ import '../../models/chat_models.dart';
 import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
 import '../settings_screen.dart';
+import '../advanced_chat_views.dart';
 import 'mobile_details_panel.dart';
 import 'mobile_navigation.dart';
 import 'mobile_profile_sheet.dart';
@@ -43,6 +44,7 @@ class _MobileChatShellState extends State<MobileChatShell>
   int _resumeGeneration = 0;
   Timer? _timelineGestureReset;
   bool _suppressTimelineGestures = false;
+  int _inboxRevision = 0;
 
   ChatBackend get backend => widget.backend;
 
@@ -53,6 +55,7 @@ class _MobileChatShellState extends State<MobileChatShell>
     _lastSpaceId = backend.selectedSpaceId;
     WidgetsBinding.instance.addObserver(this);
     backend.addListener(_backendChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _backendChanged());
     unawaited(_restoreDrafts());
   }
 
@@ -69,6 +72,21 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   void _backendChanged() {
     if (!mounted) return;
+    if (_inboxRevision != backend.inboxRequestRevision) {
+      _inboxRevision = backend.inboxRequestRevision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showUnifiedInbox(
+          context,
+          backend,
+          onOpen: (item) async {
+            await backend.selectRoom(item.roomId);
+            final room = backend.selectedRoom;
+            if (room != null) await _openRoom(room);
+          },
+        );
+      });
+    }
     final roomId = backend.selectedRoom?.id;
     final spaceId = backend.selectedSpaceId;
     final roomChanged = roomId != _lastRoomId;
@@ -118,9 +136,6 @@ class _MobileChatShellState extends State<MobileChatShell>
     final generation = ++_roomOpenGeneration;
     await backend.selectRoom(room.id);
     if (generation != _roomOpenGeneration) return;
-    if (room.isVoice && backend.activeVoiceRoomId != room.id) {
-      await backend.joinVoiceRoom(room.id);
-    }
     if (!mounted) return;
     setState(() {
       _lastRoomId = room.id;

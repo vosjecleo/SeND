@@ -64,8 +64,16 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
       );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.backend,
+    builder: (context, _) => _buildVoice(context),
+  );
+
+  Widget _buildVoice(BuildContext context) {
     final backend = widget.backend;
+    final room = backend.selectedRoom?.id == widget.room.id
+        ? backend.selectedRoom!
+        : widget.room;
     final connectedHere = backend.activeVoiceRoomId == widget.room.id;
     final streams =
         backend.rtcMediaStreams
@@ -89,7 +97,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     return Column(
       children: [
         _VoiceHeader(
-          room: widget.room,
+          room: room,
           backend: backend,
           showOwnPreview: _showOwnPreview,
           onToggleOwnPreview: () =>
@@ -121,7 +129,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                   backend: backend,
                   streams: streams,
                   pinnedStreamId: _pinnedStreamId,
-                  participants: widget.room.voiceParticipants,
+                  participants: room.voiceParticipants,
                   profileFor: _profileFor,
                   onFullscreen: _showStreamFullscreen,
                   onPin: (id) => setState(
@@ -130,7 +138,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 )
               : _VoiceLobby(
                   backend: backend,
-                  room: widget.room,
+                  room: room,
                   profileFor: _profileFor,
                 ),
         ),

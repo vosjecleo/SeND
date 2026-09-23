@@ -2189,14 +2189,15 @@ void main() {
       ];
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
-    await tester.tap(find.byTooltip('Search direct messages and groups'));
-    await tester.pump();
-    await tester.enterText(find.byKey(const Key('room-list-search')), 'garden');
+    await tester.enterText(
+      find.byKey(const Key('desktop-room-search')),
+      'garden',
+    );
     await tester.pump();
     expect(find.text('Garden club'), findsOneWidget);
     expect(find.text('Alice'), findsNothing);
 
-    await tester.tap(find.byTooltip('Clear room search'));
+    await tester.enterText(find.byKey(const Key('desktop-room-search')), '');
     await tester.pump();
     await tester.tap(find.byTooltip('Start chat or create room'));
     await tester.pumpAndSettle();
@@ -2212,19 +2213,29 @@ void main() {
     expect(backend.startedDirectMessageWith, '@newfriend:example.org');
   });
 
-  testWidgets('search close button does not reopen the room search', (
+  testWidgets('desktop search remains inline and Escape clears its query', (
     tester,
   ) async {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
-    await tester.tap(find.byTooltip('Search direct messages and groups'));
+    await tester.enterText(
+      find.byKey(const Key('desktop-room-search')),
+      'query',
+    );
     await tester.pump();
-    expect(find.byKey(const Key('room-search-popup')), findsOneWidget);
-    await tester.tap(find.byTooltip('Search direct messages and groups'));
+    expect(find.byKey(const Key('desktop-room-search')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
 
     expect(find.byKey(const Key('room-search-popup')), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('desktop-room-search')))
+          .controller!
+          .text,
+      isEmpty,
+    );
   });
 
   testWidgets('bottom user island exposes status, presence, mute, and deafen', (

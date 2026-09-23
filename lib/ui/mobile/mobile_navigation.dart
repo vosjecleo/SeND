@@ -36,7 +36,12 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
   ChatBackend get backend => widget.backend;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: backend,
+    builder: (context, _) => _buildPanel(context),
+  );
+
+  Widget _buildPanel(BuildContext context) {
     final selectedSpace = backend.selectedSpaceId;
     final rooms = backend.rooms
         .where((room) {
@@ -165,7 +170,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                         key: const ValueKey('mobile-inbox'),
                                         tooltip: 'Inbox',
                                         onPressed: () => _openInbox(context),
-                                        icon: const Icon(Icons.inbox_outlined),
+                                        icon: InboxIcon(backend: backend),
                                       ),
                                       IconButton(
                                         key: const ValueKey(

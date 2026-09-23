@@ -20,7 +20,7 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
   final _assets = <AssetEntity>[];
   final _selected = <AssetEntity>[];
   final _scroll = ScrollController();
-  AssetPathEntity? _album;
+  bool _limitedAccess = false;
   int _page = 0;
   bool _loading = true;
   bool _more = true;
@@ -55,12 +55,7 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
         });
         return;
       }
-      final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.common,
-        onlyAll: true,
-      );
-      if (!mounted) return;
-      _album = albums.firstOrNull;
+      _limitedAccess = permission == PermissionState.limited;
       _loading = false;
       await _loadMore();
     } catch (_) {
@@ -75,14 +70,20 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
 
   Future<void> _loadMore() async {
     if (_loading || !_more || !mounted) return;
-    final album = _album;
-    if (album == null) {
-      setState(() => _more = false);
-      return;
-    }
     setState(() => _loading = true);
     try {
-      final items = await album.getAssetListPaged(page: _page, size: 60);
+      // Query the entire accessible library, not a manufacturer-specific
+      // "all"/camera album. Modified time includes recently downloaded media.
+      final items = await PhotoManager.getAssetListPaged(
+        page: _page,
+        pageCount: 60,
+        type: RequestType.common,
+        filterOption: FilterOptionGroup(
+          orders: const [
+            OrderOption(type: OrderOptionType.updateDate, asc: false),
+          ],
+        ),
+      );
       if (!mounted) return;
       setState(() {
         _assets.addAll(items);
@@ -144,10 +145,22 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
   Widget build(BuildContext context) => SafeArea(
     child: Column(
       children: [
+        if (_limitedAccess)
+          TextButton(
+            onPressed: () async {
+              await PhotoManager.presentLimited();
+              if (!mounted) return;
+              _assets.clear();
+              _page = 0;
+              _more = true;
+              await _loadMore();
+            },
+            child: const Text('Limited photo access — choose more photos'),
+          ),
         Row(
           children: [
             const SizedBox(width: 12),
-            const Expanded(child: Text('Photos and videos')),
+            const Expanded(child: Text('Recent photos and videos')),
             if (_selected.isNotEmpty)
               TextButton(
                 onPressed: _reading ? null : _attach,

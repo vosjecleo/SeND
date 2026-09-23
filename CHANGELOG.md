@@ -1,5 +1,32 @@
 # Changelog
 
+## Deltiecord 0.9.30 build 101 — 2026-09-23
+
+- Keep build 100's complete Flutter application; do not ship the experimental
+  HTML adapter or replace the Matrix SDK/cryptography implementation.
+- Coalesce web backend notification bursts and yield during room metadata/key
+  processing. Stop treating unchanged absent avatars as metadata changes, and
+  reuse locally stored last-message session keys before requesting backups.
+- Restore backup sessions needed by the loaded timeline instead of importing
+  every historical key in the room on entry. Older history retains SDK key requests.
+- Add an always-visible desktop room search bar, a smaller Home/Space heading,
+  and inbox access beside search. Both layouts show a red pending-invite dot and
+  explicit accept/ignore actions; the inbox updates while open.
+- Resolve Android invitation pushes from authenticated pending membership,
+  without requiring joined-room history access or message unread counters.
+  Tapping an invite notification opens the inbox; handling it clears the alert.
+- Subscribe room panels directly to backend updates so category visibility and
+  voice participant changes no longer require navigating away and back.
+- Open the voice-channel overview before joining on mobile, matching desktop.
+  Opening a channel alone does not join or start microphone capture.
+- Show Recent photos/videos from the accessible device library, ordered by
+  modification time, rather than relying on an album. Surface limited access
+  with a control for selecting more photos.
+- Add focused navigation, invite and notification-batching regression tests.
+  Remaining validation: real iOS performance, large-account recovery, and
+  physical-device push delivery. These changes are not a claim that every
+  browser's performance problems are resolved.
+
 ## Deltiecord 0.9.30 build 100 — 2026-09-23
 
 - Reuse the application theme/navigation configuration for ordinary backend

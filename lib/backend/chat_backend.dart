@@ -57,6 +57,11 @@ abstract class ChatBackend extends ChangeNotifier {
   String? roomIdForMessage(String eventId) => selectedRoom?.id;
   List<ScheduledMessageSummary> get scheduledMessages => const [];
   List<InboxItemSummary> get unifiedInbox => const [];
+  int get pendingInviteCount =>
+      unifiedInbox.where((item) => item.kind == InboxItemKind.invite).length;
+
+  /// Incremented when a notification requests the invitation inbox.
+  int get inboxRequestRevision => 0;
   List<StickerPackSummary> get stickerPacks => const [];
   List<StickerSummary> get customEmojis => stickerPacks
       .expand((pack) => pack.stickers)

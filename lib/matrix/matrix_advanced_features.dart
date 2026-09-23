@@ -1184,6 +1184,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) throw StateError('That invitation is unavailable.');
     await room.join();
+    await _notifications.clearRoom(roomId);
     if (room.isSpace) {
       _selectSpace(room.id);
     } else {
@@ -1195,6 +1196,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) return;
     await room.leave();
+    await _notifications.clearRoom(roomId);
     _notifyBackendListeners();
   }
 

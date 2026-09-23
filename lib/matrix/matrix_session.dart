@@ -233,7 +233,6 @@ extension _MatrixSession on MatrixBackend {
       _settingsHydrated = false;
       _selectedRoomId = null;
       _selectedSpaceId = null;
-      _loadedBackupRoomIds.clear();
       _roomHeroUsersLoaded.clear();
       _avatarBytes.clear();
       _avatarUris.clear();
@@ -782,6 +781,12 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _openNotificationTarget(NotificationTarget target) async {
     if (!_matrix.isLogged()) return;
     final room = _matrix.getRoomById(target.roomId);
+    if (room?.membership == Membership.invite) {
+      await _notifications.clearRoom(target.roomId);
+      _inboxRequestRevision++;
+      _notifyBackendListeners();
+      return;
+    }
     if (room == null || room.membership != Membership.join) return;
     try {
       await _selectRoom(target.roomId);

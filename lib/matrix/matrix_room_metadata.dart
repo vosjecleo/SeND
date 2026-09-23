@@ -109,11 +109,13 @@ extension _MatrixRoomMetadata on MatrixBackend {
     _refreshingRoomMetadata = true;
     var changed = false;
     try {
+      if (kIsWeb) await Future<void>.delayed(const Duration(milliseconds: 16));
       do {
         _roomMetadataRefreshRequested = false;
         final joinedRooms = _joinedRooms;
+        final joinedRoomIds = joinedRooms.map((room) => room.id).toSet();
         _roomHeroUsersLoaded.removeWhere(
-          (roomId) => joinedRooms.every((room) => room.id != roomId),
+          (roomId) => !joinedRoomIds.contains(roomId),
         );
         // Prioritise the visible room so metadata work for a large account
         // cannot hold its timeline/avatar behind dozens of inactive rooms.
@@ -124,6 +126,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
                 ...joinedRooms.where((room) => room.id == selectedRoomId),
                 ...joinedRooms.where((room) => room.id != selectedRoomId),
               ];
+        var processed = 0;
         for (final room in orderedRooms) {
           try {
             await room.postLoad();
@@ -141,6 +144,14 @@ extension _MatrixRoomMetadata on MatrixBackend {
           } catch (_) {
             // One unavailable avatar or key must not block the other rooms.
           }
+          if (kIsWeb && ++processed % 8 == 0) {
+            // Awaiting already-resolved SDK futures only drains microtasks;
+            // a browser task boundary lets input/painting run during recovery.
+            await Future<void>.delayed(Duration.zero);
+          }
+        }
+        if (kIsWeb && _roomMetadataRefreshRequested) {
+          await Future<void>.delayed(const Duration(milliseconds: 16));
         }
       } while (_roomMetadataRefreshRequested && _matrix.isLogged());
       // Native UnifiedPush notifications may arrive while Flutter is stopped.
@@ -182,7 +193,9 @@ extension _MatrixRoomMetadata on MatrixBackend {
     final avatar = room.avatar;
     if (_avatarUris.containsKey(room.id) &&
         _avatarUris[room.id] == avatar &&
-        _avatarBytes[room.id] != null) {
+        (avatar == null ||
+            !avatar.isScheme('mxc') ||
+            _avatarBytes[room.id] != null)) {
       return false;
     }
     _avatarUris[room.id] = avatar;
@@ -236,7 +249,10 @@ extension _MatrixRoomMetadata on MatrixBackend {
         keyManager.enabled &&
         await keyManager.isCached()) {
       try {
-        await keyManager.loadSingleKey(room.id, sessionId);
+        if (await keyManager.loadInboundGroupSession(room.id, sessionId) ==
+            null) {
+          await keyManager.loadSingleKey(room.id, sessionId);
+        }
       } on MatrixException catch (exception) {
         if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
       }

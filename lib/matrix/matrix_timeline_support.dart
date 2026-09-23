@@ -117,16 +117,31 @@ extension _MatrixTimelineSupport on MatrixBackend {
     }
   }
 
-  Future<void> _loadRoomBackupKeys(Room room) async {
-    if (!room.encrypted || _loadedBackupRoomIds.contains(room.id)) return;
+  Future<void> _loadRoomBackupKeys(Room room, Timeline timeline) async {
+    if (!room.encrypted) return;
     final keyManager = _matrix.encryption?.keyManager;
     if (keyManager == null || !keyManager.enabled) return;
     if (!await keyManager.isCached()) return;
-    try {
-      await keyManager.loadAllKeysFromRoom(room.id);
-      _loadedBackupRoomIds.add(room.id);
-    } on MatrixException catch (exception) {
-      if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
+    // Restore only sessions referenced by the loaded window, not years of room
+    // history. The SDK handles older sessions as history is requested later.
+    final sessions = <String>{
+      for (final event in timeline.events)
+        if (event.type == EventTypes.Encrypted)
+          if (event.content['session_id'] case final String sessionId)
+            sessionId,
+    };
+    for (final sessionId in sessions) {
+      if (!identical(_timeline, timeline)) return;
+      if (await keyManager.loadInboundGroupSession(room.id, sessionId) !=
+          null) {
+        continue;
+      }
+      try {
+        await keyManager.loadSingleKey(room.id, sessionId);
+      } on MatrixException catch (exception) {
+        if (exception.error != MatrixError.M_NOT_FOUND) rethrow;
+      }
+      if (kIsWeb) await Future<void>.delayed(Duration.zero);
     }
   }
 

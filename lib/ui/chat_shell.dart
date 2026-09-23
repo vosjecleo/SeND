@@ -170,6 +170,9 @@ class _ChatShellState extends State<ChatShell> {
     _lastBackendStatus = widget.backend.status;
     _draftRoomId = widget.backend.selectedRoom?.id;
     widget.backend.addListener(_handleBackendRoomChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleBackendRoomChange();
+    });
     unawaited(_initializeDrafts());
   }
 
@@ -204,7 +207,22 @@ class _ChatShellState extends State<ChatShell> {
     _restoreDraft(widget.backend.selectedRoom?.id);
   }
 
+  int _inboxRevision = 0;
+
   void _handleBackendRoomChange() {
+    if (_inboxRevision != widget.backend.inboxRequestRevision) {
+      _inboxRevision = widget.backend.inboxRequestRevision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showUnifiedInbox(
+          context,
+          widget.backend,
+          onOpen: (item) async {
+            await widget.backend.selectRoom(item.roomId);
+          },
+        );
+      });
+    }
     final status = widget.backend.status;
     if (status == SessionStatus.signedOut &&
         _lastBackendStatus != SessionStatus.signedOut) {
