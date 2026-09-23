@@ -7,6 +7,22 @@ without remote renderer dependencies, and packages `dist/*-web.tar.gz`.
 
 ## Hosting prerequisites
 
+### Build 99 deployment status — 2026-09-23
+
+The owner completed the approved cutover from Element to Deltiecord at
+`chat.deltie.net`. Post-cutover checks confirm version 0.9.30 build 99, active
+nginx/contact-api/Web Push services, the required isolation headers and WASM
+MIME type, working public KLIPY search/trending routes, and a responding Web
+Push configuration endpoint. The download site now includes the Web/PWA entry.
+An isolated Chromium smoke test of the live site reached startup without
+JavaScript errors, opened the SDK's IndexedDB database, and activated `/sw.js`.
+These infrastructure checks do not establish end-to-end notification delivery
+on a real iPhone; the real-device checklist below remains required.
+
+Reported first-release issues are tracked in
+[the build 99 follow-up notes](web-build-99-follow-up.md). No fixes for those
+reports are included in this deployment verification.
+
 Deployment is **not complete** until the chosen host has all of these:
 
 - HTTPS with a valid certificate, serving the complete archive at `/`.

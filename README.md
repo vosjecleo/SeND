@@ -2,8 +2,8 @@
 
 > **Latest release: version 0.9.30 build 99**
 >
-> Deltiecord now includes a Web/PWA build for **[chat.deltie.net](https://chat.deltie.net)**.
-> Hosting cutover from Element requires the operator's [server setup steps](docs/web-deployment.md).
+> Deltiecord now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
+> See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
 > Install it on an iPhone/iPad Home Screen, Android, or desktop. This release
 > introduces KLIPY GIF search and fixes animated clipboard paste, desktop emoji
 > composition, sticker alignment, edit cancellation, and resume synchronization.
