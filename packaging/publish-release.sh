@@ -122,8 +122,10 @@ base_url="https://github.com/vosjecleo/deltiecord/releases/download/$tag"
 checksum_url="$base_url/SHA256SUMS"
 printf 'Waiting for GitHub Actions release %s' "$tag"
 for _ in $(seq 1 180); do
+  # Missing-release responses can remain cached after CI publishes the assets.
+  # Poll a distinct URL so a stale 404 cannot delay a completed release.
   if curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-      "$checksum_url" -o "$temporary/SHA256SUMS"; then
+      "$checksum_url?poll=$(date +%s)" -o "$temporary/SHA256SUMS"; then
     printf '%s\n' ' ready.'
     break
   fi

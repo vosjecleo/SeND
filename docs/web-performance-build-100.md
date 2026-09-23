@@ -77,4 +77,13 @@ interoperability are unchanged.
 - Fresh Chromium contexts at desktop and mobile-sized viewports render the
   canvas with cross-origin isolation and no uncaught JavaScript errors.
   This is a signed-out smoke test, not Safari/iOS or authenticated performance
-  validation. No build-100 artifacts have been deployed.
+  validation.
+
+## Publication
+
+Build 100 was subsequently published to latest on GitHub and deltie.net for
+Android, Linux, Windows and Web. All four CI jobs passed and all ten artifact
+checksums were verified. The live `chat.deltie.net/version.json` reports build
+100; stable remains empty. `/home/cleo/update-deltiecord.sh` on deltie was tested
+against the published artifact. No privileged service/configuration changes
+were needed.
