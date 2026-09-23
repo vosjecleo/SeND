@@ -1,4 +1,4 @@
-import 'package:deltiecord/services/giphy_service.dart';
+import 'package:deltiecord/services/gif_service.dart';
 import 'package:deltiecord/ui/expression_picker.dart';
 import 'package:deltiecord/ui/emoji_picker_dialog.dart';
 import 'package:deltiecord/ui/advanced_chat_dialogs.dart';
@@ -16,7 +16,7 @@ void main() {
     'expression picker defaults to emoji and exposes sticker management',
     (tester) async {
       final backend = FakeBackend();
-      final giphy = GiphyService();
+      final giphy = GifService();
       addTearDown(giphy.dispose);
       await tester.pumpWidget(
         MaterialApp(

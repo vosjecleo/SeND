@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'platform_io.dart';
 
 import 'bounded_http.dart';
 

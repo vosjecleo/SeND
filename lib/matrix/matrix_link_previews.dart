@@ -147,6 +147,45 @@ extension _MatrixLinkPreviews on MatrixBackend {
       added: _preferences.trustedPreviewDomainsAdded,
       removed: _preferences.trustedPreviewDomainsRemoved,
     );
+    if (directAllowed &&
+        (requestUrl.host == 'klipy.com' ||
+            requestUrl.host == 'static.klipy.com')) {
+      final gifs = GifService();
+      try {
+        final gif = await gifs.resolveKlipyLink(requestUrl);
+        if (gif != null &&
+            LinkPreviewNetworkPolicy.allowsDirectFallback(
+              _preferences.directLinkPreviewMode,
+              gif.shareUrl,
+              added: _preferences.trustedPreviewDomainsAdded,
+              removed: _preferences.trustedPreviewDomainsRemoved,
+            )) {
+          final bytes = await gifs.download(gif);
+          final isGif =
+              bytes.length >= 10 &&
+              bytes[0] == 71 &&
+              bytes[1] == 73 &&
+              bytes[2] == 70;
+          if (isGif) {
+            result = LinkPreview(
+              url: original,
+              title: gif.title,
+              siteName: 'KLIPY',
+              imageBytes: bytes,
+              gifSource: gif.shareUrl,
+              width: bytes[6] | (bytes[7] << 8),
+              height: bytes[8] | (bytes[9] << 8),
+            );
+            _linkPreviewUrlCache.put(original, result);
+            return result;
+          }
+        }
+      } catch (_) {
+        // Preserve the homeserver card if provider lookup/media is unavailable.
+      } finally {
+        gifs.dispose();
+      }
+    }
     // A homeserver can return useful OpenGraph text while omitting a playable
     // provider stream. In an explicitly allowed direct mode, enrich that card
     // after the homeserver request rather than treating partial metadata as a
@@ -195,6 +234,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
         siteName: preview.siteName,
         imageBytes: preview.imageBytes,
         videoUrl: preview.videoUrl,
+        gifSource: preview.gifSource,
         width: preview.width,
         height: preview.height,
       );
@@ -207,6 +247,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
         siteName: homeserver.siteName ?? direct.siteName,
         imageBytes: homeserver.imageBytes ?? direct.imageBytes,
         videoUrl: homeserver.videoUrl ?? direct.videoUrl,
+        gifSource: homeserver.gifSource ?? direct.gifSource,
         width: direct.width ?? homeserver.width,
         height: direct.height ?? homeserver.height,
       );

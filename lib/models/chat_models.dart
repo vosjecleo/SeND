@@ -870,6 +870,7 @@ class LinkPreview {
     this.siteName,
     this.imageBytes,
     this.videoUrl,
+    this.gifSource,
     this.width,
     this.height,
   });
@@ -880,6 +881,7 @@ class LinkPreview {
   final String? siteName;
   final Uint8List? imageBytes;
   final Uri? videoUrl;
+  final Uri? gifSource;
   final int? width;
   final int? height;
 }
@@ -905,6 +907,7 @@ class ChatAttachment {
     this.sticker = false,
     this.stickerPackId,
     this.stickerPackName,
+    this.gifSource,
   });
 
   final AttachmentKind kind;
@@ -926,6 +929,7 @@ class ChatAttachment {
   final bool sticker;
   final String? stickerPackId;
   final String? stickerPackName;
+  final Uri? gifSource;
 }
 
 class AttachmentDraft {
@@ -938,6 +942,7 @@ class AttachmentDraft {
     this.voiceMessage = false,
     this.durationMilliseconds,
     this.waveform,
+    this.gifSource,
   });
 
   final Uint8List bytes;
@@ -948,6 +953,7 @@ class AttachmentDraft {
   final bool voiceMessage;
   final int? durationMilliseconds;
   final List<int>? waveform;
+  final Uri? gifSource;
 }
 
 class MediaPlaybackSource {

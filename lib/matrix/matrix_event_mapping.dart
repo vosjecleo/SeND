@@ -283,6 +283,9 @@ extension _MatrixEventMapping on MatrixBackend {
               true ||
           event.content.tryGet<bool>('m.spoiler') == true,
       caption: caption,
+      gifSource: Uri.tryParse(
+        event.content.tryGet<String>('net.deltiecord.gif_source') ?? '',
+      ),
       hasThumbnail: event.hasThumbnail,
       animated: _isAnimatedImageMime(event.attachmentMimetype),
       width: event.infoMap.tryGet<int>('w'),

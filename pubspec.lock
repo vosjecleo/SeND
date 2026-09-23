@@ -1250,6 +1250,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.9"
+  universal_io:
+    dependency: "direct main"
+    description:
+      name: universal_io
+      sha256: f63cbc48103236abf48e345e07a03ce5757ea86285ed313a6a032596ed9301e2
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.1"
   universal_platform:
     dependency: transitive
     description:
@@ -1395,7 +1403,7 @@ packages:
     source: hosted
     version: "1.6.0"
   web:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: web
       sha256: "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"

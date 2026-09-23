@@ -1,0 +1,26 @@
+[Unit]
+Description=Deltiecord identifier-only Web Push gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=deltiecord-push
+Group=deltiecord-push
+WorkingDirectory=/opt/deltiecord-web-push
+Environment=WEB_PUSH_STATE=/var/lib/deltiecord-web-push
+Environment=WEB_PUSH_PRIVATE_KEY=/var/lib/deltiecord-web-push/vapid.pem
+Environment=WEB_PUSH_CONTACT=mailto:admin@deltie.net
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/deltiecord-web-push/venv/bin/gunicorn --workers 1 --threads 4 --timeout 45 --bind 127.0.0.1:8141 web_push:app
+Restart=on-failure
+UMask=0077
+StateDirectory=deltiecord-web-push
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

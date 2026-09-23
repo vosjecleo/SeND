@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'platform_io.dart';
 import 'dart:math';
 
 import 'package:path/path.dart' as path;

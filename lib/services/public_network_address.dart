@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'platform_io.dart';
 
 /// Returns whether [address] is suitable for a client-side public web fetch.
 ///

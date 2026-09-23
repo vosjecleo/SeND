@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
@@ -16,10 +15,11 @@ import '../../services/android_shared_content.dart';
 import '../../services/emoji_repository.dart';
 import '../../services/custom_emoji.dart';
 import '../../services/favourite_reactions_store.dart';
-import '../../services/giphy_service.dart';
+import '../../services/gif_service.dart';
 import '../deltiecord_theme.dart';
 import '../expression_picker.dart';
 import 'mobile_attachment_picker.dart';
+import '../../services/clipboard_image.dart';
 import '../advanced_chat_dialogs.dart';
 import '../advanced_chat_views.dart';
 import '../matrix_html_text.dart';
@@ -75,7 +75,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   final GlobalKey _timelineViewportKey = GlobalKey();
   final Map<String, GlobalKey> _messageKeys = {};
   final Map<GlobalKey, String> _messageIdsByKey = {};
-  final _giphy = GiphyService();
+  final _giphy = GifService();
   final List<AttachmentDraft> _attachments = [];
   ChatMessage? _reply;
   ChatMessage? _edit;
@@ -947,6 +947,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             contextMessage: _edit ?? _reply,
             editing: _edit != null,
             onClearContext: () => setState(() {
+              if (_edit != null) {
+                _customEmojiSpans = [];
+                _composer.clear();
+              }
               _reply = null;
               _edit = null;
             }),
@@ -1228,20 +1232,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _pasteClipboardImage() async {
-    final clipboard = SystemClipboard.instance;
-    if (clipboard == null) return;
-    final reader = await clipboard.read();
-    final formats = [Formats.png, Formats.jpeg, Formats.webp, Formats.gif];
-    final format = formats.where(reader.canProvide).firstOrNull;
-    if (format == null) return;
-    final completed = Completer<Uint8List?>();
-    final progress = reader.getFile(
-      format,
-      (file) async => completed.complete(await file.readAll()),
-      onError: (_) => completed.complete(null),
-    );
-    if (progress == null) return;
-    final bytes = await completed.future;
+    final bytes = await readClipboardImage();
     if (!mounted || bytes == null || bytes.isEmpty) return;
     final mimeType = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
     _insertKeyboardContent(
@@ -1303,7 +1294,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       await backend.sendAttachment(
         AttachmentDraft(
           bytes: bytes,
-          name: 'giphy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          gifSource: gif.shareUrl,
           mimeType: 'image/gif',
           spoiler: false,
         ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_vodozemac/flutter_vodozemac.dart' as vodozemac;
 import 'package:media_kit/media_kit.dart';
 import 'package:timezone/data/latest_all.dart' as timezone_data;
@@ -13,9 +14,27 @@ import 'services/chat_notifications.dart';
 import 'services/app_sounds.dart';
 import 'services/android_push_bridge.dart';
 import 'services/temporary_attachment_store.dart';
+import 'services/browser_lifecycle.dart';
+import 'services/browser_push.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb && !await initializeBrowser()) {
+    runApp(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              'Deltiecord is already open in another tab, or browser storage is unavailable.\n'
+              'Close other Deltiecord tabs and reopen this page over HTTPS.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
   // Desktop Flutter defaults to a 100 MiB decoded-image cache. Deltiecord also
   // keeps bounded Matrix timeline data, WebRTC, and video decoders resident,
   // so a smaller cache avoids retaining old media previews unnecessarily.
@@ -25,13 +44,19 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
   timezone_data.initializeTimeZones();
   final temporaryAttachments = TemporaryAttachmentStore.instance;
-  await temporaryAttachments.initialize();
-  WidgetsBinding.instance.addObserver(
-    _TemporaryAttachmentLifecycle(temporaryAttachments),
-  );
+  if (!kIsWeb) {
+    await temporaryAttachments.initialize();
+    WidgetsBinding.instance.addObserver(
+      _TemporaryAttachmentLifecycle(temporaryAttachments),
+    );
+  }
   // Matrix only constructs its E2EE engine when Vodozemac is ready first.
   await vodozemac.init();
-  final backend = MatrixBackend(notifications: PlatformChatNotificationSink());
+  final backend = MatrixBackend(
+    notifications: kIsWeb
+        ? BrowserChatNotificationSink()
+        : PlatformChatNotificationSink(),
+  );
   final initialization = backend.initialize();
   runApp(DeltiecordApp(backend: backend));
   unawaited(
@@ -60,6 +85,17 @@ Future<void> main() async {
     ),
   );
   await initialization;
+  if (kIsWeb && backend.status == SessionStatus.signedIn) {
+    final roomId = Uri.base.queryParameters['room'];
+    if (roomId != null && roomId.isNotEmpty && roomId.length <= 1024) {
+      await backend.openAndroidPushTarget(
+        NotificationTarget(
+          roomId: roomId,
+          eventId: Uri.base.queryParameters['event'] ?? '',
+        ),
+      );
+    }
+  }
 }
 
 /// Headless Android entry point started by WorkManager for encrypted pushes.

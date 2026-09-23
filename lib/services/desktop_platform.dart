@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'platform_io.dart';
 
 enum DeltiecordDesktopPlatform { linux, windows, other }
 

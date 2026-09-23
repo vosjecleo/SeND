@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io';
+import 'platform_io.dart';
 import 'dart:typed_data';
 
 import 'package:html/dom.dart';
@@ -641,7 +641,9 @@ class PinnedDirectPreviewTransport implements DirectPreviewTransport {
         task = await Socket.startConnect(address, port);
       }
       final socket = await task.socket;
-      if (!isPublicInternetAddress(socket.remoteAddress)) {
+      if (!isPublicInternetAddress(
+        InternetAddress(socket.remoteAddress.address),
+      )) {
         socket.destroy();
         throw const HttpException(
           'Preview connection was redirected to a private address.',

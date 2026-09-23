@@ -7,6 +7,7 @@ import '../models/chat_models.dart';
 /// Keeping SDK objects behind this contract lets desktop and future Android
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
+  Future<void> enableWebNotifications() async {}
   SessionStatus get status;
   ConnectionStatus get connectionStatus;
   String? get error;

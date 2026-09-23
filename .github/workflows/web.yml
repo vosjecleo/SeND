@@ -1,0 +1,47 @@
+name: Web PWA
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.cargo/registry
+            ~/.cargo/git
+            .dart_tool/web-crypto
+            .dart_tool/web-tools
+          key: web-crypto-v1-${{ runner.arch }}-${{ hashFiles('packaging/build-web.sh', 'pubspec.lock') }}
+      - name: Install verified Flutter
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.0-stable.tar.xz -o /tmp/flutter.tar.xz
+          echo '26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296  /tmp/flutter.tar.xz' | sha256sum --check --strict
+          tar -C "$RUNNER_TEMP" -xf /tmp/flutter.tar.xz
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Validate and build web
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/sw.js
+          node --check web/browser_bridge.js
+          python3 -m venv /tmp/web-push-tests
+          /tmp/web-push-tests/bin/pip install -r server/requirements-web-push.txt
+          /tmp/web-push-tests/bin/python -m unittest discover -s server -p 'test_*.py'
+          bash packaging/build-web.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deltiecord-web
+          path: dist/deltiecord-*-web.tar.gz
+          if-no-files-found: error

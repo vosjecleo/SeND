@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+import '../gif_favourite_button.dart';
+import '../../services/platform_io.dart';
 import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
@@ -93,7 +94,7 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
           : null,
       onLongPress: hidden || attachment.sticker ? null : _showMediaActions,
       child: Stack(
-        alignment: Alignment.center,
+        alignment: attachment.sticker ? Alignment.centerLeft : Alignment.center,
         children: [
           IgnorePointer(
             ignoring: hidden,
@@ -107,6 +108,12 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
             const Chip(
               avatar: Icon(Icons.visibility_off, size: 17),
               label: Text('Spoiler — tap to reveal'),
+            ),
+          if (!hidden && isFavouriteableGifUri(attachment.gifSource))
+            Positioned(
+              right: 4,
+              top: 4,
+              child: GifFavouriteButton(uri: attachment.gifSource!),
             ),
         ],
       ),
@@ -123,7 +130,13 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
   Future<void> _openImageFullscreen() async {
     final bytes = await widget.backend.downloadAttachment(widget.message.id);
     if (mounted) {
-      _showImageFullscreen(context, bytes, onActions: _showMediaActions);
+      _showImageFullscreen(
+        context,
+        bytes,
+        onActions: _showMediaActions,
+        gifSource: widget.message.attachment?.gifSource,
+        autoplay: !widget.backend.preferences.reducedMotion,
+      );
     }
   }
 
@@ -219,7 +232,13 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
             widget.message.id,
           );
           if (mounted) {
-            _showImageFullscreen(context, bytes, onActions: _showMediaActions);
+            _showImageFullscreen(
+              context,
+              bytes,
+              onActions: _showMediaActions,
+              gifSource: attachment.gifSource,
+              autoplay: !widget.backend.preferences.reducedMotion,
+            );
           }
         } else if (video) {
           await _videoKey.currentState?.showFullscreen(
@@ -399,6 +418,8 @@ void _showImageFullscreen(
   BuildContext context,
   Uint8List bytes, {
   VoidCallback? onActions,
+  Uri? gifSource,
+  bool autoplay = true,
 }) {
   showDialog<void>(
     context: context,
@@ -411,10 +432,22 @@ void _showImageFullscreen(
             child: InteractiveViewer(
               minScale: 0.5,
               maxScale: 6,
-              child: Center(child: Image.memory(bytes)),
+              child: Center(
+                child: LifecycleMemoryImage(
+                  bytes: bytes,
+                  animated: false,
+                  autoplay: autoplay,
+                ),
+              ),
             ),
           ),
           _fullscreenCloseButton(context),
+          if (isFavouriteableGifUri(gifSource))
+            Positioned(
+              left: 12,
+              top: 12,
+              child: SafeArea(child: GifFavouriteButton(uri: gifSource!)),
+            ),
           if (onActions != null) _fullscreenActionsButton(context, onActions),
         ],
       ),
@@ -886,15 +919,34 @@ class MobileLinkPreviewCard extends StatelessWidget {
               )
             else if (preview.imageBytes case final image?)
               GestureDetector(
-                onTap: () => _showImageFullscreen(context, image),
+                onTap: () => _showImageFullscreen(
+                  context,
+                  image,
+                  gifSource: preview.gifSource,
+                  autoplay: !backend.preferences.reducedMotion,
+                ),
                 child: SizedBox(
                   width: mediaFrame.width,
                   height: mediaFrame.height,
-                  child: Image.memory(
-                    image,
-                    width: mediaFrame.width,
-                    height: mediaFrame.height,
-                    fit: BoxFit.contain,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      LifecycleMemoryImage(
+                        bytes: image,
+                        animated: false,
+                        autoplay:
+                            backend.preferences.autoplayGifs &&
+                            !backend.preferences.reducedMotion,
+                        width: mediaFrame.width,
+                        height: mediaFrame.height,
+                      ),
+                      if (isFavouriteableGifUri(preview.gifSource))
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GifFavouriteButton(uri: preview.gifSource!),
+                        ),
+                    ],
                   ),
                 ),
               ),

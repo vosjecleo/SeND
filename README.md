@@ -1,14 +1,46 @@
 # Deltiecord
 
-> **Current release candidate: version 0.9.29 build 98**
+> **Latest release: version 0.9.30 build 99**
 >
-> Deltiecord is available for desktop and Android. Build 94 hardens Android
-> media resume and notification cadence, adds media albums and editable trusted
-> preview sites, and makes Matrix sticker packs explicitly shareable.
+> Deltiecord now includes a Web/PWA build for **[chat.deltie.net](https://chat.deltie.net)**.
+> Hosting cutover from Element requires the operator's [server setup steps](docs/web-deployment.md).
+> Install it on an iPhone/iPad Home Screen, Android, or desktop. This release
+> introduces KLIPY GIF search and fixes animated clipboard paste, desktop emoji
+> composition, sticker alignment, edit cancellation, and resume synchronization.
 
 Start with the [installation and source-build guide](INSTALL.md). Official
 builds and release notes are available on the
 [Deltiecord releases page](https://deltie.net/cord).
+
+## Web app and iPhone/iPad
+
+Visit **[chat.deltie.net](https://chat.deltie.net)**. The browser target uses the
+same Flutter app and Matrix encryption stack as the native clients, with the
+phone interface on iOS/Android and the desktop interface on desktop systems.
+
+- **iPhone/iPad:** open in Safari → Share → Add to Home Screen. Launch the
+  installed app, sign in, then use Settings → Notifications → Enable browser
+  notifications. Web Push requires iOS/iPadOS 16.4+ and permission; an ordinary
+  browser tab is not sufficient on iOS. No TestFlight or App Store installation
+  is required.
+- **Android/desktop:** use the browser’s Install app/Add to Home Screen option,
+  or keep using the website. Native packages remain available.
+- **Session safety:** Matrix sessions and crypto state persist in IndexedDB;
+  only one tab may own that session at a time. Keep your recovery key. Clearing
+  site data or using private browsing can remove local session/crypto state,
+  and browsers may deny requests for persistent storage.
+- **Web notifications:** the gateway receives short-lived Matrix OpenID proof
+  and opaque Web Push subscription data, not your Matrix session token or
+  decrypted messages. Alerts show generic activity text. Initially, the hosted
+  gateway accepts deltie.net accounts; additional homeservers require explicit
+  operator configuration.
+- **Browser limits:** native photo-library browsing uses the browser picker
+  instead. Browser video playback currently requires a known size up to 25 MiB;
+  codec support depends on the browser. HTTPS/CORS and cross-origin isolation
+  are required for hosting. Web Push delivery on a real iPhone still needs
+  device validation; desktop Chromium smoke tests do not establish iOS parity.
+
+For self-hosting/builds, see [Web deployment](docs/web-deployment.md).
 
 ## Preface
 
@@ -30,7 +62,8 @@ Please forgive my sins of vibecoding.
 
 ## What is Deltiecord?
 
-Deltiecord is an open-source Flutter client for Matrix on desktop and Android.
+Deltiecord is an open-source Flutter client for Matrix on desktop, Android, and
+the web—including iPhone/iPad as an installed PWA.
 
 The goal of the project is to bring the familiar UX of discord to the secure and open source side, to hopefully get more discord users on a secure platform.
 
@@ -66,7 +99,7 @@ Deltiecord focuses heavily on a Discord-like user experiencie that most Matrix c
 Notable features include:
 
 - End-to-end encrypted Matrix messaging
-- GIF search, powered by GIPHY
+- GIF search and trending, powered by KLIPY; favourites include older GIPHY saves
 - Inline video streaming, including encrypted media without requiring the entire file to download first
 - Separate voice channels using MatrixRTC
 - Voice, video and screen sharing, with participant grids, speaking indicators,
@@ -151,7 +184,8 @@ Normal network activity may include:
 - your configured Matrix homeserver
 - Matrix federation indirectly through that homeserver
 - MatrixRTC/WebRTC infrastructure
-- Deltiecord's GIF search proxy / GIPHY when using GIF search
+- Deltiecord's GIF search proxy / KLIPY when using GIF search (older saved GIPHY
+  media still connects to GIPHY when opened)
 - services required for supported link-preview integrations
 - external websites when explicitly opened by the user
 - external websites for link previews only if the user explicitly enables the

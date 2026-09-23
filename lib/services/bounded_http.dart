@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'platform_io.dart';
 import 'dart:typed_data';
 
 /// Reads a response without allowing an endpoint to grow process memory without

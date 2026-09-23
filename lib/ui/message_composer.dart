@@ -100,7 +100,7 @@ class _MentionPicker extends StatelessWidget {
 
 class _RichComposerState extends State<_RichComposer> {
   final _scrollController = ScrollController();
-  final _pickerGiphy = GiphyService();
+  final _pickerGiphy = GifService();
   final _emojiOverlay = OverlayPortalController();
   final _emojiAnchor = LayerLink();
   List<EmojiEntry> _emojiMatches = const [];
@@ -286,7 +286,8 @@ class _RichComposerState extends State<_RichComposer> {
         await widget.backend.sendAttachment(
           AttachmentDraft(
             bytes: bytes,
-            name: 'giphy-${DateTime.now().millisecondsSinceEpoch}.gif',
+            name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+            gifSource: result.shareUrl,
             mimeType: 'image/gif',
             spoiler: false,
           ),
@@ -545,6 +546,28 @@ class _RichComposerState extends State<_RichComposer> {
                                     focusNode: widget.focusNode,
                                     scrollController: _scrollController,
                                     config: QuillEditorConfig(
+                                      textSpanBuilder:
+                                          (
+                                            context,
+                                            node,
+                                            offset,
+                                            text,
+                                            style,
+                                            recognizer,
+                                          ) => composerEmojiSpan(
+                                            backend: widget.backend,
+                                            text: text,
+                                            link:
+                                                node
+                                                        .style
+                                                        .attributes[Attribute
+                                                            .link
+                                                            .key]
+                                                        ?.value
+                                                    as String?,
+                                            style: style,
+                                            recognizer: recognizer,
+                                          ),
                                       autoFocus: false,
                                       minHeight: editorHeight,
                                       maxHeight: expandedEditorHeight,

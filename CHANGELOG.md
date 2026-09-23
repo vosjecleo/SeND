@@ -1,5 +1,33 @@
 # Changelog
 
+## Deltiecord 0.9.30 build 99 — 2026-09-23
+
+- Add a shared-code Web/PWA target with mobile and desktop layouts, SDK-owned
+  IndexedDB session/crypto persistence, single-tab session ownership, and
+  install guidance for iPhone/iPad, Android, and desktop browsers.
+- Add Web Push registration, a generic-message service worker, notification
+  navigation/clearing, and a bounded gateway authenticated by short-lived Matrix
+  OpenID proofs. iOS delivery requires Home Screen installation and real-device
+  validation; the gateway never receives Matrix session tokens or message text.
+- Replace GIF search/trending with KLIPY through a server-held key. Preserve
+  existing favourites, resolve KLIPY GIF links under the chosen preview policy,
+  and allow inline/fullscreen favouriting of source-tagged GIFs.
+- Share bounded GIF byte caching and lifecycle-aware rendering between search,
+  favourites, inline media, and fullscreen viewing.
+- Canceling an edit clears its composer text and custom-emoji formatting on
+  both desktop and mobile; canceling a reply still preserves the draft.
+- Resume synchronization invalidates a suspended long poll through the SDK
+  before issuing a fresh sync, retaining the existing timeline and scroll anchor.
+- Add a cached Web/PWA CI job and include the web archive in release verification.
+- Document the image-heavy scroll investigation without changing scrolling code.
+
+- Prefer original GIF/WebP clipboard data over flattened PNG alternatives on
+  desktop and mobile, including desktop rich-editor paste callbacks.
+- Use animated source URLs for older favourites saved with still previews.
+- Render selected custom emojis inside the desktop composer while preserving
+  alias text, stable references, and editing offsets. Plain aliases stay text.
+- Left-align stickers with message content on desktop and mobile.
+
 ## Deltiecord 0.9.29 build 98 — 2026-09-22
 
 - Give animated images their own bounded, lifecycle-aware frame decoder so GIF

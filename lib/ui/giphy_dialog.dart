@@ -2,16 +2,61 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/giphy_service.dart';
+import '../services/gif_service.dart';
+import 'lifecycle_memory_image.dart';
+import 'dart:typed_data';
 import '../services/secret_redaction.dart';
 import 'deltiecord_theme.dart';
 
+class _GifPreview extends StatefulWidget {
+  const _GifPreview({
+    required this.service,
+    required this.gif,
+    required this.autoplay,
+    super.key,
+  });
+  final GifService service;
+  final GifSearchResult gif;
+  final bool autoplay;
+  @override
+  State<_GifPreview> createState() => _GifPreviewState();
+}
+
+class _GifPreviewState extends State<_GifPreview> {
+  late final Future<Uint8List> _bytes = widget.service.preview(widget.gif);
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List>(
+    future: _bytes,
+    builder: (context, snapshot) => snapshot.hasError
+        ? const Center(child: Icon(Icons.broken_image_outlined))
+        : snapshot.data == null
+        ? const Center(
+            child: SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        : LifecycleMemoryImage(
+            bytes: snapshot.data!,
+            animated: true,
+            autoplay: widget.autoplay,
+            fit: BoxFit.cover,
+          ),
+  );
+}
+
 class GiphyDialog extends StatefulWidget {
-  const GiphyDialog({required this.service, this.embedded = false, super.key});
+  const GiphyDialog({
+    required this.service,
+    this.embedded = false,
+    this.autoplay = true,
+    super.key,
+  });
+  final bool autoplay;
 
   final bool embedded;
 
-  final GiphyService service;
+  final GifService service;
 
   @override
   State<GiphyDialog> createState() => _GiphyDialogState();
@@ -109,7 +154,7 @@ class _GiphyDialogState extends State<GiphyDialog> {
               unawaited(_search());
             },
             decoration: InputDecoration(
-              hintText: 'Search Giphy',
+              hintText: 'Search KLIPY',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: IconButton(
                 onPressed: () {
@@ -167,12 +212,11 @@ class _GiphyDialogState extends State<GiphyDialog> {
                             message: gif.title,
                             child: InkWell(
                               onTap: () => Navigator.of(context).pop(gif),
-                              child: Image.network(
-                                gif.previewUrl.toString(),
-                                fit: BoxFit.cover,
-                                gaplessPlayback: true,
-                                errorBuilder: (_, _, _) =>
-                                    const ColoredBox(color: Color(0xff292a30)),
+                              child: _GifPreview(
+                                key: ValueKey(gif.animatedPreviewUrl),
+                                service: widget.service,
+                                gif: gif,
+                                autoplay: widget.autoplay,
                               ),
                             ),
                           ),

@@ -18,6 +18,7 @@ abstract final class LinkPreviewNetworkPolicy {
     'ttvnw.net',
     'streamable.com',
     'giphy.com',
+    'klipy.com',
     'tenor.com',
     'tenor.googleapis.com',
     'imgur.com',

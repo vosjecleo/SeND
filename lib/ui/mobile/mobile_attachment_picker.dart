@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:mime/mime.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -36,6 +37,14 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
   }
 
   Future<void> _initialize() async {
+    if (kIsWeb) {
+      setState(() {
+        _loading = false;
+        _error =
+            'Use Picker below to choose photos and videos from your device.';
+      });
+      return;
+    }
     try {
       final permission = await PhotoManager.requestPermissionExtend();
       if (!mounted) return;

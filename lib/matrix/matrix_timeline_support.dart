@@ -163,7 +163,10 @@ extension _MatrixTimelineSupport on MatrixBackend {
             .toList(growable: false)) {
       final source = _mediaPlaybackSources.remove(eventId);
       _mediaPlaybackReferences.remove(eventId);
-      if (source != null) _mediaRangeProxy.unregister(source.uri);
+      if (source != null) {
+        releaseBrowserMediaUrl(source.uri);
+        _mediaRangeProxy.unregister(source.uri);
+      }
     }
     await Future.wait([
       _hydrateSenderAvatars(timeline),
@@ -237,12 +240,16 @@ extension _MatrixTimelineSupport on MatrixBackend {
           continue;
         }
         try {
-          // Android can suspend the Dart isolate between a Matrix sync and the
-          // timeline listener's frame notification. An immediate SDK sync
-          // catches up the persisted token and feeds new events through the
-          // existing Timeline subscriptions without rebuilding the timeline
-          // or disturbing its scroll anchor.
-          await _matrix.oneShotSync(timeout: Duration.zero);
+          // oneShotSync joins an outstanding long poll, even with timeout=0.
+          // Invalidate that suspended request through the SDK before restarting;
+          // abortSync waits for its database transaction and rejects stale data.
+          // Keep the same Timeline, listeners, and scroll anchor throughout.
+          final client = _matrix;
+          await client.abortSync();
+          if (!identical(client, _client) || !client.isLogged()) return;
+          final refresh = client.oneShotSync(timeout: Duration.zero);
+          client.backgroundSync = true;
+          await refresh;
         } catch (_) {
           // The normal sync loop owns reconnect/backoff. A resume refresh is a
           // best-effort nudge and must never replace its connection state.

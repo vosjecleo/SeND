@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'dart:io';
+import 'services/platform_io.dart';
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -45,8 +46,13 @@ class DeltiecordApp extends StatelessWidget {
         // the dedicated mobile tree directly widget-testable.
         final mobile =
             platformOverride == TargetPlatform.android ||
-            (platformOverride == null && Platform.isAndroid);
-        if (backend.status == SessionStatus.signedIn && !mobile) {
+            platformOverride == TargetPlatform.iOS ||
+            (platformOverride == null &&
+                (kIsWeb
+                    ? defaultTargetPlatform == TargetPlatform.android ||
+                          defaultTargetPlatform == TargetPlatform.iOS
+                    : Platform.isAndroid || Platform.isIOS));
+        if (backend.status == SessionStatus.signedIn && !mobile && !kIsWeb) {
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => DesktopWindowService.apply(preferences),
           );

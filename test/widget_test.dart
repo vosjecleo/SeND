@@ -1202,6 +1202,23 @@ void main() {
         .onPressed!();
     await tester.pump();
     expect(find.text('Editing message'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pump();
+    expect(find.text('Editing message'), findsNothing);
+    expect(
+      tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .controller
+          .document
+          .toPlainText()
+          .trim(),
+      isEmpty,
+    );
+    await _revealMessageActions(tester, find.text('Original').last);
+    tester
+        .widget<IconButton>(find.byKey(const Key('message-action-edit')))
+        .onPressed!();
+    await tester.pump();
     await _enterComposer(tester, 'Changed');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();

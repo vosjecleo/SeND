@@ -20,6 +20,7 @@ import urllib.request
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8091"))
 KEY_FILE = os.environ.get("GIPHY_API_KEY_FILE", "/etc/deltiecord/giphy-api-key")
+KLIPY_KEY_FILE = os.environ.get("KLIPY_API_KEY_FILE", "/etc/deltiecord/klipy-api-key")
 TELEGRAM_TOKEN_FILE = os.environ.get(
     "TELEGRAM_BOT_TOKEN_FILE", "/etc/deltiecord/telegram-bot-token"
 )
@@ -147,6 +148,35 @@ def _giphy_request(query=None):
         if len(body) > MAX_UPSTREAM_BYTES:
             raise RuntimeError("GIPHY response too large")
         return json.loads(body)
+
+
+def _klipy_request(query=None, slug=None):
+    # Never log the upstream URL: KLIPY places the credential in its path.
+    key = _read_secret(KLIPY_KEY_FILE)
+    endpoint = "items" if slug is not None else "trending" if query is None else "search"
+    parameters = {"per_page": 24, "page": 1, "content_filter": "high",
+                  "format_filter": "gif", "locale": "en"}
+    if query is not None:
+        parameters["q"] = query
+    if slug is not None:
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', slug):
+            raise ValueError('Invalid GIF slug')
+        parameters['slugs'] = slug
+    request = urllib.request.Request(
+        f"https://api.klipy.com/api/v1/{quote(key, safe='')}/gifs/{endpoint}?"
+        + urlencode(parameters),
+        headers={"User-Agent": f"Deltiecord-GIF-Proxy/{VERSION}"},
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        if response.status != 200 or response.headers.get_content_type() != "application/json":
+            raise RuntimeError("unexpected GIF provider response")
+        body = response.read(MAX_UPSTREAM_BYTES + 1)
+        if len(body) > MAX_UPSTREAM_BYTES:
+            raise RuntimeError("GIF provider response too large")
+        decoded = json.loads(body)
+        if decoded.get("result") is not True:
+            raise RuntimeError("GIF provider request failed")
+        return decoded
 
 
 def _telegram_request(method, parameters):
@@ -584,6 +614,8 @@ class Handler(BaseHTTPRequestHandler):
         if not telegram_list and not telegram_file and parsed.path not in {
             "/search",
             "/api/servers/giphy/search",
+            "/api/servers/klipy/search",
+            "/klipy/search",
         }:
             self._json({"error": "not found"}, 404)
             return
@@ -603,14 +635,17 @@ class Handler(BaseHTTPRequestHandler):
         parameters = parse_qs(parsed.query)
         trending = parameters.get("mode", [""])[0] == "trending"
         query = parameters.get("q", [""])[0].strip()
-        if (not trending and not query) or len(query) > 100:
+        slug = parameters.get('slug', [''])[0]
+        klipy = parsed.path.endswith('/klipy/search')
+        if (not trending and not query and not (klipy and slug)) or len(query) > 100 or len(slug) > 200:
             self._json({"error": "invalid query"}, 400)
             return
         if not _request_slots.acquire(blocking=False):
             self._json({"error": "GIF search busy"}, 503)
             return
         try:
-            self._json(_giphy_request(None if trending else query))
+            self._json(_klipy_request(None if trending or slug else query, slug or None)
+                       if klipy else _giphy_request(None if trending else query))
         except Exception:
             # Upstream details can contain request material; keep them server-side.
             self._json({"error": "GIF search unavailable"}, 502)

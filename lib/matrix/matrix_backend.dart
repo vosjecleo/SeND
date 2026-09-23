@@ -2,9 +2,14 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
+import '../services/platform_io.dart';
+import '../services/browser_media.dart';
+import '../services/browser_push.dart';
+import '../services/gif_service.dart';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
@@ -44,7 +49,12 @@ part 'matrix_media.dart';
 part 'matrix_profiles.dart';
 part 'matrix_advanced_features.dart';
 
-bool get _isMobilePlatform => Platform.isAndroid || Platform.isIOS;
+bool get _isMobilePlatform =>
+    Platform.isAndroid ||
+    Platform.isIOS ||
+    (kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS));
 
 double get _platformDefaultFontScale => _isMobilePlatform ? 1.1 : 1;
 
@@ -592,6 +602,16 @@ class MatrixBackend extends ChatBackend {
 
   void _notifyBackendListeners() => notifyListeners();
 
+  @override
+  Future<void> enableWebNotifications() async {
+    await enableBrowserPush(_matrix);
+    if (!_preferences.notificationsEnabled) {
+      await updatePreferences(
+        _preferences.copyWith(notificationsEnabled: true),
+      );
+    }
+  }
+
   bool get _mayAdvanceReadMarker =>
       _applicationForeground && _conversationVisible && _conversationAtPresent;
 
@@ -612,8 +632,8 @@ class MatrixBackend extends ChatBackend {
     // a recent write and make theme changes appear stuck until restart.
     if (Platform.isAndroid) {
       unawaited(_restoreUnifiedPushPusher());
-      unawaited(_refreshTimelineAfterResume());
     }
+    if (_applicationForeground) unawaited(_refreshTimelineAfterResume());
     _notifyBackendListeners();
   }
 
@@ -1221,6 +1241,9 @@ class MatrixBackend extends ChatBackend {
     _replyPreviews.clear();
     _linkPreviews.clear();
     _hydratedPollResponseIds.clear();
+    for (final source in _mediaPlaybackSources.values) {
+      releaseBrowserMediaUrl(source.uri);
+    }
     _mediaPlaybackSources.clear();
     _mediaPlaybackReferences.clear();
     _mediaRangeProxy.clear();

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
-import '../services/giphy_service.dart';
+import '../services/gif_service.dart';
 import '../services/favourite_reactions_store.dart';
 import 'advanced_chat_dialogs.dart';
 import 'deltiecord_theme.dart';
@@ -14,7 +14,7 @@ import 'giphy_dialog.dart';
 Future<Object?> showExpressionPicker(
   BuildContext context,
   ChatBackend backend,
-  GiphyService giphy,
+  GifService giphy,
 ) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
@@ -47,7 +47,7 @@ Future<Object?> showExpressionPicker(
 class _ExpressionPicker extends StatefulWidget {
   const _ExpressionPicker({required this.backend, required this.giphy});
   final ChatBackend backend;
-  final GiphyService giphy;
+  final GifService giphy;
 
   @override
   State<_ExpressionPicker> createState() => _ExpressionPickerState();
@@ -101,7 +101,13 @@ class _ExpressionPickerState extends State<_ExpressionPicker> {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: switch (_tab) {
             0 => EmojiPickerDialog(backend: widget.backend, embedded: true),
-            1 => GiphyDialog(service: widget.giphy, embedded: true),
+            1 => GiphyDialog(
+              service: widget.giphy,
+              embedded: true,
+              autoplay:
+                  widget.backend.preferences.autoplayGifs &&
+                  !widget.backend.preferences.reducedMotion,
+            ),
             _ => StickerPickerContents(backend: widget.backend),
           },
         ),

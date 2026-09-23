@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+import 'gif_favourite_button.dart';
+import '../services/platform_io.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -18,7 +19,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
-import '../services/giphy_service.dart';
+import '../services/gif_service.dart';
+import '../services/clipboard_image.dart';
 import '../services/encoded_image_dimensions.dart';
 import '../services/secret_redaction.dart';
 import '../services/temporary_attachment_store.dart';
@@ -30,6 +32,7 @@ import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
 import 'emoji_picker_dialog.dart';
 import 'expression_picker.dart';
+import 'composer_emoji_span.dart';
 import 'settings_screen.dart';
 import 'profile_dialog.dart';
 import 'profile_card.dart';
@@ -120,7 +123,7 @@ class _ChatShellState extends State<ChatShell> {
   int? _mentionStart;
   int _mentionSelectionIndex = 0;
   bool _wasTyping = false;
-  final GiphyService _giphy = GiphyService();
+  final GifService _giphy = GifService();
   final _composerKey = GlobalKey<_RichComposerState>();
   final _conversationKey = GlobalKey<_ConversationState>();
   final _draftStore = DraftStore();
@@ -143,7 +146,9 @@ class _ChatShellState extends State<ChatShell> {
         // ignore: experimental_member_use
         clipboardConfig: QuillClipboardConfig(
           onImagePaste: (bytes) async {
-            _queueClipboardImage(bytes);
+            // Quill can offer an already-flattened bitmap. Check the original
+            // clipboard formats before accepting that fallback.
+            _queueClipboardImage(await readClipboardImage() ?? bytes);
             // Deltiecord sends pasted images as Matrix attachments instead of
             // inserting a local-only image embed into the text document.
             return null;
@@ -549,6 +554,15 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   void _cancelComposerAction() {
+    // Reply cancellation preserves the draft; edit cancellation must not leave
+    // the old message (including its custom-emoji link attributes) ready to send.
+    if (_editingMessage != null) {
+      _message.document = Document();
+      _message.updateSelection(
+        const TextSelection.collapsed(offset: 0),
+        ChangeSource.local,
+      );
+    }
     setState(() {
       _replyingTo = null;
       _editingMessage = null;
@@ -593,7 +607,8 @@ class _ChatShellState extends State<ChatShell> {
       await widget.backend.sendAttachment(
         AttachmentDraft(
           bytes: bytes,
-          name: 'giphy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          gifSource: gif.shareUrl,
           mimeType: 'image/gif',
           spoiler: false,
         ),
@@ -648,19 +663,8 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<bool> _pasteClipboardImage() async {
-    final clipboard = SystemClipboard.instance;
-    if (clipboard == null) return false;
-    final reader = await clipboard.read();
-    if (!reader.canProvide(Formats.png)) return false;
-    final completed = Completer<Uint8List?>();
-    final progress = reader.getFile(
-      Formats.png,
-      (file) async => completed.complete(await file.readAll()),
-      onError: (_) => completed.complete(null),
-    );
-    if (progress == null) return false;
-    final bytes = await completed.future;
-    if (bytes == null || bytes.isEmpty) return false;
+    final bytes = await readClipboardImage();
+    if (!mounted || bytes == null) return false;
     _queueClipboardImage(bytes);
     return true;
   }

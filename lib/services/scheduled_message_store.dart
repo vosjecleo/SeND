@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'platform_io.dart';
 
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/chat_models.dart';
 import 'private_file_store.dart';
+import 'browser_private_store.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Private, durable queue for messages waiting to be sent by this device.
 ///
@@ -22,18 +24,22 @@ class ScheduledMessageStore {
   Future<void> _writes = Future.value();
 
   Future<void> initialize() async {
-    if (_file == null) {
+    if (!kIsWeb && _file == null) {
       final support = await getApplicationSupportDirectory();
       final directory = Directory(path.join(support.path, 'deltiecord'));
       await ensurePrivateDirectory(directory);
       _file = File(path.join(directory.path, 'scheduled-messages.json'));
-    } else {
+    } else if (!kIsWeb) {
       await ensurePrivateDirectory(_file!.parent);
     }
-    final file = _file!;
-    if (!await file.exists()) return;
+    final file = _file;
+    if (!kIsWeb && !await file!.exists()) return;
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      final text = kIsWeb
+          ? await BrowserPrivateStore.read('scheduled')
+          : await file!.readAsString();
+      if (text == null) return;
+      final decoded = jsonDecode(text);
       if (decoded is! List) return;
       for (final value in decoded.whereType<Map>()) {
         final id = value['id'];
@@ -56,7 +62,11 @@ class ScheduledMessageStore {
       }
     } catch (_) {
       // A corrupt queue cannot be delivered and should not retain plaintext.
-      await deletePrivateFile(file);
+      if (kIsWeb) {
+        await BrowserPrivateStore.write('scheduled', null);
+      } else {
+        await deletePrivateFile(file);
+      }
     }
   }
 
@@ -83,7 +93,7 @@ class ScheduledMessageStore {
 
   Future<void> _persist() async {
     final file = _file;
-    if (file == null) return;
+    if (!kIsWeb && file == null) return;
     final empty = _messages.isEmpty;
     final encoded = jsonEncode([
       for (final message in messages)
@@ -96,19 +106,28 @@ class ScheduledMessageStore {
             'reply_to': message.replyToMessageId,
         },
     ]);
+    if (kIsWeb) {
+      _writes = _writes.then(
+        (_) => BrowserPrivateStore.write('scheduled', empty ? null : encoded),
+        onError: (_) =>
+            BrowserPrivateStore.write('scheduled', empty ? null : encoded),
+      );
+      await _writes;
+      return;
+    }
     _writes = _writes.then(
       (_) async {
         if (empty) {
           await deletePrivateFile(file);
         } else {
-          await writePrivateTextFile(file, encoded);
+          await writePrivateTextFile(file!, encoded);
         }
       },
       onError: (_) async {
         if (empty) {
           await deletePrivateFile(file);
         } else {
-          await writePrivateTextFile(file, encoded);
+          await writePrivateTextFile(file!, encoded);
         }
       },
     );

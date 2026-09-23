@@ -528,6 +528,39 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ],
     ]),
     _SettingsPage.notifications => _section('Notifications', [
+      if (kIsWeb) ...[
+        const Text(
+          'On iPhone/iPad, add Deltiecord to your Home Screen from Safari, '
+          'open that installed app, then enable notifications here (iOS 16.4 or later). '
+          'Web alerts contain no decrypted message previews.',
+        ),
+        FilledButton.icon(
+          icon: const Icon(Icons.notifications_active_outlined),
+          label: const Text('Enable browser notifications'),
+          onPressed: () async {
+            try {
+              await backend.enableWebNotifications();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Browser notifications enabled.'),
+                  ),
+                );
+              }
+            } catch (_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Could not enable notifications. Check permission and Home Screen installation, then try again.',
+                    ),
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ],
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(

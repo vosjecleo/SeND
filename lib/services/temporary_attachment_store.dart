@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'platform_io.dart';
 import 'dart:math';
 import 'dart:typed_data';
 

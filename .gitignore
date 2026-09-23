@@ -58,3 +58,5 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+# Generated browser Matrix crypto assets (rebuilt from pinned upstream source).
+/web/pkg/

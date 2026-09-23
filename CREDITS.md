@@ -63,9 +63,12 @@ dependency under its own license.
   licensed. Deltiecord's configured Matrix gateway
   uses [ntfy](https://github.com/binwiederhier/ntfy), which is Apache-2.0 and
   GPL-2.0 licensed depending on the component; no ntfy server code is bundled.
-- [GIPHY](https://developers.giphy.com/) supplies GIF search results through its
-  public API. Deltiecord contains its own small client; a rate-limited HTTPS
-  proxy holds the shared API key so client binaries never contain it.
+- [KLIPY](https://docs.klipy.com/) supplies GIF search and trending through its
+  API. A rate-limited HTTPS proxy holds the key; neither native binaries nor
+  the web bundle contains it. Older [GIPHY](https://developers.giphy.com/)
+  favourites retain their original public media URLs.
+- [pywebpush](https://github.com/web-push-libs/pywebpush) provides standards-based
+  Web Push encryption and VAPID delivery on the optional gateway (MPL-2.0).
 - [Telegram's Bot API](https://core.telegram.org/bots/api) supplies metadata
   and media for user-requested public sticker-pack imports. A bounded
   Deltiecord proxy holds the bot credential; no Telegram code or assets are

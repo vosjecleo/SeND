@@ -60,12 +60,14 @@ jobs:
           windows_run="$(await_run 'Windows release')"
           linux_run="$(await_run 'Linux packages')"
           android_run="$(await_run 'Android release')"
+          web_run="$(await_run 'Web PWA')"
 
           echo "version=$package_version" >>"$GITHUB_OUTPUT"
           echo "build=$build_number" >>"$GITHUB_OUTPUT"
           echo "windows_run=$windows_run" >>"$GITHUB_OUTPUT"
           echo "linux_run=$linux_run" >>"$GITHUB_OUTPUT"
           echo "android_run=$android_run" >>"$GITHUB_OUTPUT"
+          echo "web_run=$web_run" >>"$GITHUB_OUTPUT"
 
       - name: Download successful platform packages
         shell: bash
@@ -75,6 +77,7 @@ jobs:
           gh run download "${{ steps.release.outputs.windows_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/windows
           gh run download "${{ steps.release.outputs.linux_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/linux
           gh run download "${{ steps.release.outputs.android_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/android
+          gh run download "${{ steps.release.outputs.web_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/web
 
       - name: Assemble and verify release assets
         shell: bash
@@ -105,9 +108,10 @@ jobs:
           copy_unique "deltiecord-${release_id}-android-armeabi-v7a.apk"
           copy_unique "deltiecord-${release_id}-android-x86_64.apk"
           copy_unique "deltiecord-${release_id}-android.aab"
+          copy_unique "deltiecord-${release_id}-web.tar.gz"
 
           (cd release-assets && sha256sum -- * >SHA256SUMS)
-          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 10
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 11
 
       - name: Publish GitHub release
         shell: bash
@@ -116,7 +120,9 @@ jobs:
           version="${{ steps.release.outputs.version }}"
           build="${{ steps.release.outputs.build }}"
           cat >release-notes.md <<EOF
-          Deltiecord ${version} build ${build} is the latest desktop and Android release for Matrix.
+          Deltiecord ${version} build ${build} is the latest desktop, Android, and Web/PWA release for Matrix.
+
+          Try the web app at https://chat.deltie.net — including iPhone/iPad Home Screen installation.
 
           $(awk -v version="$version" -v build="$build" '
             $0 ~ "^## Deltiecord " version " build " build { active=1; next }

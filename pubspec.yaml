@@ -1,7 +1,7 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.9.29+98
+version: 0.9.30+99
 
 environment:
   sdk: ^3.12.0
@@ -35,6 +35,8 @@ dependencies:
   vodozemac: ^0.7.0
   vsc_quill_delta_to_html: ^1.0.5
   url_launcher: ^6.3.2
+  universal_io: ^2.3.1
+  web: ^1.1.1
   flutter_webrtc: ^1.6.0
   webrtc_interface: ^1.5.1
   flutter_secure_storage: ^10.3.1

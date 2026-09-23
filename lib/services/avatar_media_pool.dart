@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io';
+import 'platform_io.dart';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';

@@ -145,6 +145,7 @@ artifacts=(
   "deltiecord-${release_id}-android-armeabi-v7a.apk"
   "deltiecord-${release_id}-android-x86_64.apk"
   "deltiecord-${release_id}-android.aab"
+  "deltiecord-${release_id}-web.tar.gz"
 )
 [[ "$(wc -l <"$temporary/SHA256SUMS")" -eq "${#artifacts[@]}" ]] || {
   printf '%s\n' 'GitHub checksum manifest has an unexpected artifact count.' >&2
@@ -186,6 +187,7 @@ asset_json() {
 android_assets="$(asset_json "deltiecord-${release_id}-android*")"
 linux_assets="$(asset_json "deltiecord-${release_id}-linux-*")"
 windows_assets="$(asset_json "deltiecord-${release_id}-windows-*")"
+web_assets="$(asset_json "deltiecord-${release_id}-web.tar.gz")"
 updated_at="$(date --utc +'%Y-%m-%dT%H:%M:%S+00:00')"
 
 jq --arg channel "$channel" \
@@ -195,11 +197,15 @@ jq --arg channel "$channel" \
   --arg updated "$updated_at" \
   --argjson android "$android_assets" \
   --argjson linux "$linux_assets" \
-  --argjson windows "$windows_assets" '
+  --argjson windows "$windows_assets" \
+  --argjson web "$web_assets" '
   def set_channel($name):
     .platforms.android[$name] = $android |
     .platforms.linux[$name] = $linux |
-    .platforms.windows[$name] = $windows;
+    .platforms.windows[$name] = $windows |
+    .platforms.web[$name] = $web |
+    .platforms.web.url = "https://chat.deltie.net" |
+    .platforms.web.stable //= [];
   if $channel == "both" then
     set_channel("latest") | set_channel("stable") |
     .version = $version | .build = $build | .release = "stable" |
@@ -215,6 +221,7 @@ jq --arg channel "$channel" \
     .platforms.android.stable = [] |
     .platforms.linux.stable = [] |
     .platforms.windows.stable = [] |
+    .platforms.web.stable = [] |
     del(.stable_version, .stable_build)
   else . end |
   .updated_at = $updated
@@ -227,7 +234,7 @@ ssh -o BatchMode=yes deltie "mkdir -m 700 -- '$remote_stage'"
 cleanup_remote() { ssh -o BatchMode=yes deltie "rm -rf -- '$remote_stage'" >/dev/null 2>&1 || true; }
 trap 'cleanup_remote; rm -rf -- "$temporary"' EXIT
 scp -q -- "$temporary/SHA256SUMS" "$temporary/releases.json" \
-  "${artifacts[@]/#/$temporary/}" "deltie:$remote_stage/"
+  "packaging/deploy-web.py" "${artifacts[@]/#/$temporary/}" "deltie:$remote_stage/"
 
 ssh -o BatchMode=yes deltie "bash -s" -- \
   "$remote_root" "$remote_stage" "$version" "$build" "${artifacts[@]}" <<'REMOTE'
@@ -237,6 +244,9 @@ stage="$2"
 version="$3"
 build="$4"
 shift 4
+python3 "$stage/deploy-web.py" \
+  "$stage/deltiecord-${version}+${build}-web.tar.gz" \
+  /srv/storage/www/deltiecord-web "${version}+${build}"
 archive="/srv/storage/releases-archive/deltiecord/${version}-b${build}"
 mkdir -p -- "$archive"
 if [[ -f "$remote_root/releases.json" ]]; then

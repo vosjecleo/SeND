@@ -140,7 +140,22 @@ class _FirstRunTourDialogState extends State<_FirstRunTourDialog> {
           },
         ),
       ),
-      if (defaultTargetPlatform == TargetPlatform.android)
+      if (kIsWeb)
+        const _TourPage(
+          icon: Icons.install_mobile,
+          title: 'Install Deltiecord on your Home Screen',
+          body:
+              'On iPhone or iPad, open this site in Safari, choose Share, '
+              'then Add to Home Screen. Open the installed Deltiecord app and '
+              'enable browser notifications in Settings > Notifications. '
+              'Push requires iOS 16.4 or later and your permission. Android and '
+              'desktop browsers can install it from their browser menu too.\n\n'
+              'Your session and encryption keys are kept in this browser’s '
+              'site storage. Keep your Matrix recovery key safe: clearing site '
+              'data, private browsing, or storage eviction can remove the local '
+              'session. Only one Deltiecord tab may use this session at a time.',
+        ),
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _TourPage(
           icon: Icons.notifications_active_outlined,
           title: 'Set up reliable background notifications',

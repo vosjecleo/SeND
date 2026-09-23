@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 bool shouldLoopLinkPreview(Uri pageUrl) {
   final host = pageUrl.host.toLowerCase();
   return host == 'giphy.com' ||
+      host == 'klipy.com' ||
+      host.endsWith('.klipy.com') ||
       host.endsWith('.giphy.com') ||
       host == 'tenor.com' ||
       host.endsWith('.tenor.com') ||

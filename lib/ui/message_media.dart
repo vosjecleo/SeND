@@ -133,7 +133,31 @@ class _LinkPreviewCard extends StatelessWidget {
                     maxWidth: maxWidth,
                     maxHeight: maxHeight,
                   ),
-                  child: Image.memory(image, fit: BoxFit.contain),
+                  child: Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: () => showGifFullscreen(
+                          context,
+                          image,
+                          preview.gifSource,
+                          autoplay: !backend.preferences.reducedMotion,
+                        ),
+                        child: LifecycleMemoryImage(
+                          bytes: image,
+                          animated: false,
+                          autoplay:
+                              backend.preferences.autoplayGifs &&
+                              !backend.preferences.reducedMotion,
+                        ),
+                      ),
+                      if (isFavouriteableGifUri(preview.gifSource))
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GifFavouriteButton(uri: preview.gifSource!),
+                        ),
+                    ],
+                  ),
                 ),
               InkWell(
                 onTap: () => launchUrl(preview.url),
@@ -740,7 +764,9 @@ class _AttachmentViewState extends State<_AttachmentView> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.attachment.sticker) return _buildSticker();
+    if (widget.attachment.sticker) {
+      return Align(alignment: Alignment.centerLeft, child: _buildSticker());
+    }
     if (widget.attachment.spoiler && !_revealed) {
       return Align(
         alignment: Alignment.centerLeft,
@@ -772,7 +798,24 @@ class _AttachmentViewState extends State<_AttachmentView> {
     }
 
     return switch (widget.attachment.kind) {
-      AttachmentKind.image => _buildImage(),
+      AttachmentKind.image =>
+        isFavouriteableGifUri(widget.attachment.gifSource)
+            ? Align(
+                alignment: Alignment.centerLeft,
+                child: Stack(
+                  children: [
+                    _buildImage(),
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: GifFavouriteButton(
+                        uri: widget.attachment.gifSource!,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : _buildImage(),
       AttachmentKind.video => _InlineVideo(
         backend: widget.backend,
         messageId: widget.messageId,
@@ -1339,7 +1382,15 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                               key: ValueKey(_message.id),
                               minScale: 0.25,
                               maxScale: 8,
-                              child: Center(child: Image.memory(bytes)),
+                              child: Center(
+                                child: LifecycleMemoryImage(
+                                  bytes: bytes,
+                                  animated:
+                                      _message.attachment?.animated ?? false,
+                                  autoplay:
+                                      !widget.backend.preferences.reducedMotion,
+                                ),
+                              ),
                             );
                           }
                           return const Center(
@@ -1391,6 +1442,8 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                     style: const TextStyle(color: Colors.white70),
                   ),
                   const SizedBox(width: 8),
+                  if (isFavouriteableGifUri(_message.attachment?.gifSource))
+                    GifFavouriteButton(uri: _message.attachment!.gifSource!),
                   IconButton.filledTonal(
                     tooltip: 'Save attachment',
                     onPressed: _save,

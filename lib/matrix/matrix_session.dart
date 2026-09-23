@@ -253,6 +253,9 @@ extension _MatrixSession on MatrixBackend {
       _stickerPackSourceSignature = null;
       _notificationsPrimed = false;
       _maximumUploadBytes = null;
+      for (final source in _mediaPlaybackSources.values) {
+        releaseBrowserMediaUrl(source.uri);
+      }
       _mediaPlaybackSources.clear();
       _mediaPlaybackReferences.clear();
       _attachmentBytesCache.clear();
@@ -924,6 +927,11 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
     if (_matrix.userID == null) return;
+    if (kIsWeb &&
+        _preferences.notificationsEnabled &&
+        !preferences.notificationsEnabled) {
+      await disableRegisteredBrowserPush(_matrix);
+    }
     final userId = _matrix.userID!;
     final previewPolicyChanged =
         preferences.directLinkPreviewMode !=

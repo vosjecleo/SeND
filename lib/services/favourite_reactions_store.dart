@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
+import 'platform_io.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'private_file_store.dart';
+import 'browser_private_store.dart';
 
 /// Small bounded local index for favourite Unicode emoji and Matrix stickers.
 /// Sticker media remains in the normal Matrix/media cache; this file stores
@@ -43,12 +44,18 @@ final class FavouriteReactionsStore extends ChangeNotifier {
     if (_loaded) return;
     _loaded = true;
     try {
-      final support = await getApplicationSupportDirectory();
-      _file = File(
-        path.join(support.path, 'deltiecord', 'reaction_favourites.json'),
-      );
-      if (!await _file!.exists()) return;
-      final value = jsonDecode(await _file!.readAsString());
+      if (!kIsWeb) {
+        final support = await getApplicationSupportDirectory();
+        _file = File(
+          path.join(support.path, 'deltiecord', 'reaction_favourites.json'),
+        );
+        if (!await _file!.exists()) return;
+      }
+      final text = kIsWeb
+          ? await BrowserPrivateStore.read('reactions')
+          : await _file!.readAsString();
+      if (text == null) return;
+      final value = jsonDecode(text);
       if (value is! Map) return;
       final usage = value['usage'];
       if (usage is Map) {
@@ -100,6 +107,17 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    if (kIsWeb) {
+      await BrowserPrivateStore.write(
+        'reactions',
+        jsonEncode({
+          'emoji': _emoji,
+          'stickers': _stickers,
+          'usage': _emojiUsage,
+        }),
+      );
+      return;
+    }
     final file = _file;
     if (file == null) return;
     await writePrivateTextFile(

@@ -33,6 +33,9 @@ extension _MatrixMedia on MatrixBackend {
   }
 
   Future<void> _clearMediaCache() async {
+    for (final source in _mediaPlaybackSources.values) {
+      releaseBrowserMediaUrl(source.uri);
+    }
     _mediaPlaybackSources.clear();
     _mediaPlaybackReferences.clear();
     _mediaRangeProxy.clear();
@@ -99,8 +102,12 @@ extension _MatrixMedia on MatrixBackend {
               shrinkImageMaxDimension: null,
               extraContent:
                   attachment.spoiler ||
+                      attachment.gifSource != null ||
                       attachment.caption?.trim().isNotEmpty == true
                   ? {
+                      if (attachment.gifSource != null)
+                        'net.deltiecord.gif_source': attachment.gifSource
+                            .toString(),
                       if (attachment.caption?.trim().isNotEmpty == true) ...{
                         'body': attachment.caption!.trim(),
                         'filename': attachment.name,
@@ -229,6 +236,42 @@ extension _MatrixMedia on MatrixBackend {
       _mediaPlaybackReferences.update(messageId, (value) => value + 1);
       return cached;
     }
+    if (kIsWeb) {
+      // Browser video elements cannot attach Authorization headers or use the
+      // native loopback range proxy. Keep this fallback explicitly bounded.
+      final size = event.infoMap.tryGet<int>('size');
+      if (size == null || size <= 0 || size > 25 * 1024 * 1024) {
+        throw StateError(
+          'Browser playback requires a known video size up to 25 MiB.',
+        );
+      }
+      final file = await event.downloadAndDecryptAttachment(
+        downloadCallback: (uri) {
+          if (uri.scheme != 'https' ||
+              uri.origin != _matrix.homeserver?.origin) {
+            throw StateError(
+              'Browser playback requires media served by your homeserver.',
+            );
+          }
+          return downloadBrowserMedia(
+            uri,
+            _matrix.accessToken ?? '',
+            25 * 1024 * 1024,
+          );
+        },
+      );
+      final bytes = file.bytes;
+      if (bytes.length > 25 * 1024 * 1024) {
+        throw StateError('Video exceeds the browser playback limit.');
+      }
+      final source = MediaPlaybackSource(
+        uri: createBrowserMediaUrl(bytes, event.attachmentMimetype),
+        headers: const {},
+      );
+      _mediaPlaybackSources[messageId] = source;
+      _mediaPlaybackReferences[messageId] = 1;
+      return source;
+    }
     if (event.isAttachmentEncrypted) {
       final file = event.content.tryGetMap<String, Object?>('file');
       final mxc = Uri.tryParse(file?.tryGet<String>('url') ?? '');
@@ -283,6 +326,9 @@ extension _MatrixMedia on MatrixBackend {
     }
     _mediaPlaybackReferences.remove(messageId);
     final source = _mediaPlaybackSources.remove(messageId);
-    if (source != null) _mediaRangeProxy.unregister(source.uri);
+    if (source != null) {
+      releaseBrowserMediaUrl(source.uri);
+      _mediaRangeProxy.unregister(source.uri);
+    }
   }
 }
