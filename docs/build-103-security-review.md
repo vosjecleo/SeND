@@ -1,7 +1,8 @@
 # Build 103 security and validation handoff
 
-This is a source-only implementation, not a completed native-device security
-certification. No release binaries have been compiled or published.
+This review records source/host validation, not a completed native-device
+security certification. Subsequent CI-only compilation and latest publication
+were authorized on 2026-09-24; the physical-device checks below remain outstanding.
 
 Final host validation: `flutter analyze` reports no issues; `flutter test`
 passes 303 tests with one existing skip. Dart formatting and `git diff --check`
@@ -48,7 +49,7 @@ also pass. These checks do not substitute for the native release gates below.
   preserving the source, tampered/valid encrypted media and cache reuse, link
   confirmation, formatting, receipt frontiers, usage counting, composer sizing,
   logout confirmation, colour-picker dismissal and repeated resume/theme edits.
-- **Before release:** build Android and test migration on a disposable restored
+- **Before stable promotion:** test Android migration on a disposable restored
   database, cold start, background notification worker, process interruption
   during export, low disk space, logout and re-login. Real SQLCipher and Android
   Keystore integration cannot be proven by host widget tests.

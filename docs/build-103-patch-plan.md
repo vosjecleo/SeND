@@ -1,8 +1,9 @@
 # Changes for version 0.9.31+103
 
-Status: implementation prepared and regression-tested; source-only push authorized.
+Status: implementation regression-tested; CI build and latest publication authorized.
 Baseline: 0.9.30+102 PWA / 0.9.30+101 native releases.
-Compilation, release publication and deployment are NOT authorized yet.
+User authorized CI-only builds, GitHub/deltie.net latest publication and PWA
+deployment on 2026-09-24. No local builds; stable remains unchanged.
 Append new reports here; do not silently treat proposals as completed fixes.
 
 ## Implementation handoff
@@ -15,7 +16,8 @@ original acceptance checklist, not a claim of device-level verification.
   sender-and-message line; continuation messages do not gain redundant avatars.
 - iOS/PWA-specific work (section 16 and the separate investigation below) is
   explicitly deferred to tomorrow's build, including camera/image attachments.
-- No release builds, release workflow dispatches, tags or deployment in this pass.
+- Initial implementation stopped after the source-only push. The subsequent
+  authorized release uses CI artifacts and the existing atomic PWA deployment.
 - Resume/theme propagation is covered by simulated lifecycle tests; actual
   Android freeze/unfreeze reproduction remains a manual validation gate.
 - Existing rich-message formatting loss and custom-emoji/Markdown interaction

@@ -1,6 +1,6 @@
 # Changelog
 
-## Deltiecord 0.9.31 build 103 — source prepared, not released
+## Deltiecord 0.9.31 build 103 — 2026-09-24
 
 - Move sent/read progress markers and edited labels after message content.
   Show receipt frontiers rather than repeating acknowledgement on every message;
@@ -33,7 +33,8 @@
   ciphertext SHA-256 before decrypting encrypted video, with bounded downloads.
 - iOS/PWA-specific camera, picker and lifecycle investigations are deferred to
   the following build. Native SQLCipher migration and physical-device lifecycle
-  checks remain release gates; no release artifacts were built for this push.
+  checks still need device validation. Packages are built by CI; this release is
+  published to latest, not stable.
 
 ## Deltiecord 0.9.30 build 102 — 2026-09-23
 
