@@ -56,15 +56,19 @@ Future<void> showAccentColorPickerPopup(
   Offset? anchor,
 }) {
   if (MediaQuery.sizeOf(context).width < 700) {
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
+      builder: (context) => AlertDialog(
+        title: const Text('Accent colour'),
+        content: SingleChildScrollView(
           child: AccentColorPicker(color: color, onChanged: onChanged),
         ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Apply'),
+          ),
+        ],
       ),
     );
   }
@@ -75,22 +79,22 @@ Future<void> showAccentColorPickerPopup(
     barrierColor: Colors.black38,
     pageBuilder: (context, _, _) => LayoutBuilder(
       builder: (context, constraints) {
-        const width = 530.0;
-        const height = 300.0;
+        final width = min(530.0, max(1.0, constraints.maxWidth - 24));
+        final height = min(300.0, max(1.0, constraints.maxHeight - 24));
         final point = anchor ?? constraints.biggest.center(Offset.zero);
         final left = (point.dx - width / 2).clamp(
           12.0,
-          constraints.maxWidth - width - 12,
+          max(12.0, constraints.maxWidth - width - 12),
         );
         final top = (point.dy - 36).clamp(
           12.0,
-          constraints.maxHeight - height - 12,
+          max(12.0, constraints.maxHeight - height - 12),
         );
         return Stack(
           children: [
             Positioned(
-              left: left,
-              top: top,
+              left: left.toDouble(),
+              top: top.toDouble(),
               width: width,
               child: Material(
                 elevation: 18,
@@ -188,7 +192,7 @@ class _AccentColorPickerState extends State<AccentColorPicker> {
           ),
         ),
         SizedBox(
-          width: 270,
+          width: min(270, MediaQuery.sizeOf(context).width - 104),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

@@ -10,6 +10,31 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'deltiecord_theme.dart';
 
+Future<void> _confirmFormattedLink(BuildContext context, Uri uri) async {
+  final open = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Open external link?'),
+      content: SingleChildScrollView(
+        child: SelectionArea(
+          child: Text(uri.toString(), textDirection: TextDirection.ltr),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Open link'),
+        ),
+      ],
+    ),
+  );
+  if (open == true) await launchUrl(uri);
+}
+
 final _emojiPresentationPattern = RegExp(
   r'[\u{00A9}\u{00AE}\u{203C}\u{2049}\u{2122}\u{2139}\u{2194}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FAFF}]',
   unicode: true,
@@ -95,12 +120,14 @@ class MatrixPlainText extends StatefulWidget {
     required this.text,
     this.style,
     this.selectable = true,
+    this.trailing,
     super.key,
   });
 
   final String text;
   final TextStyle? style;
   final bool selectable;
+  final InlineSpan? trailing;
 
   @override
   State<MatrixPlainText> createState() => _MatrixPlainTextState();
@@ -170,7 +197,7 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
         _emojiAwareTextSpans(context, widget.text.substring(offset), style),
       );
     }
-    final span = TextSpan(style: style, children: spans);
+    final span = TextSpan(style: style, children: [...spans, ?widget.trailing]);
     return widget.selectable
         ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
         : Text.rich(span);
@@ -187,6 +214,7 @@ class MatrixHtmlText extends StatefulWidget {
     this.selectable = true,
     this.backend,
     this.onCustomEmojiTap,
+    this.trailing,
     super.key,
   });
 
@@ -195,6 +223,7 @@ class MatrixHtmlText extends StatefulWidget {
   final bool selectable;
   final ChatBackend? backend;
   final ValueChanged<CustomEmojiReference>? onCustomEmojiTap;
+  final InlineSpan? trailing;
 
   @override
   State<MatrixHtmlText> createState() => _MatrixHtmlTextState();
@@ -245,13 +274,16 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
           ? const TextStyle(fontSize: _standaloneEmojiSize, height: 1)
           : const TextStyle();
       final span = TextSpan(
-        children: _emojiAwareTextSpans(context, widget.fallback, fallbackStyle),
+        children: [
+          ..._emojiAwareTextSpans(context, widget.fallback, fallbackStyle),
+          ?widget.trailing,
+        ],
       );
       return widget.selectable
           ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
           : Text.rich(span);
     }
-    final span = TextSpan(children: spans);
+    final span = TextSpan(children: [...spans, ?widget.trailing]);
     return widget.selectable
         ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
         : Text.rich(span);
@@ -375,13 +407,15 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
         ..onTap = () {
           final uri = href == null ? null : Uri.tryParse(href);
           if (uri != null && {'http', 'https'}.contains(uri.scheme)) {
-            launchUrl(uri);
+            _confirmFormattedLink(context, uri);
           }
         };
       _linkRecognizers.add(recognizer);
       return [
         TextSpan(
-          children: children,
+          children: children
+              .map((span) => _linkedSpan(span, recognizer))
+              .toList(),
           style: isMention
               ? childStyle.copyWith(
                   backgroundColor: const Color(0xff3f456c),
@@ -414,6 +448,18 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       return [...children, const TextSpan(text: '\n')];
     }
     return children;
+  }
+
+  InlineSpan _linkedSpan(InlineSpan span, TapGestureRecognizer recognizer) {
+    if (span is! TextSpan) return span;
+    return TextSpan(
+      text: span.text,
+      style: span.style,
+      recognizer: recognizer,
+      children: span.children
+          ?.map((child) => _linkedSpan(child, recognizer))
+          .toList(),
+    );
   }
 
   ({bool valid, bool found}) _emojiOnlyNodes(Iterable<dom.Node> nodes) {

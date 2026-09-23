@@ -244,7 +244,6 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
         child: InkWell(
           key: ValueKey('emoji-picker-result-${entry.favouriteKey}'),
           onTap: () {
-            FavouriteReactionsStore.instance.recordEmoji(entry.favouriteKey);
             Navigator.of(context).pop(entry);
           },
           onLongPress: () async {

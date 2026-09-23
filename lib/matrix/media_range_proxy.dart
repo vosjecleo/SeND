@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:vodozemac/vodozemac.dart';
+import 'package:crypto/crypto.dart' as crypto;
 
 typedef RangeDecryptor =
     Uint8List Function(
@@ -55,9 +56,21 @@ class MediaRangeProxy {
     required Uint8List iv,
     required int size,
     required String mimeType,
+    Uint8List? expectedSha256,
   }) async {
+    if (expectedSha256 != null && expectedSha256.length != 32) {
+      throw const FormatException('Invalid attachment SHA-256');
+    }
+    if (size <= 0 || size > 512 * 1024 * 1024) {
+      throw const FormatException('Video must be between 1 byte and 512 MiB');
+    }
     final server = await _ensureServer();
     _removeExpired();
+    if (_entries.values.fold<int>(0, (total, entry) => total + entry.size) +
+            size >
+        512 * 1024 * 1024) {
+      throw StateError('Close another video before opening more media.');
+    }
     while (_entries.length >= maximumEntries) {
       final oldest = _entries.entries.reduce(
         (a, b) => a.value.accessSequence < b.value.accessSequence ? a : b,
@@ -73,6 +86,7 @@ class MediaRangeProxy {
       iv: iv,
       size: size,
       mimeType: mimeType,
+      expectedSha256: expectedSha256,
       lastAccess: _clock(),
       accessSequence: ++_accessSequence,
     );
@@ -320,15 +334,29 @@ class MediaRangeProxy {
         .getUrl(media.upstream)
         .timeout(const Duration(seconds: 10));
     request.followRedirects = false;
-    request.headers
-      ..set(HttpHeaders.authorizationHeader, 'Bearer ${media.accessToken}')
-      ..set(HttpHeaders.rangeHeader, 'bytes=$fetchStart-$requestedEnd');
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Bearer ${media.accessToken}',
+    );
+    if (media.expectedSha256 == null) {
+      request.headers.set(
+        HttpHeaders.rangeHeader,
+        'bytes=$fetchStart-$requestedEnd',
+      );
+    }
     final response = await request.close().timeout(const Duration(seconds: 10));
     if (response.statusCode != HttpStatus.ok &&
         response.statusCode != HttpStatus.partialContent) {
       throw HttpException('Media server returned ${response.statusCode}');
     }
-    if (response.statusCode == HttpStatus.ok && fetchStart != 0) {
+    if (media.expectedSha256 != null && response.statusCode != HttpStatus.ok) {
+      await response.listen((_) {}).cancel();
+      throw const HttpException(
+        'A complete attachment is required for integrity verification',
+      );
+    }
+    if (response.statusCode == HttpStatus.ok &&
+        (fetchStart != 0 || media.expectedSha256 != null)) {
       // Some Matrix media endpoints ignore Range. Never discard bytes until a
       // seek offset: that turns a small seek into an unbounded network read.
       // Instead cache exactly one size-validated ciphertext copy in a private
@@ -400,8 +428,12 @@ class MediaRangeProxy {
     final file = File('${directory.path}/$randomName.cipher');
     final sink = file.openWrite(mode: FileMode.writeOnly);
     var received = 0;
+    final downloadTime = Stopwatch()..start();
     try {
       await for (final chunk in response.timeout(const Duration(seconds: 15))) {
+        if (downloadTime.elapsed > const Duration(minutes: 5)) {
+          throw const HttpException('Encrypted media download timed out');
+        }
         received += chunk.length;
         if (received > media.size) {
           throw const HttpException('Encrypted media exceeds declared size');
@@ -412,6 +444,17 @@ class MediaRangeProxy {
       await sink.close();
       if (received != media.size) {
         throw const HttpException('Incomplete encrypted media download');
+      }
+      final expected = media.expectedSha256;
+      if (expected != null) {
+        final digest = await crypto.sha256.bind(file.openRead()).first;
+        var difference = 0;
+        for (var i = 0; i < 32; i++) {
+          difference |= digest.bytes[i] ^ expected[i];
+        }
+        if (difference != 0) {
+          throw const HttpException('Attachment integrity check failed');
+        }
       }
       await _restrictPermissions(file.path, directory: false);
       return file;
@@ -561,6 +604,7 @@ class _EncryptedMedia {
     required this.iv,
     required this.size,
     required this.mimeType,
+    required this.expectedSha256,
     required this.lastAccess,
     required this.accessSequence,
   });
@@ -571,6 +615,7 @@ class _EncryptedMedia {
   final Uint8List iv;
   final int size;
   final String mimeType;
+  final Uint8List? expectedSha256;
   DateTime lastAccess;
   int accessSequence;
   File? cachedCiphertext;

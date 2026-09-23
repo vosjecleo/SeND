@@ -304,7 +304,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         )
         .firstOrNull;
     await _prepareEncryptedSend(room);
-    await room.sendEvent({
+    final sentStickerId = await room.sendEvent({
       'body': sticker.body ?? sticker.name,
       'url': sticker.mxcUri.toString(),
       'info': {
@@ -320,6 +320,13 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
           if (pack.stateKey != null) 'state_key': pack.stateKey,
         },
     }, type: EventTypes.Sticker);
+    if (sentStickerId != null) {
+      unawaited(
+        FavouriteReactionsStore.instance
+            .recordSticker(sticker.mxcUri)
+            .catchError((Object _) {}),
+      );
+    }
   }
 
   Future<void> _refreshStickerPacks() async {

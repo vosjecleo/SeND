@@ -861,6 +861,9 @@ class _SpaceRoomTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    minLeadingWidth: 20,
+    horizontalTitleGap: 8,
     dense: true,
     visualDensity: const VisualDensity(vertical: -4),
     minTileHeight: 32,

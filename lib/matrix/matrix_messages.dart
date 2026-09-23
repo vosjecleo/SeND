@@ -258,7 +258,7 @@ extension _MatrixMessages on MatrixBackend {
       final replyEvent = replyToMessageId == null
           ? null
           : _eventById(replyToMessageId);
-      late final Future<String?> operation;
+      late Future<String?> operation;
       final outgoingFormattedBody =
           formattedBody != null && _preferences.improveTwitterLinks
           ? rewriteTwitterLinks(formattedBody)
@@ -295,6 +295,17 @@ extension _MatrixMessages on MatrixBackend {
           txid: transactionId,
         );
       }
+      operation = operation.then((id) {
+        // Track acknowledged sends, never draft taps, local echoes or edits.
+        if (id != null && editMessageId == null) {
+          unawaited(
+            FavouriteReactionsStore.instance
+                .recordSentMessage(value, outgoingFormattedBody)
+                .catchError((Object _) {}),
+          );
+        }
+        return id;
+      });
       if (_connectionStatus != ConnectionStatus.online) {
         _offlineSendRooms[transactionId] = room.id;
         _notifyBackendListeners();

@@ -6,7 +6,6 @@ import '../services/gif_service.dart';
 import 'lifecycle_memory_image.dart';
 import 'dart:typed_data';
 import '../services/secret_redaction.dart';
-import 'deltiecord_theme.dart';
 
 class _GifPreview extends StatefulWidget {
   const _GifPreview({
@@ -97,19 +96,9 @@ class _GiphyDialogState extends State<GiphyDialog> {
           ? await widget.service.trending()
           : await widget.service.search(query);
       if (!mounted || generation != _generation) return;
-      final combined = query.isEmpty
-          ? [
-              ...favorites,
-              ...results.where(
-                (gif) => !favorites.any(
-                  (favorite) => favorite.shareUrl == gif.shareUrl,
-                ),
-              ),
-            ]
-          : results;
       setState(() {
         _favorites = favorites;
-        _results = combined;
+        _results = results;
       });
     } catch (exception) {
       if (mounted && generation == _generation) {
@@ -120,15 +109,6 @@ class _GiphyDialogState extends State<GiphyDialog> {
         setState(() => _loading = false);
       }
     }
-  }
-
-  Future<void> _toggleFavorite(GifSearchResult gif) async {
-    await widget.service.toggleFavorite(gif);
-    if (!mounted) return;
-    final favorites = await widget.service.favorites();
-    if (!mounted) return;
-    setState(() => _favorites = favorites);
-    if (_query.text.trim().isEmpty) unawaited(_search());
   }
 
   @override
@@ -182,11 +162,7 @@ class _GiphyDialogState extends State<GiphyDialog> {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              _query.text.trim().isEmpty
-                  ? _favorites.isEmpty
-                        ? 'Trending'
-                        : 'Favourites first · Trending'
-                  : 'Search results',
+              _query.text.trim().isEmpty ? 'GIFs' : 'Search results',
               style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
@@ -194,56 +170,86 @@ class _GiphyDialogState extends State<GiphyDialog> {
           Expanded(
             child: _loading && _results.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 6,
-                          mainAxisSpacing: 6,
-                        ),
-                    itemCount: _results.length,
-                    itemBuilder: (context, index) {
-                      final gif = _results[index];
-                      final favorite = widget.service.isFavorite(gif);
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Tooltip(
-                            message: gif.title,
-                            child: InkWell(
-                              onTap: () => Navigator.of(context).pop(gif),
-                              child: _GifPreview(
-                                key: ValueKey(gif.animatedPreviewUrl),
-                                service: widget.service,
-                                gif: gif,
-                                autoplay: widget.autoplay,
+                : CustomScrollView(
+                    slivers: [
+                      if (_query.text.trim().isEmpty && _favorites.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Favourites'),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    height: 110,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: _favorites.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 6),
+                                      itemBuilder: (context, index) => SizedBox(
+                                        width: 110,
+                                        child: InkWell(
+                                          onTap: () => Navigator.pop(
+                                            context,
+                                            _favorites[index],
+                                          ),
+                                          child: _GifPreview(
+                                            service: widget.service,
+                                            gif: _favorites[index],
+                                            autoplay: widget.autoplay,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: Material(
-                              color: Colors.black54,
-                              borderRadius: DeltiecordCorners.borderRadius,
-                              child: IconButton(
-                                tooltip: favorite
-                                    ? 'Remove from favourites'
-                                    : 'Add to favourites',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () => _toggleFavorite(gif),
-                                icon: Icon(
-                                  favorite ? Icons.star : Icons.star_border,
-                                  color: favorite
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.white,
+                        ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            _query.text.trim().isEmpty
+                                ? 'Trending'
+                                : 'Search results',
+                          ),
+                        ),
+                      ),
+                      SliverGrid.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 6,
+                              mainAxisSpacing: 6,
+                            ),
+                        itemCount: _results.length,
+                        itemBuilder: (context, index) {
+                          final gif = _results[index];
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Tooltip(
+                                message: gif.title,
+                                child: InkWell(
+                                  onTap: () => Navigator.of(context).pop(gif),
+                                  child: _GifPreview(
+                                    key: ValueKey(gif.animatedPreviewUrl),
+                                    service: widget.service,
+                                    gif: gif,
+                                    autoplay: widget.autoplay,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                            ],
+                          );
+                        },
+                      ),
+                    ],
                   ),
           ),
         ],

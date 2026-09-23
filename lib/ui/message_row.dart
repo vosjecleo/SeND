@@ -12,6 +12,7 @@ String _formatMessageClock(DateTime value, {required bool use24HourTime}) {
 class _MessageRow extends StatefulWidget {
   const _MessageRow({
     required this.message,
+    this.showReceipt = false,
     this.albumMessages,
     required this.highlighted,
     required this.startsGroup,
@@ -30,6 +31,7 @@ class _MessageRow extends StatefulWidget {
   });
 
   final ChatMessage message;
+  final bool showReceipt;
   final List<ChatMessage>? albumMessages;
   final bool highlighted;
   final bool startsGroup;
@@ -362,23 +364,6 @@ class _MessageRowState extends State<_MessageRow> {
                                             color: context.deltiecord.muted,
                                           ),
                                     ),
-                                    if (message.own &&
-                                        !message.failed &&
-                                        !message.pending) ...[
-                                      const SizedBox(width: 5),
-                                      Tooltip(
-                                        message: message.readBy.isEmpty
-                                            ? 'Sent to homeserver'
-                                            : 'Read by ${message.readBy.map((reader) => reader.displayName).join(', ')}',
-                                        child: Icon(
-                                          message.readBy.isEmpty
-                                              ? Icons.check
-                                              : Icons.done_all,
-                                          size: 11,
-                                          color: context.deltiecord.muted,
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
                               if (widget.albumMessages == null &&
@@ -388,6 +373,11 @@ class _MessageRowState extends State<_MessageRow> {
                                   key: ValueKey('message-body-${message.id}'),
                                   child: message.formattedBody != null
                                       ? MatrixHtmlText(
+                                          trailing: messageMetadata(
+                                            context,
+                                            message,
+                                            showReceipt: widget.showReceipt,
+                                          ),
                                           html: message.formattedBody!,
                                           fallback: message.body,
                                           backend: widget.backend,
@@ -399,6 +389,11 @@ class _MessageRowState extends State<_MessageRow> {
                                               ),
                                         )
                                       : MatrixPlainText(
+                                          trailing: messageMetadata(
+                                            context,
+                                            message,
+                                            showReceipt: widget.showReceipt,
+                                          ),
                                           text: message.body,
                                           style: TextStyle(
                                             height: 1.16,
@@ -466,12 +461,14 @@ class _MessageRowState extends State<_MessageRow> {
                                     backend: widget.backend,
                                   ),
                                 ),
-                              if (message.edited)
-                                Text(
-                                  '(edited)',
-                                  style: TextStyle(
-                                    fontSize: DeltiecordTypeScale.normal,
-                                    color: context.deltiecord.muted,
+                              if ((widget.showReceipt || message.edited) &&
+                                  (message.body.isEmpty ||
+                                      message.poll != null))
+                                Text.rich(
+                                  messageMetadata(
+                                    context,
+                                    message,
+                                    showReceipt: widget.showReceipt,
                                   ),
                                 ),
                               if (message.queued)
@@ -562,7 +559,19 @@ class _MessageRowState extends State<_MessageRow> {
                       // first content line. The near-equal outer and inner
                       // gutters make the timeline read as one aligned column.
                       left: 10,
-                      top: groupTop - 3 + (message.reply == null ? 0 : 22),
+                      top:
+                          groupTop +
+                          (MediaQuery.textScalerOf(
+                                        context,
+                                      ).scale(DeltiecordTypeScale.bigChat) *
+                                      1.05 +
+                                  MediaQuery.textScalerOf(
+                                        context,
+                                      ).scale(DeltiecordTypeScale.normal) *
+                                      1.16 -
+                                  38) /
+                              2 +
+                          (message.reply == null ? 0 : 22),
                       child: GestureDetector(
                         key: ValueKey('message-avatar-${message.id}'),
                         onTap: _showSenderProfile,

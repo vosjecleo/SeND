@@ -128,9 +128,8 @@ class _RichComposerState extends State<_RichComposer> {
               .length +
           1,
     );
-    if (lineCount != _visibleLineCount) {
-      setState(() => _visibleLineCount = lineCount);
-    }
+    // Soft-wrapped lines change height even without a newline character.
+    setState(() => _visibleLineCount = lineCount);
     final cursor = widget.controller.selection.extentOffset.clamp(
       0,
       text.length,
@@ -321,6 +320,7 @@ class _RichComposerState extends State<_RichComposer> {
     final lineHeight =
         MediaQuery.textScalerOf(context).scale(DeltiecordTypeScale.normal) *
         1.2;
+    final editorVerticalPadding = max(7.0, (editorHeight - lineHeight) / 2);
     final expandedEditorHeight = min(
       widget.maxHeight,
       editorHeight + ((_visibleLineCount - 1) * lineHeight),
@@ -539,167 +539,203 @@ class _RichComposerState extends State<_RichComposer> {
                                 style: const TextStyle(
                                   fontSize: DeltiecordTypeScale.normal,
                                 ),
-                                child: SizedBox(
-                                  height: expandedEditorHeight,
-                                  child: QuillEditor(
-                                    controller: widget.controller,
-                                    focusNode: widget.focusNode,
-                                    scrollController: _scrollController,
-                                    config: QuillEditorConfig(
-                                      textSpanBuilder:
-                                          (
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final painter =
+                                        TextPainter(
+                                          text: TextSpan(
+                                            text: widget.controller.document
+                                                .toPlainText()
+                                                .trimRight(),
+                                            style: const TextStyle(
+                                              fontSize:
+                                                  DeltiecordTypeScale.normal,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                          textDirection: Directionality.of(
                                             context,
-                                            node,
-                                            offset,
-                                            text,
-                                            style,
-                                            recognizer,
-                                          ) => composerEmojiSpan(
-                                            backend: widget.backend,
-                                            text: text,
-                                            link:
-                                                node
-                                                        .style
-                                                        .attributes[Attribute
-                                                            .link
-                                                            .key]
-                                                        ?.value
-                                                    as String?,
-                                            style: style,
-                                            recognizer: recognizer,
                                           ),
-                                      autoFocus: false,
-                                      minHeight: editorHeight,
-                                      maxHeight: expandedEditorHeight,
-                                      customStyles: DefaultStyles(
-                                        paragraph: DefaultTextBlockStyle(
-                                          TextStyle(
-                                            fontSize:
-                                                DeltiecordTypeScale.normal,
-                                            height: 1.2,
-                                            color: context.deltiecord.text,
+                                          textScaler: MediaQuery.textScalerOf(
+                                            context,
                                           ),
-                                          HorizontalSpacing.zero,
-                                          VerticalSpacing.zero,
-                                          VerticalSpacing.zero,
-                                          null,
-                                        ),
-                                        placeHolder: DefaultTextBlockStyle(
-                                          TextStyle(
-                                            fontSize:
-                                                DeltiecordTypeScale.normal,
-                                            height: 1.2,
-                                            color: context.deltiecord.muted,
+                                        )..layout(
+                                          maxWidth: max(
+                                            1,
+                                            constraints.maxWidth - 22,
                                           ),
-                                          HorizontalSpacing.zero,
-                                          VerticalSpacing.zero,
-                                          VerticalSpacing.zero,
-                                          null,
+                                        );
+                                    final height = max(
+                                      expandedEditorHeight,
+                                      painter.height +
+                                          editorVerticalPadding * 2,
+                                    ).clamp(editorHeight, widget.maxHeight);
+                                    painter.dispose();
+                                    return SizedBox(
+                                      height: height,
+                                      child: QuillEditor(
+                                        controller: widget.controller,
+                                        focusNode: widget.focusNode,
+                                        scrollController: _scrollController,
+                                        config: QuillEditorConfig(
+                                          textSpanBuilder:
+                                              (
+                                                context,
+                                                node,
+                                                offset,
+                                                text,
+                                                style,
+                                                recognizer,
+                                              ) => composerEmojiSpan(
+                                                backend: widget.backend,
+                                                text: text,
+                                                link:
+                                                    node
+                                                            .style
+                                                            .attributes[Attribute
+                                                                .link
+                                                                .key]
+                                                            ?.value
+                                                        as String?,
+                                                style: style,
+                                                recognizer: recognizer,
+                                              ),
+                                          autoFocus: false,
+                                          minHeight: editorHeight,
+                                          maxHeight: height,
+                                          customStyles: DefaultStyles(
+                                            paragraph: DefaultTextBlockStyle(
+                                              TextStyle(
+                                                fontSize:
+                                                    DeltiecordTypeScale.normal,
+                                                height: 1.2,
+                                                color: context.deltiecord.text,
+                                              ),
+                                              HorizontalSpacing.zero,
+                                              VerticalSpacing.zero,
+                                              VerticalSpacing.zero,
+                                              null,
+                                            ),
+                                            placeHolder: DefaultTextBlockStyle(
+                                              TextStyle(
+                                                fontSize:
+                                                    DeltiecordTypeScale.normal,
+                                                height: 1.2,
+                                                color: context.deltiecord.muted,
+                                              ),
+                                              HorizontalSpacing.zero,
+                                              VerticalSpacing.zero,
+                                              VerticalSpacing.zero,
+                                              null,
+                                            ),
+                                          ),
+                                          // Keep the compact composer while seating its text
+                                          // cleanly alongside the attachment and send controls.
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 11,
+                                            vertical: editorVerticalPadding,
+                                          ),
+                                          placeholder:
+                                              'Message #${widget.roomName}',
+                                          // ignore: experimental_member_use
+                                          onKeyPressed: (event, _) {
+                                            if (event is KeyDownEvent &&
+                                                _emojiMatches.isNotEmpty) {
+                                              if (event.logicalKey ==
+                                                  LogicalKeyboardKey.tab) {
+                                                setState(
+                                                  () => _emojiSelection =
+                                                      (_emojiSelection + 1) %
+                                                      _emojiMatches.length,
+                                                );
+                                                return KeyEventResult.handled;
+                                              }
+                                              if (event.logicalKey ==
+                                                  LogicalKeyboardKey.enter) {
+                                                _acceptEmoji(
+                                                  _emojiMatches[_emojiSelection],
+                                                );
+                                                return KeyEventResult.handled;
+                                              }
+                                              if (event.logicalKey ==
+                                                  LogicalKeyboardKey.escape) {
+                                                _clearEmojiCompletion();
+                                                return KeyEventResult.handled;
+                                              }
+                                            }
+                                            if (event is KeyDownEvent &&
+                                                event.logicalKey ==
+                                                    LogicalKeyboardKey.keyV &&
+                                                (HardwareKeyboard
+                                                        .instance
+                                                        .isControlPressed ||
+                                                    HardwareKeyboard
+                                                        .instance
+                                                        .isMetaPressed)) {
+                                              unawaited(widget.onPasteImage());
+                                              return KeyEventResult.ignored;
+                                            }
+                                            if (event is KeyDownEvent &&
+                                                widget
+                                                    .mentionSuggestions
+                                                    .isNotEmpty) {
+                                              if (event.logicalKey ==
+                                                  LogicalKeyboardKey
+                                                      .arrowDown) {
+                                                widget.onMentionSelectionChanged(
+                                                  (widget.mentionSelectionIndex +
+                                                          1) %
+                                                      widget
+                                                          .mentionSuggestions
+                                                          .length,
+                                                );
+                                                return KeyEventResult.handled;
+                                              }
+                                              if (event.logicalKey ==
+                                                  LogicalKeyboardKey.arrowUp) {
+                                                widget.onMentionSelectionChanged(
+                                                  (widget.mentionSelectionIndex -
+                                                          1) %
+                                                      widget
+                                                          .mentionSuggestions
+                                                          .length,
+                                                );
+                                                return KeyEventResult.handled;
+                                              }
+                                              if (event.logicalKey ==
+                                                      LogicalKeyboardKey
+                                                          .enter &&
+                                                  !HardwareKeyboard
+                                                      .instance
+                                                      .isShiftPressed) {
+                                                widget.onMentionSelected(
+                                                  widget
+                                                      .mentionSuggestions[widget
+                                                          .mentionSelectionIndex]
+                                                      .matrixId,
+                                                );
+                                                return KeyEventResult.handled;
+                                              }
+                                            }
+                                            if (event is KeyDownEvent &&
+                                                event.logicalKey ==
+                                                    LogicalKeyboardKey.enter &&
+                                                !HardwareKeyboard
+                                                    .instance
+                                                    .isShiftPressed &&
+                                                (widget.sendWithCtrlEnter ==
+                                                    HardwareKeyboard
+                                                        .instance
+                                                        .isControlPressed)) {
+                                              widget.onSend();
+                                              return KeyEventResult.handled;
+                                            }
+                                            return KeyEventResult.ignored;
+                                          },
                                         ),
                                       ),
-                                      // Keep the compact composer while seating its text
-                                      // cleanly alongside the attachment and send controls.
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 11,
-                                        vertical: 7,
-                                      ),
-                                      placeholder:
-                                          'Message #${widget.roomName}',
-                                      // ignore: experimental_member_use
-                                      onKeyPressed: (event, _) {
-                                        if (event is KeyDownEvent &&
-                                            _emojiMatches.isNotEmpty) {
-                                          if (event.logicalKey ==
-                                              LogicalKeyboardKey.tab) {
-                                            setState(
-                                              () => _emojiSelection =
-                                                  (_emojiSelection + 1) %
-                                                  _emojiMatches.length,
-                                            );
-                                            return KeyEventResult.handled;
-                                          }
-                                          if (event.logicalKey ==
-                                              LogicalKeyboardKey.enter) {
-                                            _acceptEmoji(
-                                              _emojiMatches[_emojiSelection],
-                                            );
-                                            return KeyEventResult.handled;
-                                          }
-                                          if (event.logicalKey ==
-                                              LogicalKeyboardKey.escape) {
-                                            _clearEmojiCompletion();
-                                            return KeyEventResult.handled;
-                                          }
-                                        }
-                                        if (event is KeyDownEvent &&
-                                            event.logicalKey ==
-                                                LogicalKeyboardKey.keyV &&
-                                            (HardwareKeyboard
-                                                    .instance
-                                                    .isControlPressed ||
-                                                HardwareKeyboard
-                                                    .instance
-                                                    .isMetaPressed)) {
-                                          unawaited(widget.onPasteImage());
-                                          return KeyEventResult.ignored;
-                                        }
-                                        if (event is KeyDownEvent &&
-                                            widget
-                                                .mentionSuggestions
-                                                .isNotEmpty) {
-                                          if (event.logicalKey ==
-                                              LogicalKeyboardKey.arrowDown) {
-                                            widget.onMentionSelectionChanged(
-                                              (widget.mentionSelectionIndex +
-                                                      1) %
-                                                  widget
-                                                      .mentionSuggestions
-                                                      .length,
-                                            );
-                                            return KeyEventResult.handled;
-                                          }
-                                          if (event.logicalKey ==
-                                              LogicalKeyboardKey.arrowUp) {
-                                            widget.onMentionSelectionChanged(
-                                              (widget.mentionSelectionIndex -
-                                                      1) %
-                                                  widget
-                                                      .mentionSuggestions
-                                                      .length,
-                                            );
-                                            return KeyEventResult.handled;
-                                          }
-                                          if (event.logicalKey ==
-                                                  LogicalKeyboardKey.enter &&
-                                              !HardwareKeyboard
-                                                  .instance
-                                                  .isShiftPressed) {
-                                            widget.onMentionSelected(
-                                              widget
-                                                  .mentionSuggestions[widget
-                                                      .mentionSelectionIndex]
-                                                  .matrixId,
-                                            );
-                                            return KeyEventResult.handled;
-                                          }
-                                        }
-                                        if (event is KeyDownEvent &&
-                                            event.logicalKey ==
-                                                LogicalKeyboardKey.enter &&
-                                            !HardwareKeyboard
-                                                .instance
-                                                .isShiftPressed &&
-                                            (widget.sendWithCtrlEnter ==
-                                                HardwareKeyboard
-                                                    .instance
-                                                    .isControlPressed)) {
-                                          widget.onSend();
-                                          return KeyEventResult.handled;
-                                        }
-                                        return KeyEventResult.ignored;
-                                      },
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),

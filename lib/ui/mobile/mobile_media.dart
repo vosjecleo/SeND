@@ -109,12 +109,6 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
               avatar: Icon(Icons.visibility_off, size: 17),
               label: Text('Spoiler — tap to reveal'),
             ),
-          if (!hidden && isFavouriteableGifUri(attachment.gifSource))
-            Positioned(
-              right: 4,
-              top: 4,
-              child: GifFavouriteButton(uri: attachment.gifSource!),
-            ),
         ],
       ),
     );
@@ -940,12 +934,6 @@ class MobileLinkPreviewCard extends StatelessWidget {
                         width: mediaFrame.width,
                         height: mediaFrame.height,
                       ),
-                      if (isFavouriteableGifUri(preview.gifSource))
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GifFavouriteButton(uri: preview.gifSource!),
-                        ),
                     ],
                   ),
                 ),

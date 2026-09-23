@@ -260,6 +260,10 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> requestDeviceVerification(String deviceId) async =>
       throw UnsupportedError('Device verification is unavailable');
   Future<void> deleteAccount(String password);
+  Future<void> changeAccountPassword(
+    String currentPassword,
+    String newPassword,
+  ) => Future.error(UnsupportedError('Password changes are unavailable.'));
   Future<void> refreshStorageUsage();
   Future<void> clearMediaCache();
   Future<void> joinVoiceRoom(String roomId);

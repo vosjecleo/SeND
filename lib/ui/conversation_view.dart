@@ -561,6 +561,7 @@ class _ConversationState extends State<_Conversation> {
     final backend = widget.backend;
     final room = backend.selectedRoom!;
     final messages = backend.messages;
+    final receipts = receiptFrontiers(messages);
     final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
     _scheduleInitialViewportFill();
     WidgetsBinding.instance.addPostFrameCallback(
@@ -633,11 +634,27 @@ class _ConversationState extends State<_Conversation> {
                           ],
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Search',
+                        onPressed: showSearch,
+                        icon: const Icon(Icons.search),
+                      ),
+                      IconButton(
+                        tooltip: 'Start call',
+                        onPressed: () => backend.joinVoiceRoom(room.id),
+                        icon: const Icon(Icons.call_outlined),
+                      ),
                       PopupMenuButton<String>(
                         tooltip: 'Room tools',
                         icon: const Icon(Icons.more_horiz, size: 22),
                         onSelected: (value) async {
                           switch (value) {
+                            case 'notifications':
+                              await showRoomNotificationControls(
+                                context,
+                                backend,
+                                room,
+                              );
                             case 'search':
                               showSearch();
                             case 'pins':
@@ -728,20 +745,12 @@ class _ConversationState extends State<_Conversation> {
                         },
                         itemBuilder: (context) => [
                           const PopupMenuItem(
-                            value: 'search',
-                            child: Text('Search'),
-                          ),
-                          const PopupMenuItem(
                             value: 'pins',
                             child: Text('Pinned messages'),
                           ),
                           const PopupMenuItem(
                             value: 'members',
                             child: Text('Members'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'call',
-                            child: Text('Start call'),
                           ),
                           const PopupMenuItem(
                             value: 'copy-link',
@@ -766,35 +775,9 @@ class _ConversationState extends State<_Conversation> {
                           ),
                           const PopupMenuDivider(),
 
-                          CheckedPopupMenuItem(
-                            value: 'all',
-                            checked:
-                                room.notificationMode ==
-                                RoomNotificationMode.allMessages,
-                            child: const Text('All messages'),
-                          ),
-                          CheckedPopupMenuItem(
-                            value: 'mentions',
-                            checked:
-                                room.notificationMode ==
-                                RoomNotificationMode.mentionsOnly,
-                            child: const Text('Mentions only'),
-                          ),
-                          CheckedPopupMenuItem(
-                            value: 'mute',
-                            checked:
-                                room.notificationMode ==
-                                RoomNotificationMode.muted,
-                            child: const Text('Mute'),
-                          ),
-                          const PopupMenuDivider(),
                           const PopupMenuItem(
-                            value: 'hour',
-                            child: Text('Mute for 1 hour'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'tomorrow',
-                            child: Text('Mute until tomorrow'),
+                            value: 'notifications',
+                            child: Text('Notification settings'),
                           ),
                           const PopupMenuItem(
                             value: 'unread',
@@ -924,6 +907,9 @@ class _ConversationState extends State<_Conversation> {
                                             const _UnreadDivider(),
                                           _MessageRow(
                                             message: message,
+                                            showReceipt: receipts.contains(
+                                              message.id,
+                                            ),
                                             albumMessages:
                                                 mediaAlbums.albums[message.id],
                                             highlighted:

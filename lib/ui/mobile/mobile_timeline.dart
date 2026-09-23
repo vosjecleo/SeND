@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart' show Document, LinkAttribute;
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
@@ -21,6 +22,7 @@ import '../expression_picker.dart';
 import 'mobile_attachment_picker.dart';
 import '../../services/clipboard_image.dart';
 import '../advanced_chat_dialogs.dart';
+import '../member_management.dart';
 import '../advanced_chat_views.dart';
 import '../matrix_html_text.dart';
 import '../poll_card.dart';
@@ -28,6 +30,9 @@ import '../typing_indicator.dart';
 import '../room_search_panel.dart';
 import '../media_album.dart';
 import '../encryption_attention_banner.dart';
+import '../message_metadata.dart';
+import '../rich_message.dart';
+import '../../services/receipt_frontiers.dart';
 import 'mobile_media.dart';
 import 'mobile_profile_sheet.dart';
 import 'mobile_widgets.dart';
@@ -79,6 +84,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   final List<AttachmentDraft> _attachments = [];
   ChatMessage? _reply;
   ChatMessage? _edit;
+  Document? _richEdit;
   bool _sending = false;
   bool _autoFillingInitialChunk = false;
   bool _pageLoadInFlight = false;
@@ -181,6 +187,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   void _composerChanged() {
+    if (_edit != null && _richEdit != null) {
+      reconcileRichMessageDocument(
+        _richEdit!,
+        _previousComposerText,
+        _composer.text,
+      );
+    }
     _customEmojiSpans = reconcileCustomEmojiSpans(
       _previousComposerText,
       _composer.text,
@@ -564,6 +577,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   @override
   Widget build(BuildContext context) {
     final messages = backend.messages;
+    final receipts = receiptFrontiers(messages);
     final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
     final physicalPixel = 1 / MediaQuery.devicePixelRatioOf(context);
     WidgetsBinding.instance.addPostFrameCallback(
@@ -643,31 +657,38 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           ),
         ),
         actions: [
-          if (widget.room.isDirect)
-            IconButton(
-              tooltip: 'Call',
-              onPressed: () => backend.joinVoiceRoom(widget.room.id),
-              icon: const Icon(Icons.call_outlined),
-            ),
           IconButton(
             tooltip: 'Search',
             onPressed: _showSearch,
             icon: const Icon(Icons.search),
           ),
           IconButton(
-            tooltip: 'Notification settings',
-            onPressed: () =>
-                showRoomNotificationControls(context, backend, widget.room),
-            icon: Icon(
-              backend.selectedRoomMuted
-                  ? Icons.notifications_off_outlined
-                  : Icons.notifications_outlined,
-            ),
+            tooltip: 'Start call',
+            onPressed: () => backend.joinVoiceRoom(widget.room.id),
+            icon: const Icon(Icons.call_outlined),
           ),
           PopupMenuButton<String>(
             tooltip: 'More',
             onSelected: (value) async {
               switch (value) {
+                case 'members':
+                  widget.onOpenDetails();
+                case 'invite':
+                  await showInviteMember(context, backend);
+                case 'aliases':
+                  await showRoomAliasEditor(context, backend, widget.room);
+                case 'copy-link':
+                  await Clipboard.setData(
+                    ClipboardData(
+                      text: 'https://matrix.to/#/${widget.room.id}',
+                    ),
+                  );
+                case 'notifications':
+                  await showRoomNotificationControls(
+                    context,
+                    backend,
+                    widget.room,
+                  );
                 case 'gallery':
                   await showRoomSearchSheet(
                     context,
@@ -717,6 +738,16 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
               PopupMenuItem(value: 'saved', child: Text('Saved and scheduled')),
               PopupMenuItem(value: 'pinned', child: Text('Pinned messages')),
               PopupMenuItem(value: 'inbox', child: Text('Inbox')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'members', child: Text('Members')),
+              PopupMenuItem(value: 'invite', child: Text('Invite member')),
+              PopupMenuItem(value: 'aliases', child: Text('Room aliases')),
+              PopupMenuItem(value: 'copy-link', child: Text('Copy room link')),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'notifications',
+                child: Text('Notification settings'),
+              ),
               PopupMenuItem(
                 value: 'unread',
                 child: Text('Toggle read / unread'),
@@ -850,6 +881,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                       navigationGestureActive:
                                           widget.navigationGestureActive,
                                       message: message,
+                                      showReceipt: receipts.contains(
+                                        message.id,
+                                      ),
                                       albumMessages:
                                           mediaAlbums.albums[message.id],
                                       grouped: grouped,
@@ -864,16 +898,28 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                       onEdit: message.own && !message.redacted
                                           ? () => setState(() {
                                               _edit = message;
+                                              _richEdit = null;
                                               _reply = null;
                                               _customEmojiSpans = const [];
-                                              _composer.text = message.body;
+                                              final document =
+                                                  richMessageDocument(
+                                                    message.body,
+                                                    message.formattedBody,
+                                                  );
+                                              final restored =
+                                                  serializeRichMessage(
+                                                    document,
+                                                  );
+                                              _composer.text =
+                                                  restored.plainText;
+                                              _richEdit = document;
                                               _customEmojiSpans =
                                                   customEmojiSpansFromHtml(
-                                                    message.formattedBody,
-                                                    message.body,
+                                                    restored.html,
+                                                    restored.plainText,
                                                   );
                                               _previousComposerText =
-                                                  message.body;
+                                                  restored.plainText;
                                               _composer.selection =
                                                   TextSelection.collapsed(
                                                     offset:
@@ -1030,10 +1076,18 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _send() async {
-    final serialized = serializeCustomEmojiText(
-      _composer.text,
-      _customEmojiSpans,
-    );
+    if (_edit != null && _richEdit != null) {
+      for (final span in _customEmojiSpans) {
+        _richEdit!.format(
+          span.start,
+          span.end - span.start,
+          LinkAttribute(customEmojiEditorLink(span.emoji)),
+        );
+      }
+    }
+    final serialized = _edit != null && _richEdit != null
+        ? serializeRichMessage(_richEdit!)
+        : serializeMarkdownEmojiMessage(_composer.text, _customEmojiSpans);
     final text = unescapeLiteralEmojiAliases(serialized.plainText);
     final formatted = serialized.html == null
         ? null
@@ -1042,6 +1096,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     final roomId = widget.room.id;
     final submittedText = text;
     final submittedRawText = _composer.text;
+    final submittedRichEdit = _richEdit == null
+        ? null
+        : Document.fromDelta(_richEdit!.toDelta());
     final submittedEmojiSpans = List<CustomEmojiTextSpan>.of(_customEmojiSpans);
     final submittedAttachments = List<AttachmentDraft>.from(_attachments);
     final reply = _reply;
@@ -1113,6 +1170,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           _attachments.insertAll(0, submittedAttachments);
           _reply = reply;
           _edit = edit;
+          _richEdit = submittedRichEdit;
         });
       }
     } finally {
@@ -1428,6 +1486,7 @@ class _MobileMessageRow extends StatelessWidget {
     required this.backend,
     required this.navigationGestureActive,
     required this.message,
+    this.showReceipt = false,
     this.albumMessages,
     required this.grouped,
     required this.highlighted,
@@ -1439,6 +1498,7 @@ class _MobileMessageRow extends StatelessWidget {
   final ChatBackend backend;
   final bool navigationGestureActive;
   final ChatMessage message;
+  final bool showReceipt;
   final List<ChatMessage>? albumMessages;
   final bool grouped;
   final bool highlighted;
@@ -1603,33 +1663,6 @@ class _MobileMessageRow extends StatelessWidget {
                                   color: context.deltiecord.muted,
                                 ),
                               ),
-                              if (message.edited) ...[
-                                const SizedBox(width: 5),
-                                Text(
-                                  '(edited)',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.deltiecord.muted,
-                                  ),
-                                ),
-                              ],
-                              if (message.own &&
-                                  !message.failed &&
-                                  !message.pending) ...[
-                                const SizedBox(width: 5),
-                                GestureDetector(
-                                  onTap: message.readBy.isEmpty
-                                      ? null
-                                      : () => _showReaders(context),
-                                  child: Icon(
-                                    message.readBy.isEmpty
-                                        ? Icons.check
-                                        : Icons.done_all,
-                                    size: 12,
-                                    color: context.deltiecord.muted,
-                                  ),
-                                ),
-                              ],
                               if (message.pending) ...[
                                 const SizedBox(width: 5),
                                 const SizedBox.square(
@@ -1650,6 +1683,12 @@ class _MobileMessageRow extends StatelessWidget {
                           key: ValueKey('mobile-message-body-${message.id}'),
                           child: message.formattedBody != null
                               ? MatrixHtmlText(
+                                  trailing: messageMetadata(
+                                    context,
+                                    message,
+                                    showReceipt: showReceipt,
+                                    onReaders: () => _showReaders(context),
+                                  ),
                                   html: message.formattedBody!,
                                   fallback: message.body,
                                   selectable: false,
@@ -1662,6 +1701,12 @@ class _MobileMessageRow extends StatelessWidget {
                                       ),
                                 )
                               : MatrixPlainText(
+                                  trailing: messageMetadata(
+                                    context,
+                                    message,
+                                    showReceipt: showReceipt,
+                                    onReaders: () => _showReaders(context),
+                                  ),
                                   text: message.body,
                                   selectable: false,
                                 ),
@@ -1704,6 +1749,16 @@ class _MobileMessageRow extends StatelessWidget {
                           child: MobileAttachmentView(
                             backend: backend,
                             message: message,
+                          ),
+                        ),
+                      if ((showReceipt || message.edited) &&
+                          (message.body.isEmpty || message.poll != null))
+                        Text.rich(
+                          messageMetadata(
+                            context,
+                            message,
+                            showReceipt: showReceipt,
+                            onReaders: () => _showReaders(context),
                           ),
                         ),
                       for (final preview in message.linkPreviews)

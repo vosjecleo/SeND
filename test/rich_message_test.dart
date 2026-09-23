@@ -7,6 +7,29 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('mobile range edits preserve untouched rich formatting', () {
+    final document = richMessageDocument(
+      'bold plain',
+      '<strong>bold</strong> plain',
+    );
+    reconcileRichMessageDocument(document, 'bold plain', 'bold changed');
+    final message = serializeRichMessage(document);
+    expect(message.plainText, 'bold changed');
+    expect(message.html, contains('<strong>bold</strong>'));
+    expect(message.html, contains('changed'));
+  });
+  test('selected custom emoji does not disable typed Markdown', () {
+    final emoji = CustomEmojiReference(
+      id: Uri.parse('mxc://test/emoji'),
+      name: 'wave',
+    );
+    final document = Document()..insert(0, '**bold** :wave:');
+    document.format(9, 6, LinkAttribute(customEmojiEditorLink(emoji)));
+    final message = serializeRichMessage(document);
+    expect(message.html, contains('<strong>bold</strong>'));
+    expect(message.html, contains('data-mx-emoticon'));
+    expect(message.html, contains('mxc://test/emoji'));
+  });
   test(
     'recognizes standalone Unicode emoji without treating text as emoji',
     () {

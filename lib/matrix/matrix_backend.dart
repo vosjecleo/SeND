@@ -16,6 +16,7 @@ import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/chat_notifications.dart';
+import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/avatar_media_pool.dart';
 import '../services/coalesced_callback.dart';
@@ -787,6 +788,12 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> deleteAccount(String password) => _deleteAccount(password);
+
+  @override
+  Future<void> changeAccountPassword(
+    String currentPassword,
+    String newPassword,
+  ) => _matrix.changePassword(newPassword, oldPassword: currentPassword);
 
   @override
   Future<void> joinVoiceRoom(String roomId) => _joinVoiceRoom(roomId);

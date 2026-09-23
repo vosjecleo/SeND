@@ -109,6 +109,9 @@ extension _MatrixEventMapping on MatrixBackend {
                       const []),
             senderId: event.senderId,
             readBy: _readersFor(event, timeline),
+            editReadBy: displayEvent.eventId == event.eventId
+                ? const []
+                : _readersFor(displayEvent, timeline),
             blocked: blocked,
             queued: _offlineSendRooms.containsKey(event.eventId),
             poll: poll,
@@ -154,7 +157,9 @@ extension _MatrixEventMapping on MatrixBackend {
         _preferences.readReceiptMemberThreshold) {
       return const [];
     }
-    final eventIndex = timeline.events.indexOf(event);
+    final eventIndex = timeline.events.indexWhere(
+      (candidate) => candidate.eventId == event.eventId,
+    );
     if (eventIndex < 0) return const [];
     final readers = <ReceiptReaderSummary>[];
     for (final entry in room.receiptState.global.otherUsers.entries) {

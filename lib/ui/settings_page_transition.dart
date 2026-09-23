@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
-/// Fade the old page out before showing the new one. A simultaneous crossfade
-/// or short slide of transparent pages superimposes their text mid-transition.
+/// Paint only the incoming page. Keeping outgoing transparent pages around
+/// superimposes their text when navigation is interrupted or reversed.
 class SettingsPageTransition extends StatelessWidget {
   const SettingsPageTransition({
     required this.child,
     required this.reduceMotion,
+    this.backwards = false,
     super.key,
   });
 
   final Widget child;
   final bool reduceMotion;
+  final bool backwards;
 
   @override
   Widget build(BuildContext context) => ClipRect(
@@ -23,14 +25,19 @@ class SettingsPageTransition extends StatelessWidget {
         layoutBuilder: (current, previous) => Stack(
           fit: StackFit.expand,
           children: [
-            for (final old in previous)
-              ExcludeSemantics(child: IgnorePointer(child: old)),
+            // Only the current page may paint. Interrupted transitions can
+            // leave several outgoing pages alive with nonzero opacity.
             ?current,
           ],
         ),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation.drive(CurveTween(curve: const Interval(0.5, 1))),
-          child: child,
+        transitionBuilder: (child, animation) => SlideTransition(
+          position: animation.drive(
+            Tween(
+              begin: Offset(backwards ? -0.12 : 0.12, 0),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)),
+          ),
+          child: FadeTransition(opacity: animation, child: child),
         ),
         child: child,
       ),

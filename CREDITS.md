@@ -82,10 +82,11 @@ dependency under its own license.
   Deltiecord vendors only `emojis.json`; Jome is MIT licensed.
 - Interface text and colour emoji use platform fonts; release packages no
   longer bundle font files that behaved inconsistently across renderers.
-- Desktop notification and call cues use `#8.wav` from HaelDB's
-  [UI Sounds](https://opengameart.org/content/ui-sounds-0) collection, released
-  under CC0. Notification and call asset slots remain separate so either cue
-  can be replaced independently in a future sound pass.
+- Notification and call sounds are original creations by VosjeCleo. The
+  notification, call-connected and call-disconnected asset slots remain
+  independently replaceable.
+- [sqflite_sqlcipher](https://github.com/davidmartos96/sqflite_sqlcipher)
+  provides SQLCipher-backed Android local database storage (MIT).
 
 Additional Dart and Flutter packages are declared in `pubspec.yaml` and retain
 their upstream copyright notices and licenses.

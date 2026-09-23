@@ -1,5 +1,40 @@
 # Changelog
 
+## Deltiecord 0.9.31 build 103 — source prepared, not released
+
+- Move sent/read progress markers and edited labels after message content.
+  Show receipt frontiers rather than repeating acknowledgement on every message;
+  edit acknowledgements use the actual replacement event's receipt state.
+- Grow the desktop composer for wrapped drafts, center its text, and keep the
+  user/profile islands independently sized. Center desktop timeline avatars on
+  the first sender-and-message line. Align mobile channel icons with categories.
+- Stop outgoing settings pages overlapping the incoming page; correct the space
+  menu return direction and respect reduced motion. Refresh inherited theme
+  configuration on resume without resetting the session or room selection.
+- Group settings into Account, Preferences and App, with larger entry labels.
+  Security includes existing encryption controls and a password-change dialog.
+  Theme choices wrap into fewer columns on narrow screens. The mobile colour
+  picker is centered and has an explicit Apply/dismiss button.
+- Confirm logout, dismiss account overlays and clear in-memory image/draft UI
+  state after successful logout. Preserve the current screen when cancelled.
+- Preserve existing rich formatting when editing messages, including mobile
+  range edits; custom emoji insertion no longer disables typed Markdown.
+- Keep Search and Call outside the room menu on desktop and mobile, and move
+  secondary actions into the menu with clearer notification controls.
+- Count emoji/sticker usage after successful sends, not picker clicks or draft
+  deletion. Add a frequently-used sticker section and visible favourite controls.
+  Order favourites before frequent items and packs; show GIF favourites in their
+  own category before Trending. GIF favourite controls appear only fullscreen.
+- Replace placeholder notification/call cues with VosjeCleo's original sounds
+  and remove the old sound attribution.
+- Protect Android's Matrix database with SQLCipher and a securely stored random
+  key, with a verified atomic migration that never resets data on failure.
+  Confirm formatted-link destinations before opening them. Verify declared
+  ciphertext SHA-256 before decrypting encrypted video, with bounded downloads.
+- iOS/PWA-specific camera, picker and lifecycle investigations are deferred to
+  the following build. Native SQLCipher migration and physical-device lifecycle
+  checks remain release gates; no release artifacts were built for this push.
+
 ## Deltiecord 0.9.30 build 102 — 2026-09-23
 
 - PWA-only password autofill fix: use persistent, labelled browser-native

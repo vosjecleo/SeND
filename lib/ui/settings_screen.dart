@@ -87,6 +87,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Future<UserProfileSummary>? _ownProfile;
   Future<UnifiedPushState>? _unifiedPushState;
   bool _checkingForUpdates = false;
+  bool _loggingOut = false;
   late final MicrophoneTestController _microphoneTest =
       MicrophoneTestController();
 
@@ -128,6 +129,51 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       setState(() => _mobilePageOpen = false);
     } else {
       Navigator.of(context).maybePop();
+    }
+  }
+
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'Are you sure? Make sure you have your recovery key before logging out.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _loggingOut = true);
+    try {
+      await backend.logout();
+      if (backend.status == SessionStatus.signedOut) {
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
+        if (!mounted) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              backend.error ?? 'Could not log out. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loggingOut = false);
     }
   }
 
@@ -249,20 +295,50 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             children: [
-              for (final page in _SettingsPage.values)
-                if (_availableOnCurrentPlatform(page))
-                  ListTile(
-                    dense: true,
-                    visualDensity: const VisualDensity(vertical: -1),
-                    selected: !mobile && _page == page,
-                    leading: Icon(_iconFor(page), size: 21),
-                    title: Text(_labelFor(page)),
-                    trailing: mobile ? const Icon(Icons.chevron_right) : null,
-                    onTap: () => setState(() {
-                      _page = page;
-                      if (mobile) _mobilePageOpen = true;
-                    }),
+              for (final group in const <String, List<_SettingsPage>>{
+                'Account': [
+                  _SettingsPage.account,
+                  _SettingsPage.devices,
+                  _SettingsPage.encryption,
+                ],
+                'Preferences': [
+                  _SettingsPage.audioVideo,
+                  _SettingsPage.appearance,
+                  _SettingsPage.accessibility,
+                  _SettingsPage.privacy,
+                  _SettingsPage.shortcuts,
+                ],
+                'App': [
+                  _SettingsPage.notifications,
+                  _SettingsPage.storage,
+                  _SettingsPage.about,
+                ],
+              }.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+                  child: Text(
+                    group.key,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
+                ),
+                for (final page in group.value)
+                  if (_availableOnCurrentPlatform(page))
+                    ListTile(
+                      dense: true,
+                      visualDensity: const VisualDensity(vertical: -1),
+                      selected: !mobile && _page == page,
+                      leading: Icon(_iconFor(page), size: 21),
+                      title: Text(
+                        _labelFor(page),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      trailing: mobile ? const Icon(Icons.chevron_right) : null,
+                      onTap: () => setState(() {
+                        _page = page;
+                        if (mobile) _mobilePageOpen = true;
+                      }),
+                    ),
+              ],
             ],
           ),
         ),
@@ -271,7 +347,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           dense: true,
           leading: const Icon(Icons.logout, size: 21),
           title: const Text('Log out'),
-          onTap: backend.logout,
+          onTap: _loggingOut ? null : _logout,
         ),
         const SizedBox(height: 6),
       ],
@@ -294,7 +370,17 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _pageBody() => switch (_page) {
     _SettingsPage.account => _account(),
     _SettingsPage.devices => _devices(),
-    _SettingsPage.encryption => _section('Encryption & recovery', [
+    _SettingsPage.encryption => _section('Security', [
+      OutlinedButton.icon(
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => _ChangePasswordDialog(backend: backend),
+        ),
+        icon: const Icon(Icons.password),
+        label: const Text('Change account password'),
+      ),
+      const SizedBox(height: 20),
+      const Text('Encryption & recovery'),
       _value('Status', _encryptionLabel(backend.encryptionSetup.status)),
       _value(
         'Encrypted key backup',
@@ -940,33 +1026,38 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       const SizedBox(height: 12),
       const Text('Theme'),
-      SegmentedButton<DeltiecordThemeMode>(
-        segments: const [
-          ButtonSegment(
-            value: DeltiecordThemeMode.light,
-            icon: Icon(Icons.light_mode_outlined),
-            label: Text('Light'),
-          ),
-          ButtonSegment(
-            value: DeltiecordThemeMode.regular,
-            icon: Icon(Icons.dark_mode_outlined),
-            label: Text('Gray'),
-          ),
-          ButtonSegment(
-            value: DeltiecordThemeMode.dark,
-            icon: Icon(Icons.contrast),
-            label: Text('Dark'),
-          ),
-          ButtonSegment(
-            value: DeltiecordThemeMode.night,
-            icon: Icon(Icons.brightness_2_outlined),
-            label: Text('Night'),
-          ),
-        ],
-        selected: {preferences.themeMode},
-        onSelectionChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(themeMode: value.first),
-        ),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final minimum = 120 * MediaQuery.textScalerOf(context).scale(1);
+          final columns = constraints.maxWidth >= minimum * 4 + 24
+              ? 4
+              : constraints.maxWidth >= minimum * 2 + 8
+              ? 2
+              : 1;
+          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in const [
+                (DeltiecordThemeMode.light, 'Light'),
+                (DeltiecordThemeMode.regular, 'Gray'),
+                (DeltiecordThemeMode.dark, 'Dark'),
+                (DeltiecordThemeMode.night, 'Night'),
+              ])
+                SizedBox(
+                  width: width,
+                  child: ChoiceChip(
+                    label: Text(option.$2, maxLines: 1),
+                    selected: preferences.themeMode == option.$1,
+                    onSelected: (_) => backend.updatePreferences(
+                      preferences.copyWith(themeMode: option.$1),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
       const SizedBox(height: 20),
       Text('Interface scale — ${(preferences.interfaceScale * 100).round()}%'),
@@ -1691,6 +1782,116 @@ String? _normalPreviewDomain(String input) {
   return host;
 }
 
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog({required this.backend});
+  final ChatBackend backend;
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_busy) return;
+    if (_current.text.isEmpty ||
+        _next.text.isEmpty ||
+        _next.text != _confirm.text) {
+      setState(
+        () =>
+            _error = 'Enter your current password and matching new passwords.',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.backend.changeAccountPassword(_current.text, _next.text);
+      if (!mounted) return;
+      TextInput.finishAutofillContext();
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Password changed.')));
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Password change failed. Check your current password and the server’s password requirements.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: AlertDialog(
+      title: const Text('Change password'),
+      content: AutofillGroup(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final field in [
+                (_current, 'Current password', AutofillHints.password),
+                (_next, 'New password', AutofillHints.newPassword),
+                (_confirm, 'Confirm new password', AutofillHints.newPassword),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextField(
+                    controller: field.$1,
+                    enabled: !_busy,
+                    obscureText: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    autofillHints: [field.$3],
+                    decoration: InputDecoration(labelText: field.$2),
+                  ),
+                ),
+              const Text(
+                'Other sessions may be signed out by your homeserver.',
+              ),
+              if (_error != null)
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_busy ? 'Changing…' : 'Change password'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _PasswordPromptDialog extends StatefulWidget {
   const _PasswordPromptDialog({required this.title, required this.warning});
 
@@ -1770,7 +1971,7 @@ IconData _iconFor(_SettingsPage page) => switch (page) {
 String _labelFor(_SettingsPage page) => switch (page) {
   _SettingsPage.account => 'Account',
   _SettingsPage.devices => 'Devices',
-  _SettingsPage.encryption => 'Encryption',
+  _SettingsPage.encryption => 'Security',
   _SettingsPage.audioVideo => 'Audio & video',
   _SettingsPage.notifications => 'Notifications',
   _SettingsPage.privacy => 'Privacy',

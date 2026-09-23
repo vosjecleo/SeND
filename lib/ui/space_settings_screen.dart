@@ -239,6 +239,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
               Expanded(
                 child: SettingsPageTransition(
                   reduceMotion: reduceMotion,
+                  backwards: _mobileMenu,
                   child: _mobileMenu
                       ? KeyedSubtree(
                           key: const ValueKey('space-settings-menu'),

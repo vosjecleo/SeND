@@ -150,12 +150,6 @@ class _LinkPreviewCard extends StatelessWidget {
                               !backend.preferences.reducedMotion,
                         ),
                       ),
-                      if (isFavouriteableGifUri(preview.gifSource))
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GifFavouriteButton(uri: preview.gifSource!),
-                        ),
                     ],
                   ),
                 ),
@@ -798,24 +792,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
     }
 
     return switch (widget.attachment.kind) {
-      AttachmentKind.image =>
-        isFavouriteableGifUri(widget.attachment.gifSource)
-            ? Align(
-                alignment: Alignment.centerLeft,
-                child: Stack(
-                  children: [
-                    _buildImage(),
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: GifFavouriteButton(
-                        uri: widget.attachment.gifSource!,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : _buildImage(),
+      AttachmentKind.image => _buildImage(),
       AttachmentKind.video => _InlineVideo(
         backend: widget.backend,
         messageId: widget.messageId,

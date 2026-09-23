@@ -35,11 +35,35 @@ class DeltiecordApp extends StatefulWidget {
   State<DeltiecordApp> createState() => _DeltiecordAppState();
 }
 
-class _DeltiecordAppState extends State<DeltiecordApp> {
+class _DeltiecordAppState extends State<DeltiecordApp>
+    with WidgetsBindingObserver {
   ChatBackend get backend => widget.backend;
   TargetPlatform? get platformOverride => widget.platformOverride;
   Object? _configuration;
   Widget? _configuredApp;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // Reconstruct inherited theme/scale configuration after a suspended view,
+    // without replacing Navigator, conversation state, drafts or the session.
+    setState(() {
+      _configuration = null;
+      _configuredApp = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +217,9 @@ class _DeltiecordAppState extends State<DeltiecordApp> {
         return _configuredApp = MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
+          themeAnimationDuration: preferences.reducedMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,

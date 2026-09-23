@@ -346,7 +346,7 @@ void main() {
       await _pumpMobile(tester, backend);
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Account'));
+      await tester.tap(find.widgetWithText(ListTile, 'Account'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Edit profile'));
       await tester.pumpAndSettle();
@@ -921,7 +921,7 @@ void main() {
     expect(find.text('Fix encryption'), findsNothing);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Encryption'));
+    await tester.tap(find.text('Security'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();
@@ -943,7 +943,7 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Encryption'));
+    await tester.tap(find.text('Security'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();
@@ -1167,24 +1167,35 @@ void main() {
 
     final hoverOnly = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await hoverOnly.addPointer();
-    await hoverOnly.moveTo(tester.getCenter(find.text('Original').last));
+    await hoverOnly.moveTo(
+      tester.getCenter(find.byKey(const ValueKey(r'message-body-$own'))),
+    );
     await tester.pump(const Duration(milliseconds: 1100));
     expect(find.byTooltip('Reply'), findsNothing);
     await hoverOnly.removePointer();
 
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     expect(find.byTooltip('Reply'), findsOneWidget);
     expect(find.byTooltip('Copy text'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.byTooltip('Reply'), findsNothing);
 
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     expect(find.byTooltip('Reply'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 1100));
     expect(find.byTooltip('Reply'), findsNothing);
 
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     tester
         .widget<IconButton>(find.byKey(const Key('message-action-react')))
         .onPressed!();
@@ -1196,7 +1207,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.toggledReactions, [(r'$own', '👍'), (r'$own', '🎉')]);
 
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     tester
         .widget<IconButton>(find.byKey(const Key('message-action-edit')))
         .onPressed!();
@@ -1214,7 +1228,10 @@ void main() {
           .trim(),
       isEmpty,
     );
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     tester
         .widget<IconButton>(find.byKey(const Key('message-action-edit')))
         .onPressed!();
@@ -1224,7 +1241,10 @@ void main() {
     await tester.pump();
     expect(backend.lastEditMessageId, r'$own');
 
-    await _revealMessageActions(tester, find.text('Original').last);
+    await _revealMessageActions(
+      tester,
+      find.byKey(const ValueKey(r'message-body-$own')),
+    );
     tester
         .widget<IconButton>(find.byKey(const Key('message-action-delete')))
         .onPressed!();

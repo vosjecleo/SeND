@@ -38,6 +38,8 @@ import 'profile_dialog.dart';
 import 'profile_card.dart';
 import 'app_shortcuts.dart';
 import 'rich_message.dart';
+import 'message_metadata.dart';
+import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
 import 'deltiecord_theme.dart';
@@ -549,19 +551,12 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   void _edit(ChatMessage message) {
-    _message.document = Document()..insert(0, message.body);
-    for (final span in customEmojiSpansFromHtml(
-      message.formattedBody,
+    _message.document = richMessageDocument(
       message.body,
-    )) {
-      _message.formatText(
-        span.start,
-        span.end - span.start,
-        LinkAttribute(customEmojiEditorLink(span.emoji)),
-      );
-    }
+      message.formattedBody,
+    );
     _message.updateSelection(
-      TextSelection(baseOffset: 0, extentOffset: message.body.length),
+      TextSelection(baseOffset: 0, extentOffset: _message.document.length - 1),
       ChangeSource.local,
     );
     setState(() {

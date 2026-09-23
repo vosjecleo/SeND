@@ -279,6 +279,12 @@ extension _MatrixMedia on MatrixBackend {
           ?.tryGetMap<String, Object?>('key')
           ?.tryGet<String>('k');
       final ivText = file?.tryGet<String>('iv');
+      final hashText = file
+          ?.tryGetMap<String, Object?>('hashes')
+          ?.tryGet<String>('sha256');
+      if (hashText == null) {
+        throw StateError('Encrypted attachment is missing its integrity hash.');
+      }
       final size = event.infoMap.tryGet<int>('size');
       final accessToken = _matrix.accessToken;
       if (mxc == null ||
@@ -298,6 +304,7 @@ extension _MatrixMedia on MatrixBackend {
         iv: base64.decode(base64.normalize(ivText)),
         size: size,
         mimeType: event.attachmentMimetype,
+        expectedSha256: base64.decode(base64.normalize(hashText)),
       );
       final source = MediaPlaybackSource(uri: localUri, headers: const {});
       _mediaPlaybackSources[messageId] = source;

@@ -9,12 +9,13 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../services/android_video_thumbnail.dart';
 
 import 'matrix_state_types.dart';
+import 'encrypted_android_database.dart';
 
 /// Creates the Matrix SDK client and its platform-appropriate persistent store.
 ///
 /// Session tokens, Olm state, and cached room keys stay in the application data
 /// directory rather than the repository. Desktop SQLite uses the FFI factory;
-/// Android can use the native sqflite plugin through the same SDK database.
+/// Android uses SQLCipher through the same SDK database abstraction.
 Future<Client> createMatrixClient() async {
   final dataDirectory = await getDeltiecordDataDirectory();
   await dataDirectory.create(recursive: true);
@@ -23,7 +24,9 @@ Future<Client> createMatrixClient() async {
   final databasePath = p.join(dataDirectory.path, 'matrix.db');
   late final sqflite.Database database;
   DatabaseFactory? ffiFactory;
-  if (Platform.isLinux || Platform.isWindows) {
+  if (Platform.isAndroid) {
+    database = await openEncryptedAndroidDatabase(databasePath);
+  } else if (Platform.isLinux || Platform.isWindows) {
     sqfliteFfiInit();
     ffiFactory = databaseFactoryFfi;
     database = await ffiFactory.openDatabase(databasePath);

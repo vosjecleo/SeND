@@ -180,12 +180,33 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
         )
         .toList(growable: false);
     final query = _query.trim().toLowerCase();
+    final usage = FavouriteReactionsStore.instance.stickerUsage;
+    final frequent =
+        widget.backend.stickerPacks
+            .expand((pack) => pack.stickers)
+            .where(
+              (sticker) =>
+                  sticker.assetType == StickerAssetType.sticker &&
+                  usage.containsKey(sticker.mxcUri.toString()),
+            )
+            .toList()
+          ..sort(
+            (a, b) => usage[b.mxcUri.toString()]!.compareTo(
+              usage[a.mxcUri.toString()]!,
+            ),
+          );
     return <StickerPackSummary>[
       if (favouriteStickers.isNotEmpty)
         StickerPackSummary(
           id: 'favourites',
           name: 'Favourites',
           stickers: favouriteStickers,
+        ),
+      if (frequent.isNotEmpty)
+        StickerPackSummary(
+          id: 'frequent',
+          name: 'Frequently used',
+          stickers: frequent.take(32).toList(),
         ),
       ...widget.backend.stickerPacks.map((pack) {
         final stickers = pack.stickers
@@ -310,12 +331,23 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                                   ),
                                 ),
                               ),
-                              if (favourite)
-                                const Positioned(
-                                  right: 1,
-                                  top: 1,
-                                  child: Icon(Icons.star, size: 14),
+                              Positioned(
+                                right: 1,
+                                top: 1,
+                                child: IconButton(
+                                  tooltip: favourite
+                                      ? 'Remove from favourites'
+                                      : 'Add to favourites',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () => FavouriteReactionsStore
+                                      .instance
+                                      .toggleSticker(sticker.mxcUri),
+                                  icon: Icon(
+                                    favourite ? Icons.star : Icons.star_border,
+                                    size: 16,
+                                  ),
                                 ),
+                              ),
                             ],
                           ),
                         ),
@@ -342,7 +374,7 @@ class _StickerPackHeader extends StatelessWidget {
     dense: true,
     contentPadding: const EdgeInsets.only(left: 12, right: 4),
     title: Text(pack.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-    trailing: pack.id == 'favourites'
+    trailing: const {'favourites', 'frequent'}.contains(pack.id)
         ? null
         : PopupMenuButton<String>(
             tooltip: 'Pack options',

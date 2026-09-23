@@ -72,6 +72,11 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   void _backendChanged() {
     if (!mounted) return;
+    if (backend.status == SessionStatus.signedOut) {
+      _drafts.clear();
+      unawaited(_draftStore.clear());
+      return;
+    }
     if (_inboxRevision != backend.inboxRequestRevision) {
       _inboxRevision = backend.inboxRequestRevision;
       WidgetsBinding.instance.addPostFrameCallback((_) {
