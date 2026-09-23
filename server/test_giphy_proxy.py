@@ -13,6 +13,16 @@ SPEC.loader.exec_module(PROXY)
 
 
 class GiphyProxySecurityTests(unittest.TestCase):
+    def test_public_media_cors_is_fixed_and_never_credentialed(self):
+        for method, args in [(PROXY.Handler._json, ({'ok': True},)),
+                             (PROXY.Handler._bytes, (b'GIF89a', 'image/gif'))]:
+            handler = mock.Mock()
+            handler.headers = {'Origin': 'https://untrusted.example'}
+            method(handler, *args)
+            headers = dict(call.args for call in handler.send_header.call_args_list)
+            self.assertEqual(headers['Access-Control-Allow-Origin'], 'https://chat.deltie.net')
+            self.assertNotIn('Access-Control-Allow-Credentials', headers)
+
     def setUp(self):
         with PROXY._requests_lock:
             PROXY._requests.clear()
