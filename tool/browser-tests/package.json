@@ -1,0 +1,7 @@
+{
+  "name": "deltiecord-browser-regression",
+  "private": true,
+  "dependencies": {
+    "puppeteer-core": "25.12.0"
+  }
+}

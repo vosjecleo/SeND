@@ -13,11 +13,17 @@ removes all stable-channel entries without deleting historical artifacts;
 `--install-host` installs the verified Debian package locally. The script runs
 the full preflight, pushes `main` and the
 version tag to GitHub and the Deltie mirror, waits for the existing GitHub
-Actions platform builds, verifies the exact nine-artifact checksum set, then
+Actions platform builds, verifies the exact ten-artifact checksum set, then
 stages and atomically publishes it to deltie.net. This removes the repeated
 manual download/upload work; the platform compilation time still belongs to
 CI. `--skip-preflight` exists for a retry only after the same commit has already
 passed the complete local preflight.
+
+For a PWA-only patch, include `[web-only]` in the release commit message and run
+`packaging/publish-release.sh --channel latest --web-only`. Native CI builds
+are skipped for that push; the tagged release waits only for Web PWA and
+requires exactly one web archive. Existing native and stable channel entries
+are preserved. Omit the marker and flag for the next all-platform release.
 
 Run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from the
 repository root. GIF search uses Deltiecord's HTTPS proxy; the GIPHY key exists

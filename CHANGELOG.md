@@ -1,5 +1,16 @@
 # Changelog
 
+## Deltiecord 0.9.30 build 102 — 2026-09-23
+
+- PWA-only password autofill fix: use persistent, labelled browser-native
+  username/password fields with standard autocomplete hints on login/signup.
+  Read autofilled values directly on submit, including managers that do not
+  dispatch input events. Keep Matrix authentication and native apps unchanged.
+- Preserve registration validation and clear password fields on mode changes
+  and disposal. Credentials are never submitted as a URL or native HTTP form.
+- Add browser regression tests and web-only release automation. Android,
+  Linux and Windows remain on build 101; stable is unchanged.
+
 ## Deltiecord 0.9.30 build 101 — 2026-09-23
 
 - Keep build 100's complete Flutter application; do not ship the experimental

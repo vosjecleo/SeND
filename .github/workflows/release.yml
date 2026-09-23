@@ -57,9 +57,16 @@ jobs:
             return 1
           }
 
-          windows_run="$(await_run 'Windows release')"
-          linux_run="$(await_run 'Linux packages')"
-          android_run="$(await_run 'Android release')"
+          web_only=false
+          windows_run='' linux_run='' android_run=''
+          if git log -1 --format=%B | grep -Fq '[web-only]'; then
+            web_only=true
+          else
+            windows_run="$(await_run 'Windows release')"
+            linux_run="$(await_run 'Linux packages')"
+            android_run="$(await_run 'Android release')"
+          fi
+          echo "web_only=$web_only" >>"$GITHUB_OUTPUT"
           web_run="$(await_run 'Web PWA')"
 
           echo "version=$package_version" >>"$GITHUB_OUTPUT"
@@ -74,9 +81,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-staging/windows release-staging/linux release-staging/android
-          gh run download "${{ steps.release.outputs.windows_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/windows
-          gh run download "${{ steps.release.outputs.linux_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/linux
-          gh run download "${{ steps.release.outputs.android_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/android
+          if [[ '${{ steps.release.outputs.web_only }}' != true ]]; then
+            gh run download "${{ steps.release.outputs.windows_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/windows
+            gh run download "${{ steps.release.outputs.linux_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/linux
+            gh run download "${{ steps.release.outputs.android_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/android
+          fi
           gh run download "${{ steps.release.outputs.web_run }}" --repo "$GITHUB_REPOSITORY" --dir release-staging/web
 
       - name: Assemble and verify release assets
@@ -99,19 +108,23 @@ jobs:
             cp -- "${matches[0]}" "release-assets/$filename"
           }
 
-          copy_unique "deltiecord-${release_id}-windows-x64-portable.zip"
-          copy_unique "deltiecord-${release_id}-windows-x64-setup.exe"
-          copy_unique "deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
-          copy_unique "deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
-          copy_unique "deltiecord-${release_id}-linux-debian-amd64.deb"
-          copy_unique "deltiecord-${release_id}-android-arm64-v8a.apk"
-          copy_unique "deltiecord-${release_id}-android-armeabi-v7a.apk"
-          copy_unique "deltiecord-${release_id}-android-x86_64.apk"
-          copy_unique "deltiecord-${release_id}-android.aab"
+          expected_count=2
+          if [[ '${{ steps.release.outputs.web_only }}' != true ]]; then
+            expected_count=11
+            copy_unique "deltiecord-${release_id}-windows-x64-portable.zip"
+            copy_unique "deltiecord-${release_id}-windows-x64-setup.exe"
+            copy_unique "deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
+            copy_unique "deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+            copy_unique "deltiecord-${release_id}-linux-debian-amd64.deb"
+            copy_unique "deltiecord-${release_id}-android-arm64-v8a.apk"
+            copy_unique "deltiecord-${release_id}-android-armeabi-v7a.apk"
+            copy_unique "deltiecord-${release_id}-android-x86_64.apk"
+            copy_unique "deltiecord-${release_id}-android.aab"
+          fi
           copy_unique "deltiecord-${release_id}-web.tar.gz"
 
           (cd release-assets && sha256sum -- * >SHA256SUMS)
-          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 11
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq "$expected_count"
 
       - name: Publish GitHub release
         shell: bash
@@ -119,8 +132,12 @@ jobs:
           set -euo pipefail
           version="${{ steps.release.outputs.version }}"
           build="${{ steps.release.outputs.build }}"
+          scope='desktop, Android, and Web/PWA'
+          if [[ '${{ steps.release.outputs.web_only }}' == true ]]; then
+            scope='Web/PWA-only (native packages remain on their previous release)'
+          fi
           cat >release-notes.md <<EOF
-          Deltiecord ${version} build ${build} is the latest desktop, Android, and Web/PWA release for Matrix.
+          Deltiecord ${version} build ${build} is the latest ${scope} release for Matrix.
 
           Try the web app at https://chat.deltie.net — including iPhone/iPad Home Screen installation.
 
@@ -132,7 +149,7 @@ jobs:
 
           Please read the [installation guide](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/INSTALL.md) before installing, and check the [known issues](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/KNOWN_ISSUES.md) before reporting a bug.
 
-          Packages are provided for Android, Windows x86-64, Debian/Ubuntu/Mint amd64, Arch Linux x86-64, and other current x86-64 Linux distributions through AppImage. Verify downloads with the attached SHA256SUMS file.
+          Only targets listed above are included in this release. Verify downloads with the attached SHA256SUMS file.
 
           The version remains below 1.0 while broader hardware validation continues. Windows in particular still benefits from testing across more hardware and Windows 10/11 installations.
 

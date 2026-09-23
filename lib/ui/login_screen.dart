@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'web_login_form.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.backend, super.key});
@@ -88,127 +90,153 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 28),
-                        if (_registering)
-                          const ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.dns_outlined),
-                            title: Text('matrix.deltie.net'),
-                            subtitle: Text(
-                              'New accounts currently use Deltiecord’s homeserver.',
-                            ),
+                        if (kIsWeb)
+                          WebLoginForm(
+                            registering: _registering,
+                            loading: loading,
+                            onSubmit: (server, username, password) {
+                              _homeserver.text = server;
+                              _username.text = username;
+                              _password.text = password;
+                              _submit();
+                            },
                           )
-                        else
+                        else ...[
+                          if (_registering)
+                            const ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.dns_outlined),
+                              title: Text('matrix.deltie.net'),
+                              subtitle: Text(
+                                'New accounts currently use Deltiecord’s homeserver.',
+                              ),
+                            )
+                          else
+                            TextFormField(
+                              controller: _homeserver,
+                              // A server address is configuration, not a login
+                              // credential for the browser's autofill group.
+                              autofillHints: null,
+                              keyboardType: TextInputType.url,
+                              autocorrect: false,
+                              textInputAction: TextInputAction.next,
+                              enabled: !loading,
+                              decoration: const InputDecoration(
+                                labelText: 'Homeserver',
+                                hintText: 'https://matrix.example.org',
+                                border: InputBorder.none,
+                              ),
+                              validator: (value) {
+                                final uri = normalizedHomeserverUri(
+                                  value ?? '',
+                                );
+                                return uri == null
+                                    ? 'Enter a valid homeserver address.'
+                                    : null;
+                              },
+                            ),
+                          const SizedBox(height: 12),
                           TextFormField(
-                            controller: _homeserver,
-                            // A server address is configuration, not a login
-                            // credential for the browser's autofill group.
-                            autofillHints: null,
-                            keyboardType: TextInputType.url,
+                            controller: _username,
+                            autofillHints: const [AutofillHints.username],
                             autocorrect: false,
                             textInputAction: TextInputAction.next,
                             enabled: !loading,
-                            decoration: const InputDecoration(
-                              labelText: 'Homeserver',
-                              hintText: 'https://matrix.example.org',
+                            decoration: InputDecoration(
+                              labelText: _registering
+                                  ? 'Choose a username'
+                                  : 'Username or Matrix ID',
                               border: InputBorder.none,
                             ),
                             validator: (value) {
-                              final uri = normalizedHomeserverUri(value ?? '');
-                              return uri == null
-                                  ? 'Enter a valid homeserver address.'
-                                  : null;
+                              final username = value?.trim() ?? '';
+                              if (username.isEmpty) {
+                                return 'Enter your username.';
+                              }
+                              if (_registering &&
+                                  !isValidDeltiecordLocalpart(username)) {
+                                return 'Use lowercase letters, numbers, dots, hyphens, or underscores.';
+                              }
+                              return null;
                             },
                           ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _username,
-                          autofillHints: const [AutofillHints.username],
-                          autocorrect: false,
-                          textInputAction: TextInputAction.next,
-                          enabled: !loading,
-                          decoration: InputDecoration(
-                            labelText: _registering
-                                ? 'Choose a username'
-                                : 'Username or Matrix ID',
-                            border: InputBorder.none,
-                          ),
-                          validator: (value) {
-                            final username = value?.trim() ?? '';
-                            if (username.isEmpty) return 'Enter your username.';
-                            if (_registering &&
-                                !isValidDeltiecordLocalpart(username)) {
-                              return 'Use lowercase letters, numbers, dots, hyphens, or underscores.';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _password,
-                          autofillHints: [
-                            _registering
-                                ? AutofillHints.newPassword
-                                : AutofillHints.password,
-                          ],
-                          enabled: !loading,
-                          obscureText: true,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          onFieldSubmitted: (_) {
-                            if (!loading && !_registering) _submit();
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                            border: InputBorder.none,
-                          ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? 'Enter your password.'
-                              : null,
-                        ),
-                        if (_registering) ...[
                           const SizedBox(height: 12),
                           TextFormField(
-                            controller: _passwordConfirmation,
-                            autofillHints: const [AutofillHints.newPassword],
+                            controller: _password,
+                            autofillHints: [
+                              _registering
+                                  ? AutofillHints.newPassword
+                                  : AutofillHints.password,
+                            ],
                             enabled: !loading,
                             obscureText: true,
+                            autocorrect: false,
+                            enableSuggestions: false,
                             onFieldSubmitted: (_) {
-                              if (!loading) _submit();
+                              if (!loading && !_registering) _submit();
                             },
                             decoration: const InputDecoration(
-                              labelText: 'Confirm password',
+                              labelText: 'Password',
                               border: InputBorder.none,
                             ),
-                            validator: (value) => value != _password.text
-                                ? 'Passwords do not match.'
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'Enter your password.'
                                 : null,
                           ),
+                          if (_registering) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _passwordConfirmation,
+                              autofillHints: const [AutofillHints.newPassword],
+                              enabled: !loading,
+                              obscureText: true,
+                              onFieldSubmitted: (_) {
+                                if (!loading) _submit();
+                              },
+                              decoration: const InputDecoration(
+                                labelText: 'Confirm password',
+                                border: InputBorder.none,
+                              ),
+                              validator: (value) => value != _password.text
+                                  ? 'Passwords do not match.'
+                                  : null,
+                            ),
+                          ],
+                          if (widget.backend.error case final error?) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              error,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          FilledButton(
+                            onPressed: loading ? null : _submit,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              child: Text(
+                                loading
+                                    ? _registering
+                                          ? 'Creating account…'
+                                          : 'Signing in…'
+                                    : _registering
+                                    ? 'Create account'
+                                    : 'Sign in',
+                              ),
+                            ),
+                          ),
                         ],
-                        if (widget.backend.error case final error?) ...[
+                        if (kIsWeb && widget.backend.error != null) ...[
                           const SizedBox(height: 12),
                           Text(
-                            error,
+                            widget.backend.error!,
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.error,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 18),
-                        FilledButton(
-                          onPressed: loading ? null : _submit,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            child: Text(
-                              loading
-                                  ? _registering
-                                        ? 'Creating account…'
-                                        : 'Signing in…'
-                                  : _registering
-                                  ? 'Create account'
-                                  : 'Sign in',
-                            ),
-                          ),
-                        ),
                         TextButton(
                           onPressed: loading
                               ? null

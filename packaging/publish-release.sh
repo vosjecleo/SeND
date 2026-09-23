@@ -4,7 +4,7 @@ IFS=$'\n\t'
 
 usage() {
   cat <<'EOF'
-Usage: packaging/publish-release.sh --channel latest|stable|both [--clear-stable] [--install-host] [--skip-preflight]
+Usage: packaging/publish-release.sh --channel latest|stable|both [--web-only] [--clear-stable] [--install-host] [--skip-preflight]
 
 Validates the committed release, pushes main and its version tag to GitHub and
 the Deltie mirror, waits for GitHub Actions to publish the platform artifacts,
@@ -13,11 +13,16 @@ EOF
 }
 
 channel=''
+web_only=false
 install_host=false
 skip_preflight=false
 clear_stable=false
 while (($#)); do
   case "$1" in
+    --web-only)
+      web_only=true
+      shift
+      ;;
     --channel)
       (($# >= 2)) || { usage >&2; exit 2; }
       channel="$2"
@@ -51,6 +56,10 @@ case "$channel" in
   latest|stable|both) ;;
   *) printf '%s\n' '--channel must be latest, stable, or both.' >&2; exit 2 ;;
 esac
+if $web_only && { [[ "$channel" != latest ]] || $install_host || $clear_stable; }; then
+  printf '%s\n' '--web-only requires latest, without host installation or stable changes.' >&2
+  exit 2
+fi
 if $clear_stable && [[ "$channel" != latest ]]; then
   printf '%s\n' '--clear-stable is only valid while publishing latest.' >&2
   exit 2
@@ -74,6 +83,15 @@ done
   printf '%s\n' 'Refusing to publish a dirty worktree. Commit the release first.' >&2
   exit 1
 }
+if $web_only; then
+  git log -1 --format=%B | grep -Fq '[web-only]' || {
+    printf '%s\n' 'Web-only releases require [web-only] in the commit message.' >&2
+    exit 1
+  }
+elif git log -1 --format=%B | grep -Fq '[web-only]'; then
+  printf '%s\n' 'This commit requires --web-only.' >&2
+  exit 1
+fi
 
 release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
 [[ "$release_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]] || {
@@ -149,6 +167,9 @@ artifacts=(
   "deltiecord-${release_id}-android.aab"
   "deltiecord-${release_id}-web.tar.gz"
 )
+if $web_only; then
+  artifacts=("deltiecord-${release_id}-web.tar.gz")
+fi
 [[ "$(wc -l <"$temporary/SHA256SUMS")" -eq "${#artifacts[@]}" ]] || {
   printf '%s\n' 'GitHub checksum manifest has an unexpected artifact count.' >&2
   exit 1
@@ -186,13 +207,17 @@ asset_json() {
   jq -c . "$temporary/assets.json"
 }
 
-android_assets="$(asset_json "deltiecord-${release_id}-android*")"
-linux_assets="$(asset_json "deltiecord-${release_id}-linux-*")"
-windows_assets="$(asset_json "deltiecord-${release_id}-windows-*")"
+android_assets='[]' linux_assets='[]' windows_assets='[]'
+if ! $web_only; then
+  android_assets="$(asset_json "deltiecord-${release_id}-android*")"
+  linux_assets="$(asset_json "deltiecord-${release_id}-linux-*")"
+  windows_assets="$(asset_json "deltiecord-${release_id}-windows-*")"
+fi
 web_assets="$(asset_json "deltiecord-${release_id}-web.tar.gz")"
 updated_at="$(date --utc +'%Y-%m-%dT%H:%M:%S+00:00')"
 
 jq --arg channel "$channel" \
+  --argjson web_only "$web_only" \
   --argjson clear_stable "$clear_stable" \
   --arg version "$version" \
   --argjson build "$build" \
@@ -202,9 +227,10 @@ jq --arg channel "$channel" \
   --argjson windows "$windows_assets" \
   --argjson web "$web_assets" '
   def set_channel($name):
+    (if $web_only then . else
     .platforms.android[$name] = $android |
     .platforms.linux[$name] = $linux |
-    .platforms.windows[$name] = $windows |
+    .platforms.windows[$name] = $windows end) |
     .platforms.web[$name] = $web |
     .platforms.web.url = "https://chat.deltie.net" |
     .platforms.web.stable //= [];

@@ -60,3 +60,5 @@ app.*.map.json
 .widget_preview/
 # Generated browser Matrix crypto assets (rebuilt from pinned upstream source).
 /web/pkg/
+# Local browser regression dependencies (the lockfile is committed).
+tool/browser-tests/node_modules/

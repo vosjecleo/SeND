@@ -20,6 +20,7 @@ env:
 
 jobs:
   debian:
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[web-only]')
     runs-on: ubuntu-24.04
     container: debian:12
     timeout-minutes: 75
@@ -128,6 +129,7 @@ jobs:
           if-no-files-found: error
 
   arch:
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[web-only]')
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     timeout-minutes: 75
