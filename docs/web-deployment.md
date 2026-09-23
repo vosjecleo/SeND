@@ -25,6 +25,9 @@ Deployment is **not complete** until the chosen host has all of these:
   This reduces CSP's defence-in-depth against script injection; third-party
   scripts remain disallowed. Recheck removal when upgrading that dependency.
 - Same-origin `/api/servers/klipy/search` and Telegram media proxy routes.
+  The shared public media helper also permits read-only CORS from exactly
+  `https://chat.deltie.net`, because the initial browser build retains the
+  native Telegram endpoint on deltie.net. It does not allow credentials.
   Keep old GIPHY routes working for older native builds. KLIPY's credential
   remains in a mode-0600 service file, never an environment variable embedded
   in Flutter or browser assets.

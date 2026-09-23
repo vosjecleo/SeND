@@ -731,6 +731,10 @@ class Handler(BaseHTTPRequestHandler):
             status = 502
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        # The first browser release reuses the native public Telegram endpoint.
+        # Permit only the app origin; never reflect arbitrary Origin headers or
+        # allow credentials on these anonymous, rate-limited media endpoints.
+        self.send_header("Access-Control-Allow-Origin", "https://chat.deltie.net")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -739,6 +743,7 @@ class Handler(BaseHTTPRequestHandler):
     def _bytes(self, body, content_type):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
+        self.send_header("Access-Control-Allow-Origin", "https://chat.deltie.net")
         self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
