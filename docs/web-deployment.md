@@ -1,5 +1,13 @@
 # Web/PWA deployment
 
+For subsequent published releases, `/home/cleo/update-deltiecord.sh` on deltie
+can re-select the latest web artifact from the local downloads manifest. Run it
+as `cleo`, without sudo. It validates the artifact name and SHA-256, takes an
+update lock, and uses `packaging/deploy-web.py` for bounded extraction and an
+atomic `current` symlink switch. It does not build, change release channels,
+edit services, or restart nginx. Normal automated publication already performs
+the web switch; this is also available for a manual retry.
+
 Build 99 adds a separate browser artifact; it does not replace Matrix or run
 Matrix encryption on the server. `bash packaging/build-web.sh` builds pinned
 vodozemac Rust/WASM bindings, checks the committed Dart lockfile, builds Flutter

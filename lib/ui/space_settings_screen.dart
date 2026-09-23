@@ -7,6 +7,7 @@ import '../models/chat_models.dart';
 import 'deltiecord_theme.dart';
 import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
+import 'settings_page_transition.dart';
 
 enum _SpaceSettingsPage { basic, channels, roles, pages, serverProfile }
 
@@ -199,11 +200,17 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
           ),
       ],
     );
-    final body = _loading
+    final reduceMotion =
+        widget.backend.preferences.reducedMotion ||
+        MediaQuery.disableAnimationsOf(context);
+    final pageBody = _loading
         ? const Center(child: CircularProgressIndicator())
-        : AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: KeyedSubtree(key: ValueKey(_page), child: _pageBody()),
+        : _pageBody();
+    final body = widget.mobile
+        ? pageBody
+        : SettingsPageTransition(
+            reduceMotion: reduceMotion,
+            child: KeyedSubtree(key: ValueKey(_page), child: pageBody),
           );
     if (widget.mobile) {
       return PopScope(
@@ -230,15 +237,8 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
                 title: Text(_mobileMenu ? 'Space settings' : _pageLabel(_page)),
               ),
               Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  transitionBuilder: (child, animation) => SlideTransition(
-                    position: Tween<Offset>(
-                      begin: Offset(_mobileMenu ? -0.08 : 0.08, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
+                child: SettingsPageTransition(
+                  reduceMotion: reduceMotion,
                   child: _mobileMenu
                       ? KeyedSubtree(
                           key: const ValueKey('space-settings-menu'),

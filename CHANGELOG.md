@@ -1,5 +1,27 @@
 # Changelog
 
+## Deltiecord 0.9.30 build 100 — 2026-09-23
+
+- Reuse the application theme/navigation configuration for ordinary backend
+  updates instead of regenerating it for every sync, typing, and receipt event.
+  Suppress redundant connection-status notifications; chat updates still flow.
+- Wait for initial account settings before completing a fresh login or saving
+  preferences, protecting synced appearance from premature default writes.
+  Cancel pending preference-save timers when replacing or ending a session.
+- Show encryption-recovery stages and add credential-free profiling markers.
+  Coalesce concurrent recovery requests; Matrix SDK cryptography is unchanged.
+- Stop Space settings pages overlapping during navigation. Reduce Motion
+  skips these transitions and disables page transitions on iOS/macOS/Windows
+  as well as Android/Linux.
+- Remove the obsolete GIPHY footer, retain Search KLIPY attribution, and update
+  About credits. Move README web-install instructions below the introduction.
+- Exclude the homeserver configuration field from login credential autofill
+  and disable credential autocorrection. Password-manager compatibility still
+  requires real-browser/manager validation.
+- Keep timeline scrolling/media-height changes deferred. These targeted web
+  improvements do not establish that all interaction lag or the reported
+  two-minute recovery delay is resolved; see the build-100 investigation report.
+
 ## Deltiecord 0.9.30 build 99 — 2026-09-23
 
 - Add a shared-code Web/PWA target with mobile and desktop layouts, SDK-owned

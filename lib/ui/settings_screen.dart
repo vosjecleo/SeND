@@ -803,7 +803,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       const SizedBox(height: 12),
       const Text(
         'Matrix connectivity and encryption use matrix-dart-sdk. MatrixRTC, '
-        'media_kit, Flutter WebRTC, Flutter Quill, GIPHY, Element, and '
+        'media_kit, Flutter WebRTC, Flutter Quill, KLIPY, Element, and '
         'FluffyChat informed or support parts of the implementation.',
       ),
       const SizedBox(height: 12),

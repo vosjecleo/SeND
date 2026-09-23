@@ -21,7 +21,7 @@ import 'ui/mobile/mobile_chat_shell.dart';
 import 'ui/security_center.dart';
 import 'ui/startup_update_gate.dart';
 
-class DeltiecordApp extends StatelessWidget {
+class DeltiecordApp extends StatefulWidget {
   const DeltiecordApp({
     required this.backend,
     this.platformOverride,
@@ -32,11 +32,43 @@ class DeltiecordApp extends StatelessWidget {
   final TargetPlatform? platformOverride;
 
   @override
+  State<DeltiecordApp> createState() => _DeltiecordAppState();
+}
+
+class _DeltiecordAppState extends State<DeltiecordApp> {
+  ChatBackend get backend => widget.backend;
+  TargetPlatform? get platformOverride => widget.platformOverride;
+  Object? _configuration;
+  Widget? _configuredApp;
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: backend,
       builder: (context, _) {
         final preferences = backend.preferences;
+        // Sync, typing, receipts and voice levels must not regenerate the
+        // Material color scheme/theme. The home subtree listens independently.
+        final configuration = (
+          backend,
+          platformOverride,
+          backend.status,
+          preferences.themeMode,
+          preferences.accentColor,
+          preferences.highContrast,
+          preferences.reducedMotion,
+          preferences.fontFamily,
+          preferences.emojiFontFamily,
+          preferences.compactness,
+          preferences.fontScale,
+          preferences.interfaceScale,
+          preferences.showNativeTitleBar,
+          preferences.rememberWindowState,
+        );
+        if (_configuration == configuration && _configuredApp != null) {
+          return _configuredApp!;
+        }
+        _configuration = configuration;
         final emojiFontFamily = normalizeEmojiFontFamily(
           preferences.emojiFontFamily,
         );
@@ -158,7 +190,7 @@ class DeltiecordApp extends StatelessWidget {
               // changed ordinary text metrics on some hosts.
               fontFamilyFallback: null,
             );
-        return MaterialApp(
+        return _configuredApp = MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
           localizationsDelegates: const [
@@ -206,6 +238,9 @@ class DeltiecordApp extends StatelessWidget {
                     builders: {
                       TargetPlatform.linux: _NoMotionPageTransitionsBuilder(),
                       TargetPlatform.android: _NoMotionPageTransitionsBuilder(),
+                      TargetPlatform.iOS: _NoMotionPageTransitionsBuilder(),
+                      TargetPlatform.macOS: _NoMotionPageTransitionsBuilder(),
+                      TargetPlatform.windows: _NoMotionPageTransitionsBuilder(),
                     },
                   )
                 : const PageTransitionsTheme(),
@@ -335,44 +370,47 @@ class DeltiecordApp extends StatelessWidget {
               ),
             );
           },
-          home: switch (backend.status) {
-            SessionStatus.starting => const _StartupScreen(),
-            SessionStatus.failed => _StartupFailure(
-              message: backend.error ?? 'Deltiecord could not start.',
-              onRetry: backend.initialize,
-            ),
-            SessionStatus.signedIn =>
-              mobile
-                  ? StartupUpdateGate(
-                      child: _ReadReceiptLifecycle(
-                        backend: backend,
-                        child: _EncryptionRecoveryPrompt(
+          home: ListenableBuilder(
+            listenable: backend,
+            builder: (context, _) => switch (backend.status) {
+              SessionStatus.starting => const _StartupScreen(),
+              SessionStatus.failed => _StartupFailure(
+                message: backend.error ?? 'Deltiecord could not start.',
+                onRetry: backend.initialize,
+              ),
+              SessionStatus.signedIn =>
+                mobile
+                    ? StartupUpdateGate(
+                        child: _ReadReceiptLifecycle(
                           backend: backend,
-                          child: FirstRunTourGate(
+                          child: _EncryptionRecoveryPrompt(
                             backend: backend,
-                            child: MobileChatShell(backend: backend),
+                            child: FirstRunTourGate(
+                              backend: backend,
+                              child: MobileChatShell(backend: backend),
+                            ),
                           ),
                         ),
-                      ),
-                    )
-                  : StartupUpdateGate(
-                      child: _ReadReceiptLifecycle(
-                        backend: backend,
-                        child: _EncryptionRecoveryPrompt(
+                      )
+                    : StartupUpdateGate(
+                        child: _ReadReceiptLifecycle(
                           backend: backend,
-                          child: FirstRunTourGate(
+                          child: _EncryptionRecoveryPrompt(
                             backend: backend,
-                            child: _DesktopActivityReporter(
+                            child: FirstRunTourGate(
                               backend: backend,
-                              child: ChatShell(backend: backend),
+                              child: _DesktopActivityReporter(
+                                backend: backend,
+                                child: ChatShell(backend: backend),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-            SessionStatus.signedOut ||
-            SessionStatus.signingIn => LoginScreen(backend: backend),
-          },
+              SessionStatus.signedOut ||
+              SessionStatus.signingIn => LoginScreen(backend: backend),
+            },
+          ),
         );
       },
     );

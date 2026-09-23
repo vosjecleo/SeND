@@ -19,6 +19,7 @@ import '../services/chat_notifications.dart';
 import '../services/custom_emoji.dart';
 import '../services/avatar_media_pool.dart';
 import '../services/device_appearance_store.dart';
+import '../services/account_settings_sync.dart';
 import '../services/app_sounds.dart';
 import '../services/android_push_bridge.dart';
 import '../services/font_preferences.dart';
@@ -156,6 +157,9 @@ class MatrixBackend extends ChatBackend {
   final Map<String, Future<Uint8List?>> _stickerPreviewLoads = {};
   int _activeStickerPreviewLoads = 0;
   Timer? _profileRefreshTimer;
+  bool _settingsHydrated = false;
+  Future<void>? _recoveryInFlight;
+  String? _recoveryStage;
   bool _profileRefreshRunning = false;
   final LinkedHashMap<String, _ProfileCacheEntry> _profileCache =
       LinkedHashMap();
@@ -836,7 +840,12 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> recoverEncryption(String recoveryKeyOrPassphrase) =>
-      _recoverEncryption(recoveryKeyOrPassphrase);
+      _recoveryInFlight ??= _recoverEncryption(
+        recoveryKeyOrPassphrase,
+      ).whenComplete(() => _recoveryInFlight = null);
+
+  @override
+  String? get encryptionRecoveryStage => _recoveryStage;
 
   @override
   Future<String> createEncryptionSetup() => _createEncryptionSetup();

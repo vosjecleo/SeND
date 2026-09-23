@@ -158,6 +158,20 @@ class _SecurityDialogState extends State<_SecurityDialog> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _SecurityStatus(state: security),
+                      if (_working)
+                        ListenableBuilder(
+                          listenable: widget.backend,
+                          builder: (context, _) {
+                            final stage =
+                                widget.backend.encryptionRecoveryStage;
+                            return stage == null
+                                ? const SizedBox.shrink()
+                                : Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Text(stage),
+                                  );
+                          },
+                        ),
                       if (security.status ==
                               EncryptionSetupStatus.needsRecovery ||
                           security.status ==

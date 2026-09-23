@@ -100,8 +100,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         else
                           TextFormField(
                             controller: _homeserver,
-                            autofillHints: const [AutofillHints.url],
+                            // A server address is configuration, not a login
+                            // credential for the browser's autofill group.
+                            autofillHints: null,
                             keyboardType: TextInputType.url,
+                            autocorrect: false,
+                            textInputAction: TextInputAction.next,
                             enabled: !loading,
                             decoration: const InputDecoration(
                               labelText: 'Homeserver',
@@ -119,6 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _username,
                           autofillHints: const [AutofillHints.username],
+                          autocorrect: false,
+                          textInputAction: TextInputAction.next,
                           enabled: !loading,
                           decoration: InputDecoration(
                             labelText: _registering
@@ -146,6 +152,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                           enabled: !loading,
                           obscureText: true,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           onFieldSubmitted: (_) {
                             if (!loading && !_registering) _submit();
                           },

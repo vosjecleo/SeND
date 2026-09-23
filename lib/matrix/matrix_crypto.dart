@@ -5,6 +5,20 @@ part of 'matrix_backend.dart';
 /// These methods deliberately delegate protocol and cryptographic behavior to
 /// matrix-dart-sdk instead of duplicating security-sensitive algorithms.
 extension _MatrixCrypto on MatrixBackend {
+  Future<T> _recoveryPhase<T>(String label, Future<T> Function() action) async {
+    _recoveryStage = label;
+    _notifyBackendListeners();
+    // Only fixed stage labels enter the profiler: never credentials, keys,
+    // account IDs or server responses.
+    final trace = developer.TimelineTask()
+      ..start('Encryption recovery: $label');
+    try {
+      return await action();
+    } finally {
+      trace.finish();
+    }
+  }
+
   Future<void> _refreshEncryptionSetup() async {
     if (_client == null || !_matrix.isLogged()) return;
     _encryptionSetup = const EncryptionSetupState(
@@ -54,28 +68,40 @@ extension _MatrixCrypto on MatrixBackend {
     final credential = recoveryKeyOrPassphrase.trim();
     if (credential.isEmpty) throw ArgumentError('Enter a recovery key.');
     try {
-      final current = await _matrix.getCryptoIdentityState();
+      final current = await _recoveryPhase(
+        'Checking encryption identity',
+        _matrix.getCryptoIdentityState,
+      );
       if (current.initialized) {
         if (!current.connected) {
-          await _matrix.restoreCryptoIdentity(credential);
+          await _recoveryPhase(
+            'Unlocking secure storage and restoring keys',
+            () => _matrix.restoreCryptoIdentity(credential),
+          );
         } else {
-          await _matrix.encryption!.crossSigning.selfSign(
-            keyOrPassphrase: credential,
+          await _recoveryPhase(
+            'Verifying this device',
+            () => _matrix.encryption!.crossSigning.selfSign(
+              keyOrPassphrase: credential,
+            ),
           );
         }
       } else {
-        await _matrix.initCryptoIdentity(
-          reuseExistingStorageRecoveryKeyOrPassphrase: credential,
-          wipeSecureStorage: false,
-          wipeKeyBackup: false,
-          wipeCrossSigning: false,
-          setupMasterKey: !current.crossSigningEnabled,
-          setupSelfSigningKey: !current.crossSigningEnabled,
-          setupUserSigningKey: !current.crossSigningEnabled,
-          setupOnlineKeyBackup: !current.keyBackupEnabled,
+        await _recoveryPhase(
+          'Repairing encryption identity',
+          () => _matrix.initCryptoIdentity(
+            reuseExistingStorageRecoveryKeyOrPassphrase: credential,
+            wipeSecureStorage: false,
+            wipeKeyBackup: false,
+            wipeCrossSigning: false,
+            setupMasterKey: !current.crossSigningEnabled,
+            setupSelfSigningKey: !current.crossSigningEnabled,
+            setupUserSigningKey: !current.crossSigningEnabled,
+            setupOnlineKeyBackup: !current.keyBackupEnabled,
+          ),
         );
       }
-      await refreshEncryptionSetup();
+      await _recoveryPhase('Checking recovery result', refreshEncryptionSetup);
       unawaited(_refreshRoomMetadata());
     } catch (exception) {
       _encryptionSetup = EncryptionSetupState(
@@ -87,6 +113,9 @@ extension _MatrixCrypto on MatrixBackend {
       );
       _notifyBackendListeners();
       rethrow;
+    } finally {
+      _recoveryStage = null;
+      _notifyBackendListeners();
     }
   }
 

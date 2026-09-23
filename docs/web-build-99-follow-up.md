@@ -1,5 +1,9 @@
 # Web build 99: deferred follow-up
 
+Build 100 follow-up is now underway; see
+[the investigation and validation limits](web-performance-build-100.md).
+The original observations below are retained for context.
+
 Reported by the owner after the 2026-09-23 hosting cutover. These are user
 observations, not established root causes. The owner requested that fixes wait;
 the release remains 0.9.30+99, latest only.

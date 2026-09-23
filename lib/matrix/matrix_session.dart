@@ -8,6 +8,8 @@ part of 'matrix_backend.dart';
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
     try {
+      _settingsSaveTimer?.cancel();
+      _pendingPreferences = null;
       await _syncSubscription?.cancel();
       await _loginSubscription?.cancel();
       await _syncStatusSubscription?.cancel();
@@ -18,10 +20,12 @@ extension _MatrixSession on MatrixBackend {
       await _disposeVoice();
       _client?.dispose();
       _client = await createMatrixClient();
+      _settingsHydrated = false;
       _roomHeroUsersLoaded.clear();
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((_) {
+        _settingsHydrated = true;
         // Successful local state writes are mirrored until this authoritative
         // sync makes the SDK's room-state cache current.
         _spaceChannelLayoutOverrides.clear();
@@ -36,6 +40,12 @@ extension _MatrixSession on MatrixBackend {
         unawaited(_notifyNewMessages());
       });
       _loginSubscription = _matrix.onLoginStateChanged.stream.listen((_) {
+        // Authentication can report success before initial account data has
+        // arrived. Do not expose editable defaults in that interval.
+        if (_status == SessionStatus.signingIn ||
+            _status == SessionStatus.starting) {
+          return;
+        }
         _status = _matrix.isLogged()
             ? SessionStatus.signedIn
             : SessionStatus.signedOut;
@@ -52,7 +62,7 @@ extension _MatrixSession on MatrixBackend {
                 : ConnectionStatus.online,
           SyncStatus.error => ConnectionStatus.offline,
         };
-        _notifyBackendListeners();
+        if (previousStatus != _connectionStatus) _notifyBackendListeners();
         if (_connectionStatus == ConnectionStatus.online &&
             previousStatus != ConnectionStatus.online) {
           unawaited(_retryOfflineSends());
@@ -61,6 +71,11 @@ extension _MatrixSession on MatrixBackend {
         }
       });
       await _matrix.init();
+      _settingsHydrated =
+          _settingsHydrated ||
+          _matrix.accountData.containsKey(
+            MatrixBackend._settingsAccountDataType,
+          );
       await _loadDeviceAppearance();
       await _initializeScheduledMessages();
       _initializeVoice();
@@ -184,6 +199,13 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _finishPasswordAuthentication() async {
+    await _matrix.accountDataLoading;
+    await waitForAccountSettings(
+      firstAttempt: _matrix.firstSyncReceived,
+      isHydrated: () => _settingsHydrated,
+      nextSuccessfulSync: () =>
+          _matrix.onSync.stream.timeout(const Duration(seconds: 45)).first,
+    );
     await _loadDeviceAppearance();
     _loadSettings();
     _initializeVoice();
@@ -202,10 +224,13 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _logoutSession() async {
     _error = null;
     try {
+      _settingsSaveTimer?.cancel();
+      _pendingPreferences = null;
       _stopProfileRefreshTimer();
       await _disposeVoice();
       await _closeTimeline();
       await _matrix.logout();
+      _settingsHydrated = false;
       _selectedRoomId = null;
       _selectedSpaceId = null;
       _loadedBackupRoomIds.clear();
@@ -927,6 +952,11 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
     if (_matrix.userID == null) return;
+    if (!_settingsHydrated) {
+      throw StateError(
+        'Settings are still synchronizing. Please try again shortly.',
+      );
+    }
     if (kIsWeb &&
         _preferences.notificationsEnabled &&
         !preferences.notificationsEnabled) {
@@ -1013,7 +1043,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _persistPreferences(AppPreferences preferences) async {
-    if (_matrix.userID == null) return;
+    if (_matrix.userID == null || !_settingsHydrated) return;
     final existing =
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     try {

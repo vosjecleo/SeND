@@ -136,6 +136,7 @@ abstract class ChatBackend extends ChangeNotifier {
   void clearError();
   Future<void> refreshEncryptionSetup();
   Future<void> recoverEncryption(String recoveryKeyOrPassphrase);
+  String? get encryptionRecoveryStage => null;
   Future<String> createEncryptionSetup();
 
   /// Rotates Matrix Secure Secret Storage while retaining the connected

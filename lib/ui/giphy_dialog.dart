@@ -246,16 +246,6 @@ class _GiphyDialogState extends State<GiphyDialog> {
                     },
                   ),
           ),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'Powered by GIPHY',
-              style: TextStyle(
-                fontSize: DeltiecordTypeScale.normal,
-                color: Color(0xff989aa5),
-              ),
-            ),
-          ),
         ],
       ),
     );
