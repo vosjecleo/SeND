@@ -1,7 +1,7 @@
 # Deltiecord 0.9.32+104 — proposed changelog and acceptance plan
 
-Status: implementation approved by the user, including source push only.
-Builds, CI release jobs, tags and deployments must wait for explicit approval.
+Status: implementation and source push completed. The user subsequently approved
+CI builds for all platforms, latest-channel publication and the hosted PWA update.
 Baseline is build 103. The changelog records implemented scope; acceptance tests
 below include device checks that remain pending, not claims of completed checks.
 

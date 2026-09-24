@@ -1,6 +1,6 @@
 # Changelog
 
-## Deltiecord 0.9.32 build 104 — source prepared, release pending
+## Deltiecord 0.9.32 build 104 — 2026-09-24
 
 - Add composer voice messages: microphone when empty, live waveform and timer,
   pause/resume, stop-to-review, local playback, delete and explicit send. Reuse
@@ -21,8 +21,7 @@
   `sobbing` for the loudly crying face (`sob`).
 - Speech-to-text remains a proposal, not an enabled upload service. Platform
   recording, Linux emoji appearance and notification races need device checks
-  after release compilation is approved; no build/deployment accompanies this
-  source-only push.
+  across real hardware, particularly Safari/PWA microphone codecs.
 
 ## Deltiecord 0.9.31 build 103 — 2026-09-24
 
