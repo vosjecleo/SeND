@@ -31,7 +31,9 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
       return TweenAnimationBuilder<double>(
         key: const Key('side-panel-width'),
         tween: Tween(end: widget.visible ? widget.width : 0),
-        duration: _resizing ? Duration.zero : const Duration(milliseconds: 180),
+        duration: _resizing || MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         child: widget.child,
         builder: (context, animatedWidth, panel) => SizedBox(
@@ -61,7 +63,11 @@ class _SidePanelRegionState extends State<_SidePanelRegion> {
                           child: Center(
                             child: VerticalDivider(
                               width: 1,
-                              color: context.deltiecord.divider,
+                              color: _resizing
+                                  ? Theme.of(context).colorScheme.primary
+                                  : context.deltiecord.divider.withValues(
+                                      alpha: .35,
+                                    ),
                             ),
                           ),
                         ),

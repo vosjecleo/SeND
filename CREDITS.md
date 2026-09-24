@@ -110,3 +110,11 @@ package maintainers, and Deltiecord's hands-on testers:
 Yeen, Tecilis and Gabe.
 
 And lastly, thanks to the AI developers at Alibaba cloud for building an LLM capable of doing the work of building the base of this app.
+
+## Aero theme icon pack
+
+The bundled Tango subset is from the Tango Desktop Project, released into the
+public domain with version 0.8.90. PNG rasterizations are from
+[Nigel Tao's Tango icon library](https://github.com/nigeltao/tango-icon-library-pngs),
+commit `0a1564d0861bcca68ced31a5798f8d07c39a19ed`. See
+`assets/icons/tango/COPYING` and `SOURCE.md`. No Microsoft icon assets are included.

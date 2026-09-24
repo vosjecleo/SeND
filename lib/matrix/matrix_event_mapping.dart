@@ -124,7 +124,8 @@ extension _MatrixEventMapping on MatrixBackend {
             ),
           );
         })
-        .toList(growable: false);
+        .toList(growable: false)
+      ..sort(compareTimelineMessages);
   }
 
   bool _eventPingsCurrentUser(Event source, Event display, Timeline timeline) {

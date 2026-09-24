@@ -12,6 +12,7 @@ import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/telegram_sticker_service.dart';
 import 'deltiecord_theme.dart';
+import 'json_theme.dart';
 
 Future<PollDraft?> showPollComposer(BuildContext context) =>
     showDialog<PollDraft>(
@@ -56,7 +57,7 @@ Future<void> showRoomNotificationControls(
         children: [
           const ListTile(title: Text('Room notifications')),
           ListTile(
-            leading: Icon(
+            leading: ThemeIcon(
               room.notificationMode == RoomNotificationMode.allMessages
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
@@ -65,7 +66,7 @@ Future<void> showRoomNotificationControls(
             onTap: () => Navigator.pop(context, 'all'),
           ),
           ListTile(
-            leading: Icon(
+            leading: ThemeIcon(
               room.notificationMode == RoomNotificationMode.mentionsOnly
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
@@ -74,7 +75,7 @@ Future<void> showRoomNotificationControls(
             onTap: () => Navigator.pop(context, 'mentions'),
           ),
           ListTile(
-            leading: Icon(
+            leading: ThemeIcon(
               room.notificationMode == RoomNotificationMode.muted
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
@@ -84,17 +85,17 @@ Future<void> showRoomNotificationControls(
           ),
           const Divider(height: 1),
           ListTile(
-            leading: const Icon(Icons.timer_outlined),
+            leading: const ThemeIcon(Icons.timer_outlined),
             title: const Text('Mute for 1 hour'),
             onTap: () => Navigator.pop(context, 'hour'),
           ),
           ListTile(
-            leading: const Icon(Icons.bedtime_outlined),
+            leading: const ThemeIcon(Icons.bedtime_outlined),
             title: const Text('Mute until tomorrow'),
             onTap: () => Navigator.pop(context, 'tomorrow'),
           ),
           ListTile(
-            leading: Icon(
+            leading: ThemeIcon(
               room.markedUnread
                   ? Icons.mark_chat_read_outlined
                   : Icons.mark_chat_unread_outlined,
@@ -243,7 +244,13 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
       final surface =
           palette?.surface ?? Theme.of(context).colorScheme.surfaceContainer;
       return Material(
-        color: surface,
+        color:
+            Theme.of(
+                  context,
+                ).extension<ThemeChrome>()?.surfaces.containsKey('popup') ==
+                true
+            ? Colors.transparent
+            : surface,
         child: CustomScrollView(
           key: const ValueKey('sticker-picker-scroll'),
           slivers: [
@@ -258,7 +265,7 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                 onChanged: (value) => setState(() => _query = value),
                 decoration: const InputDecoration(
                   hintText: 'Search stickers',
-                  prefixIcon: Icon(Icons.search, size: 20),
+                  prefixIcon: ThemeIcon(Icons.search, size: 20),
                   isDense: true,
                 ),
               ),
@@ -266,10 +273,12 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                 IconButton(
                   tooltip: 'Manage sticker packs',
                   onPressed: () async {
-                    await _manageStickerPacks(context, widget.backend);
+                    final hostContext = Navigator.of(context).context;
+                    Navigator.of(context).pop();
+                    await _manageStickerPacks(hostContext, widget.backend);
                     await widget.backend.refreshStickerPacks();
                   },
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  icon: const ThemeIcon(Icons.add_photo_alternate_outlined),
                 ),
                 const SizedBox(width: 4),
               ],
@@ -279,9 +288,13 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                 hasScrollBody: false,
                 child: Center(
                   child: FilledButton.icon(
-                    onPressed: () =>
-                        _manageStickerPacks(context, widget.backend),
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    onPressed: () async {
+                      final hostContext = Navigator.of(context).context;
+                      Navigator.of(context).pop();
+                      await _manageStickerPacks(hostContext, widget.backend);
+                      await widget.backend.refreshStickerPacks();
+                    },
+                    icon: const ThemeIcon(Icons.add_photo_alternate_outlined),
                     label: Text(
                       _query.isEmpty
                           ? 'Create or import a pack'
@@ -342,7 +355,7 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                                   onPressed: () => FavouriteReactionsStore
                                       .instance
                                       .toggleSticker(sticker.mxcUri),
-                                  icon: Icon(
+                                  icon: ThemeIcon(
                                     favourite ? Icons.star : Icons.star_border,
                                     size: 16,
                                   ),
@@ -427,16 +440,11 @@ Future<void> showStickerPackForMessage(
   await backend.refreshStickerPacks();
   final reference = await backend.getAttachmentReference(messageId);
   if (!context.mounted) return;
-  final pack = backend.stickerPacks.where((candidate) {
-    if (attachment.stickerPackId != null &&
-        candidate.id == attachment.stickerPackId) {
-      return true;
-    }
-    return reference != null &&
-        candidate.stickers.any(
-          (sticker) => sticker.mxcUri.toString() == reference,
-        );
-  }).firstOrNull;
+  final pack = await backend.resolveStickerPack(
+    packId: attachment.stickerPackId,
+    mediaUri: reference == null ? null : Uri.tryParse(reference),
+  );
+  if (!context.mounted) return;
   await _showStickerPackDetails(
     context,
     backend,
@@ -452,10 +460,11 @@ Future<void> showStickerPackForEmoji(
 ) async {
   await backend.refreshStickerPacks();
   if (!context.mounted) return;
-  final pack = backend.stickerPacks.where((candidate) {
-    if (emoji.packId != null && candidate.id == emoji.packId) return true;
-    return candidate.stickers.any((sticker) => sticker.mxcUri == emoji.id);
-  }).firstOrNull;
+  final pack = await backend.resolveStickerPack(
+    packId: emoji.packId,
+    mediaUri: emoji.id,
+  );
+  if (!context.mounted) return;
   await _showStickerPackDetails(
     context,
     backend,
@@ -505,8 +514,13 @@ Future<void> _showStickerPackDetails(
     surfaceKey: const ValueKey('message-sticker-pack-surface'),
     builder: (context) => Material(
       color:
-          Theme.of(context).extension<DeltiecordPalette>()?.surface ??
-          Theme.of(context).colorScheme.surfaceContainer,
+          Theme.of(
+                context,
+              ).extension<ThemeChrome>()?.surfaces.containsKey('popup') ==
+              true
+          ? Colors.transparent
+          : Theme.of(context).extension<DeltiecordPalette>()?.surface ??
+                Theme.of(context).colorScheme.surfaceContainer,
       child: Column(
         children: [
           ListTile(
@@ -547,7 +561,9 @@ Future<void> _showStickerPackDetails(
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: () => Navigator.pop(context, 'toggle'),
-                    icon: Icon(pack.globallyEnabled ? Icons.remove : Icons.add),
+                    icon: ThemeIcon(
+                      pack.globallyEnabled ? Icons.remove : Icons.add,
+                    ),
                     label: Text(
                       pack.globallyEnabled
                           ? 'Remove from my account'
@@ -563,7 +579,19 @@ Future<void> _showStickerPackDetails(
     ),
   );
   if (action == 'toggle') {
-    await backend.setStickerPackGloballyEnabled(pack, !pack.globallyEnabled);
+    try {
+      await backend.setStickerPackGloballyEnabled(pack, !pack.globallyEnabled);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update this pack. Check your connection and try again.',
+            ),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -588,11 +616,15 @@ Future<T?> _showStickerSurface<T>(
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: surface,
-      builder: (sheetContext) => FractionallySizedBox(
-        key: surfaceKey,
-        heightFactor: mobileHeightFactor,
-        child: builder(sheetContext),
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => ThemeSurface(
+        kind: 'popup',
+        color: surface,
+        child: FractionallySizedBox(
+          key: surfaceKey,
+          heightFactor: mobileHeightFactor,
+          child: builder(sheetContext),
+        ),
       ),
     );
   }
@@ -602,14 +634,16 @@ Future<T?> _showStickerSurface<T>(
       final viewport = MediaQuery.sizeOf(dialogContext);
       return Dialog(
         key: surfaceKey,
-        backgroundColor:
-            Theme.of(dialogContext).extension<DeltiecordPalette>()?.surface ??
-            Theme.of(dialogContext).colorScheme.surface,
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        child: SizedBox(
-          width: min(desktopWidth, max(280, viewport.width - 64)),
-          height: min(desktopHeight, max(280, viewport.height - 64)),
-          child: builder(dialogContext),
+        child: ThemeSurface(
+          kind: 'popup',
+          color: surface,
+          child: SizedBox(
+            width: min(desktopWidth, max(280, viewport.width - 64)),
+            height: min(desktopHeight, max(280, viewport.height - 64)),
+            child: builder(dialogContext),
+          ),
         ),
       );
     },
@@ -694,31 +728,31 @@ Future<void> _manageStickerPacks(
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.collections_outlined),
+            leading: const ThemeIcon(Icons.collections_outlined),
             title: const Text('Create sticker pack'),
             onTap: () => Navigator.pop(context, 'create-sticker'),
           ),
           ListTile(
-            leading: const Icon(Icons.folder_zip_outlined),
+            leading: const ThemeIcon(Icons.folder_zip_outlined),
             title: const Text('Import ZIP'),
             subtitle: const Text('Up to 120 PNG, JPEG, GIF or WebP files'),
             onTap: () => Navigator.pop(context, 'import-sticker'),
           ),
           ListTile(
-            leading: const Icon(Icons.send_outlined),
+            leading: const ThemeIcon(Icons.send_outlined),
             title: const Text('Import from Telegram'),
             subtitle: const Text('Paste a public sticker-pack link'),
             onTap: () => Navigator.pop(context, 'telegram-sticker'),
           ),
           ListTile(
-            leading: const Icon(Icons.add_reaction_outlined),
+            leading: const ThemeIcon(Icons.add_reaction_outlined),
             title: const Text('Create custom emoji pack'),
             subtitle: const Text('Up to 120 images, 128×128 and 256 KiB each'),
             onTap: () => Navigator.pop(context, 'create-emoji'),
           ),
           if (backend.stickerPacks.any(_isEditableEmojiPack))
             ListTile(
-              leading: const Icon(Icons.edit_outlined),
+              leading: const ThemeIcon(Icons.edit_outlined),
               title: const Text('Edit custom emoji pack'),
               subtitle: const Text('Rename, crop, rescale or change aliases'),
               onTap: () => Navigator.pop(context, 'edit-emoji'),
@@ -728,7 +762,7 @@ Future<void> _manageStickerPacks(
                 (space) => backend.canManageStickerPacksInRoom(space.id),
               ))
             ListTile(
-              leading: const Icon(Icons.public_outlined),
+              leading: const ThemeIcon(Icons.public_outlined),
               title: const Text('Publish a personal pack'),
               subtitle: const Text(
                 'Move a pack to a server so members can add it',
@@ -736,20 +770,20 @@ Future<void> _manageStickerPacks(
               onTap: () => Navigator.pop(context, 'publish'),
             ),
           ListTile(
-            leading: const Icon(Icons.folder_zip_outlined),
+            leading: const ThemeIcon(Icons.folder_zip_outlined),
             title: const Text('Import emoji ZIP'),
             subtitle: const Text('PNG, JPEG, GIF or WebP'),
             onTap: () => Navigator.pop(context, 'import-emoji'),
           ),
           ListTile(
-            leading: const Icon(Icons.send_outlined),
+            leading: const ThemeIcon(Icons.send_outlined),
             title: const Text('Import Telegram pack as emoji'),
             subtitle: const Text('Choose aliases before saving'),
             onTap: () => Navigator.pop(context, 'telegram-emoji'),
           ),
           if (backend.stickerPacks.any((pack) => pack.canManage))
             ListTile(
-              leading: const Icon(Icons.delete_outline),
+              leading: const ThemeIcon(Icons.delete_outline),
               title: const Text('Delete a pack'),
               onTap: () => Navigator.pop(context, 'delete'),
             ),
@@ -940,7 +974,7 @@ Future<void> _editExistingEmojiPack(
           ),
           for (final pack in packs)
             ListTile(
-              leading: const Icon(Icons.add_reaction_outlined),
+              leading: const ThemeIcon(Icons.add_reaction_outlined),
               title: Text(pack.name),
               subtitle: Text(
                 '${pack.stickers.length} emoji · '
@@ -1123,7 +1157,13 @@ class _EmojiAliasEditorState extends State<_EmojiAliasEditor> {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: context.deltiecord.surface,
+    color:
+        Theme.of(
+              context,
+            ).extension<ThemeChrome>()?.surfaces.containsKey('popup') ==
+            true
+        ? Colors.transparent
+        : context.deltiecord.surface,
     child: Column(
       children: [
         ListTile(
@@ -1134,7 +1174,7 @@ class _EmojiAliasEditorState extends State<_EmojiAliasEditor> {
           trailing: IconButton(
             tooltip: 'Close',
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close),
+            icon: const ThemeIcon(Icons.close),
           ),
         ),
         if (_error != null)
@@ -1198,7 +1238,7 @@ class _EmojiAliasEditorState extends State<_EmojiAliasEditor> {
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: _save,
-                icon: const Icon(Icons.check),
+                icon: const ThemeIcon(Icons.check),
                 label: const Text('Continue'),
               ),
             ],
@@ -1381,7 +1421,7 @@ Future<String?> _chooseStickerPackDestination(
       child: Wrap(
         children: [
           ListTile(
-            leading: const Icon(Icons.person_outline),
+            leading: const ThemeIcon(Icons.person_outline),
             title: const Text('My account'),
             subtitle: const Text(
               'Private to this account and available in every conversation',
@@ -1390,7 +1430,7 @@ Future<String?> _chooseStickerPackDestination(
           ),
           for (final space in manageableSpaces)
             ListTile(
-              leading: const Icon(Icons.hub_outlined),
+              leading: const ThemeIcon(Icons.hub_outlined),
               title: Text(space.name),
               subtitle: const Text(
                 'Publish to this server; members can add it and updates sync',
@@ -1425,7 +1465,7 @@ Future<void> _deleteStickerPack(
           const ListTile(title: Text('Delete pack')),
           for (final pack in manageable)
             ListTile(
-              leading: const Icon(Icons.delete_outline),
+              leading: const ThemeIcon(Icons.delete_outline),
               title: Text(pack.name),
               subtitle: Text(pack.roomScoped ? 'Server pack' : 'Personal pack'),
               onTap: () => Navigator.pop(context, pack),
@@ -1456,7 +1496,7 @@ Future<void> _publishPersonalStickerPack(
             (candidate) => candidate.sourceRoomId == null,
           ))
             ListTile(
-              leading: const Icon(Icons.collections_outlined),
+              leading: const ThemeIcon(Icons.collections_outlined),
               title: Text(candidate.name),
               subtitle: Text('${candidate.stickers.length} items'),
               onTap: () => Navigator.pop(context, candidate),
@@ -1485,7 +1525,7 @@ Future<void> _publishPersonalStickerPack(
           ),
           for (final space in spaces)
             ListTile(
-              leading: const Icon(Icons.hub_outlined),
+              leading: const ThemeIcon(Icons.hub_outlined),
               title: Text(space.name),
               onTap: () => Navigator.pop(context, space.id),
             ),
@@ -1760,7 +1800,7 @@ Future<Set<int>?> _selectTelegramStickers(
                           Positioned(
                             top: 2,
                             right: 2,
-                            child: Icon(
+                            child: ThemeIcon(
                               included
                                   ? Icons.check_circle
                                   : Icons.circle_outlined,
@@ -1844,7 +1884,7 @@ class _TelegramStickerPreviewState extends State<_TelegramStickerPreview> {
         return IconButton(
           tooltip: 'Retry preview',
           onPressed: () => setState(() => _bytes = _load()),
-          icon: Icon(Icons.refresh, color: context.deltiecord.muted),
+          icon: ThemeIcon(Icons.refresh, color: context.deltiecord.muted),
         );
       }
       return const Center(
@@ -1951,7 +1991,7 @@ class _PollComposerDialogState extends State<_PollComposerDialog> {
                             onPressed: () => setState(() {
                               _answers.removeAt(index).dispose();
                             }),
-                            icon: const Icon(Icons.close),
+                            icon: const ThemeIcon(Icons.close),
                           )
                         : null,
                   ),
@@ -1963,7 +2003,7 @@ class _PollComposerDialogState extends State<_PollComposerDialog> {
                 child: TextButton.icon(
                   onPressed: () =>
                       setState(() => _answers.add(TextEditingController())),
-                  icon: const Icon(Icons.add),
+                  icon: const ThemeIcon(Icons.add),
                   label: const Text('Add answer'),
                 ),
               ),

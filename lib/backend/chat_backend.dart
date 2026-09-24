@@ -41,6 +41,7 @@ abstract class ChatBackend extends ChangeNotifier {
       .fold(0, (sum, room) => sum + room.highlightCount);
   int get totalAttentionCount => directUnreadCount + serverPingCount;
   int pingCountForSpace(String spaceId) => 0;
+  bool hasUnreadForSpace(String spaceId) => pingCountForSpace(spaceId) > 0;
   RoomSummary? get selectedRoom;
   bool get selectedRoomMuted;
   RoomNotificationMode get selectedRoomNotificationMode => selectedRoomMuted
@@ -332,6 +333,20 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> sendSticker(StickerSummary sticker, {String? roomId}) async =>
       throw UnsupportedError('Stickers are unavailable');
   Future<void> refreshStickerPacks() async {}
+  Future<StickerPackSummary?> resolveStickerPack({
+    String? packId,
+    Uri? mediaUri,
+  }) async {
+    await refreshStickerPacks();
+    for (final pack in stickerPacks) {
+      if (pack.id == packId ||
+          pack.stickers.any((item) => item.mxcUri == mediaUri)) {
+        return pack;
+      }
+    }
+    return null;
+  }
+
   Future<void> savePersonalStickerPack(StickerPackDraft pack) async =>
       throw UnsupportedError('Sticker-pack editing is unavailable');
   bool canManageStickerPacksInRoom(String roomId) => false;

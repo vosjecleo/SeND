@@ -605,443 +605,460 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
         backend.canLoadMoreHistory) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _fillInitialChunk());
     }
-    return Scaffold(
-      key: const ValueKey('mobile-timeline'),
-      appBar: AppBar(
-        toolbarHeight: 64,
-        leading: IconButton(
-          key: const ValueKey('mobile-open-navigation'),
-          onPressed: widget.onOpenNavigation,
-          icon: MobileAttentionBadge(
-            count: backend.totalAttentionCount,
-            child: const Icon(Icons.menu),
-          ),
-        ),
-        titleSpacing: 0,
-        title: InkWell(
-          key: const ValueKey('mobile-open-details'),
-          onTap: widget.onOpenDetails,
-          child: Row(
-            children: [
-              MobileAvatar(
-                bytes: widget.room.avatarBytes,
-                fallback: widget.room.name,
-                presence: widget.room.isDirect ? widget.room.presence : null,
-                size: 40,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.room.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      widget.room.topic.isNotEmpty
-                          ? widget.room.topic
-                          : widget.room.isDirect
-                          ? mobilePresenceLabel(widget.room.presence)
-                          : '${backend.selectedRoomMembers.length} members',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            onPressed: _showSearch,
-            icon: const Icon(Icons.search),
-          ),
-          IconButton(
-            tooltip: 'Start call',
-            onPressed: () => backend.joinVoiceRoom(widget.room.id),
-            icon: const Icon(Icons.call_outlined),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            onSelected: (value) async {
-              switch (value) {
-                case 'members':
-                  widget.onOpenDetails();
-                case 'invite':
-                  await showInviteMember(context, backend);
-                case 'aliases':
-                  await showRoomAliasEditor(context, backend, widget.room);
-                case 'copy-link':
-                  await Clipboard.setData(
-                    ClipboardData(
-                      text: 'https://matrix.to/#/${widget.room.id}',
-                    ),
-                  );
-                case 'notifications':
-                  await showRoomNotificationControls(
-                    context,
-                    backend,
-                    widget.room,
-                  );
-                case 'gallery':
-                  await showRoomSearchSheet(
-                    context,
-                    backend,
-                    onOpen: _jumpToEvent,
-                    initialSection: RoomSearchSection.media,
-                  );
-                case 'saved':
-                  await showSavedMessages(
-                    context,
-                    backend,
-                    onOpen: (roomId, eventId) async {
-                      if (backend.selectedRoom?.id != roomId) {
-                        await backend.selectRoom(roomId);
-                      }
-                      await backend.jumpToEvent(eventId);
-                    },
-                  );
-                case 'pinned':
-                  await showPinnedMessages(
-                    context,
-                    backend,
-                    onOpen: _jumpToEvent,
-                  );
-                case 'inbox':
-                  await showUnifiedInbox(
-                    context,
-                    backend,
-                    onOpen: (item) async {
-                      if (backend.selectedRoom?.id != item.roomId) {
-                        await backend.selectRoom(item.roomId);
-                      }
-                      if (item.eventId != null) {
-                        await backend.jumpToEvent(item.eventId!);
-                      }
-                    },
-                  );
-                case 'unread':
-                  await backend.markRoomUnread(
-                    widget.room.id,
-                    !widget.room.markedUnread,
-                  );
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'gallery', child: Text('Media and links')),
-              PopupMenuItem(value: 'saved', child: Text('Saved and scheduled')),
-              PopupMenuItem(value: 'pinned', child: Text('Pinned messages')),
-              PopupMenuItem(value: 'inbox', child: Text('Inbox')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'members', child: Text('Members')),
-              PopupMenuItem(value: 'invite', child: Text('Invite member')),
-              PopupMenuItem(value: 'aliases', child: Text('Room aliases')),
-              PopupMenuItem(value: 'copy-link', child: Text('Copy room link')),
-              PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'notifications',
-                child: Text('Notification settings'),
-              ),
-              PopupMenuItem(
-                value: 'unread',
-                child: Text('Toggle read / unread'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (backend.connectionStatus != ConnectionStatus.online)
-            MaterialBanner(
-              content: Text(
-                backend.connectionStatus == ConnectionStatus.offline
-                    ? 'Offline — messages will be queued'
-                    : 'Reconnecting…',
-              ),
-              actions: const [SizedBox.shrink()],
+    return ReceiptPlacement(
+      messages: messages,
+      receiptIds: receipts,
+      hiddenIds: mediaAlbums.hiddenMessageIds,
+      contentInset: 64,
+      child: Scaffold(
+        key: const ValueKey('mobile-timeline'),
+        appBar: AppBar(
+          toolbarHeight: 64,
+          leading: IconButton(
+            key: const ValueKey('mobile-open-navigation'),
+            onPressed: widget.onOpenNavigation,
+            icon: MobileAttentionBadge(
+              count: backend.totalAttentionCount,
+              child: const Icon(Icons.menu),
             ),
-          EncryptionAttentionBanner(backend: backend, room: widget.room),
-          Expanded(
-            child: backend.timelineLoading && messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : messages.isEmpty &&
-                      !backend.canLoadMoreHistory &&
-                      !backend.historyLoading
-                ? const Center(child: Text('No messages yet'))
-                : Stack(
-                    clipBehavior: Clip.none,
+          ),
+          titleSpacing: 0,
+          title: InkWell(
+            key: const ValueKey('mobile-open-details'),
+            onTap: widget.onOpenDetails,
+            child: Row(
+              children: [
+                MobileAvatar(
+                  bytes: widget.room.avatarBytes,
+                  fallback: widget.room.name,
+                  presence: widget.room.isDirect ? widget.room.presence : null,
+                  size: 40,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      KeyedSubtree(
-                        key: _timelineViewportKey,
-                        child: Listener(
-                          onPointerDown: _noteTimelineUserInput,
-                          onPointerMove: _noteTimelineUserInput,
-                          onPointerSignal: _noteTimelineUserInput,
-                          child: ListView.builder(
-                            key: const ValueKey('mobile-message-timeline'),
-                            controller: _scroll,
-                            reverse: true,
-                            physics: const ClampingScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(
-                              6,
-                              8,
-                              6,
-                              typingIndicatorHeight + 1,
-                            ),
-                            itemCount:
-                                messages.length +
-                                ((backend.canLoadMoreHistory ||
-                                        backend.historyLoading)
-                                    ? 1
-                                    : 0),
-                            findChildIndexCallback: (key) {
-                              final messageId = key is GlobalKey
-                                  ? _messageIdsByKey[key]
-                                  : null;
-                              return messageId == null
-                                  ? null
-                                  : messageIndexes[messageId];
-                            },
-                            itemBuilder: (context, index) {
-                              if (index == messages.length) {
-                                return SizedBox(
-                                  height: 64,
-                                  child: Center(
-                                    child: backend.historyLoading
-                                        ? const Padding(
-                                            padding: EdgeInsets.all(16),
-                                            child: CircularProgressIndicator(),
-                                          )
-                                        : TextButton.icon(
-                                            onPressed: () =>
-                                                _loadTimelinePage(older: true),
-                                            icon: const Icon(Icons.history),
-                                            label: const Text(
-                                              'Load older messages',
-                                            ),
-                                          ),
-                                  ),
-                                );
-                              }
-                              final message = messages[index];
-                              if (mediaAlbums.hiddenMessageIds.contains(
-                                message.id,
-                              )) {
-                                return const SizedBox.shrink();
-                              }
-                              final older = index + 1 < messages.length
-                                  ? messages[index + 1]
-                                  : null;
-                              final grouped =
-                                  older != null &&
-                                  !older.system &&
-                                  !message.system &&
-                                  older.senderId == message.senderId &&
-                                  message.timestamp.difference(
-                                        older.timestamp,
-                                      ) <
-                                      const Duration(minutes: 7) &&
-                                  message.reply == null &&
-                                  DateUtils.isSameDay(
-                                    older.timestamp.toLocal(),
-                                    message.timestamp.toLocal(),
-                                  );
-                              final showDaySeparator =
-                                  older == null ||
-                                  !DateUtils.isSameDay(
-                                    older.timestamp.toLocal(),
-                                    message.timestamp.toLocal(),
-                                  );
-                              final rowKey = _messageKeys.putIfAbsent(
-                                message.id,
-                                () {
-                                  final key = GlobalKey();
-                                  _messageIdsByKey[key] = message.id;
-                                  return key;
-                                },
-                              );
-                              return KeyedSubtree(
-                                key: rowKey,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (showDaySeparator)
-                                      _MobileDaySeparator(
-                                        date: message.timestamp.toLocal(),
-                                      ),
-                                    _MobileMessageRow(
-                                      receiptIds: receipts,
-                                      backend: backend,
-                                      navigationGestureActive:
-                                          widget.navigationGestureActive,
-                                      message: message,
-                                      showReceipt: receipts.contains(
-                                        message.id,
-                                      ),
-                                      albumMessages:
-                                          mediaAlbums.albums[message.id],
-                                      grouped: grouped,
-                                      highlighted:
-                                          _highlightedMessageId == message.id,
-                                      onJumpToReply: _jumpToEvent,
-                                      onReply: () => setState(() {
-                                        _reply = message;
-                                        _edit = null;
-                                        _focus.requestFocus();
-                                      }),
-                                      onEdit: message.own && !message.redacted
-                                          ? () => setState(() {
-                                              _edit = message;
-                                              _richEdit = null;
-                                              _reply = null;
-                                              _customEmojiSpans = const [];
-                                              final document =
-                                                  richMessageDocument(
-                                                    message.body,
-                                                    message.formattedBody,
-                                                  );
-                                              final restored =
-                                                  serializeRichMessage(
-                                                    document,
-                                                  );
-                                              _composer.text =
-                                                  restored.plainText;
-                                              _richEdit = document;
-                                              _customEmojiSpans =
-                                                  customEmojiSpansFromHtml(
-                                                    restored.html,
-                                                    restored.plainText,
-                                                  );
-                                              _previousComposerText =
-                                                  restored.plainText;
-                                              _composer.selection =
-                                                  TextSelection.collapsed(
-                                                    offset:
-                                                        _composer.text.length,
-                                                  );
-                                              _focus.requestFocus();
-                                            })
-                                          : null,
-                                      onProfile: message.senderId == null
-                                          ? null
-                                          : () => showMobileProfileSheet(
-                                              context,
-                                              backend,
-                                              message.senderId!,
-                                              onEditOwnProfile:
-                                                  widget.onOpenSettings,
-                                            ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+                      Text(
+                        widget.room.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      if (!backend.atTimelinePresent ||
-                          _scrolledAwayFromPresent)
-                        Positioned(
-                          right: 14,
-                          bottom: 10,
-                          child: FilledButton.icon(
-                            onPressed: () async {
-                              if (!backend.atTimelinePresent) {
-                                await backend.jumpToPresent();
-                              }
-                              if (_scroll.hasClients) {
-                                await _scroll.animateTo(
-                                  0,
-                                  duration: const Duration(milliseconds: 180),
-                                  curve: Curves.easeOutCubic,
-                                );
-                              }
-                              if (mounted && _scrolledAwayFromPresent) {
-                                setState(
-                                  () => _scrolledAwayFromPresent = false,
-                                );
-                              }
-                              backend.setConversationAtPresent(true);
-                            },
-                            icon: const Icon(Icons.arrow_downward),
-                            label: const Text('Present'),
-                          ),
-                        ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        // Overlap by one physical pixel so fractional device
-                        // scaling cannot expose a seam above the composer.
-                        bottom: -physicalPixel,
-                        child: TypingIndicator(names: backend.typingUserNames),
+                      Text(
+                        widget.room.topic.isNotEmpty
+                            ? widget.room.topic
+                            : widget.room.isDirect
+                            ? mobilePresenceLabel(widget.room.presence)
+                            : '${backend.selectedRoomMembers.length} members',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
-          ),
-          VoiceMessageComposer(
-            key: ValueKey('voice-composer-${widget.room.id}'),
-            backend: backend,
-            roomId: widget.room.id,
-            replyToMessageId: _reply?.id,
-            onSent: () => setState(() => _reply = null),
-            builder: (startRecording) => _MobileComposer(
-              backend: backend,
-              controller: _composer,
-              focusNode: _focus,
-              sending: _sending,
-              attachments: _attachments,
-              contextMessage: _edit ?? _reply,
-              editing: _edit != null,
-              onClearContext: () => setState(() {
-                if (_edit != null) {
-                  _customEmojiSpans = [];
-                  _composer.clear();
-                }
-                _reply = null;
-                _edit = null;
-              }),
-              onRemoveAttachment: (attachment) =>
-                  setState(() => _attachments.remove(attachment)),
-              onToggleAttachmentSpoiler: (attachment) {
-                final index = _attachments.indexOf(attachment);
-                if (index < 0) return;
-                setState(() {
-                  _attachments[index] = AttachmentDraft(
-                    bytes: attachment.bytes,
-                    name: attachment.name,
-                    mimeType: attachment.mimeType,
-                    spoiler: !attachment.spoiler,
-                    caption: attachment.caption,
-                  );
-                });
-              },
-              onAdd: _showAddMenu,
-              onEmoji: _showEmojiPicker,
-              onPasteImage: _pasteClipboardImage,
-              onSend: _send,
-              onRecord: _edit == null ? startRecording : null,
-              onSchedule: _scheduleCurrentMessage,
-              onContentInserted: _insertKeyboardContent,
-              emojiMatches: _emojiMatches,
-              emojiCompletionActive: _emojiStart != null,
-              emojiSelection: _emojiSelection,
-              onEmojiSelected: _acceptEmojiCompletion,
-              onEmojiSelectionChanged: (index) =>
-                  setState(() => _emojiSelection = index),
-              onDismissEmojiCompletion: _clearEmojiCompletion,
-              mentionMatches: _mentionMatches,
-              onMentionSelected: _acceptMention,
+                ),
+              ],
             ),
           ),
-        ],
+          actions: [
+            IconButton(
+              tooltip: 'Search',
+              onPressed: _showSearch,
+              icon: const Icon(Icons.search),
+            ),
+            IconButton(
+              tooltip: 'Start call',
+              onPressed: () => backend.joinVoiceRoom(widget.room.id),
+              icon: const Icon(Icons.call_outlined),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: (value) async {
+                switch (value) {
+                  case 'members':
+                    widget.onOpenDetails();
+                  case 'invite':
+                    await showInviteMember(context, backend);
+                  case 'aliases':
+                    await showRoomAliasEditor(context, backend, widget.room);
+                  case 'copy-link':
+                    await Clipboard.setData(
+                      ClipboardData(
+                        text: 'https://matrix.to/#/${widget.room.id}',
+                      ),
+                    );
+                  case 'notifications':
+                    await showRoomNotificationControls(
+                      context,
+                      backend,
+                      widget.room,
+                    );
+                  case 'gallery':
+                    await showRoomSearchSheet(
+                      context,
+                      backend,
+                      onOpen: _jumpToEvent,
+                      initialSection: RoomSearchSection.media,
+                    );
+                  case 'saved':
+                    await showSavedMessages(
+                      context,
+                      backend,
+                      onOpen: (roomId, eventId) async {
+                        if (backend.selectedRoom?.id != roomId) {
+                          await backend.selectRoom(roomId);
+                        }
+                        await backend.jumpToEvent(eventId);
+                      },
+                    );
+                  case 'pinned':
+                    await showPinnedMessages(
+                      context,
+                      backend,
+                      onOpen: _jumpToEvent,
+                    );
+                  case 'inbox':
+                    await showUnifiedInbox(
+                      context,
+                      backend,
+                      onOpen: (item) async {
+                        if (backend.selectedRoom?.id != item.roomId) {
+                          await backend.selectRoom(item.roomId);
+                        }
+                        if (item.eventId != null) {
+                          await backend.jumpToEvent(item.eventId!);
+                        }
+                      },
+                    );
+                  case 'unread':
+                    await backend.markRoomUnread(
+                      widget.room.id,
+                      !widget.room.markedUnread,
+                    );
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'gallery', child: Text('Media and links')),
+                PopupMenuItem(
+                  value: 'saved',
+                  child: Text('Saved and scheduled'),
+                ),
+                PopupMenuItem(value: 'pinned', child: Text('Pinned messages')),
+                PopupMenuItem(value: 'inbox', child: Text('Inbox')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'members', child: Text('Members')),
+                PopupMenuItem(value: 'invite', child: Text('Invite member')),
+                PopupMenuItem(value: 'aliases', child: Text('Room aliases')),
+                PopupMenuItem(
+                  value: 'copy-link',
+                  child: Text('Copy room link'),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'notifications',
+                  child: Text('Notification settings'),
+                ),
+                PopupMenuItem(
+                  value: 'unread',
+                  child: Text('Toggle read / unread'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (backend.connectionStatus != ConnectionStatus.online)
+              MaterialBanner(
+                content: Text(
+                  backend.connectionStatus == ConnectionStatus.offline
+                      ? 'Offline — messages will be queued'
+                      : 'Reconnecting…',
+                ),
+                actions: const [SizedBox.shrink()],
+              ),
+            EncryptionAttentionBanner(backend: backend, room: widget.room),
+            Expanded(
+              child: backend.timelineLoading && messages.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : messages.isEmpty &&
+                        !backend.canLoadMoreHistory &&
+                        !backend.historyLoading
+                  ? const Center(child: Text('No messages yet'))
+                  : Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        KeyedSubtree(
+                          key: _timelineViewportKey,
+                          child: Listener(
+                            onPointerDown: _noteTimelineUserInput,
+                            onPointerMove: _noteTimelineUserInput,
+                            onPointerSignal: _noteTimelineUserInput,
+                            child: ListView.builder(
+                              key: const ValueKey('mobile-message-timeline'),
+                              controller: _scroll,
+                              reverse: true,
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(
+                                6,
+                                8,
+                                6,
+                                typingIndicatorHeight + 1,
+                              ),
+                              itemCount:
+                                  messages.length +
+                                  ((backend.canLoadMoreHistory ||
+                                          backend.historyLoading)
+                                      ? 1
+                                      : 0),
+                              findChildIndexCallback: (key) {
+                                final messageId = key is GlobalKey
+                                    ? _messageIdsByKey[key]
+                                    : null;
+                                return messageId == null
+                                    ? null
+                                    : messageIndexes[messageId];
+                              },
+                              itemBuilder: (context, index) {
+                                if (index == messages.length) {
+                                  return SizedBox(
+                                    height: 64,
+                                    child: Center(
+                                      child: backend.historyLoading
+                                          ? const Padding(
+                                              padding: EdgeInsets.all(16),
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            )
+                                          : TextButton.icon(
+                                              onPressed: () =>
+                                                  _loadTimelinePage(
+                                                    older: true,
+                                                  ),
+                                              icon: const Icon(Icons.history),
+                                              label: const Text(
+                                                'Load older messages',
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                }
+                                final message = messages[index];
+                                if (mediaAlbums.hiddenMessageIds.contains(
+                                  message.id,
+                                )) {
+                                  return const SizedBox.shrink();
+                                }
+                                final older = index + 1 < messages.length
+                                    ? messages[index + 1]
+                                    : null;
+                                final grouped =
+                                    older != null &&
+                                    !older.system &&
+                                    !message.system &&
+                                    older.senderId == message.senderId &&
+                                    message.timestamp.difference(
+                                          older.timestamp,
+                                        ) <
+                                        const Duration(minutes: 7) &&
+                                    message.reply == null &&
+                                    DateUtils.isSameDay(
+                                      older.timestamp.toLocal(),
+                                      message.timestamp.toLocal(),
+                                    );
+                                final showDaySeparator =
+                                    older == null ||
+                                    !DateUtils.isSameDay(
+                                      older.timestamp.toLocal(),
+                                      message.timestamp.toLocal(),
+                                    );
+                                final rowKey = _messageKeys.putIfAbsent(
+                                  message.id,
+                                  () {
+                                    final key = GlobalKey();
+                                    _messageIdsByKey[key] = message.id;
+                                    return key;
+                                  },
+                                );
+                                return KeyedSubtree(
+                                  key: rowKey,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (showDaySeparator)
+                                        _MobileDaySeparator(
+                                          date: message.timestamp.toLocal(),
+                                        ),
+                                      _MobileMessageRow(
+                                        receiptIds: receipts,
+                                        backend: backend,
+                                        navigationGestureActive:
+                                            widget.navigationGestureActive,
+                                        message: message,
+                                        showReceipt: receipts.contains(
+                                          message.id,
+                                        ),
+                                        albumMessages:
+                                            mediaAlbums.albums[message.id],
+                                        grouped: grouped,
+                                        highlighted:
+                                            _highlightedMessageId == message.id,
+                                        onJumpToReply: _jumpToEvent,
+                                        onReply: () => setState(() {
+                                          _reply = message;
+                                          _edit = null;
+                                          _focus.requestFocus();
+                                        }),
+                                        onEdit: message.own && !message.redacted
+                                            ? () => setState(() {
+                                                _edit = message;
+                                                _richEdit = null;
+                                                _reply = null;
+                                                _customEmojiSpans = const [];
+                                                final document =
+                                                    richMessageDocument(
+                                                      message.body,
+                                                      message.formattedBody,
+                                                    );
+                                                final restored =
+                                                    serializeRichMessage(
+                                                      document,
+                                                    );
+                                                _composer.text =
+                                                    restored.plainText;
+                                                _richEdit = document;
+                                                _customEmojiSpans =
+                                                    customEmojiSpansFromHtml(
+                                                      restored.html,
+                                                      restored.plainText,
+                                                    );
+                                                _previousComposerText =
+                                                    restored.plainText;
+                                                _composer.selection =
+                                                    TextSelection.collapsed(
+                                                      offset:
+                                                          _composer.text.length,
+                                                    );
+                                                _focus.requestFocus();
+                                              })
+                                            : null,
+                                        onProfile: message.senderId == null
+                                            ? null
+                                            : () => showMobileProfileSheet(
+                                                context,
+                                                backend,
+                                                message.senderId!,
+                                                onEditOwnProfile:
+                                                    widget.onOpenSettings,
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        if (!backend.atTimelinePresent ||
+                            _scrolledAwayFromPresent)
+                          Positioned(
+                            right: 14,
+                            bottom: 10,
+                            child: FilledButton.icon(
+                              onPressed: () async {
+                                if (!backend.atTimelinePresent) {
+                                  await backend.jumpToPresent();
+                                }
+                                if (_scroll.hasClients) {
+                                  await _scroll.animateTo(
+                                    0,
+                                    duration: const Duration(milliseconds: 180),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                }
+                                if (mounted && _scrolledAwayFromPresent) {
+                                  setState(
+                                    () => _scrolledAwayFromPresent = false,
+                                  );
+                                }
+                                backend.setConversationAtPresent(true);
+                              },
+                              icon: const Icon(Icons.arrow_downward),
+                              label: const Text('Present'),
+                            ),
+                          ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          // Overlap by one physical pixel so fractional device
+                          // scaling cannot expose a seam above the composer.
+                          bottom: -physicalPixel,
+                          child: TypingIndicator(
+                            names: backend.typingUserNames,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            VoiceMessageComposer(
+              key: ValueKey('voice-composer-${widget.room.id}'),
+              backend: backend,
+              roomId: widget.room.id,
+              replyToMessageId: _reply?.id,
+              onSent: () => setState(() => _reply = null),
+              builder: (startRecording) => _MobileComposer(
+                backend: backend,
+                controller: _composer,
+                focusNode: _focus,
+                sending: _sending,
+                attachments: _attachments,
+                contextMessage: _edit ?? _reply,
+                editing: _edit != null,
+                onClearContext: () => setState(() {
+                  if (_edit != null) {
+                    _customEmojiSpans = [];
+                    _composer.clear();
+                  }
+                  _reply = null;
+                  _edit = null;
+                }),
+                onRemoveAttachment: (attachment) =>
+                    setState(() => _attachments.remove(attachment)),
+                onToggleAttachmentSpoiler: (attachment) {
+                  final index = _attachments.indexOf(attachment);
+                  if (index < 0) return;
+                  setState(() {
+                    _attachments[index] = AttachmentDraft(
+                      bytes: attachment.bytes,
+                      name: attachment.name,
+                      mimeType: attachment.mimeType,
+                      spoiler: !attachment.spoiler,
+                      caption: attachment.caption,
+                    );
+                  });
+                },
+                onAdd: _showAddMenu,
+                onEmoji: _showEmojiPicker,
+                onPasteImage: _pasteClipboardImage,
+                onSend: _send,
+                onRecord: _edit == null ? startRecording : null,
+                onSchedule: _scheduleCurrentMessage,
+                onContentInserted: _insertKeyboardContent,
+                emojiMatches: _emojiMatches,
+                emojiCompletionActive: _emojiStart != null,
+                emojiSelection: _emojiSelection,
+                onEmojiSelected: _acceptEmojiCompletion,
+                onEmojiSelectionChanged: (index) =>
+                    setState(() => _emojiSelection = index),
+                onDismissEmojiCompletion: _clearEmojiCompletion,
+                mentionMatches: _mentionMatches,
+                onMentionSelected: _acceptMention,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1649,7 +1666,8 @@ class _MobileMessageRow extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (!grouped)
+                      if (!grouped ||
+                          HeaderMessageMetadata.has(context, message.id))
                         GestureDetector(
                           onTap: onProfile,
                           child: Row(
@@ -1673,6 +1691,11 @@ class _MobileMessageRow extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: context.deltiecord.muted,
+                                ),
+                              ),
+                              Flexible(
+                                child: HeaderMessageMetadata(
+                                  messageId: message.id,
                                 ),
                               ),
                               if (message.pending) ...[

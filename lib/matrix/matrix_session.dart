@@ -828,6 +828,9 @@ extension _MatrixSession on MatrixBackend {
           (content?['compactness'] as num?)?.toDouble().clamp(0, 1) ??
           (content?.tryGet<String>('density') == 'cozy' ? 0.15 : 0.5),
       themeMode: _readThemeMode(content),
+      themeJson: content?.tryGet<String>('theme_document') ?? '',
+      themeSettings:
+          content?.tryGetMap<String, Object?>('theme_parameters') ?? const {},
       interfaceScale:
           (content?['interface_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ??
           1,
@@ -1072,6 +1075,8 @@ extension _MatrixSession on MatrixBackend {
           'density': preferences.density.name,
           'compactness': preferences.compactness,
           'theme_mode': preferences.themeMode.name,
+          'theme_document': preferences.themeJson,
+          'theme_parameters': preferences.themeSettings,
           // Version 1 had only light/dark/oled. Keeping an explicit schema
           // marker lets legacy `dark` retain its old Regular appearance
           // while version 2 can use `dark` for the deeper charcoal palette.

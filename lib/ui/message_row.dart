@@ -11,6 +11,7 @@ String _formatMessageClock(DateTime value, {required bool use24HourTime}) {
 
 class _MessageRow extends StatefulWidget {
   const _MessageRow({
+    super.key,
     required this.message,
     this.showReceipt = false,
     this.receiptIds = const {},
@@ -331,7 +332,11 @@ class _MessageRowState extends State<_MessageRow> {
                                     ),
                                   ),
                                 ),
-                              if (widget.startsGroup)
+                              if (widget.startsGroup ||
+                                  HeaderMessageMetadata.has(
+                                    context,
+                                    message.id,
+                                  ))
                                 Row(
                                   children: [
                                     Flexible(
@@ -350,7 +355,7 @@ class _MessageRowState extends State<_MessageRow> {
                                             fontSize:
                                                 DeltiecordTypeScale.bigChat,
                                             fontWeight: FontWeight.w600,
-                                            height: 1.05,
+                                            height: 1.15,
                                           ),
                                         ),
                                       ),
@@ -365,6 +370,11 @@ class _MessageRowState extends State<_MessageRow> {
                                             fontSize: DeltiecordTypeScale.small,
                                             color: context.deltiecord.muted,
                                           ),
+                                    ),
+                                    Flexible(
+                                      child: HeaderMessageMetadata(
+                                        messageId: message.id,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -573,7 +583,7 @@ class _MessageRowState extends State<_MessageRow> {
                           (MediaQuery.textScalerOf(
                                         context,
                                       ).scale(DeltiecordTypeScale.bigChat) *
-                                      1.05 +
+                                      1.15 +
                                   MediaQuery.textScalerOf(
                                         context,
                                       ).scale(DeltiecordTypeScale.normal) *
@@ -586,7 +596,7 @@ class _MessageRowState extends State<_MessageRow> {
                         onTap: _showSenderProfile,
                         onTapDown: (details) =>
                             _profileAnchorPosition = details.globalPosition,
-                        child: CircleAvatar(
+                        child: ThemeAvatar(
                           radius: 19,
                           backgroundColor: context.deltiecord.elevated,
                           backgroundImage: message.avatarBytes == null

@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +45,8 @@ import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
 import 'deltiecord_theme.dart';
+import 'json_theme.dart';
+import '../services/spoiler_reveals.dart';
 import 'advanced_chat_dialogs.dart';
 import 'advanced_chat_views.dart';
 import 'poll_card.dart';
@@ -587,7 +590,7 @@ class _ChatShellState extends State<ChatShell> {
   Future<void> _attachFile() async {
     if (_sending) return;
     final result = await FilePicker.pickFiles(
-      withData: false,
+      withData: kIsWeb,
       allowMultiple: true,
     );
     if (!mounted || result == null || result.files.isEmpty) return;

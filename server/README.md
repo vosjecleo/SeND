@@ -44,3 +44,21 @@ separate per-client/global rate limits. These defaults can be tightened with
 bounded client download workers can import a full 120-item set. Place a shared
 limiter in front when running multiple proxy processes; like the GIPHY limiter,
 this process-local limit is intentionally not distributed.
+# Build 105 web preview bridge
+
+`web_preview.py` extends the existing media service at
+`/api/servers/preview`; `giphy_proxy.Handler.do_GET` dispatches that endpoint.
+If embedding this handler in another service, also forward that exact path to
+it and install `web_preview.py` alongside the media module. Deltie's existing
+`/api/servers` reverse-proxy route is sufficient; no new listener or nginx
+change is required. The PWA calls the HTTPS deltie.net endpoint, which allows
+only the chat.deltie.net browser origin and sends CORP headers for isolated PWA
+media playback. No Matrix credentials are sent to this service.
+
+The bridge accepts only HTTPS URLs on its explicit provider allowlist, pins
+connections to public DNS answers, validates each redirect, sends no upstream
+credentials, and limits concurrency, rate, duration, MIME types and sizes.
+Documents are limited to 1 MiB, images to 5 MiB, and video range responses to
+8 MiB (512 MiB maximum declared resource size). HTML is sandboxed with a
+no-script CSP; SVG and generic files are not served. This does not add media
+conversion, arbitrary-site proxying, or support for every provider's player.

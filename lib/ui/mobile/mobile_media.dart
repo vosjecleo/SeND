@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../services/spoiler_reveals.dart';
 import '../gif_favourite_button.dart';
 import '../../services/platform_io.dart';
 import 'dart:math';
@@ -60,14 +61,41 @@ class MobileAttachmentView extends StatefulWidget {
 }
 
 class _MobileAttachmentViewState extends State<MobileAttachmentView> {
-  bool _revealed = false;
   final _videoKey = GlobalKey<_MobilePlayerState>();
 
   @override
   Widget build(BuildContext context) {
     final attachment = widget.message.attachment!;
     final image = attachment.kind == AttachmentKind.image;
-    final hidden = attachment.spoiler && !_revealed;
+    final hidden =
+        attachment.spoiler &&
+        !SpoilerReveals.forBackend(widget.backend).contains(widget.message.id);
+    if (hidden) {
+      final screen = MediaQuery.sizeOf(context);
+      final frame = mobileMediaFrameSize(
+        maxWidth: min(420, max(120, screen.width - 76)),
+        maxHeight: min(520, max(180, screen.height * .52)),
+        width: attachment.width,
+        height: attachment.height,
+      );
+      return GestureDetector(
+        onTap: () => setState(
+          () => SpoilerReveals.forBackend(
+            widget.backend,
+          ).reveal(widget.message.id),
+        ),
+        child: Container(
+          width: frame.width,
+          height: frame.height,
+          decoration: BoxDecoration(
+            color: context.deltiecord.input.withValues(alpha: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: const Text('Spoiler — tap to reveal'),
+        ),
+      );
+    }
     final media = switch (attachment.kind) {
       AttachmentKind.image => _MobileImage(
         backend: widget.backend,
@@ -85,32 +113,13 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
       ),
     };
     return GestureDetector(
-      onTap: hidden
-          ? () => setState(() => _revealed = true)
-          : attachment.sticker
+      onTap: attachment.sticker
           ? _openStickerPack
           : image
           ? _openImageFullscreen
           : null,
-      onLongPress: hidden || attachment.sticker ? null : _showMediaActions,
-      child: Stack(
-        alignment: attachment.sticker ? Alignment.centerLeft : Alignment.center,
-        children: [
-          IgnorePointer(
-            ignoring: hidden,
-            child: AnimatedOpacity(
-              opacity: hidden ? 0.14 : 1,
-              duration: const Duration(milliseconds: 120),
-              child: media,
-            ),
-          ),
-          if (hidden)
-            const Chip(
-              avatar: Icon(Icons.visibility_off, size: 17),
-              label: Text('Spoiler — tap to reveal'),
-            ),
-        ],
-      ),
+      onLongPress: attachment.sticker ? null : _showMediaActions,
+      child: media,
     );
   }
 

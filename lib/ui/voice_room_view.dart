@@ -188,6 +188,13 @@ class _VoiceHeader extends StatelessWidget {
         else if (backend.voiceConnectionStatus == VoiceConnectionStatus.error)
           const Text('Connection error'),
         const SizedBox(width: 8),
+        if (backend.activeVoiceRoomId != null)
+          IconButton(
+            tooltip: 'Disconnect',
+            onPressed: backend.leaveVoiceRoom,
+            color: Theme.of(context).colorScheme.error,
+            icon: const Icon(Icons.call_end),
+          ),
         PopupMenuButton<_VoiceMenuAction>(
           tooltip: 'Voice options',
           icon: const Icon(Icons.more_horiz),

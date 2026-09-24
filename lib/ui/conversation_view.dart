@@ -70,7 +70,6 @@ class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
   final _timelineViewportKey = GlobalKey();
   final Map<String, GlobalKey> _messageKeys = {};
-  final Map<GlobalKey, String> _messageIdsByKey = {};
   String? _roomId;
   bool _loadingAnchoredHistory = false;
   bool _fillingInitialViewport = false;
@@ -319,7 +318,6 @@ class _ConversationState extends State<_Conversation> {
       _roomId = roomId;
       _scrolledAwayFromPresent = false;
       _messageKeys.clear();
-      _messageIdsByKey.clear();
       _navigationGeneration++;
       _highlightedMessageId = null;
       _newestMessageId = newestMessageId;
@@ -347,7 +345,6 @@ class _ConversationState extends State<_Conversation> {
 
   GlobalKey _messageKeyFor(String eventId) {
     final key = _messageKeys.putIfAbsent(eventId, GlobalKey.new);
-    _messageIdsByKey[key] = eventId;
     return key;
   }
 
@@ -570,11 +567,6 @@ class _ConversationState extends State<_Conversation> {
     _preserveAnchorAcrossMetadataLayout(messages);
     final retainedIds = messages.map((message) => message.id).toSet();
     _messageKeys.removeWhere((eventId, _) => !retainedIds.contains(eventId));
-    _messageIdsByKey
-      ..clear()
-      ..addEntries(
-        _messageKeys.entries.map((entry) => MapEntry(entry.value, entry.key)),
-      );
     final messageIndexes = <String, int>{
       for (var index = 0; index < messages.length; index++)
         messages[index].id: index,
@@ -586,522 +578,571 @@ class _ConversationState extends State<_Conversation> {
               message.attachment?.kind == AttachmentKind.video,
         )
         .toList(growable: false);
-    return DropRegion(
-      formats: Formats.standardFormats,
-      hitTestBehavior: HitTestBehavior.opaque,
-      onDropOver: _onDropOver,
-      onPerformDrop: _onPerformDrop,
-      onDropLeave: _onDropLeave,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Column(
-              children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  alignment: Alignment.centerLeft,
-                  color: context.deltiecord.surface,
-                  child: Row(
-                    children: [
-                      _RoomIcon(room: room, size: 30),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              room.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: DeltiecordTypeScale.bigUi,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (room.isDirect)
-                              _ConversationPresence(presence: room.presence)
-                            else if (room.topic.isNotEmpty)
-                              Text(
-                                room.topic,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: DeltiecordTypeScale.normal,
-                                  color: context.deltiecord.muted,
+    return ReceiptPlacement(
+      messages: messages,
+      receiptIds: receipts,
+      hiddenIds: mediaAlbums.hiddenMessageIds,
+      contentInset: 80,
+      child: DropRegion(
+        formats: Formats.standardFormats,
+        hitTestBehavior: HitTestBehavior.opaque,
+        onDropOver: _onDropOver,
+        onPerformDrop: _onPerformDrop,
+        onDropLeave: _onDropLeave,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Column(
+                children: [
+                  ThemeSurface(
+                    color: context.deltiecord.surface,
+                    child: Container(
+                      height: 56,
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          _RoomIcon(room: room, size: 30),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  room.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: DeltiecordTypeScale.bigUi,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Search',
-                        onPressed: showSearch,
-                        icon: const Icon(Icons.search),
-                      ),
-                      IconButton(
-                        tooltip: 'Start call',
-                        onPressed: () => backend.joinVoiceRoom(room.id),
-                        icon: const Icon(Icons.call_outlined),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Room tools',
-                        icon: const Icon(Icons.more_horiz, size: 22),
-                        onSelected: (value) async {
-                          switch (value) {
-                            case 'notifications':
-                              await showRoomNotificationControls(
-                                context,
-                                backend,
-                                room,
-                              );
-                            case 'search':
-                              showSearch();
-                            case 'pins':
-                              _showPins();
-                            case 'members':
-                              widget.onShowMembers();
-                            case 'call':
-                              backend.joinVoiceRoom(room.id);
-                            case 'copy-link':
-                              Clipboard.setData(
-                                ClipboardData(
-                                  text: 'https://matrix.to/#/${room.id}',
-                                ),
-                              );
-                            case 'first-unread':
-                              _jumpToFirstUnread();
-                            case 'saved':
-                              await showSavedMessages(
-                                context,
-                                backend,
-                                onOpen: (roomId, eventId) async {
-                                  if (backend.selectedRoom?.id != roomId) {
-                                    await backend.selectRoom(roomId);
-                                  }
-                                  await backend.jumpToEvent(eventId);
-                                },
-                              );
-                            case 'media':
-                              await showRoomSearchDialog(
-                                context,
-                                backend,
-                                onOpen: _jumpToEvent,
-                                initialSection: RoomSearchSection.media,
-                              );
-                            case 'inbox':
-                              await showUnifiedInbox(
-                                context,
-                                backend,
-                                onOpen: (item) async {
-                                  if (backend.selectedRoom?.id != item.roomId) {
-                                    await backend.selectRoom(item.roomId);
-                                  }
-                                  if (item.eventId != null) {
-                                    await backend.jumpToEvent(item.eventId!);
-                                  }
-                                },
-                              );
-                            case 'all':
-                              backend.setRoomNotificationMode(
-                                room.id,
-                                RoomNotificationMode.allMessages,
-                              );
-                            case 'mentions':
-                              backend.setRoomNotificationMode(
-                                room.id,
-                                RoomNotificationMode.mentionsOnly,
-                              );
-                            case 'mute':
-                              backend.setRoomNotificationMode(
-                                room.id,
-                                RoomNotificationMode.muted,
-                              );
-                            case 'hour':
-                              backend.muteRoomUntil(
-                                room.id,
-                                DateTime.now().add(const Duration(hours: 1)),
-                              );
-                            case 'tomorrow':
-                              final now = DateTime.now();
-                              backend.muteRoomUntil(
-                                room.id,
-                                DateTime(now.year, now.month, now.day + 1, 9),
-                              );
-                            case 'unread':
-                              backend.markRoomUnread(
-                                room.id,
-                                !room.markedUnread,
-                              );
-                            case 'invite':
-                              showInviteMember(context, backend);
-                            case 'aliases':
-                              showRoomAliasEditor(context, backend, room);
-                            case 'previews':
-                              backend.setNotificationPreviewsEnabled(
-                                !backend.notificationPreviewsEnabled,
-                              );
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'pins',
-                            child: Text('Pinned messages'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'members',
-                            child: Text('Members'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'copy-link',
-                            child: Text('Copy room link'),
-                          ),
-                          if (backend.firstUnreadMessageId != null)
-                            const PopupMenuItem(
-                              value: 'first-unread',
-                              child: Text('Jump to first unread'),
+                                if (room.isDirect)
+                                  _ConversationPresence(presence: room.presence)
+                                else if (room.topic.isNotEmpty)
+                                  Text(
+                                    room.topic,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: DeltiecordTypeScale.normal,
+                                      color: context.deltiecord.muted,
+                                    ),
+                                  ),
+                              ],
                             ),
-                          const PopupMenuItem(
-                            value: 'media',
-                            child: Text('Media and links'),
                           ),
-                          const PopupMenuItem(
-                            value: 'saved',
-                            child: Text('Saved and scheduled'),
+                          IconButton(
+                            tooltip: 'Search',
+                            onPressed: showSearch,
+                            icon: const ThemeIcon(Icons.search),
                           ),
-                          const PopupMenuItem(
-                            value: 'inbox',
-                            child: Text('Inbox'),
+                          IconButton(
+                            tooltip: backend.activeVoiceRoomId != null
+                                ? 'Disconnect'
+                                : 'Start call',
+                            onPressed: () => backend.activeVoiceRoomId != null
+                                ? backend.leaveVoiceRoom()
+                                : backend.joinVoiceRoom(room.id),
+                            icon: ThemeIcon(
+                              backend.activeVoiceRoomId != null
+                                  ? Icons.call_end
+                                  : Icons.call_outlined,
+                            ),
                           ),
-                          const PopupMenuDivider(),
+                          PopupMenuButton<String>(
+                            tooltip: 'Room tools',
+                            icon: const ThemeIcon(Icons.more_horiz, size: 22),
+                            onSelected: (value) async {
+                              switch (value) {
+                                case 'notifications':
+                                  await showRoomNotificationControls(
+                                    context,
+                                    backend,
+                                    room,
+                                  );
+                                case 'search':
+                                  showSearch();
+                                case 'pins':
+                                  _showPins();
+                                case 'members':
+                                  widget.onShowMembers();
+                                case 'call':
+                                  backend.joinVoiceRoom(room.id);
+                                case 'copy-link':
+                                  Clipboard.setData(
+                                    ClipboardData(
+                                      text: 'https://matrix.to/#/${room.id}',
+                                    ),
+                                  );
+                                case 'first-unread':
+                                  _jumpToFirstUnread();
+                                case 'saved':
+                                  await showSavedMessages(
+                                    context,
+                                    backend,
+                                    onOpen: (roomId, eventId) async {
+                                      if (backend.selectedRoom?.id != roomId) {
+                                        await backend.selectRoom(roomId);
+                                      }
+                                      await backend.jumpToEvent(eventId);
+                                    },
+                                  );
+                                case 'media':
+                                  await showRoomSearchDialog(
+                                    context,
+                                    backend,
+                                    onOpen: _jumpToEvent,
+                                    initialSection: RoomSearchSection.media,
+                                  );
+                                case 'inbox':
+                                  await showUnifiedInbox(
+                                    context,
+                                    backend,
+                                    onOpen: (item) async {
+                                      if (backend.selectedRoom?.id !=
+                                          item.roomId) {
+                                        await backend.selectRoom(item.roomId);
+                                      }
+                                      if (item.eventId != null) {
+                                        await backend.jumpToEvent(
+                                          item.eventId!,
+                                        );
+                                      }
+                                    },
+                                  );
+                                case 'all':
+                                  backend.setRoomNotificationMode(
+                                    room.id,
+                                    RoomNotificationMode.allMessages,
+                                  );
+                                case 'mentions':
+                                  backend.setRoomNotificationMode(
+                                    room.id,
+                                    RoomNotificationMode.mentionsOnly,
+                                  );
+                                case 'mute':
+                                  backend.setRoomNotificationMode(
+                                    room.id,
+                                    RoomNotificationMode.muted,
+                                  );
+                                case 'hour':
+                                  backend.muteRoomUntil(
+                                    room.id,
+                                    DateTime.now().add(
+                                      const Duration(hours: 1),
+                                    ),
+                                  );
+                                case 'tomorrow':
+                                  final now = DateTime.now();
+                                  backend.muteRoomUntil(
+                                    room.id,
+                                    DateTime(
+                                      now.year,
+                                      now.month,
+                                      now.day + 1,
+                                      9,
+                                    ),
+                                  );
+                                case 'unread':
+                                  backend.markRoomUnread(
+                                    room.id,
+                                    !room.markedUnread,
+                                  );
+                                case 'invite':
+                                  showInviteMember(context, backend);
+                                case 'aliases':
+                                  showRoomAliasEditor(context, backend, room);
+                                case 'previews':
+                                  backend.setNotificationPreviewsEnabled(
+                                    !backend.notificationPreviewsEnabled,
+                                  );
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'pins',
+                                child: Text('Pinned messages'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'members',
+                                child: Text('Members'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'copy-link',
+                                child: Text('Copy room link'),
+                              ),
+                              if (backend.firstUnreadMessageId != null)
+                                const PopupMenuItem(
+                                  value: 'first-unread',
+                                  child: Text('Jump to first unread'),
+                                ),
+                              const PopupMenuItem(
+                                value: 'media',
+                                child: Text('Media and links'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'saved',
+                                child: Text('Saved and scheduled'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'inbox',
+                                child: Text('Inbox'),
+                              ),
+                              const PopupMenuDivider(),
 
-                          const PopupMenuItem(
-                            value: 'notifications',
-                            child: Text('Notification settings'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'unread',
-                            child: Text('Toggle read / unread'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'invite',
-                            child: Text('Invite member'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'aliases',
-                            child: Text('Room aliases'),
-                          ),
-                          CheckedPopupMenuItem(
-                            value: 'previews',
-                            checked: backend.notificationPreviewsEnabled,
-                            child: const Text('Show message previews'),
+                              const PopupMenuItem(
+                                value: 'notifications',
+                                child: Text('Notification settings'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'unread',
+                                child: Text('Toggle read / unread'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'invite',
+                                child: Text('Invite member'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'aliases',
+                                child: Text('Room aliases'),
+                              ),
+                              CheckedPopupMenuItem(
+                                value: 'previews',
+                                checked: backend.notificationPreviewsEnabled,
+                                child: const Text('Show message previews'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                if (backend.error case final error?)
-                  MaterialBanner(
-                    content: Text(error),
-                    actions: [
-                      TextButton(
-                        onPressed: backend.clearError,
-                        child: const Text('Dismiss'),
-                      ),
-                    ],
-                  ),
-                EncryptionAttentionBanner(backend: backend, room: room),
-                Expanded(
-                  child: Stack(
-                    key: const Key('conversation-timeline-area'),
-                    children: [
-                      Positioned.fill(
-                        child: KeyedSubtree(
-                          key: _timelineViewportKey,
-                          child: Listener(
-                            onPointerDown: _noteTimelineUserInput,
-                            onPointerMove: _noteTimelineUserInput,
-                            onPointerSignal: _noteTimelineUserInput,
-                            child: backend.timelineLoading && messages.isEmpty
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : backend.messages.isEmpty
-                                ? const Center(child: Text('No messages yet'))
-                                : ListView.builder(
-                                    key: const Key('message-timeline'),
-                                    controller: _scrollController,
-                                    reverse: true,
-                                    physics: const ClampingScrollPhysics(),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      0,
-                                      10,
-                                      0,
-                                      typingIndicatorHeight + 1,
-                                    ),
-                                    itemCount:
-                                        messages.length +
-                                        (backend.historyLoading ||
-                                                backend.canLoadMoreHistory
-                                            ? 1
-                                            : 0),
-                                    findChildIndexCallback: (key) {
-                                      final messageId = key is GlobalKey
-                                          ? _messageIdsByKey[key]
-                                          : null;
-                                      if (messageId == null) return null;
-                                      return messageIndexes[messageId];
-                                    },
-                                    itemBuilder: (context, index) {
-                                      if (index == messages.length) {
-                                        return SizedBox(
-                                          height: 64,
-                                          child: Center(
-                                            child: backend.historyLoading
-                                                ? const SizedBox.square(
-                                                    dimension: 20,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                        ),
-                                                  )
-                                                : TextButton.icon(
-                                                    onPressed:
-                                                        _loadOlderAnchored,
-                                                    icon: const Icon(
-                                                      Icons.history,
-                                                      size: 17,
-                                                    ),
-                                                    label: const Text(
-                                                      'Load older messages',
-                                                    ),
-                                                  ),
-                                          ),
-                                        );
-                                      }
-                                      final message = messages[index];
-                                      if (mediaAlbums.hiddenMessageIds.contains(
-                                        message.id,
-                                      )) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      final older = index + 1 < messages.length
-                                          ? messages[index + 1]
-                                          : null;
-                                      final startsGroup =
-                                          older == null ||
-                                          older.system ||
-                                          message.system ||
-                                          older.senderId != message.senderId ||
-                                          message.timestamp.difference(
-                                                older.timestamp,
-                                              ) >
-                                              const Duration(minutes: 7) ||
-                                          message.reply != null;
-                                      return Column(
-                                        key: _messageKeyFor(message.id),
-                                        children: [
-                                          if (message.id ==
-                                              backend.firstUnreadMessageId)
-                                            const _UnreadDivider(),
-                                          _MessageRow(
-                                            message: message,
-                                            receiptIds: receipts,
-                                            showReceipt: receipts.contains(
-                                              message.id,
-                                            ),
-                                            albumMessages:
-                                                mediaAlbums.albums[message.id],
-                                            highlighted:
-                                                _highlightedMessageId ==
-                                                message.id,
-                                            startsGroup: startsGroup,
-                                            onReply: () =>
-                                                widget.onReply(message),
-                                            onEdit:
-                                                message.own && !message.redacted
-                                                ? () => widget.onEdit(message)
-                                                : null,
-                                            onDelete: message.canRedact
-                                                ? () => _deleteMessage(message)
-                                                : null,
-                                            onReact:
-                                                message.redacted ||
-                                                    message.system
-                                                ? null
-                                                : () => _pickReaction(message),
-                                            onRetry: message.failed
-                                                ? () => backend.retryMessage(
-                                                    message.id,
-                                                  )
-                                                : null,
-                                            onCancel:
-                                                message.pending ||
-                                                    message.failed
-                                                ? () => backend
-                                                      .cancelPendingMessage(
-                                                        message.id,
-                                                      )
-                                                : null,
-                                            onToggleReaction: (reaction) =>
-                                                backend.toggleReaction(
-                                                  message.id,
-                                                  reaction.key,
-                                                  customEmoji:
-                                                      reaction.customEmoji,
-                                                ),
-                                            onJumpToReply: _jumpToEvent,
-                                            mediaMessages: mediaMessages,
-                                            backend: backend,
-                                            onShowProfile: widget.onShowProfile,
-                                            onActionsShown:
-                                                _registerMessageActions,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ),
-                      ),
-                      if (backend.timelineLoading && messages.isNotEmpty)
-                        const Positioned(
-                          left: 0,
-                          right: 0,
-                          top: 0,
-                          child: LinearProgressIndicator(minHeight: 2),
-                        ),
-                      if (backend.canLoadMoreFuture)
-                        Positioned(
-                          right: 16,
-                          bottom: 58,
-                          child: FilledButton.tonalIcon(
-                            key: const Key('load-newer-messages'),
-                            onPressed: backend.historyLoading
-                                ? null
-                                : _loadNewerAnchored,
-                            icon: backend.historyLoading
-                                ? const SizedBox.square(
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.update, size: 17),
-                            label: const Text('Load newer messages'),
-                          ),
-                        ),
-                      if (!backend.atTimelinePresent ||
-                          _scrolledAwayFromPresent)
-                        Positioned(
-                          right: 16,
-                          bottom: 12,
-                          child: FilledButton.tonalIcon(
-                            onPressed: _returnToPresent,
-                            icon: const Icon(
-                              Icons.vertical_align_bottom,
-                              size: 17,
-                            ),
-                            label: Text(
-                              room.unreadCount > 0
-                                  ? 'Jump to present (${room.unreadCount})'
-                                  : 'Jump to present',
-                            ),
-                          ),
-                        ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: TypingIndicator(names: backend.typingUserNames),
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.replyingTo case final message?)
-                  _ComposerContext(
-                    label: 'Replying to ${message.sender}',
-                    body: message.body,
-                    onCancel: widget.onCancelComposerAction,
-                  )
-                else if (widget.editingMessage case final message?)
-                  _ComposerContext(
-                    label: 'Editing message',
-                    body: message.body,
-                    onCancel: widget.onCancelComposerAction,
-                  ),
-                if (widget.mentionSuggestions.isNotEmpty)
-                  _MentionPicker(
-                    suggestions: widget.mentionSuggestions,
-                    selectedIndex: widget.mentionSelectionIndex,
-                    onSelected: widget.onMentionSelected,
-                  ),
-                VoiceMessageComposer(
-                  key: ValueKey('voice-composer-${room.id}'),
-                  backend: backend,
-                  roomId: room.id,
-                  replyToMessageId: widget.replyingTo?.id,
-                  onSent: widget.onCancelComposerAction,
-                  builder: (startRecording) => _RichComposer(
-                    key: widget.composerKey,
-                    backend: backend,
-                    controller: widget.controller,
-                    focusNode: widget.composerFocus,
-                    roomName: room.name,
-                    replyToMessageId: widget.replyingTo?.id,
-                    // The editor remains live while this only gates attachment
-                    // and submit controls for the in-flight request.
-                    enabled: !widget.sending,
-                    sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-                    onSend: widget.onSend,
-                    onRecord: widget.editingMessage == null
-                        ? startRecording
-                        : null,
-                    onSchedule: widget.onSchedule,
-                    onPoll: widget.onPoll,
-                    onSticker: widget.onSticker,
-                    onAttach: widget.onAttach,
-                    onGif: widget.onGif,
-                    onPasteImage: widget.onPasteImage,
-                    pendingAttachments: widget.pendingAttachments,
-                    onRemoveAttachment: widget.onRemoveAttachment,
-                    onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
-                    mentionSuggestions: widget.mentionSuggestions,
-                    mentionSelectionIndex: widget.mentionSelectionIndex,
-                    onMentionSelected: widget.onMentionSelected,
-                    onMentionSelectionChanged: widget.onMentionSelectionChanged,
-                    maxHeight: max(
-                      _bottomPanelHeightFor(context),
-                      (MediaQuery.sizeOf(context).height - 56) / 3,
                     ),
                   ),
-                ),
-              ],
+                  if (backend.error case final error?)
+                    MaterialBanner(
+                      content: Text(error),
+                      actions: [
+                        TextButton(
+                          onPressed: backend.clearError,
+                          child: const Text('Dismiss'),
+                        ),
+                      ],
+                    ),
+                  EncryptionAttentionBanner(backend: backend, room: room),
+                  Expanded(
+                    child: Stack(
+                      key: const Key('conversation-timeline-area'),
+                      children: [
+                        Positioned.fill(
+                          child: KeyedSubtree(
+                            key: _timelineViewportKey,
+                            child: Listener(
+                              onPointerDown: _noteTimelineUserInput,
+                              onPointerMove: _noteTimelineUserInput,
+                              onPointerSignal: _noteTimelineUserInput,
+                              child: backend.timelineLoading && messages.isEmpty
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : backend.messages.isEmpty
+                                  ? const Center(child: Text('No messages yet'))
+                                  : ListView.builder(
+                                      key: const Key('message-timeline'),
+                                      controller: _scrollController,
+                                      reverse: true,
+                                      physics: const ClampingScrollPhysics(),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        0,
+                                        10,
+                                        0,
+                                        typingIndicatorHeight + 1,
+                                      ),
+                                      itemCount:
+                                          messages.length +
+                                          (backend.historyLoading ||
+                                                  backend.canLoadMoreHistory
+                                              ? 1
+                                              : 0),
+                                      findChildIndexCallback: (key) {
+                                        final messageId =
+                                            key is ValueKey<String>
+                                            ? key.value
+                                            : null;
+                                        if (messageId == null) return null;
+                                        return messageIndexes[messageId];
+                                      },
+                                      itemBuilder: (context, index) {
+                                        if (index == messages.length) {
+                                          return SizedBox(
+                                            height: 64,
+                                            child: Center(
+                                              child: backend.historyLoading
+                                                  ? const SizedBox.square(
+                                                      dimension: 20,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                          ),
+                                                    )
+                                                  : TextButton.icon(
+                                                      onPressed:
+                                                          _loadOlderAnchored,
+                                                      icon: const ThemeIcon(
+                                                        Icons.history,
+                                                        size: 17,
+                                                      ),
+                                                      label: const Text(
+                                                        'Load older messages',
+                                                      ),
+                                                    ),
+                                            ),
+                                          );
+                                        }
+                                        final message = messages[index];
+                                        if (mediaAlbums.hiddenMessageIds
+                                            .contains(message.id)) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        final older =
+                                            index + 1 < messages.length
+                                            ? messages[index + 1]
+                                            : null;
+                                        final startsGroup =
+                                            older == null ||
+                                            !DateUtils.isSameDay(
+                                              older.timestamp.toLocal(),
+                                              message.timestamp.toLocal(),
+                                            ) ||
+                                            older.system ||
+                                            message.system ||
+                                            older.senderId !=
+                                                message.senderId ||
+                                            message.timestamp.difference(
+                                                  older.timestamp,
+                                                ) >
+                                                const Duration(minutes: 7) ||
+                                            message.reply != null;
+                                        return Column(
+                                          key: ValueKey(message.id),
+                                          children: [
+                                            if (older == null ||
+                                                !DateUtils.isSameDay(
+                                                  older.timestamp.toLocal(),
+                                                  message.timestamp.toLocal(),
+                                                ))
+                                              MessageDaySeparator(
+                                                date: message.timestamp,
+                                              ),
+                                            if (message.id ==
+                                                backend.firstUnreadMessageId)
+                                              const _UnreadDivider(),
+                                            _MessageRow(
+                                              key: _messageKeyFor(message.id),
+                                              message: message,
+                                              receiptIds: receipts,
+                                              showReceipt: receipts.contains(
+                                                message.id,
+                                              ),
+                                              albumMessages: mediaAlbums
+                                                  .albums[message.id],
+                                              highlighted:
+                                                  _highlightedMessageId ==
+                                                  message.id,
+                                              startsGroup: startsGroup,
+                                              onReply: () =>
+                                                  widget.onReply(message),
+                                              onEdit:
+                                                  message.own &&
+                                                      !message.redacted
+                                                  ? () => widget.onEdit(message)
+                                                  : null,
+                                              onDelete: message.canRedact
+                                                  ? () =>
+                                                        _deleteMessage(message)
+                                                  : null,
+                                              onReact:
+                                                  message.redacted ||
+                                                      message.system
+                                                  ? null
+                                                  : () =>
+                                                        _pickReaction(message),
+                                              onRetry: message.failed
+                                                  ? () => backend.retryMessage(
+                                                      message.id,
+                                                    )
+                                                  : null,
+                                              onCancel:
+                                                  message.pending ||
+                                                      message.failed
+                                                  ? () => backend
+                                                        .cancelPendingMessage(
+                                                          message.id,
+                                                        )
+                                                  : null,
+                                              onToggleReaction: (reaction) =>
+                                                  backend.toggleReaction(
+                                                    message.id,
+                                                    reaction.key,
+                                                    customEmoji:
+                                                        reaction.customEmoji,
+                                                  ),
+                                              onJumpToReply: _jumpToEvent,
+                                              mediaMessages: mediaMessages,
+                                              backend: backend,
+                                              onShowProfile:
+                                                  widget.onShowProfile,
+                                              onActionsShown:
+                                                  _registerMessageActions,
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ),
+                        ),
+                        if (backend.timelineLoading && messages.isNotEmpty)
+                          const Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 0,
+                            child: LinearProgressIndicator(minHeight: 2),
+                          ),
+                        if (backend.canLoadMoreFuture)
+                          Positioned(
+                            right: 16,
+                            bottom: 58,
+                            child: FilledButton.tonalIcon(
+                              key: const Key('load-newer-messages'),
+                              onPressed: backend.historyLoading
+                                  ? null
+                                  : _loadNewerAnchored,
+                              icon: backend.historyLoading
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const ThemeIcon(Icons.update, size: 17),
+                              label: const Text('Load newer messages'),
+                            ),
+                          ),
+                        if (!backend.atTimelinePresent ||
+                            _scrolledAwayFromPresent)
+                          Positioned(
+                            right: 16,
+                            bottom: 12,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _returnToPresent,
+                              icon: const ThemeIcon(
+                                Icons.vertical_align_bottom,
+                                size: 17,
+                              ),
+                              label: Text(
+                                room.unreadCount > 0
+                                    ? 'Jump to present (${room.unreadCount})'
+                                    : 'Jump to present',
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: TypingIndicator(
+                            names: backend.typingUserNames,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.replyingTo case final message?)
+                    _ComposerContext(
+                      label: 'Replying to ${message.sender}',
+                      body: message.body,
+                      onCancel: widget.onCancelComposerAction,
+                    )
+                  else if (widget.editingMessage case final message?)
+                    _ComposerContext(
+                      label: 'Editing message',
+                      body: message.body,
+                      onCancel: widget.onCancelComposerAction,
+                    ),
+                  if (widget.mentionSuggestions.isNotEmpty)
+                    _MentionPicker(
+                      suggestions: widget.mentionSuggestions,
+                      selectedIndex: widget.mentionSelectionIndex,
+                      onSelected: widget.onMentionSelected,
+                    ),
+                  VoiceMessageComposer(
+                    key: ValueKey('voice-composer-${room.id}'),
+                    backend: backend,
+                    roomId: room.id,
+                    replyToMessageId: widget.replyingTo?.id,
+                    onSent: widget.onCancelComposerAction,
+                    builder: (startRecording) => _RichComposer(
+                      key: widget.composerKey,
+                      backend: backend,
+                      controller: widget.controller,
+                      focusNode: widget.composerFocus,
+                      roomName: room.name,
+                      replyToMessageId: widget.replyingTo?.id,
+                      // The editor remains live while this only gates attachment
+                      // and submit controls for the in-flight request.
+                      enabled: !widget.sending,
+                      sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
+                      onSend: widget.onSend,
+                      onRecord: widget.editingMessage == null
+                          ? startRecording
+                          : null,
+                      onSchedule: widget.onSchedule,
+                      onPoll: widget.onPoll,
+                      onSticker: widget.onSticker,
+                      onAttach: widget.onAttach,
+                      onGif: widget.onGif,
+                      onPasteImage: widget.onPasteImage,
+                      pendingAttachments: widget.pendingAttachments,
+                      onRemoveAttachment: widget.onRemoveAttachment,
+                      onToggleAttachmentSpoiler:
+                          widget.onToggleAttachmentSpoiler,
+                      mentionSuggestions: widget.mentionSuggestions,
+                      mentionSelectionIndex: widget.mentionSelectionIndex,
+                      onMentionSelected: widget.onMentionSelected,
+                      onMentionSelectionChanged:
+                          widget.onMentionSelectionChanged,
+                      maxHeight: max(
+                        _bottomPanelHeightFor(context),
+                        (MediaQuery.sizeOf(context).height - 56) / 3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (_draggingFiles)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(
-                  color: const Color(0xaa111216),
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 16,
+            if (_draggingFiles)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ColoredBox(
+                    color: const Color(0xaa111216),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.deltiecord.elevated,
+                          borderRadius: DeltiecordCorners.borderRadius,
+                        ),
+                        child: const Text('Drop files to attach'),
                       ),
-                      decoration: BoxDecoration(
-                        color: context.deltiecord.elevated,
-                        borderRadius: DeltiecordCorners.borderRadius,
-                      ),
-                      child: const Text('Drop files to attach'),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1153,7 +1194,7 @@ class _EmptyConversation extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.forum_outlined, size: 46),
+        ThemeIcon(Icons.forum_outlined, size: 46),
         SizedBox(height: 12),
         Text('Choose a room to start chatting'),
       ],

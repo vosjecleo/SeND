@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "id": "deltiecord.aero",
+  "name": "Aero Glass",
+  "extends": "dark",
+  "description": "Blue-grey glass, soft reflections and restrained Windows Vista/7-inspired chrome.",
+  "settings": [
+    {"id":"accent1","label":"Accent 1 — glass blue","type":"color","default":"#8ACFFF"},
+    {"id":"accent2","label":"Accent 2 — reflection","type":"color","default":"#B9E5E8"},
+    {"id":"variant","label":"Variant","type":"choice","choices":["Dark","Light"],"default":"Dark"},
+    {"id":"opacity","label":"Glass opacity","type":"number","min":0.65,"max":1,"default":0.86},
+    {"id":"blur","label":"Glass blur","type":"number","min":0,"max":8,"default":4},
+    {"id":"gloss","label":"Reflection strength","type":"number","min":0,"max":0.3,"default":0.22},
+    {"id":"texture","label":"Glass texture","type":"number","min":0,"max":0.08,"default":0.015},
+    {"id":"popupOpacity","label":"Popup glass opacity","type":"number","min":0.55,"max":1,"default":0.65},
+    {"id":"motion","label":"Hover transition (ms)","type":"number","min":0,"max":180,"default":120},
+    {"id":"icons","label":"Icon treatment","type":"choice","choices":["Classic","Outline"],"default":"Classic"},
+    {"id":"iconPack","label":"Icon pack","type":"choice","choices":["Tango","Material"],"default":"Tango"}
+  ],
+  "tokens": {
+    "accent.primary":{"setting":"accent1"},
+    "accent.secondary":{"setting":"accent2"},
+    "surface.background":"#152735",
+    "surface.rail":"#162936",
+    "surface.panel":"#203845",
+    "surface.content":"#192B37",
+    "surface.raised":"#2A4456",
+    "surface.input":"#1A2B38",
+    "surface.island":"#263F50",
+    "surface.hover":"#355466",
+    "border.subtle":"#526F82",
+    "text.primary":"#EFF7FC",
+    "text.secondary":"#B6CCD9",
+    "selection.fill":{"mix":["#294759",{"setting":"accent1"}],"amount":0.18},
+    "selection.border":"#769CB4",
+    "glass.opacity":{"setting":"opacity"},
+    "glass.blur":{"setting":"blur"},
+    "glass.gloss":{"setting":"gloss"},
+    "glass.glow":0.06,
+    "shape.cardRadius":4,
+    "avatar.shape":"glass-square",
+    "icons.style":{"setting":"icons"},
+    "icons.pack":{"setting":"iconPack"}
+  },
+  "surfaces": {
+    "header": {
+      "gloss":{"setting":"gloss"},
+      "gradient":["#6C8EA5","#44677F","#29495F","#365D77"],
+      "border":"#163A53","highlight":"#A8CEE6",
+      "opacity":{"setting":"opacity"},"blur":{"setting":"blur"},
+      "texture":{"setting":"texture"},"radius":6,"shadow":0.18
+    },
+    "island": {
+      "gloss":{"setting":"gloss"},
+      "gradient":["#42647B","#2D4A60","#203B50","#304F65"],
+      "border":"#102B3F","highlight":"#7898AE","radius":6,
+      "texture":{"setting":"texture"},"shadow":0.16
+    },
+    "button": {
+      "gloss":{"setting":"gloss"},
+      "gradient":["#7298B3","#466A85","#254C69","#3D7194"],
+      "border":"#132F43","highlight":"#B4D7EE","radius":5,
+      "hover":"#1839BFFF","transitionMs":{"setting":"motion"},"shadow":0.18
+    },
+    "popup": {
+      "gloss":{"setting":"gloss"},
+      "gradient":["#587D98","#294D67","#203C53","#355C77"],
+      "border":"#102C41","highlight":"#AFD5EF","radius":4,
+      "opacity":{"setting":"popupOpacity"},"blur":8,
+      "texture":{"setting":"texture"},"shadow":0.3
+    }
+  },
+  "variants": {
+    "Light": {
+      "extends":"light",
+      "surfaces": {
+        "header": {
+          "gloss":{"setting":"gloss"},
+          "gradient":["#F3FAFF","#D5E8F4","#A8C9E0","#DCEBF5"],
+          "border":"#6E91AA","highlight":"#FFFFFF","radius":6,
+          "opacity":{"setting":"opacity"},"blur":{"setting":"blur"},
+          "texture":{"setting":"texture"},"shadow":0.12
+        },
+        "island": {
+          "gloss":{"setting":"gloss"},
+          "gradient":["#F4F8FB","#E0E9F0","#CCDAE6","#ECF3F8"],
+          "border":"#7D9BAF","highlight":"#FFFFFF","radius":6,
+          "texture":{"setting":"texture"},"shadow":0.12
+        },
+        "button": {
+          "gloss":{"setting":"gloss"},
+          "gradient":["#FFFFFF","#EAF3FA","#C1D8E9","#E2F1FC"],
+          "border":"#678FAE","highlight":"#FFFFFF","radius":5,
+          "hover":"#2039BFFF","transitionMs":{"setting":"motion"},"shadow":0.16
+        },
+        "popup": {
+          "gloss":{"setting":"gloss"},
+          "gradient":["#F4FAFF","#D9EAF5","#C1D8E9","#E7F2FA"],
+          "border":"#5A839F","highlight":"#FFFFFF","radius":4,
+          "opacity":{"setting":"popupOpacity"},"blur":8,
+          "texture":{"setting":"texture"},"shadow":0.26
+        }
+      },
+      "tokens": {
+        "accent.primary":{"mix":[{"setting":"accent1"},"#082844"],"amount":0.7},
+        "accent.secondary":{"mix":[{"setting":"accent2"},"#123D45"],"amount":0.7},
+        "surface.background":"#EDF2F5",
+        "surface.rail":"#B5CBD9",
+        "surface.panel":"#C6DBE7",
+        "surface.content":"#F3F7FA",
+        "surface.raised":"#E4EFF6",
+        "surface.input":"#FFFFFF",
+        "surface.island":"#C7DCE9",
+        "surface.hover":"#BCD4E4",
+        "border.subtle":"#89A7BD",
+        "text.primary":"#172E3D",
+        "text.secondary":"#425E70",
+        "selection.fill":"#BCD9EE",
+        "selection.border":"#729BBC"
+      }
+    }
+  },
+  "extensions": {}
+}

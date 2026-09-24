@@ -1,5 +1,66 @@
 # Changelog
 
+## Deltiecord 0.9.33 build 105 — 2026-09-24
+
+- Fix web attachment selection by reading browser File objects directly while
+  preserving Safari's user activation for camera/photo/file pickers. Avoid
+  CSP-blocked blob fetches and bound mobile selections to 20 files / 64 MiB.
+- Use same-origin Telegram import requests on web and leave the browser's
+  User-Agent alone. Close the expression picker before pack management/import,
+  surface import failures and refresh the catalogue afterwards.
+- Resolve shared sticker/emoji packs across joined servers, not just the
+  currently selected room. Non-admin members can subscribe; subscribed packs
+  refresh when their server state changes. Report subscription failures.
+- Add a web-only preview bridge for supported public providers, with validated
+  DNS-pinned HTTPS connections, redirect/type/size/range checks and request
+  limits. Keep native preview networking unchanged and existing opt-in policy.
+- Repair stale iOS viewport pan after keyboard dismissal without interfering
+  with active typing or pinch zoom. Safari's native accessory bar remains;
+  real-device hit-testing confirmation is still needed.
+- Refresh the timeline when foreground focus actually returns, including quick
+  resume/focus races. Sort confirmed messages by server timestamp with stable
+  event-ID ties, keeping pending local echoes provisional.
+- Keep rich spoiler-text receipts on the content row and expose uncategorised
+  channel reorder controls in server settings.
+
+- Review iteration 5: full-width centred date separators; compact two-line
+  profile speech bubbles alongside avatars, pronouns beside Matrix IDs, plain
+  biographies and local time underneath. Apply themes without transitions on
+  desktop too, avoid stale preferences in settings callbacks, and report
+  theme-application failures rather than silently ignoring them.
+
+- Review iteration 4: match the profile-column underlayer to the bottom panels;
+  opaque, aspect-correct spoilers with session-only reveal state; visible desktop
+  call disconnect and day separators. Crowded receipts move to sender headers
+  without squeezing media. Anchor messages independently of date labels, and
+  apply mobile theme changes immediately rather than through a theme animation.
+  The intermittent mobile appearance issue still needs on-device confirmation.
+
+- Review iteration 3: selected/unread rail indicators, tighter Aero corners,
+  glass rounded-square avatars, clearer translucent expression/pack popups,
+  and public-domain Tango icons. JSON themes may override supported semantic
+  icons with bounded embedded PNGs; unknown/invalid entries use stock icons.
+
+- Review iteration 2: move the profile card to the top inset and separate its
+  footer into the bottom island row. Expand declarative themes with component
+  gradients, border/highlight layers, bounded static texture, shadows, glass
+  expression popups, hover transitions and an optional classic icon treatment.
+  Restyle Aero light/dark chrome with stronger dimensional contrast. No custom
+  executable shader, remote texture loader or idle animation loop is introduced.
+
+- Inset the desktop profile preview as a floating outlined card, aligned with
+  the composer bottom margin. Strengthen profile gradients and refine banner,
+  avatar, headings, sections and footer spacing. The primary profile colour
+  controls both the outline and the top of the gradient.
+- Subtly refine selected conversations, panel boundaries and sender spacing
+  without changing column widths or message/composer horizontal alignment.
+- Add versioned declarative JSON themes, semantic tokens, built-in inheritance,
+  safe fallbacks and dynamically generated Appearance controls. Respect the
+  existing account-sync/local-only appearance preference.
+- Bundle Aero Glass with blue-grey surfaces, restrained gloss, bounded blur,
+  borders, light/dark variants and configurable accents. Accessibility settings
+  override decorative effects. No scripts or remote theme assets are executed.
+
 ## Deltiecord 0.9.32 build 104 — 2026-09-24
 
 - Add composer voice messages: microphone when empty, live waveform and timer,

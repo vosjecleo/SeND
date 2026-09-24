@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'json_theme.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -305,6 +306,7 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
         color: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: DeltiecordCorners.borderRadius,
+          side: BorderSide(color: accent.withValues(alpha: .8), width: 1.25),
         ),
         clipBehavior: Clip.antiAlias,
         elevation: 14,
@@ -316,11 +318,11 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
               end: Alignment.bottomCenter,
               colors: [
                 Color.alphaBlend(
-                  accent.withValues(alpha: 0.34),
+                  accent.withValues(alpha: 0.42),
                   context.deltiecord.surface,
                 ),
                 Color.alphaBlend(
-                  secondary.withValues(alpha: 0.4),
+                  secondary.withValues(alpha: 0.48),
                   context.deltiecord.surface,
                 ),
               ],
@@ -361,7 +363,7 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
                             color: context.deltiecord.surface,
                             shape: BoxShape.circle,
                           ),
-                          child: CircleAvatar(
+                          child: ThemeAvatar(
                             backgroundColor: context.deltiecord.elevated,
                             backgroundImage: profile.avatarBytes == null
                                 ? null

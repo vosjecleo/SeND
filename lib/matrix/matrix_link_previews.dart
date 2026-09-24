@@ -14,7 +14,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
           added: _preferences.trustedPreviewDomainsAdded,
           removed: _preferences.trustedPreviewDomainsRemoved,
         )) {
-      return cachedVideoUrl;
+      return kIsWeb ? webPreviewProxyUrl(cachedVideoUrl) : cachedVideoUrl;
     }
     try {
       // Google video URLs are short-lived. Resolve them at playback time
@@ -32,9 +32,10 @@ extension _MatrixLinkPreviews on MatrixBackend {
               )
             : null,
       );
-      return refreshed?.videoUrl ?? cachedVideoUrl;
+      final video = refreshed?.videoUrl ?? cachedVideoUrl;
+      return kIsWeb ? webPreviewProxyUrl(video) : video;
     } catch (_) {
-      return cachedVideoUrl;
+      return kIsWeb ? webPreviewProxyUrl(cachedVideoUrl) : cachedVideoUrl;
     }
   }
 

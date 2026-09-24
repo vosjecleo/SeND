@@ -263,9 +263,13 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     // Block elements need separators between one another, but the final block
     // newline is layout metadata rather than visible message content. Keeping
     // it creates an empty row below rich messages such as underscored paths.
-    if (spans.isNotEmpty) {
+    while (spans.isNotEmpty) {
       final lastSpan = spans.last;
-      if (lastSpan is TextSpan && lastSpan.text == '\n') spans.removeLast();
+      if (lastSpan is TextSpan && lastSpan.text?.trim().isEmpty == true) {
+        spans.removeLast();
+      } else {
+        break;
+      }
     }
     if (spans.isEmpty) {
       final fallbackStyle = isUnicodeEmojiOnly(widget.fallback)

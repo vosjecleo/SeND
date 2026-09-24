@@ -4,6 +4,41 @@
   let releaseLock;
   let pushkey;
   let heartbeatTimer;
+  // iOS can leave the layout viewport panned after dismissing its keyboard,
+  // while Flutter still paints in layout-viewport coordinates. Restore only
+  // after the keyboard closes, never while typing or pinch-zooming.
+  const viewport = window.visualViewport;
+  const appleTouch = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (appleTouch && viewport) {
+    let baseline = viewport.height;
+    let keyboardOpen = false;
+    let repairTimer;
+    const repairViewport = () => {
+      clearTimeout(repairTimer);
+      repairTimer = setTimeout(() => {
+        if (Math.abs(viewport.scale - 1) > 0.01) return;
+        baseline = Math.max(baseline, viewport.height);
+        const open = baseline - viewport.height > 100;
+        const closed = keyboardOpen && !open;
+        keyboardOpen = open;
+        if (closed) {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          if (document.body) document.body.scrollTop = 0;
+          window.dispatchEvent(new Event('resize'));
+        }
+      }, 120);
+    };
+    viewport.addEventListener('resize', repairViewport);
+    viewport.addEventListener('scroll', repairViewport);
+    document.addEventListener('focusout', repairViewport);
+    window.addEventListener('orientationchange', () => {
+      baseline = 0;
+      keyboardOpen = false;
+      repairViewport();
+    });
+  }
   window.deltieFetchMedia = async (url, token, maximum) => {
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 30000);

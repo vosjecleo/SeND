@@ -639,7 +639,6 @@ class _AttachmentView extends StatefulWidget {
 class _AttachmentViewState extends State<_AttachmentView> {
   Future<Uint8List>? _imageBytes;
   ({int width, int height})? _decodedDimensions;
-  bool _revealed = false;
   bool _saving = false;
   bool _opening = false;
 
@@ -650,7 +649,6 @@ class _AttachmentViewState extends State<_AttachmentView> {
         oldWidget.attachment.mimeType != widget.attachment.mimeType) {
       _imageBytes = null;
       _decodedDimensions = null;
-      _revealed = false;
     }
   }
 
@@ -766,34 +764,58 @@ class _AttachmentViewState extends State<_AttachmentView> {
         child: _buildSticker(),
       );
     }
-    if (widget.attachment.spoiler && !_revealed) {
-      return Align(
-        widthFactor: 1,
-        alignment: Alignment.centerLeft,
-        child: SizedBox(
-          width: 208,
-          height: 116,
-          child: Material(
-            color: context.deltiecord.input,
-            borderRadius: DeltiecordCorners.borderRadius,
-            child: InkWell(
-              onTap: () => setState(() => _revealed = true),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.visibility_off_outlined, size: 17),
-                    SizedBox(height: 2),
-                    Text(
-                      'Reveal spoiler',
-                      style: TextStyle(fontSize: DeltiecordTypeScale.normal),
+    if (widget.attachment.spoiler &&
+        !SpoilerReveals.forBackend(widget.backend).contains(widget.messageId)) {
+      final screen = MediaQuery.sizeOf(context);
+      final width = widget.attachment.width;
+      final height = widget.attachment.height;
+      final ratio = width != null && height != null && width > 0 && height > 0
+          ? (width / height).clamp(.25, 4.0)
+          : .75;
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final frameWidth = min(
+            constraints.maxWidth,
+            min(
+              min(420.0, screen.width * .5),
+              min(520.0, screen.height * .5) * ratio,
+            ),
+          );
+          return Align(
+            widthFactor: 1,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: frameWidth,
+              height: frameWidth / ratio,
+              child: Material(
+                color: context.deltiecord.input.withValues(alpha: 1),
+                borderRadius: DeltiecordCorners.borderRadius,
+                child: InkWell(
+                  onTap: () => setState(
+                    () => SpoilerReveals.forBackend(
+                      widget.backend,
+                    ).reveal(widget.messageId),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility_off_outlined, size: 17),
+                        SizedBox(height: 2),
+                        Text(
+                          'Reveal spoiler',
+                          style: TextStyle(
+                            fontSize: DeltiecordTypeScale.normal,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
 
@@ -820,76 +842,82 @@ class _AttachmentViewState extends State<_AttachmentView> {
     };
   }
 
-  Widget _buildImage() {
-    _imageBytes ??= _loadImage();
-    final screen = MediaQuery.sizeOf(context);
-    final metadataWidth = _decodedDimensions?.width ?? widget.attachment.width;
-    final metadataHeight =
-        _decodedDimensions?.height ?? widget.attachment.height;
-    final ratio =
-        metadataWidth != null &&
-            metadataHeight != null &&
-            metadataWidth > 0 &&
-            metadataHeight > 0
-        ? (metadataWidth / metadataHeight).clamp(0.25, 4.0).toDouble()
-        : 3 / 4;
-    final maxWidth = min(420.0, screen.width * 0.5);
-    final maxHeight = min(520.0, screen.height * 0.5);
-    final frame = maxWidth / maxHeight > ratio
-        ? Size(maxHeight * ratio, maxHeight)
-        : Size(maxWidth, maxWidth / ratio);
-    return FutureBuilder<Uint8List>(
-      future: _imageBytes,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _FileTile(
-            attachment: widget.attachment,
-            saving: _saving,
-            onSave: _save,
-            opening: _opening,
-            onOpen: _open,
-            error: 'Preview unavailable',
-          );
-        }
-        final bytes = snapshot.data;
-        if (bytes == null) {
-          return SizedBox(
-            width: frame.width,
-            height: frame.height,
-            child: ColoredBox(
-              color: context.deltiecord.elevated,
-              child: const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
+  Widget _buildImage() => LayoutBuilder(
+    builder: (context, constraints) {
+      _imageBytes ??= _loadImage();
+      final screen = MediaQuery.sizeOf(context);
+      final metadataWidth =
+          _decodedDimensions?.width ?? widget.attachment.width;
+      final metadataHeight =
+          _decodedDimensions?.height ?? widget.attachment.height;
+      final ratio =
+          metadataWidth != null &&
+              metadataHeight != null &&
+              metadataWidth > 0 &&
+              metadataHeight > 0
+          ? (metadataWidth / metadataHeight).clamp(0.25, 4.0).toDouble()
+          : 3 / 4;
+      final maxWidth = min(
+        constraints.maxWidth,
+        min(420.0, screen.width * 0.5),
+      );
+      final maxHeight = min(520.0, screen.height * 0.5);
+      final frame = maxWidth / maxHeight > ratio
+          ? Size(maxHeight * ratio, maxHeight)
+          : Size(maxWidth, maxWidth / ratio);
+      return FutureBuilder<Uint8List>(
+        future: _imageBytes,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _FileTile(
+              attachment: widget.attachment,
+              saving: _saving,
+              onSave: _save,
+              opening: _opening,
+              onOpen: _open,
+              error: 'Preview unavailable',
+            );
+          }
+          final bytes = snapshot.data;
+          if (bytes == null) {
+            return SizedBox(
+              width: frame.width,
+              height: frame.height,
+              child: ColoredBox(
+                color: context.deltiecord.elevated,
+                child: const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          return Align(
+            widthFactor: 1,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: frame.width,
+              height: frame.height,
+              child: InkWell(
+                onTap: _showMedia,
+                onSecondaryTapDown: (details) => _showContextMenu(
+                  details.globalPosition,
+                  image: true,
+                  fullscreen: _showMedia,
+                ),
+                child: _PreferenceAwareImage(
+                  bytes: bytes,
+                  animated: widget.attachment.animated,
+                  autoplay:
+                      widget.backend.preferences.autoplayGifs &&
+                      !widget.backend.preferences.reducedMotion,
+                ),
               ),
             ),
           );
-        }
-        return Align(
-          widthFactor: 1,
-          alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: frame.width,
-            height: frame.height,
-            child: InkWell(
-              onTap: _showMedia,
-              onSecondaryTapDown: (details) => _showContextMenu(
-                details.globalPosition,
-                image: true,
-                fullscreen: _showMedia,
-              ),
-              child: _PreferenceAwareImage(
-                bytes: bytes,
-                animated: widget.attachment.animated,
-                autoplay:
-                    widget.backend.preferences.autoplayGifs &&
-                    !widget.backend.preferences.reducedMotion,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+        },
+      );
+    },
+  );
 
   Future<Uint8List> _loadImage() async {
     late Uint8List bytes;

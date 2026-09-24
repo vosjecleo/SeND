@@ -524,11 +524,11 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            const Text('Profile gradient — top'),
+                            const Text('Profile outline & gradient — top'),
                             const SizedBox(height: 6),
                             AccentColorPickerButton(
                               color: _profileColor,
-                              label: 'Choose top colour',
+                              label: 'Choose outline / top colour',
                               onChanged: (color) => setState(() {
                                 _profileColor = color;
                                 _inheritProfileColor = false;

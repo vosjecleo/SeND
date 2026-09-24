@@ -425,364 +425,406 @@ class _RichComposerState extends State<_RichComposer> {
                 10,
                 _bottomPanelVerticalInset,
               ),
-              child: Container(
-                key: const Key('message-composer-island'),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: _composerIslandVerticalInset,
-                ),
-                decoration: BoxDecoration(
-                  color: context.deltiecord.island,
-                  borderRadius: DeltiecordCorners.borderRadius,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    SizedBox(
-                      width: 40,
-                      height: controlHeight,
-                      child: PopupMenuButton<String>(
-                        tooltip: 'Add content',
-                        enabled: widget.enabled,
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.add_circle_outline,
-                          size: 25,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        onSelected: (action) {
-                          switch (action) {
-                            case 'file':
-                              widget.onAttach();
-                            case 'emoji':
-                              showEmojiPicker();
-                            case 'gif':
-                              widget.onGif();
-                            case 'poll':
-                              widget.onPoll();
-                            case 'sticker':
-                              widget.onSticker();
-                          }
-                        },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'file',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.insert_drive_file_outlined),
-                              title: Text('Add file'),
-                            ),
+              child: ThemeSurface.wrap(
+                context,
+                kind: 'island',
+                color: context.deltiecord.island,
+                child: Container(
+                  key: const Key('message-composer-island'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: _composerIslandVerticalInset,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context)
+                                .extension<ThemeChrome>()
+                                ?.surfaces
+                                .containsKey('island') ==
+                            true
+                        ? Colors.transparent
+                        : context.deltiecord.island,
+                    borderRadius: DeltiecordCorners.borderRadius,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        height: controlHeight,
+                        child: PopupMenuButton<String>(
+                          tooltip: 'Add content',
+                          enabled: widget.enabled,
+                          padding: EdgeInsets.zero,
+                          icon: ThemeIcon(
+                            Icons.add_circle_outline,
+                            size: 25,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                          PopupMenuItem(
-                            value: 'emoji',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.emoji_emotions_outlined),
-                              title: Text('Emoji'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'gif',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.gif_box_outlined),
-                              title: Text('Sticker / GIF'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'poll',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.poll_outlined),
-                              title: Text('Poll'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'sticker',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.emoji_emotions_outlined),
-                              title: Text('Sticker pack'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        color: context.deltiecord.island,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (widget.pendingAttachments.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-                                child: Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    for (
-                                      var index = 0;
-                                      index < widget.pendingAttachments.length;
-                                      index++
-                                    )
-                                      _PendingAttachmentTile(
-                                        attachment:
-                                            widget.pendingAttachments[index],
-                                        onRemove: () =>
-                                            widget.onRemoveAttachment(index),
-                                        onToggleSpoiler: () => widget
-                                            .onToggleAttachmentSpoiler(index),
-                                      ),
-                                  ],
+                          onSelected: (action) {
+                            switch (action) {
+                              case 'file':
+                                widget.onAttach();
+                              case 'emoji':
+                                showEmojiPicker();
+                              case 'gif':
+                                widget.onGif();
+                              case 'poll':
+                                widget.onPoll();
+                              case 'sticker':
+                                widget.onSticker();
+                            }
+                          },
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: 'file',
+                              child: ListTile(
+                                dense: true,
+                                leading: ThemeIcon(
+                                  Icons.insert_drive_file_outlined,
                                 ),
+                                title: Text('Add file'),
                               ),
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: DefaultTextStyle.merge(
-                                style: const TextStyle(
-                                  fontSize: DeltiecordTypeScale.normal,
+                            ),
+                            PopupMenuItem(
+                              value: 'emoji',
+                              child: ListTile(
+                                dense: true,
+                                leading: ThemeIcon(
+                                  Icons.emoji_emotions_outlined,
                                 ),
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final painter =
-                                        TextPainter(
-                                          text: TextSpan(
-                                            text: widget.controller.document
-                                                .toPlainText()
-                                                .trimRight(),
-                                            style: const TextStyle(
-                                              fontSize:
-                                                  DeltiecordTypeScale.normal,
-                                              height: 1.2,
-                                            ),
-                                          ),
-                                          textDirection: Directionality.of(
-                                            context,
-                                          ),
-                                          textScaler: MediaQuery.textScalerOf(
-                                            context,
-                                          ),
-                                        )..layout(
-                                          maxWidth: max(
-                                            1,
-                                            constraints.maxWidth - 22,
-                                          ),
-                                        );
-                                    final height = max(
-                                      expandedEditorHeight,
-                                      painter.height +
-                                          editorVerticalPadding * 2,
-                                    ).clamp(editorHeight, widget.maxHeight);
-                                    painter.dispose();
-                                    return SizedBox(
-                                      height: height,
-                                      child: QuillEditor(
-                                        controller: widget.controller,
-                                        focusNode: widget.focusNode,
-                                        scrollController: _scrollController,
-                                        config: QuillEditorConfig(
-                                          textSpanBuilder:
-                                              (
-                                                context,
-                                                node,
-                                                offset,
-                                                text,
-                                                style,
-                                                recognizer,
-                                              ) => composerEmojiSpan(
-                                                backend: widget.backend,
-                                                text: text,
-                                                link:
-                                                    node
-                                                            .style
-                                                            .attributes[Attribute
-                                                                .link
-                                                                .key]
-                                                            ?.value
-                                                        as String?,
-                                                style: style,
-                                                recognizer: recognizer,
-                                              ),
-                                          autoFocus: false,
-                                          minHeight: editorHeight,
-                                          maxHeight: height,
-                                          customStyles: DefaultStyles(
-                                            paragraph: DefaultTextBlockStyle(
-                                              TextStyle(
-                                                fontSize:
-                                                    DeltiecordTypeScale.normal,
-                                                height: 1.2,
-                                                color: context.deltiecord.text,
-                                              ),
-                                              HorizontalSpacing.zero,
-                                              VerticalSpacing.zero,
-                                              VerticalSpacing.zero,
-                                              null,
-                                            ),
-                                            placeHolder: DefaultTextBlockStyle(
-                                              TextStyle(
-                                                fontSize:
-                                                    DeltiecordTypeScale.normal,
-                                                height: 1.2,
-                                                color: context.deltiecord.muted,
-                                              ),
-                                              HorizontalSpacing.zero,
-                                              VerticalSpacing.zero,
-                                              VerticalSpacing.zero,
-                                              null,
-                                            ),
-                                          ),
-                                          // Keep the compact composer while seating its text
-                                          // cleanly alongside the attachment and send controls.
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 11,
-                                            vertical: editorVerticalPadding,
-                                          ),
-                                          placeholder:
-                                              'Message #${widget.roomName}',
-                                          // ignore: experimental_member_use
-                                          onKeyPressed: (event, _) {
-                                            if (event is KeyDownEvent &&
-                                                _emojiMatches.isNotEmpty) {
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.tab) {
-                                                setState(
-                                                  () => _emojiSelection =
-                                                      (_emojiSelection + 1) %
-                                                      _emojiMatches.length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.enter) {
-                                                _acceptEmoji(
-                                                  _emojiMatches[_emojiSelection],
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.escape) {
-                                                _clearEmojiCompletion();
-                                                return KeyEventResult.handled;
-                                              }
-                                            }
-                                            if (event is KeyDownEvent &&
-                                                event.logicalKey ==
-                                                    LogicalKeyboardKey.keyV &&
-                                                (HardwareKeyboard
-                                                        .instance
-                                                        .isControlPressed ||
-                                                    HardwareKeyboard
-                                                        .instance
-                                                        .isMetaPressed)) {
-                                              unawaited(widget.onPasteImage());
-                                              return KeyEventResult.ignored;
-                                            }
-                                            if (event is KeyDownEvent &&
-                                                widget
-                                                    .mentionSuggestions
-                                                    .isNotEmpty) {
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey
-                                                      .arrowDown) {
-                                                widget.onMentionSelectionChanged(
-                                                  (widget.mentionSelectionIndex +
-                                                          1) %
-                                                      widget
-                                                          .mentionSuggestions
-                                                          .length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.arrowUp) {
-                                                widget.onMentionSelectionChanged(
-                                                  (widget.mentionSelectionIndex -
-                                                          1) %
-                                                      widget
-                                                          .mentionSuggestions
-                                                          .length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                      LogicalKeyboardKey
-                                                          .enter &&
-                                                  !HardwareKeyboard
-                                                      .instance
-                                                      .isShiftPressed) {
-                                                widget.onMentionSelected(
-                                                  widget
-                                                      .mentionSuggestions[widget
-                                                          .mentionSelectionIndex]
-                                                      .matrixId,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                            }
-                                            if (event is KeyDownEvent &&
-                                                event.logicalKey ==
-                                                    LogicalKeyboardKey.enter &&
-                                                !HardwareKeyboard
-                                                    .instance
-                                                    .isShiftPressed &&
-                                                (widget.sendWithCtrlEnter ==
-                                                    HardwareKeyboard
-                                                        .instance
-                                                        .isControlPressed)) {
-                                              widget.onSend();
-                                              return KeyEventResult.handled;
-                                            }
-                                            return KeyEventResult.ignored;
-                                          },
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                title: Text('Emoji'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'gif',
+                              child: ListTile(
+                                dense: true,
+                                leading: ThemeIcon(Icons.gif_box_outlined),
+                                title: Text('Sticker / GIF'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'poll',
+                              child: ListTile(
+                                dense: true,
+                                leading: ThemeIcon(Icons.poll_outlined),
+                                title: Text('Poll'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'sticker',
+                              child: ListTile(
+                                dense: true,
+                                leading: ThemeIcon(
+                                  Icons.emoji_emotions_outlined,
                                 ),
+                                title: Text('Sticker pack'),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      height: controlHeight,
-                      child: IconButton(
-                        tooltip: 'Emoji, GIFs and stickers',
-                        onPressed: widget.enabled ? showEmojiPicker : null,
-                        icon: const Icon(Icons.emoji_emotions_outlined),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      height: controlHeight,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onSecondaryTap: widget.enabled && !_canRecord
-                            ? widget.onSchedule
-                            : null,
-                        onLongPress: widget.enabled && !_canRecord
-                            ? widget.onSchedule
-                            : null,
-                        child: IconButton(
-                          tooltip: _canRecord ? 'Record voice message' : 'Send',
-                          padding: EdgeInsets.zero,
-                          onPressed: widget.enabled
-                              ? (_canRecord ? widget.onRecord : widget.onSend)
-                              : null,
-                          icon: Icon(
-                            _canRecord ? Icons.mic : Icons.send,
-                            size: 25,
-                            color: Theme.of(context).colorScheme.primary,
+                      Expanded(
+                        child: Container(
+                          color:
+                              Theme.of(context)
+                                      .extension<ThemeChrome>()
+                                      ?.surfaces
+                                      .containsKey('island') ==
+                                  true
+                              ? Colors.transparent
+                              : context.deltiecord.island,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (widget.pendingAttachments.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    8,
+                                    8,
+                                    2,
+                                  ),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      for (
+                                        var index = 0;
+                                        index <
+                                            widget.pendingAttachments.length;
+                                        index++
+                                      )
+                                        _PendingAttachmentTile(
+                                          attachment:
+                                              widget.pendingAttachments[index],
+                                          onRemove: () =>
+                                              widget.onRemoveAttachment(index),
+                                          onToggleSpoiler: () => widget
+                                              .onToggleAttachmentSpoiler(index),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: DefaultTextStyle.merge(
+                                  style: const TextStyle(
+                                    fontSize: DeltiecordTypeScale.normal,
+                                  ),
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final painter =
+                                          TextPainter(
+                                            text: TextSpan(
+                                              text: widget.controller.document
+                                                  .toPlainText()
+                                                  .trimRight(),
+                                              style: const TextStyle(
+                                                fontSize:
+                                                    DeltiecordTypeScale.normal,
+                                                height: 1.2,
+                                              ),
+                                            ),
+                                            textDirection: Directionality.of(
+                                              context,
+                                            ),
+                                            textScaler: MediaQuery.textScalerOf(
+                                              context,
+                                            ),
+                                          )..layout(
+                                            maxWidth: max(
+                                              1,
+                                              constraints.maxWidth - 22,
+                                            ),
+                                          );
+                                      final height = max(
+                                        expandedEditorHeight,
+                                        painter.height +
+                                            editorVerticalPadding * 2,
+                                      ).clamp(editorHeight, widget.maxHeight);
+                                      painter.dispose();
+                                      return SizedBox(
+                                        height: height,
+                                        child: QuillEditor(
+                                          controller: widget.controller,
+                                          focusNode: widget.focusNode,
+                                          scrollController: _scrollController,
+                                          config: QuillEditorConfig(
+                                            textSpanBuilder:
+                                                (
+                                                  context,
+                                                  node,
+                                                  offset,
+                                                  text,
+                                                  style,
+                                                  recognizer,
+                                                ) => composerEmojiSpan(
+                                                  backend: widget.backend,
+                                                  text: text,
+                                                  link:
+                                                      node
+                                                              .style
+                                                              .attributes[Attribute
+                                                                  .link
+                                                                  .key]
+                                                              ?.value
+                                                          as String?,
+                                                  style: style,
+                                                  recognizer: recognizer,
+                                                ),
+                                            autoFocus: false,
+                                            minHeight: editorHeight,
+                                            maxHeight: height,
+                                            customStyles: DefaultStyles(
+                                              paragraph: DefaultTextBlockStyle(
+                                                TextStyle(
+                                                  fontSize: DeltiecordTypeScale
+                                                      .normal,
+                                                  height: 1.2,
+                                                  color:
+                                                      context.deltiecord.text,
+                                                ),
+                                                HorizontalSpacing.zero,
+                                                VerticalSpacing.zero,
+                                                VerticalSpacing.zero,
+                                                null,
+                                              ),
+                                              placeHolder:
+                                                  DefaultTextBlockStyle(
+                                                    TextStyle(
+                                                      fontSize:
+                                                          DeltiecordTypeScale
+                                                              .normal,
+                                                      height: 1.2,
+                                                      color: context
+                                                          .deltiecord
+                                                          .muted,
+                                                    ),
+                                                    HorizontalSpacing.zero,
+                                                    VerticalSpacing.zero,
+                                                    VerticalSpacing.zero,
+                                                    null,
+                                                  ),
+                                            ),
+                                            // Keep the compact composer while seating its text
+                                            // cleanly alongside the attachment and send controls.
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 11,
+                                              vertical: editorVerticalPadding,
+                                            ),
+                                            placeholder:
+                                                'Message #${widget.roomName}',
+                                            // ignore: experimental_member_use
+                                            onKeyPressed: (event, _) {
+                                              if (event is KeyDownEvent &&
+                                                  _emojiMatches.isNotEmpty) {
+                                                if (event.logicalKey ==
+                                                    LogicalKeyboardKey.tab) {
+                                                  setState(
+                                                    () => _emojiSelection =
+                                                        (_emojiSelection + 1) %
+                                                        _emojiMatches.length,
+                                                  );
+                                                  return KeyEventResult.handled;
+                                                }
+                                                if (event.logicalKey ==
+                                                    LogicalKeyboardKey.enter) {
+                                                  _acceptEmoji(
+                                                    _emojiMatches[_emojiSelection],
+                                                  );
+                                                  return KeyEventResult.handled;
+                                                }
+                                                if (event.logicalKey ==
+                                                    LogicalKeyboardKey.escape) {
+                                                  _clearEmojiCompletion();
+                                                  return KeyEventResult.handled;
+                                                }
+                                              }
+                                              if (event is KeyDownEvent &&
+                                                  event.logicalKey ==
+                                                      LogicalKeyboardKey.keyV &&
+                                                  (HardwareKeyboard
+                                                          .instance
+                                                          .isControlPressed ||
+                                                      HardwareKeyboard
+                                                          .instance
+                                                          .isMetaPressed)) {
+                                                unawaited(
+                                                  widget.onPasteImage(),
+                                                );
+                                                return KeyEventResult.ignored;
+                                              }
+                                              if (event is KeyDownEvent &&
+                                                  widget
+                                                      .mentionSuggestions
+                                                      .isNotEmpty) {
+                                                if (event.logicalKey ==
+                                                    LogicalKeyboardKey
+                                                        .arrowDown) {
+                                                  widget.onMentionSelectionChanged(
+                                                    (widget.mentionSelectionIndex +
+                                                            1) %
+                                                        widget
+                                                            .mentionSuggestions
+                                                            .length,
+                                                  );
+                                                  return KeyEventResult.handled;
+                                                }
+                                                if (event.logicalKey ==
+                                                    LogicalKeyboardKey
+                                                        .arrowUp) {
+                                                  widget.onMentionSelectionChanged(
+                                                    (widget.mentionSelectionIndex -
+                                                            1) %
+                                                        widget
+                                                            .mentionSuggestions
+                                                            .length,
+                                                  );
+                                                  return KeyEventResult.handled;
+                                                }
+                                                if (event.logicalKey ==
+                                                        LogicalKeyboardKey
+                                                            .enter &&
+                                                    !HardwareKeyboard
+                                                        .instance
+                                                        .isShiftPressed) {
+                                                  widget.onMentionSelected(
+                                                    widget
+                                                        .mentionSuggestions[widget
+                                                            .mentionSelectionIndex]
+                                                        .matrixId,
+                                                  );
+                                                  return KeyEventResult.handled;
+                                                }
+                                              }
+                                              if (event is KeyDownEvent &&
+                                                  event.logicalKey ==
+                                                      LogicalKeyboardKey
+                                                          .enter &&
+                                                  !HardwareKeyboard
+                                                      .instance
+                                                      .isShiftPressed &&
+                                                  (widget.sendWithCtrlEnter ==
+                                                      HardwareKeyboard
+                                                          .instance
+                                                          .isControlPressed)) {
+                                                widget.onSend();
+                                                return KeyEventResult.handled;
+                                              }
+                                              return KeyEventResult.ignored;
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(
+                        width: 40,
+                        height: controlHeight,
+                        child: IconButton(
+                          tooltip: 'Emoji, GIFs and stickers',
+                          onPressed: widget.enabled ? showEmojiPicker : null,
+                          icon: const ThemeIcon(Icons.emoji_emotions_outlined),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 40,
+                        height: controlHeight,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onSecondaryTap: widget.enabled && !_canRecord
+                              ? widget.onSchedule
+                              : null,
+                          onLongPress: widget.enabled && !_canRecord
+                              ? widget.onSchedule
+                              : null,
+                          child: IconButton(
+                            tooltip: _canRecord
+                                ? 'Record voice message'
+                                : 'Send',
+                            padding: EdgeInsets.zero,
+                            onPressed: widget.enabled
+                                ? (_canRecord ? widget.onRecord : widget.onSend)
+                                : null,
+                            icon: ThemeIcon(
+                              _canRecord ? Icons.mic : Icons.send,
+                              size: 25,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -818,7 +860,7 @@ class _PendingAttachmentTile extends StatelessWidget {
           value: 'spoiler',
           child: ListTile(
             dense: true,
-            leading: Icon(
+            leading: ThemeIcon(
               attachment.spoiler
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
@@ -830,7 +872,7 @@ class _PendingAttachmentTile extends StatelessWidget {
           value: 'remove',
           child: ListTile(
             dense: true,
-            leading: Icon(Icons.close),
+            leading: ThemeIcon(Icons.close),
             title: Text('Remove attachment'),
           ),
         ),
@@ -873,7 +915,7 @@ class _PendingAttachmentTile extends StatelessWidget {
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    ThemeIcon(
                       isVideo
                           ? Icons.video_file_outlined
                           : Icons.insert_drive_file_outlined,
@@ -897,7 +939,7 @@ class _PendingAttachmentTile extends StatelessWidget {
                 const ColoredBox(
                   color: Color(0xcc17181c),
                   child: Center(
-                    child: Icon(Icons.visibility_off_outlined, size: 20),
+                    child: ThemeIcon(Icons.visibility_off_outlined, size: 20),
                   ),
                 ),
               Positioned(
@@ -909,7 +951,7 @@ class _PendingAttachmentTile extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     tooltip: 'Remove',
                     onPressed: onRemove,
-                    icon: const Icon(Icons.close, size: 13),
+                    icon: const ThemeIcon(Icons.close, size: 13),
                   ),
                 ),
               ),
@@ -938,7 +980,7 @@ class _ComposerContext extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
     child: Row(
       children: [
-        const Icon(Icons.subdirectory_arrow_right, size: 16),
+        const ThemeIcon(Icons.subdirectory_arrow_right, size: 16),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -967,7 +1009,7 @@ class _ComposerContext extends StatelessWidget {
           tooltip: 'Cancel',
           visualDensity: VisualDensity.compact,
           onPressed: onCancel,
-          icon: const Icon(Icons.close, size: 16),
+          icon: const ThemeIcon(Icons.close, size: 16),
         ),
       ],
     ),

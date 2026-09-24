@@ -6,6 +6,7 @@ import 'package:mime/mime.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../models/chat_models.dart';
+import '../../services/browser_file_picker.dart';
 import '../deltiecord_theme.dart';
 
 /// Pages thumbnails only; original bytes are read after explicit selection.
@@ -17,6 +18,32 @@ class MobileAttachmentPicker extends StatefulWidget {
 }
 
 class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
+  Future<void> _choose(String action) async {
+    if (!kIsWeb || action == 'poll') {
+      Navigator.pop(context, action);
+      return;
+    }
+    try {
+      final pending = pickBrowserAttachments(
+        accept: action == 'file'
+            ? ''
+            : action == 'camera-photo'
+            ? 'image/*'
+            : action == 'camera-video'
+            ? 'video/*'
+            : 'image/*,video/*',
+        camera: action.startsWith('camera-'),
+      );
+      setState(() => _reading = true);
+      final drafts = await pending;
+      if (mounted && drafts.isNotEmpty) Navigator.pop(context, drafts);
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Could not attach files: $error');
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
+
   final _assets = <AssetEntity>[];
   final _selected = <AssetEntity>[];
   final _scroll = ScrollController();
@@ -194,9 +221,8 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
                     return Material(
                       color: context.deltiecord.island,
                       child: InkWell(
-                        onTap: () => Navigator.pop(context, 'camera-photo'),
-                        onLongPress: () =>
-                            Navigator.pop(context, 'camera-video'),
+                        onTap: () => _choose('camera-photo'),
+                        onLongPress: () => _choose('camera-video'),
                         child: const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -258,7 +284,7 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
                               ),
                               onPressed: _reading
                                   ? null
-                                  : () => Navigator.pop(context, action),
+                                  : () => _choose(action),
                               icon: Icon(icon, size: 20),
                               label: Text(
                                 label,

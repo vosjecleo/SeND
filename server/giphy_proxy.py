@@ -599,6 +599,11 @@ def _telegram_sticker(set_name, index, converted_size=256):
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if urlparse(self.path).path == '/api/servers/preview':
+            import web_preview
+            client = _client_identity(self.client_address[0], self.headers.get('X-Real-IP'))
+            web_preview.handle(self, _allowed, client)
+            return
         parsed = urlparse(self.path)
         if parsed.path == "/health":
             self._json({"ok": True})

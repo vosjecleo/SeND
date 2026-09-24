@@ -1,12 +1,12 @@
 # Deltiecord
 
-> **Latest release: version 0.9.30 build 101**
+> **Latest release: version 0.9.33 build 105**
 >
 > Deltiecord now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
 > See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
-> Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 101 targets
-> recovery/update overhead, adds desktop inbox/search parity, fixes live channel
-> navigation and invite notifications, and opens the media picker on Recent.
+> Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 105 adds
+> [declarative JSON themes and Aero Glass](docs/themes.md), a polished profile
+> preview, shared-pack discovery and web attachment/media fixes.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

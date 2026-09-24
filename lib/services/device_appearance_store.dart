@@ -62,6 +62,8 @@ final class DeviceAppearanceSnapshot {
     required this.density,
     required this.compactness,
     required this.themeMode,
+    this.themeJson = '',
+    this.themeSettings = const {},
     required this.interfaceScale,
     required this.fontScale,
     required this.roomPanelWidth,
@@ -80,6 +82,8 @@ final class DeviceAppearanceSnapshot {
         density: value.density,
         compactness: value.compactness,
         themeMode: value.themeMode,
+        themeJson: value.themeJson,
+        themeSettings: value.themeSettings,
         interfaceScale: value.interfaceScale,
         fontScale: value.fontScale,
         roomPanelWidth: value.roomPanelWidth,
@@ -104,6 +108,12 @@ final class DeviceAppearanceSnapshot {
         InterfaceDensity.compact,
       ),
       compactness: _number(json['compactness'], 0.5).clamp(0, 1),
+      themeJson: json['theme_document'] is String
+          ? json['theme_document'] as String
+          : '',
+      themeSettings: json['theme_parameters'] is Map<String, dynamic>
+          ? Map<String, Object?>.from(json['theme_parameters'] as Map)
+          : const {},
       themeMode: enumValue(
         DeltiecordThemeMode.values,
         json['theme_mode'] as String?,
@@ -126,6 +136,8 @@ final class DeviceAppearanceSnapshot {
   final InterfaceDensity density;
   final double compactness;
   final DeltiecordThemeMode themeMode;
+  final String themeJson;
+  final Map<String, Object?> themeSettings;
   final double interfaceScale;
   final double fontScale;
   final double roomPanelWidth;
@@ -142,6 +154,8 @@ final class DeviceAppearanceSnapshot {
     density: density,
     compactness: compactness,
     themeMode: themeMode,
+    themeJson: themeJson,
+    themeSettings: themeSettings,
     interfaceScale: interfaceScale,
     fontScale: fontScale,
     roomPanelWidth: roomPanelWidth,
@@ -161,6 +175,8 @@ final class DeviceAppearanceSnapshot {
     'density': density.name,
     'compactness': compactness,
     'theme_mode': themeMode.name,
+    'theme_document': themeJson,
+    'theme_parameters': themeSettings,
     'interface_scale': interfaceScale,
     'font_scale': fontScale,
     'room_panel_width': roomPanelWidth,

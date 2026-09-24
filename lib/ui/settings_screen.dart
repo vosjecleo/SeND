@@ -14,6 +14,7 @@ import '../services/unified_push.dart';
 import '../services/update_checker.dart';
 import 'accent_color_picker.dart';
 import 'theme_chooser.dart';
+import 'json_theme_settings.dart';
 import 'security_center.dart';
 import 'app_shortcuts.dart';
 import 'profile_card.dart';
@@ -1027,11 +1028,31 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       const SizedBox(height: 12),
       ThemeChooser(
+        customActive: preferences.themeJson.isNotEmpty,
         value: preferences.themeMode,
-        onChanged: (mode) => backend.updatePreferences(
-          backend.preferences.copyWith(themeMode: mode),
-        ),
+        onChanged: (mode) async {
+          try {
+            await backend.updatePreferences(
+              backend.preferences.copyWith(
+                themeMode: mode,
+                themeJson: '',
+                themeSettings: const {},
+              ),
+            );
+          } catch (_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not apply the theme. Settings may still be synchronizing; please try again.',
+                ),
+              ),
+            );
+          }
+        },
       ),
+      const SizedBox(height: 20),
+      JsonThemeSettings(backend: backend),
       const SizedBox(height: 20),
       Text('Interface scale — ${(preferences.interfaceScale * 100).round()}%'),
       Slider(
@@ -1042,7 +1063,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         divisions: 10,
         label: '${(preferences.interfaceScale * 100).round()}%',
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(interfaceScale: value),
+          backend.preferences.copyWith(interfaceScale: value),
         ),
       ),
       const Text(
@@ -1058,7 +1079,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           max: 420,
           divisions: 10,
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(roomPanelWidth: value),
+            backend.preferences.copyWith(roomPanelWidth: value),
           ),
         ),
         Text('Side panel — ${preferences.sidePanelWidth.round()} px'),
@@ -1068,7 +1089,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           max: 460,
           divisions: 10,
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(sidePanelWidth: value),
+            backend.preferences.copyWith(sidePanelWidth: value),
           ),
         ),
       ],
@@ -1077,7 +1098,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         title: const Text('Autoplay GIFs'),
         value: preferences.autoplayGifs,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(autoplayGifs: value),
+          backend.preferences.copyWith(autoplayGifs: value),
         ),
       ),
       if (defaultTargetPlatform == TargetPlatform.linux ||
@@ -1092,7 +1113,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
           value: preferences.enableChannelDragAndDrop,
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(enableChannelDragAndDrop: value),
+            backend.preferences.copyWith(enableChannelDragAndDrop: value),
           ),
         ),
       const SizedBox(height: 12),
@@ -1107,12 +1128,18 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             .toList(growable: false),
         onChanged: (font) {
           if (font != null) {
-            backend.updatePreferences(preferences.copyWith(fontFamily: font));
+            backend.updatePreferences(
+              backend.preferences.copyWith(fontFamily: font),
+            );
           }
         },
       ),
       const SizedBox(height: 16),
-      const Text('Accent colour'),
+      Text(
+        preferences.themeJson.isEmpty
+            ? 'Accent colour'
+            : 'Default accent (themes may override this)',
+      ),
       const SizedBox(height: 8),
       AccentColorPickerButton(
         color: preferences.accentColor,
@@ -1130,7 +1157,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
           value: preferences.showNativeTitleBar,
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(showNativeTitleBar: value),
+            backend.preferences.copyWith(showNativeTitleBar: value),
           ),
         ),
         SwitchListTile(
@@ -1138,7 +1165,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           title: const Text('Remember window size and position'),
           value: preferences.rememberWindowState,
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(rememberWindowState: value),
+            backend.preferences.copyWith(rememberWindowState: value),
           ),
         ),
       ],
@@ -1211,7 +1238,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         onChanged: (mode) {
           if (mode == null) return;
           backend.updatePreferences(
-            preferences.copyWith(directLinkPreviewMode: mode),
+            backend.preferences.copyWith(directLinkPreviewMode: mode),
           );
         },
       ),
@@ -1231,7 +1258,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         subtitle: const Text('Let rooms know which messages you have read.'),
         value: preferences.sendReadReceipts,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(sendReadReceipts: value),
+          backend.preferences.copyWith(sendReadReceipts: value),
         ),
       ),
       Text(
@@ -1243,7 +1270,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         max: 100,
         divisions: 98,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(readReceiptMemberThreshold: value.round()),
+          backend.preferences.copyWith(
+            readReceiptMemberThreshold: value.round(),
+          ),
         ),
       ),
       SwitchListTile(
@@ -1251,7 +1280,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         title: const Text('Send typing notifications'),
         value: preferences.sendTypingNotifications,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(sendTypingNotifications: value),
+          backend.preferences.copyWith(sendTypingNotifications: value),
         ),
       ),
       SwitchListTile(
@@ -1262,7 +1291,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         ),
         value: preferences.sharePresence,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(sharePresence: value),
+          backend.preferences.copyWith(sharePresence: value),
         ),
       ),
       if (defaultTargetPlatform != TargetPlatform.android) ...[
@@ -1274,7 +1303,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           divisions: 59,
           label: '${preferences.desktopIdleMinutes} min',
           onChanged: (value) => backend.updatePreferences(
-            preferences.copyWith(desktopIdleMinutes: value.round()),
+            backend.preferences.copyWith(desktopIdleMinutes: value.round()),
           ),
         ),
       ],
@@ -1288,7 +1317,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         ),
         value: preferences.improveTwitterLinks,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(improveTwitterLinks: value),
+          backend.preferences.copyWith(improveTwitterLinks: value),
         ),
       ),
       const Divider(height: 28),
@@ -1492,8 +1521,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         max: 1.4,
         divisions: 6,
         label: '${(preferences.fontScale * 100).round()}%',
-        onChanged: (value) =>
-            backend.updatePreferences(preferences.copyWith(fontScale: value)),
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(fontScale: value),
+        ),
       ),
       const Text('Changes text size without enlarging the rest of the UI.'),
       const SizedBox(height: 12),
@@ -1504,7 +1534,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         subtitle: const Text('Turn off to show chat timestamps with AM/PM.'),
         value: preferences.use24HourTime,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(use24HourTime: value),
+          backend.preferences.copyWith(use24HourTime: value),
         ),
       ),
       SwitchListTile(
@@ -1515,7 +1545,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         ),
         value: preferences.reducedMotion,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(reducedMotion: value),
+          backend.preferences.copyWith(reducedMotion: value),
         ),
       ),
       SwitchListTile(
@@ -1524,7 +1554,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         subtitle: const Text('Strengthen panel borders and text contrast.'),
         value: preferences.highContrast,
         onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(highContrast: value),
+          backend.preferences.copyWith(highContrast: value),
         ),
       ),
       const SizedBox(height: 8),
@@ -1651,7 +1681,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             Set<String>? removals,
           }) async {
             await backend.updatePreferences(
-              preferences.copyWith(
+              backend.preferences.copyWith(
                 trustedPreviewDomainsAdded:
                     additions ?? preferences.trustedPreviewDomainsAdded,
                 trustedPreviewDomainsRemoved:

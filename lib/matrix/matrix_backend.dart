@@ -29,6 +29,8 @@ import '../services/font_preferences.dart';
 import '../services/message_search.dart';
 import '../services/link_preview_policy.dart';
 import '../services/link_preview_service.dart';
+import '../services/web_preview_proxy.dart';
+import '../services/message_order.dart';
 import '../services/profile_refresh_policy.dart';
 import '../services/poll_tally.dart';
 import '../services/personal_sticker_packs.dart';
@@ -544,6 +546,11 @@ class MatrixBackend extends ChatBackend {
   int pingCountForSpace(String spaceId) =>
       _roomsForSpace(spaceId).fold(0, (sum, room) => sum + room.highlightCount);
 
+  @override
+  bool hasUnreadForSpace(String spaceId) => _roomsForSpace(
+    spaceId,
+  ).any((room) => room.isUnread || room.highlightCount > 0);
+
   List<Room> get _joinedRooms =>
       _client?.rooms
           .where((room) => room.membership == Membership.join)
@@ -647,6 +654,9 @@ class MatrixBackend extends ChatBackend {
       return;
     }
     _applicationForeground = foreground;
+    // View focus can arrive after the lifecycle-resumed callback. Refresh on
+    // this actual foreground transition too, rather than losing that wakeup.
+    if (foreground) unawaited(_refreshTimelineAfterResume());
     if (foreground) _dismissVisibleRoomNotification();
     if (foreground && Platform.isAndroid) {
       unawaited(_restoreUnifiedPushPusher());
@@ -1173,6 +1183,11 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> refreshStickerPacks() => _refreshStickerPacks();
+  @override
+  Future<StickerPackSummary?> resolveStickerPack({
+    String? packId,
+    Uri? mediaUri,
+  }) => _resolveStickerPack(packId: packId, mediaUri: mediaUri);
 
   @override
   Future<Uint8List?> loadStickerPreview(StickerSummary sticker) =>

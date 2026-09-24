@@ -8,6 +8,7 @@ import 'advanced_chat_dialogs.dart';
 import 'deltiecord_theme.dart';
 import 'emoji_picker_dialog.dart';
 import 'giphy_dialog.dart';
+import 'json_theme.dart';
 
 /// One surface and one route for emoji, GIFs, and owned/shared sticker packs.
 /// Returns EmojiEntry, GifSearchResult, or StickerSummary to the composer.
@@ -26,20 +27,36 @@ Future<Object?> showExpressionPicker(
       context: context,
       isScrollControlled: true,
       requestFocus: false,
-      backgroundColor: context.deltiecord.surface,
-      builder: (context) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * .62,
-          child: content,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ThemeSurface(
+        kind: 'popup',
+        color: context.deltiecord.surface,
+        child: SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .62,
+            child: content,
+          ),
         ),
       ),
     );
   }
   return showDialog<Object>(
     context: context,
+    barrierColor:
+        Theme.of(
+              context,
+            ).extension<ThemeChrome>()?.surfaces.containsKey('popup') ==
+            true
+        ? const Color(0x30000000)
+        : null,
     builder: (context) => Dialog(
-      backgroundColor: context.deltiecord.surface,
-      child: SizedBox(width: 600, height: 560, child: content),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      child: ThemeSurface(
+        kind: 'popup',
+        color: context.deltiecord.surface,
+        child: SizedBox(width: 600, height: 560, child: content),
+      ),
     ),
   );
 }
@@ -71,9 +88,27 @@ class _ExpressionPickerState extends State<_ExpressionPicker> {
         child: Row(
           children: [
             for (final (index, label, icon) in [
-              (0, 'Emoji', Icons.emoji_emotions_outlined),
-              (1, 'GIFs', Icons.gif_box_outlined),
-              (2, 'Stickers', Icons.sticky_note_2_outlined),
+              (
+                0,
+                'Emoji',
+                Theme.of(context).extension<ThemeChrome>()?.classicIcons == true
+                    ? Icons.emoji_emotions
+                    : Icons.emoji_emotions_outlined,
+              ),
+              (
+                1,
+                'GIFs',
+                Theme.of(context).extension<ThemeChrome>()?.classicIcons == true
+                    ? Icons.gif_box
+                    : Icons.gif_box_outlined,
+              ),
+              (
+                2,
+                'Stickers',
+                Theme.of(context).extension<ThemeChrome>()?.classicIcons == true
+                    ? Icons.sticky_note_2
+                    : Icons.sticky_note_2_outlined,
+              ),
             ])
               Expanded(
                 child: TextButton.icon(
@@ -89,7 +124,7 @@ class _ExpressionPickerState extends State<_ExpressionPicker> {
                     );
                     setState(() => _tab = index);
                   },
-                  icon: Icon(icon, size: 20),
+                  icon: ThemeIcon(icon, size: 20),
                   label: Text(label),
                 ),
               ),

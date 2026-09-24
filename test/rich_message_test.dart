@@ -107,6 +107,28 @@ void main() {
     expect(message.html, isNot(contains('emoji.deltiecord.invalid')));
   });
 
+  testWidgets('spoiler paragraph receipts stay on the content row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: MatrixHtmlText(
+              html: '<p><span data-mx-spoiler="">secret</span></p>\n',
+              fallback: 'secret',
+              trailing: TextSpan(text: ' ✓'),
+            ),
+          ),
+        ),
+      ),
+    );
+    final text = tester.widget<SelectableText>(find.byType(SelectableText));
+    expect(text.textSpan!.toPlainText(), 'secret ✓');
+    expect(tester.getSize(find.byType(SelectableText)).height, lessThan(30));
+  });
+
   testWidgets('rich paragraphs do not retain an empty trailing row', (
     tester,
   ) async {

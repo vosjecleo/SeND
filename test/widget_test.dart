@@ -333,7 +333,7 @@ void main() {
 
     expect(find.text('Preview Name'), findsWidgets);
     expect(find.text('Edit profile — live preview'), findsOneWidget);
-    expect(find.text('Profile gradient — top'), findsOneWidget);
+    expect(find.text('Profile outline & gradient — top'), findsOneWidget);
     expect(find.text('Profile gradient — bottom'), findsOneWidget);
   });
 
@@ -866,6 +866,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Mute'), findsNothing);
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
     expect(find.byTooltip('Voice options'), findsOneWidget);
     await tester.tap(find.byTooltip('Voice options'));
     await tester.pumpAndSettle();
@@ -1357,6 +1358,12 @@ void main() {
     await tester.pump();
     final anchor = find.text('Current message 35');
     expect(anchor, findsOneWidget);
+    // Lazy slivers refine their extent once the variable-height day header
+    // is laid out. Reach the actual oldest edge before testing insertion.
+    timelineScrollable.position.jumpTo(
+      timelineScrollable.position.maxScrollExtent,
+    );
+    await tester.pump();
     final before = tester.getTopLeft(anchor).dy;
 
     tester
@@ -2602,21 +2609,42 @@ void main() {
       find.byKey(const ValueKey('conversation-presence-online')),
       findsOneWidget,
     );
-    final recipientGradient = tester.widget<DecoratedBox>(
+    final recipientGradient = tester.widget<Container>(
       find.byKey(const Key('recipient-profile-gradient')),
     );
     final recipientDecoration = recipientGradient.decoration as BoxDecoration;
     expect(recipientDecoration.gradient, isNotNull);
     expect(recipientDecoration.border, isNull);
+    expect(
+      (recipientGradient.foregroundDecoration as BoxDecoration).border,
+      isNotNull,
+    );
     final panelRect = tester.getRect(
       find.byKey(const Key('recipient-profile-gradient')),
     );
-    final aboutRect = tester.getRect(
-      find.byKey(const Key('recipient-about-island')),
+    final aboutRect = tester.getRect(find.byKey(const Key('recipient-bio')));
+    final footerRect = tester.getRect(
+      find.byKey(const Key('view-full-profile-island')),
+    );
+    expect(panelRect.bottom, lessThanOrEqualTo(footerRect.top - 8));
+    expect(panelRect.top, lessThan(20));
+    expect(aboutRect.left - panelRect.left, closeTo(16, .5));
+    expect(aboutRect.right, lessThanOrEqualTo(panelRect.right - 16));
+    expect(find.text('About me'), findsNothing);
+    expect(
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byKey(const Key('recipient-profile-panel')),
+              matching: find.text('Building things'),
+            ),
+          )
+          .dx,
+      greaterThan(panelRect.left + 100),
     );
     expect(
-      aboutRect.left - panelRect.left,
-      closeTo(panelRect.right - aboutRect.right, 0.5),
+      tester.getTopLeft(find.textContaining('UTC+02')).dy,
+      greaterThan(aboutRect.bottom),
     );
     expect(
       tester.getTopLeft(find.byKey(const Key('view-full-profile-island'))).dy,

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'json_theme.dart';
 import 'package:flutter/services.dart';
 
 class AccentColorPickerButton extends StatefulWidget {
@@ -96,13 +97,30 @@ Future<void> showAccentColorPickerPopup(
               left: left.toDouble(),
               top: top.toDouble(),
               width: width,
-              child: Material(
-                elevation: 18,
-                borderRadius: BorderRadius.circular(12),
-                clipBehavior: Clip.antiAlias,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: AccentColorPicker(color: color, onChanged: onChanged),
+              child: ThemeSurface(
+                kind: 'popup',
+                color: Theme.of(context).colorScheme.surface,
+                child: Material(
+                  color:
+                      Theme.of(context)
+                              .extension<ThemeChrome>()
+                              ?.surfaces
+                              .containsKey('popup') ==
+                          true
+                      ? Colors.transparent
+                      : null,
+                  elevation: 18,
+                  borderRadius: BorderRadius.circular(
+                    Theme.of(context).extension<ThemeChrome>()?.radius ?? 12,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: AccentColorPicker(
+                      color: color,
+                      onChanged: onChanged,
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -3,6 +3,7 @@ import 'services/platform_io.dart';
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/material.dart';
+import 'ui/json_theme.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -78,6 +79,8 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           platformOverride,
           backend.status,
           preferences.themeMode,
+          preferences.themeJson,
+          preferences.themeSettings,
           preferences.accentColor,
           preferences.highContrast,
           preferences.reducedMotion,
@@ -112,8 +115,11 @@ class _DeltiecordAppState extends State<DeltiecordApp>
             );
           }
           final contrast = preferences.highContrast;
-          final basePalette = DeltiecordPalette.forMode(preferences.themeMode);
-          final accent = Color(preferences.accentColor);
+          final customTheme = JsonTheme.fromPreferences(preferences);
+          final basePalette =
+              customTheme?.palette ??
+              DeltiecordPalette.forMode(preferences.themeMode);
+          final accent = customTheme?.accent ?? Color(preferences.accentColor);
           final palette = contrast
               ? basePalette.copyWith(
                   // Higher contrast strengthens neutral hierarchy. Accent is
@@ -136,9 +142,11 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                   hover: accent.withValues(alpha: 0.16),
                 )
               : basePalette;
-          final brightness = preferences.themeMode == DeltiecordThemeMode.light
-              ? Brightness.light
-              : Brightness.dark;
+          final brightness =
+              customTheme?.brightness ??
+              (preferences.themeMode == DeltiecordThemeMode.light
+                  ? Brightness.light
+                  : Brightness.dark);
           final colorScheme =
               ColorScheme.fromSeed(
                 seedColor: accent,
@@ -153,6 +161,14 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                 surfaceContainerHighest: palette.hover,
                 surfaceTint: Colors.transparent,
                 onSurface: palette.text,
+                primary: customTheme?.accent,
+                onPrimary: customTheme == null
+                    ? null
+                    : deltiecordContrastingForeground(customTheme.accent),
+                secondary: customTheme?.secondary,
+                onSecondary: customTheme == null
+                    ? null
+                    : deltiecordContrastingForeground(customTheme.secondary),
               );
           final baseText = ThemeData(brightness: brightness).textTheme;
           final textTheme = baseText
@@ -212,10 +228,25 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                 // changed ordinary text metrics on some hosts.
                 fontFamilyFallback: null,
               );
+          final controlRadius = BorderRadius.circular(
+            customTheme?.chrome.radius ?? 12,
+          );
           _cachedTheme = ThemeData(
             brightness: brightness,
             colorScheme: colorScheme,
-            iconTheme: IconThemeData(color: colorScheme.primary),
+            iconTheme: IconThemeData(
+              color: colorScheme.primary,
+              shadows: customTheme?.chrome.classicIcons == true && !contrast
+                  ? [
+                      Shadow(
+                        color: brightness == Brightness.light
+                            ? const Color(0xCCFFFFFF)
+                            : const Color(0x88000000),
+                        offset: const Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
             badgeTheme: BadgeThemeData(
               backgroundColor: colorScheme.primary,
               textColor: deltiecordContrastingForeground(colorScheme.primary),
@@ -225,13 +256,12 @@ class _DeltiecordAppState extends State<DeltiecordApp>
             cardColor: palette.elevated,
             cardTheme: CardThemeData(
               color: palette.elevated,
-              shape: RoundedRectangleBorder(
-                borderRadius: DeltiecordCorners.borderRadius,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: controlRadius),
             ),
             dividerColor: palette.divider,
             extensions: [
               palette,
+              customTheme?.chrome ?? const ThemeChrome(),
               DeltiecordEmojiTypography(
                 fontFamily: emojiFontFamily == systemEmojiFontFamily
                     ? null
@@ -260,45 +290,37 @@ class _DeltiecordAppState extends State<DeltiecordApp>
             useMaterial3: true,
             filledButtonTheme: FilledButtonThemeData(
               style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: DeltiecordCorners.borderRadius,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: controlRadius),
               ),
             ),
             outlinedButtonTheme: OutlinedButtonThemeData(
               style: OutlinedButton.styleFrom(
                 backgroundColor: palette.elevated,
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: DeltiecordCorners.borderRadius,
-                ),
+                side: customTheme == null
+                    ? BorderSide.none
+                    : BorderSide(color: palette.divider),
+                shape: RoundedRectangleBorder(borderRadius: controlRadius),
               ),
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: DeltiecordCorners.borderRadius,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: controlRadius),
               ),
             ),
             chipTheme: ChipThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: DeltiecordCorners.borderRadius,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: controlRadius),
             ),
             dialogTheme: DialogThemeData(
               backgroundColor: palette.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: DeltiecordCorners.borderRadius,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: controlRadius),
             ),
             bottomSheetTheme: BottomSheetThemeData(
               backgroundColor: palette.surface,
               modalBackgroundColor: palette.surface,
               surfaceTintColor: Colors.transparent,
-              shape: const RoundedRectangleBorder(
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(
-                  top: DeltiecordCorners.corner,
+                  top: Radius.circular(customTheme?.chrome.radius ?? 12),
                 ),
               ),
             ),
@@ -314,24 +336,22 @@ class _DeltiecordAppState extends State<DeltiecordApp>
               fillColor: palette.input,
               border: OutlineInputBorder(
                 borderSide: BorderSide.none,
-                borderRadius: DeltiecordCorners.borderRadius,
+                borderRadius: controlRadius,
               ),
               enabledBorder: OutlineInputBorder(
                 borderSide: BorderSide.none,
-                borderRadius: DeltiecordCorners.borderRadius,
+                borderRadius: controlRadius,
               ),
               focusedBorder: OutlineInputBorder(
                 borderSide: BorderSide.none,
-                borderRadius: DeltiecordCorners.borderRadius,
+                borderRadius: controlRadius,
               ),
             ),
             menuTheme: MenuThemeData(
               style: MenuStyle(
                 backgroundColor: WidgetStatePropertyAll(palette.elevated),
                 shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: DeltiecordCorners.borderRadius,
-                  ),
+                  RoundedRectangleBorder(borderRadius: controlRadius),
                 ),
                 padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(vertical: 3),
@@ -340,16 +360,14 @@ class _DeltiecordAppState extends State<DeltiecordApp>
             ),
             popupMenuTheme: PopupMenuThemeData(
               color: palette.elevated,
-              shape: RoundedRectangleBorder(
-                borderRadius: DeltiecordCorners.borderRadius,
-              ),
+              shape: RoundedRectangleBorder(borderRadius: controlRadius),
             ),
             tooltipTheme: TooltipThemeData(
               waitDuration: const Duration(milliseconds: 450),
               showDuration: const Duration(seconds: 4),
               decoration: BoxDecoration(
                 color: palette.elevated,
-                borderRadius: DeltiecordCorners.borderRadius,
+                borderRadius: controlRadius,
               ),
               textStyle: TextStyle(
                 color: palette.text,
@@ -361,9 +379,9 @@ class _DeltiecordAppState extends State<DeltiecordApp>
         return MaterialApp(
           title: 'Deltiecord',
           debugShowCheckedModeBanner: false,
-          themeAnimationDuration: preferences.reducedMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 200),
+          // Apply appearance atomically on every platform, even while another
+          // route is opening/closing or the application ticker is suspended.
+          themeAnimationDuration: Duration.zero,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
@@ -543,7 +561,9 @@ class _InAppNotificationOverlay extends StatelessWidget {
                 elevation: 12,
                 color: context.deltiecord.elevated,
                 shape: RoundedRectangleBorder(
-                  borderRadius: DeltiecordCorners.borderRadius,
+                  borderRadius: BorderRadius.circular(
+                    Theme.of(context).extension<ThemeChrome>()?.radius ?? 12,
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(

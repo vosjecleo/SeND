@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'platform_io.dart';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/chat_models.dart';
 import '../version.dart';
@@ -99,7 +100,11 @@ final class TelegramStickerPack {
 final class TelegramStickerService {
   TelegramStickerService({Uri? proxyUri, this.convertedSize = 256})
     : assert(convertedSize == 128 || convertedSize == 256),
-      _proxyUri = proxyUri ?? Uri.parse(_defaultProxyUrl);
+      _proxyUri =
+          proxyUri ??
+          (kIsWeb
+              ? Uri.base.resolve('/api/servers/telegram/stickers')
+              : Uri.parse(_defaultProxyUrl));
 
   static const _defaultProxyUrl = String.fromEnvironment(
     'TELEGRAM_STICKER_PROXY_URL',
@@ -114,7 +119,9 @@ final class TelegramStickerService {
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 10)
     ..idleTimeout = const Duration(seconds: 20)
-    ..userAgent = 'Deltiecord/$deltiecordVersion';
+    // Safari may preflight an application-set User-Agent. Browsers own it;
+    // our anonymous proxy intentionally accepts only simple GET requests.
+    ..userAgent = kIsWeb ? null : 'Deltiecord/$deltiecordVersion';
   final Map<String, Future<Uint8List>> _downloads = {};
   final Queue<Completer<void>> _downloadWaiters = Queue();
   int _activeDownloads = 0;

@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'dart:convert';
 import 'platform_io.dart';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'web_preview_proxy.dart';
 
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -211,6 +213,51 @@ class DirectLinkPreviewFetcher {
   final int maximumDocumentBytes;
   final int maximumImageBytes;
 
+  Future<DirectPreviewResponse> _request(
+    Uri url,
+    String accept, {
+    Map<String, String> headers = const {},
+  }) async {
+    if (kIsWeb) {
+      final kind = accept.startsWith('image/')
+          ? 'image'
+          : accept.startsWith('video/')
+          ? 'video'
+          : 'document';
+      final client = HttpClient();
+      try {
+        final request = await client
+            .getUrl(
+              webPreviewProxyUrl(
+                url,
+                kind: kind,
+                range: headers[HttpHeaders.rangeHeader],
+              ),
+            )
+            .timeout(requestTimeout);
+        final response = await request.close().timeout(requestTimeout);
+        return DirectPreviewResponse(
+          statusCode: response.statusCode,
+          body: response,
+          contentType: response.headers.contentType?.mimeType,
+          contentLength: response.contentLength,
+          contentRange: response.headers.value('content-range'),
+        );
+      } catch (_) {
+        client.close(force: true);
+        rethrow;
+      }
+    }
+    final addresses = await _resolveHost(url.host).timeout(requestTimeout);
+    if (addresses.isEmpty ||
+        addresses.any((item) => !isPublicInternetAddress(item))) {
+      throw const HttpException('Preview host did not resolve publicly.');
+    }
+    return _transport
+        .get(url, addresses.first, accept: accept, headers: headers)
+        .timeout(requestTimeout);
+  }
+
   Future<LinkPreview?> fetch(
     Uri initialUrl, {
     bool Function(Uri uri)? allowUrl,
@@ -221,14 +268,7 @@ class DirectLinkPreviewFetcher {
       if (allowUrl != null && !allowUrl(url)) {
         throw const HttpException('Preview host is outside the allowed set.');
       }
-      final addresses = await _resolveHost(url.host).timeout(requestTimeout);
-      if (addresses.isEmpty ||
-          addresses.any((item) => !isPublicInternetAddress(item))) {
-        throw const HttpException('Preview host did not resolve publicly.');
-      }
-      final response = await _transport
-          .get(url, addresses.first, accept: 'text/html,application/xhtml+xml')
-          .timeout(requestTimeout);
+      final response = await _request(url, 'text/html,application/xhtml+xml');
       if (_isRedirect(response.statusCode)) {
         await response.body.drain<void>();
         final location = response.location;
@@ -357,18 +397,7 @@ class DirectLinkPreviewFetcher {
           'Preview image host is outside the allowed set.',
         );
       }
-      final addresses = await _resolveHost(
-        current.host,
-      ).timeout(requestTimeout);
-      if (addresses.isEmpty ||
-          addresses.any((item) => !isPublicInternetAddress(item))) {
-        throw const HttpException(
-          'Preview image host did not resolve publicly.',
-        );
-      }
-      final response = await _transport
-          .get(current, addresses.first, accept: 'image/*')
-          .timeout(requestTimeout);
+      final response = await _request(current, 'image/*');
       if (_isRedirect(response.statusCode)) {
         await response.body.drain<void>();
         final location = response.location;
@@ -416,23 +445,11 @@ class DirectLinkPreviewFetcher {
           'Preview video host is outside the allowed set.',
         );
       }
-      final addresses = await _resolveHost(
-        current.host,
-      ).timeout(requestTimeout);
-      if (addresses.isEmpty ||
-          addresses.any((item) => !isPublicInternetAddress(item))) {
-        throw const HttpException(
-          'Preview video host did not resolve publicly.',
-        );
-      }
-      final response = await _transport
-          .get(
-            current,
-            addresses.first,
-            accept: 'video/*,application/octet-stream;q=0.5',
-            headers: const {HttpHeaders.rangeHeader: 'bytes=0-0'},
-          )
-          .timeout(requestTimeout);
+      final response = await _request(
+        current,
+        'video/*,application/octet-stream;q=0.5',
+        headers: const {HttpHeaders.rangeHeader: 'bytes=0-0'},
+      );
       if (_isRedirect(response.statusCode)) {
         await _cancelBody(response.body);
         final location = response.location;

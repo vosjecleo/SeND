@@ -105,7 +105,7 @@ class _SpaceBar extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          CircleAvatar(
+                          ThemeAvatar(
                             key: const Key('space-settings-avatar-preview'),
                             radius: 34,
                             backgroundColor: context.deltiecord.elevated,
@@ -140,7 +140,7 @@ class _SpaceBar extends StatelessWidget {
                                       });
                                     }
                                   },
-                                  icon: const Icon(Icons.image_outlined),
+                                  icon: const ThemeIcon(Icons.image_outlined),
                                   label: const Text('Choose picture'),
                                 ),
                                 if (previewAvatar != null)
@@ -214,7 +214,7 @@ class _SpaceBar extends StatelessWidget {
                               text: 'https://matrix.to/#/${space.id}',
                             ),
                           ),
-                          icon: const Icon(Icons.link, size: 18),
+                          icon: const ThemeIcon(Icons.link, size: 18),
                           label: const Text('Copy Space link'),
                         ),
                       ),
@@ -500,7 +500,8 @@ class _SpaceBar extends StatelessWidget {
                   selected: backend.selectedSpaceId == null,
                   onTap: () => backend.selectSpace(null),
                   attentionCount: backend.directUnreadCount,
-                  child: const Icon(Icons.home_filled, size: 21),
+                  unread: backend.directUnreadCount > 0,
+                  child: const ThemeIcon(Icons.home_filled, size: 21),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
@@ -520,6 +521,7 @@ class _SpaceBar extends StatelessWidget {
                       selected: backend.selectedSpaceId == space.id,
                       onTap: () => backend.selectSpace(space.id),
                       attentionCount: backend.pingCountForSpace(space.id),
+                      unread: backend.hasUnreadForSpace(space.id),
                       onSecondaryTapDown: (details) => _showSpaceMenu(
                         context,
                         space,
@@ -551,14 +553,17 @@ class _SpaceBar extends StatelessWidget {
                     tooltip: 'Create Space',
                     selected: false,
                     onTap: () => _createSpace(context),
-                    child: const Icon(Icons.add, size: 25),
+                    child: const ThemeIcon(Icons.add, size: 25),
                   ),
                 ),
                 _SpaceButton(
                   tooltip: 'Search for Spaces',
                   selected: false,
                   onTap: () => _searchSpaces(context),
-                  child: const Icon(Icons.travel_explore_outlined, size: 23),
+                  child: const ThemeIcon(
+                    Icons.travel_explore_outlined,
+                    size: 23,
+                  ),
                 ),
               ],
             ),
@@ -650,11 +655,11 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
             autofocus: true,
             decoration: InputDecoration(
               hintText: 'Space name, #alias:server, or Matrix server',
-              prefixIcon: const Icon(Icons.travel_explore_outlined),
+              prefixIcon: const ThemeIcon(Icons.travel_explore_outlined),
               suffixIcon: IconButton(
                 tooltip: 'Search',
                 onPressed: _searching ? null : _search,
-                icon: const Icon(Icons.search),
+                icon: const ThemeIcon(Icons.search),
               ),
             ),
             onSubmitted: (_) => _search(),
@@ -679,12 +684,15 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
                       final space = _results[index];
                       return ListTile(
                         dense: true,
-                        leading: CircleAvatar(
+                        leading: ThemeAvatar(
                           backgroundImage: space.avatarBytes == null
                               ? null
                               : MemoryImage(space.avatarBytes!),
                           child: space.avatarBytes == null
-                              ? const Icon(Icons.workspaces_outline, size: 18)
+                              ? const ThemeIcon(
+                                  Icons.workspaces_outline,
+                                  size: 18,
+                                )
                               : null,
                         ),
                         title: Text(space.name),
@@ -726,6 +734,7 @@ class _SpaceButton extends StatelessWidget {
     required this.child,
     this.onSecondaryTapDown,
     this.attentionCount = 0,
+    this.unread = false,
   });
 
   final String tooltip;
@@ -734,6 +743,7 @@ class _SpaceButton extends StatelessWidget {
   final Widget child;
   final GestureTapDownCallback? onSecondaryTapDown;
   final int attentionCount;
+  final bool unread;
 
   @override
   Widget build(BuildContext context) {
@@ -743,29 +753,61 @@ class _SpaceButton extends StatelessWidget {
         child: SizedBox.square(
           key: ValueKey('space-button-$tooltip'),
           dimension: 48,
-          child: Badge.count(
-            count: attentionCount.clamp(0, 999),
-            isLabelVisible: attentionCount > 0,
-            alignment: Alignment.topRight,
-            offset: const Offset(-1, 1),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            textColor: Theme.of(context).colorScheme.onPrimary,
-            child: Material(
-              color: selected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : context.deltiecord.elevated,
-              borderRadius: DeltiecordCorners.borderRadius,
-              clipBehavior: Clip.hardEdge,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onSecondaryTapDown: onSecondaryTapDown,
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: DeltiecordCorners.borderRadius,
-                  child: Center(child: child),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Badge.count(
+                  count: attentionCount.clamp(0, 999),
+                  isLabelVisible: attentionCount > 0,
+                  alignment: Alignment.topRight,
+                  offset: const Offset(-1, 1),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  textColor: Theme.of(context).colorScheme.onPrimary,
+                  child: Material(
+                    color: selected
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : context.deltiecord.elevated,
+                    borderRadius: BorderRadius.circular(
+                      Theme.of(context).extension<ThemeChrome>()?.radius ?? 12,
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onSecondaryTapDown: onSecondaryTapDown,
+                      child: InkWell(
+                        onTap: onTap,
+                        borderRadius: BorderRadius.circular(
+                          Theme.of(context).extension<ThemeChrome>()?.radius ??
+                              12,
+                        ),
+                        child: Center(child: child),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (selected || unread)
+                Positioned(
+                  left: -8,
+                  top: selected ? 12 : 21,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: ValueKey(
+                        'space-marker-$tooltip-${selected ? "selected" : "unread"}',
+                      ),
+                      width: 4,
+                      height: selected ? 24 : 6,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : const Color(0xff324452),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -828,12 +870,12 @@ class _RoomPanelState extends State<_RoomPanel> {
                 segments: const [
                   ButtonSegment(
                     value: RoomPresentation.text,
-                    icon: Icon(Icons.tag),
+                    icon: ThemeIcon(Icons.tag),
                     label: Text('Text'),
                   ),
                   ButtonSegment(
                     value: RoomPresentation.voice,
-                    icon: Icon(Icons.volume_up_outlined),
+                    icon: ThemeIcon(Icons.volume_up_outlined),
                     label: Text('Voice'),
                   ),
                 ],
@@ -951,138 +993,146 @@ class _RoomPanelState extends State<_RoomPanel> {
             children: [
               Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 6, 6),
-                    alignment: Alignment.centerLeft,
+                  ThemeSurface(
                     color: context.deltiecord.surface,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: InkWell(
-                            borderRadius: DeltiecordCorners.borderRadius,
-                            onTap: backend.selectedSpaceId == null
-                                ? null
-                                : () => showSpacePages(
-                                    context,
-                                    backend,
-                                    backend.selectedSpaceId!,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 6, 6),
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: InkWell(
+                              borderRadius: DeltiecordCorners.borderRadius,
+                              onTap: backend.selectedSpaceId == null
+                                  ? null
+                                  : () => showSpacePages(
+                                      context,
+                                      backend,
+                                      backend.selectedSpaceId!,
+                                    ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  backend.selectedSpaceId == null
+                                      ? 'Home'
+                                      : backend.spaces
+                                                .where(
+                                                  (space) =>
+                                                      space.id ==
+                                                      backend.selectedSpaceId,
+                                                )
+                                                .map((space) => space.name)
+                                                .firstOrNull ??
+                                            'Space',
+                                  style: const TextStyle(
+                                    fontSize: DeltiecordTypeScale.normal,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Text(
-                                backend.selectedSpaceId == null
-                                    ? 'Home'
-                                    : backend.spaces
-                                              .where(
-                                                (space) =>
-                                                    space.id ==
-                                                    backend.selectedSpaceId,
-                                              )
-                                              .map((space) => space.name)
-                                              .firstOrNull ??
-                                          'Space',
-                                style: const TextStyle(
-                                  fontSize: DeltiecordTypeScale.normal,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const Key('desktop-room-search'),
-                                controller: _roomSearchController,
-                                decoration: const InputDecoration(
-                                  hintText: 'Search',
-                                  isDense: true,
-                                  prefixIcon: Icon(Icons.search, size: 18),
-                                  contentPadding: EdgeInsets.symmetric(
-                                    vertical: 8,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  key: const Key('desktop-room-search'),
+                                  controller: _roomSearchController,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search',
+                                    isDense: true,
+                                    prefixIcon: ThemeIcon(
+                                      Icons.search,
+                                      size: 18,
+                                    ),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
                                   ),
+                                  onChanged: (value) =>
+                                      setState(() => _roomQuery = value),
                                 ),
-                                onChanged: (value) =>
-                                    setState(() => _roomQuery = value),
                               ),
-                            ),
-                            IconButton(
-                              key: const ValueKey('desktop-inbox'),
-                              tooltip: 'Inbox',
-                              icon: InboxIcon(backend: backend),
-                              onPressed: () => showUnifiedInbox(
-                                context,
-                                backend,
-                                onOpen: (item) async {
-                                  await backend.selectRoom(item.roomId);
-                                  if (item.eventId != null) {
-                                    await backend.jumpToEvent(item.eventId!);
+                              IconButton(
+                                key: const ValueKey('desktop-inbox'),
+                                tooltip: 'Inbox',
+                                icon: InboxIcon(backend: backend),
+                                onPressed: () => showUnifiedInbox(
+                                  context,
+                                  backend,
+                                  onOpen: (item) async {
+                                    await backend.selectRoom(item.roomId);
+                                    if (item.eventId != null) {
+                                      await backend.jumpToEvent(item.eventId!);
+                                    }
+                                  },
+                                ),
+                              ),
+                              PopupMenuButton<String>(
+                                tooltip: backend.selectedSpaceId == null
+                                    ? 'Start chat or create room'
+                                    : 'Create room',
+                                icon: const ThemeIcon(Icons.add, size: 20),
+                                onSelected: (value) {
+                                  if (value == 'direct') {
+                                    _startDirectMessage(context);
+                                  }
+                                  if (value == 'room') _createRoom(context);
+                                  if (value == 'category') {
+                                    _createCategory(context);
                                   }
                                 },
+                                itemBuilder: (context) => [
+                                  if (backend.selectedSpaceId == null)
+                                    const PopupMenuItem(
+                                      value: 'direct',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: ThemeIcon(
+                                          Icons.person_add_alt_1_outlined,
+                                        ),
+                                        title: Text('Start direct message'),
+                                      ),
+                                    ),
+                                  PopupMenuItem(
+                                    value: 'room',
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: const ThemeIcon(
+                                        Icons.add_comment_outlined,
+                                      ),
+                                      title: Text(
+                                        backend.selectedSpaceId == null
+                                            ? 'Create group chat'
+                                            : 'Create room',
+                                      ),
+                                    ),
+                                  ),
+                                  if (backend.selectedSpaceId
+                                      case final spaceId?
+                                      when backend.canManageSpaceChannelLayout(
+                                        spaceId,
+                                      ))
+                                    const PopupMenuItem(
+                                      value: 'category',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: ThemeIcon(
+                                          Icons.create_new_folder_outlined,
+                                        ),
+                                        title: Text('Create category'),
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ),
-                            PopupMenuButton<String>(
-                              tooltip: backend.selectedSpaceId == null
-                                  ? 'Start chat or create room'
-                                  : 'Create room',
-                              icon: const Icon(Icons.add, size: 20),
-                              onSelected: (value) {
-                                if (value == 'direct') {
-                                  _startDirectMessage(context);
-                                }
-                                if (value == 'room') _createRoom(context);
-                                if (value == 'category') {
-                                  _createCategory(context);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                if (backend.selectedSpaceId == null)
-                                  const PopupMenuItem(
-                                    value: 'direct',
-                                    child: ListTile(
-                                      dense: true,
-                                      leading: Icon(
-                                        Icons.person_add_alt_1_outlined,
-                                      ),
-                                      title: Text('Start direct message'),
-                                    ),
-                                  ),
-                                PopupMenuItem(
-                                  value: 'room',
-                                  child: ListTile(
-                                    dense: true,
-                                    leading: const Icon(
-                                      Icons.add_comment_outlined,
-                                    ),
-                                    title: Text(
-                                      backend.selectedSpaceId == null
-                                          ? 'Create group chat'
-                                          : 'Create room',
-                                    ),
-                                  ),
-                                ),
-                                if (backend.selectedSpaceId case final spaceId?
-                                    when backend.canManageSpaceChannelLayout(
-                                      spaceId,
-                                    ))
-                                  const PopupMenuItem(
-                                    value: 'category',
-                                    child: ListTile(
-                                      dense: true,
-                                      leading: Icon(
-                                        Icons.create_new_folder_outlined,
-                                      ),
-                                      title: Text('Create category'),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   Expanded(
@@ -1149,118 +1199,138 @@ class _CurrentUserPanel extends StatelessWidget {
           horizontal: 10,
           vertical: _bottomPanelVerticalInset,
         ),
-        child: Material(
-          key: const Key('current-user-island'),
+        child: ThemeSurface.wrap(
+          context,
+          kind: 'island',
           color: context.deltiecord.island,
-          shape: RoundedRectangleBorder(
-            borderRadius: DeltiecordCorners.borderRadius,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => showOwnProfile(context, backend),
-            onLongPress: () => showPresenceControls(context, backend),
-            onSecondaryTap: () => showPresenceControls(context, backend),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox.square(
-                    dimension: 40,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: ClipOval(
-                            child: backend.profileAvatarBytes == null
-                                ? ColoredBox(
-                                    color: context.deltiecord.elevated,
-                                    child: const Icon(Icons.person, size: 19),
-                                  )
-                                : Image.memory(
-                                    backend.profileAvatarBytes!,
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          right: -1,
-                          bottom: -1,
-                          child: Container(
-                            key: ValueKey(
-                              'current-user-presence-'
-                              '${backend.profilePresence.name}',
+          child: Material(
+            key: const Key('current-user-island'),
+            color:
+                Theme.of(context)
+                        .extension<ThemeChrome>()
+                        ?.surfaces
+                        .containsKey('island') ==
+                    true
+                ? Colors.transparent
+                : context.deltiecord.island,
+            shape: RoundedRectangleBorder(
+              borderRadius: DeltiecordCorners.borderRadius,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => showOwnProfile(context, backend),
+              onLongPress: () => showPresenceControls(context, backend),
+              onSecondaryTap: () => showPresenceControls(context, backend),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox.square(
+                      dimension: 40,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned.fill(
+                            child: ThemeAvatarClip(
+                              child: backend.profileAvatarBytes == null
+                                  ? ColoredBox(
+                                      color: context.deltiecord.elevated,
+                                      child: const ThemeIcon(
+                                        Icons.person,
+                                        size: 19,
+                                      ),
+                                    )
+                                  : Image.memory(
+                                      backend.profileAvatarBytes!,
+                                      fit: BoxFit.cover,
+                                    ),
                             ),
-                            width: 11,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: switch (backend.profilePresence) {
-                                UserPresence.online => const Color(0xff43b581),
-                                UserPresence.away => const Color(0xffffc857),
-                                UserPresence.doNotDisturb => const Color(
-                                  0xffe5484d,
+                          ),
+                          Positioned(
+                            right: -1,
+                            bottom: -1,
+                            child: Container(
+                              key: ValueKey(
+                                'current-user-presence-'
+                                '${backend.profilePresence.name}',
+                              ),
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: switch (backend.profilePresence) {
+                                  UserPresence.online => const Color(
+                                    0xff43b581,
+                                  ),
+                                  UserPresence.away => const Color(0xffffc857),
+                                  UserPresence.doNotDisturb => const Color(
+                                    0xffe5484d,
+                                  ),
+                                  UserPresence.offline => const Color(
+                                    0xff747680,
+                                  ),
+                                },
+                                border: Border.all(
+                                  color: context.deltiecord.island,
+                                  width: 2,
                                 ),
-                                UserPresence.offline => const Color(0xff747680),
-                              },
-                              border: Border.all(
-                                color: context.deltiecord.island,
-                                width: 2,
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          backend.profileDisplayName ??
-                              backend.userId
-                                  ?.split(':')
-                                  .first
-                                  .replaceFirst('@', '') ??
-                              'Matrix account',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        if (backend.profileStatusMessage case final status?)
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            status,
+                            backend.profileDisplayName ??
+                                backend.userId
+                                    ?.split(':')
+                                    .first
+                                    .replaceFirst('@', '') ??
+                                'Matrix account',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: context.deltiecord.muted),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
-                      ],
+                          if (backend.profileStatusMessage case final status?)
+                            Text(
+                              status,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: context.deltiecord.muted),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  _UserControlButton(
-                    tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
-                    onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
-                    icon: backend.voiceMuted ? Icons.mic_off : Icons.mic,
-                    disabled: backend.voiceMuted,
-                  ),
-                  _UserControlButton(
-                    tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
-                    onPressed: () =>
-                        backend.setVoiceDeafened(!backend.voiceDeafened),
-                    icon: backend.voiceDeafened
-                        ? Icons.headset_off
-                        : Icons.headphones,
-                    disabled: backend.voiceDeafened,
-                  ),
-                  _UserControlButton(
-                    tooltip: 'Settings',
-                    onPressed: () => showDeltiecordSettings(context, backend),
-                    icon: Icons.settings_outlined,
-                  ),
-                ],
+                    _UserControlButton(
+                      tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
+                      onPressed: () =>
+                          backend.setVoiceMuted(!backend.voiceMuted),
+                      icon: backend.voiceMuted ? Icons.mic_off : Icons.mic,
+                      disabled: backend.voiceMuted,
+                    ),
+                    _UserControlButton(
+                      tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
+                      onPressed: () =>
+                          backend.setVoiceDeafened(!backend.voiceDeafened),
+                      icon: backend.voiceDeafened
+                          ? Icons.headset_off
+                          : Icons.headphones,
+                      disabled: backend.voiceDeafened,
+                    ),
+                    _UserControlButton(
+                      tooltip: 'Settings',
+                      onPressed: () => showDeltiecordSettings(context, backend),
+                      icon: Icons.settings_outlined,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1299,7 +1369,7 @@ class _UserControlButton extends StatelessWidget {
             ? Theme.of(context).colorScheme.error.withValues(alpha: 0.14)
             : Colors.transparent,
       ),
-      icon: Icon(icon, size: 18),
+      icon: ThemeIcon(icon, size: 18),
     ),
   );
 }
@@ -1589,7 +1659,10 @@ class _ChannelCategorySection extends StatelessWidget {
                           child: Center(
                             child: Transform.translate(
                               offset: const Offset(0, 1),
-                              child: const Icon(Icons.drag_indicator, size: 14),
+                              child: const ThemeIcon(
+                                Icons.drag_indicator,
+                                size: 14,
+                              ),
                             ),
                           ),
                         ),
@@ -1622,7 +1695,7 @@ class _ChannelCategorySection extends StatelessWidget {
                               ),
                               if (current != null) ...[
                                 const SizedBox(width: 2),
-                                Icon(
+                                ThemeIcon(
                                   collapsed
                                       ? Icons.chevron_right
                                       : Icons.expand_more,
@@ -1720,12 +1793,12 @@ class _RoomListTile extends StatelessWidget {
                   segments: const [
                     ButtonSegment(
                       value: RoomPresentation.text,
-                      icon: Icon(Icons.tag),
+                      icon: ThemeIcon(Icons.tag),
                       label: Text('Text'),
                     ),
                     ButtonSegment(
                       value: RoomPresentation.voice,
-                      icon: Icon(Icons.volume_up_outlined),
+                      icon: ThemeIcon(Icons.volume_up_outlined),
                       label: Text('Voice'),
                     ),
                   ],
@@ -1738,7 +1811,7 @@ class _RoomListTile extends StatelessWidget {
                   spacing: 8,
                   children: [
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.image_outlined),
+                      icon: const ThemeIcon(Icons.image_outlined),
                       label: const Text('Choose picture'),
                       onPressed: () async {
                         final result = await FilePicker.pickFiles(
@@ -1981,7 +2054,7 @@ class _RoomListTile extends StatelessWidget {
         child: Center(
           child: Transform.translate(
             offset: const Offset(0, 1),
-            child: const Icon(Icons.drag_indicator, size: 16),
+            child: const ThemeIcon(Icons.drag_indicator, size: 16),
           ),
         ),
       );
@@ -2065,7 +2138,7 @@ class _RoomContextMenuEntry extends StatelessWidget {
     width: 200,
     child: Row(
       children: [
-        Icon(icon, size: 18, color: color),
+        ThemeIcon(icon, size: 18, color: color),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -2099,10 +2172,19 @@ class _HomeRoomListTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onSecondaryTapDown: onSecondaryTapDown,
       child: Material(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: selected
+                ? Theme.of(context).extension<ThemeChrome>()?.selectionBorder ??
+                      Colors.transparent
+                : Colors.transparent,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
         color: selected
-            ? Theme.of(
-                context,
-              ).colorScheme.primaryContainer.withValues(alpha: 0.42)
+            ? Theme.of(context).extension<ThemeChrome>()?.selection ??
+                  Theme.of(context).colorScheme.primary.withValues(alpha: .13)
             : Colors.transparent,
         child: InkWell(
           onTap: () => backend.selectRoom(room.id),
@@ -2146,7 +2228,7 @@ class _HomeRoomListTile extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: DeltiecordTypeScale.bigChat,
                             fontWeight: FontWeight.w700,
-                            height: 1,
+                            height: 1.1,
                           ),
                         ),
                         SizedBox(
@@ -2228,14 +2310,14 @@ class _RoomIcon extends StatelessWidget {
       return SizedBox(
         width: size,
         height: size,
-        child: const Icon(Icons.volume_up_outlined, size: 18),
+        child: const ThemeIcon(Icons.volume_up_outlined, size: 18),
       );
     }
     if (room.usesChannelIcon) {
       return SizedBox(
         width: size,
         height: size,
-        child: const Icon(Icons.tag, size: 18),
+        child: const ThemeIcon(Icons.tag, size: 18),
       );
     }
     final avatar = room.avatarBytes;
@@ -2245,7 +2327,7 @@ class _RoomIcon extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: CircleAvatar(
+            child: ThemeAvatar(
               backgroundColor: context.deltiecord.elevated,
               backgroundImage: avatar == null ? null : MemoryImage(avatar),
               child: avatar == null

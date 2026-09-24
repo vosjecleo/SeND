@@ -55,32 +55,35 @@ class _RecipientProfilePanelState extends State<_RecipientProfilePanel> {
   }
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    key: const Key('recipient-profile-panel'),
-    decoration: BoxDecoration(color: context.deltiecord.panel),
-    child: FutureBuilder<UserProfileSummary>(
-      future: _profile,
-      builder: (context, snapshot) {
-        final profile = snapshot.data;
-        if (profile == null) {
-          return const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text('Loading profile…'),
-              ],
-            ),
+  Widget build(BuildContext context) => ColoredBox(
+    color: context.deltiecord.panel,
+    child: Padding(
+      key: const Key('recipient-profile-panel'),
+      padding: const EdgeInsets.fromLTRB(10, 8, 12, _bottomPanelVerticalInset),
+      child: FutureBuilder<UserProfileSummary>(
+        future: _profile,
+        builder: (context, snapshot) {
+          final profile = snapshot.data;
+          if (profile == null) {
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('Loading profile…'),
+                ],
+              ),
+            );
+          }
+          return _RecipientProfileContents(
+            backend: widget.backend,
+            member: widget.member,
+            profile: profile,
+            loading: false,
           );
-        }
-        return _RecipientProfileContents(
-          backend: widget.backend,
-          member: widget.member,
-          profile: profile,
-          loading: false,
-        );
-      },
+        },
+      ),
     ),
   );
 }
@@ -109,171 +112,195 @@ class _RecipientProfileContents extends StatelessWidget {
           Color.lerp(accent, palette.rail, 0.58)!.toARGB32(),
     );
     final gradientTop = Color.alphaBlend(
-      accent.withValues(alpha: 0.25),
+      accent.withValues(alpha: 0.42),
       palette.panel,
     );
     final gradientBottom = Color.alphaBlend(
-      secondary.withValues(alpha: 0.3),
+      secondary.withValues(alpha: 0.48),
       palette.panel,
     );
-    return DecoratedBox(
-      key: const Key('recipient-profile-gradient'),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [gradientTop, gradientBottom],
-        ),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 204,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          bottom: 58,
-                          child: profile.bannerBytes == null
-                              ? DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [accent, secondary],
-                                    ),
-                                  ),
-                                )
-                              : Image.memory(
-                                  profile.bannerBytes!,
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 720,
-                                  filterQuality: FilterQuality.medium,
-                                ),
-                        ),
-                        Positioned(
-                          left: 20,
-                          bottom: 18,
-                          child: _RecipientAvatar(
-                            profile: profile,
-                            fallback: member,
-                            panelColor: palette.panel,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.displayName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: DeltiecordTypeScale.bigUi,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        if (profile.statusMessage?.trim().isNotEmpty ==
-                            true) ...[
-                          const SizedBox(height: 5),
-                          ProfileStatusBubble(
-                            status: profile.statusMessage!,
-                            accent: accent,
-                            expanded: true,
-                          ),
-                        ],
-                        const SizedBox(height: 5),
-                        SelectableText(
-                          profile.userId,
-                          style: TextStyle(color: palette.muted),
-                        ),
-                        if (profile.pronouns?.trim().isNotEmpty == true) ...[
-                          const SizedBox(height: 7),
-                          Text(
-                            profile.pronouns!,
-                            style: TextStyle(color: palette.muted),
-                          ),
-                        ],
-                        if (profile.timezone?.trim().isNotEmpty == true) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(Icons.schedule, size: 16, color: accent),
-                              const SizedBox(width: 7),
-                              Expanded(
-                                child: Text(
-                                  '${TimezoneCatalog.offsetLabel(profile.timezone)}'
-                                  '  •  ${TimezoneCatalog.localTimeLabel(profile.timezone)} local time',
-                                  style: TextStyle(color: palette.muted),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        if (profile.bio?.trim().isNotEmpty == true)
-                          SizedBox(
-                            key: const Key('recipient-about-island'),
-                            width: double.infinity,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: palette.surface,
-                                borderRadius: DeltiecordCorners.borderRadius,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'ABOUT ME',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: DeltiecordTypeScale.normal,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(profile.bio!),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (loading) ...[
-                          const SizedBox(height: 12),
-                          const LinearProgressIndicator(minHeight: 2),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+    final radius = Theme.of(context).extension<ThemeChrome>()?.radius ?? 12;
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            key: const Key('recipient-profile-gradient'),
+            clipBehavior: Clip.antiAlias,
+            foregroundDecoration: BoxDecoration(
+              border: Border.all(
+                color: accent.withValues(alpha: .8),
+                width: 1.25,
+              ),
+              borderRadius: BorderRadius.circular(radius),
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x28000000),
+                  blurRadius: 14,
+                  offset: Offset(0, 3),
+                ),
+              ],
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [gradientTop, gradientBottom],
               ),
             ),
-          ),
-          SizedBox(
-            height: _bottomPanelHeightFor(context),
-            child: ColoredBox(
-              color: Colors.transparent,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: _bottomPanelVerticalInset,
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          height: 170,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                bottom: 46,
+                                child: profile.bannerBytes == null
+                                    ? DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [accent, secondary],
+                                          ),
+                                        ),
+                                      )
+                                    : Image.memory(
+                                        profile.bannerBytes!,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 720,
+                                        filterQuality: FilterQuality.medium,
+                                      ),
+                              ),
+                              Positioned(
+                                left: 16,
+                                bottom: 4,
+                                child: _RecipientAvatar(
+                                  profile: profile,
+                                  fallback: member,
+                                  panelColor: gradientTop,
+                                ),
+                              ),
+                              if (profile.statusMessage?.trim().isNotEmpty ==
+                                  true)
+                                Positioned(
+                                  left: 114,
+                                  right: 16,
+                                  bottom: 8,
+                                  child: ProfileStatusBubble(
+                                    status: profile.statusMessage!,
+                                    accent: accent,
+                                    expanded: true,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profile.displayName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(text: profile.userId),
+                                    if (profile.pronouns?.trim().isNotEmpty ==
+                                        true)
+                                      TextSpan(
+                                        text: '  •  ${profile.pronouns}',
+                                      ),
+                                  ],
+                                ),
+                                style: TextStyle(
+                                  color: palette.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              if (profile.bio?.trim().isNotEmpty == true) ...[
+                                const SizedBox(height: 20),
+                                Text(
+                                  profile.bio!,
+                                  key: const Key('recipient-bio'),
+                                  style: const TextStyle(height: 1.4),
+                                ),
+                              ],
+                              if (profile.timezone?.trim().isNotEmpty ==
+                                  true) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    ThemeIcon(
+                                      Icons.schedule,
+                                      size: 16,
+                                      color: accent,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Expanded(
+                                      child: Text(
+                                        '${TimezoneCatalog.offsetLabel(profile.timezone)}'
+                                        '  •  ${TimezoneCatalog.localTimeLabel(profile.timezone)} local time',
+                                        style: TextStyle(color: palette.muted),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (loading) ...[
+                                const SizedBox(height: 12),
+                                const LinearProgressIndicator(minHeight: 2),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: SizedBox(
-                  key: const Key('view-full-profile-island'),
-                  width: double.infinity,
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          height: _bottomPanelHeightFor(context) - _bottomPanelVerticalInset,
+          child: ColoredBox(
+            color: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                key: const Key('view-full-profile-island'),
+                width: double.infinity,
+                child: ThemeSurface.wrap(
+                  context,
+                  kind: 'button',
+                  color: palette.island,
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: palette.island,
+                      backgroundColor:
+                          Theme.of(context)
+                                  .extension<ThemeChrome>()
+                                  ?.surfaces
+                                  .containsKey('button') ==
+                              true
+                          ? Colors.transparent
+                          : palette.island.withValues(alpha: .9),
                       foregroundColor: Theme.of(context).colorScheme.onSurface,
                       shape: RoundedRectangleBorder(
                         borderRadius: DeltiecordCorners.borderRadius,
@@ -287,8 +314,8 @@ class _RecipientProfileContents extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -315,8 +342,18 @@ class _RecipientAvatar extends StatelessWidget {
           width: 88,
           height: 88,
           padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(color: panelColor, shape: BoxShape.circle),
-          child: CircleAvatar(
+          decoration: BoxDecoration(
+            color: panelColor,
+            shape:
+                Theme.of(context).extension<ThemeChrome>()?.glassAvatars == true
+                ? BoxShape.rectangle
+                : BoxShape.circle,
+            borderRadius:
+                Theme.of(context).extension<ThemeChrome>()?.glassAvatars == true
+                ? BorderRadius.circular(10)
+                : null,
+          ),
+          child: ThemeAvatar(
             backgroundImage: bytes == null
                 ? null
                 : ResizeImage(MemoryImage(bytes), width: 192, height: 192),

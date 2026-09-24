@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/chat_models.dart';
 import '../services/timezone_catalog.dart';
 import 'deltiecord_theme.dart';
+import 'json_theme.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -36,16 +37,20 @@ class DeltiecordProfileCard extends StatelessWidget {
           Color.lerp(accent, palette.rail, 0.62)!.toARGB32(),
     );
     final gradientTop = Color.alphaBlend(
-      accent.withValues(alpha: 0.28),
+      accent.withValues(alpha: 0.42),
       palette.surface,
     );
     final gradientBottom = Color.alphaBlend(
-      secondaryAccent.withValues(alpha: 0.3),
+      secondaryAccent.withValues(alpha: 0.48),
       palette.surface,
     );
     final timezone = profile.timezone;
     return Container(
       key: const Key('profile-card'),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: DeltiecordCorners.borderRadius,
+        border: Border.all(color: accent.withValues(alpha: .8), width: 1.25),
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -74,41 +79,18 @@ class DeltiecordProfileCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      profile.displayName,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    if (profile.pronouns?.trim().isNotEmpty == true)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.32),
-                          borderRadius: DeltiecordCorners.borderRadius,
-                        ),
-                        child: Text(profile.pronouns!),
-                      ),
-                    if (profile.statusMessage?.trim().isNotEmpty == true)
-                      ProfileStatusBubble(
-                        status: profile.statusMessage!,
-                        accent: accent,
-                      ),
-                  ],
+                Text(
+                  profile.displayName,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 Row(
                   children: [
                     Expanded(
                       child: SelectableText(
-                        profile.userId,
+                        '${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns}' : ''}',
                         style: TextStyle(
                           color: palette.muted,
                           fontSize: DeltiecordTypeScale.normal,
@@ -120,56 +102,34 @@ class DeltiecordProfileCard extends StatelessWidget {
                       onPressed: () => Clipboard.setData(
                         ClipboardData(text: profile.userId),
                       ),
-                      icon: const Icon(Icons.copy_outlined, size: 18),
+                      icon: const ThemeIcon(Icons.copy_outlined, size: 18),
                     ),
                   ],
                 ),
+                if (profile.bio?.trim().isNotEmpty == true || preview) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    profile.bio?.trim().isNotEmpty == true
+                        ? profile.bio!
+                        : 'Your bio preview will appear here.',
+                    style: const TextStyle(height: 1.4),
+                  ),
+                ],
                 if (timezone?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Icon(Icons.schedule, size: 18),
+                      const ThemeIcon(Icons.schedule, size: 18),
                       const SizedBox(width: 8),
-                      Text(
-                        '${TimezoneCatalog.offsetLabel(timezone)}  •  '
-                        '${TimezoneCatalog.localTimeLabel(timezone)}',
-                        style: TextStyle(color: palette.muted),
+                      Expanded(
+                        child: Text(
+                          '${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)} local time',
+                          style: TextStyle(color: palette.muted),
+                        ),
                       ),
                     ],
                   ),
                 ],
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: palette.background,
-                    borderRadius: DeltiecordCorners.borderRadius,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.person_outline, size: 19),
-                          SizedBox(width: 8),
-                          Text(
-                            'About me',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        profile.bio?.trim().isNotEmpty == true
-                            ? profile.bio!
-                            : preview
-                            ? 'Your bio preview will appear here.'
-                            : 'No bio provided.',
-                      ),
-                    ],
-                  ),
-                ),
                 if (onMessage != null || onBlock != null) ...[
                   const SizedBox(height: 18),
                   Row(
@@ -178,7 +138,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: onMessage,
-                            icon: const Icon(Icons.chat_bubble_outline),
+                            icon: const ThemeIcon(Icons.chat_bubble_outline),
                             label: const Text('Message'),
                             style: FilledButton.styleFrom(
                               backgroundColor: accent,
@@ -194,7 +154,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: onBlock,
-                            icon: Icon(blocked ? Icons.undo : Icons.block),
+                            icon: ThemeIcon(blocked ? Icons.undo : Icons.block),
                             label: Text(blocked ? 'Unblock' : 'Block'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Theme.of(
@@ -228,28 +188,47 @@ class ProfileStatusBubble extends StatelessWidget {
   final bool expanded;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: expanded ? double.infinity : null,
-    constraints: const BoxConstraints(maxWidth: 360),
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-    decoration: BoxDecoration(
-      color: Color.alphaBlend(
-        accent.withValues(alpha: 0.18),
-        context.deltiecord.elevated,
+  Widget build(BuildContext context) {
+    final fill = Color.alphaBlend(
+      accent.withValues(alpha: .12),
+      context.deltiecord.elevated,
+    );
+    return Tooltip(
+      message: status,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -5,
+            top: 10,
+            child: Transform.rotate(
+              angle: .785398,
+              child: SizedBox.square(
+                dimension: 12,
+                child: ColoredBox(color: fill),
+              ),
+            ),
+          ),
+          Container(
+            width: expanded ? double.infinity : null,
+            constraints: const BoxConstraints(maxWidth: 360),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: accent.withValues(alpha: .18)),
+            ),
+            child: Text(
+              status.replaceAll(RegExp(r'\s+'), ' ').trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
       ),
-      borderRadius: DeltiecordCorners.borderRadius,
-    ),
-    child: Row(
-      mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
-      children: [
-        Icon(Icons.chat_bubble_outline, size: 15, color: accent),
-        const SizedBox(width: 7),
-        Flexible(
-          child: Text(status, maxLines: 3, overflow: TextOverflow.ellipsis),
-        ),
-      ],
-    ),
-  );
+    );
+  }
 }
 
 class _ProfileHeader extends StatelessWidget {
@@ -312,10 +291,23 @@ class _ProfileHeader extends StatelessWidget {
                   height: 124,
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
+                    shape:
+                        Theme.of(
+                              context,
+                            ).extension<ThemeChrome>()?.glassAvatars ==
+                            true
+                        ? BoxShape.rectangle
+                        : BoxShape.circle,
+                    borderRadius:
+                        Theme.of(
+                              context,
+                            ).extension<ThemeChrome>()?.glassAvatars ==
+                            true
+                        ? BorderRadius.circular(10)
+                        : null,
                     color: palette.surface,
                   ),
-                  child: ClipOval(
+                  child: ThemeAvatarClip(
                     clipBehavior: Clip.antiAlias,
                     child: ColoredBox(
                       color: palette.elevated,
@@ -358,32 +350,44 @@ class _ProfileHeader extends StatelessWidget {
               ),
               Positioned(
                 right: 20,
+                left: 168,
                 bottom: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: palette.elevated,
-                    borderRadius: DeltiecordCorners.borderRadius,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _profilePresenceColour(profile.presence),
+                child: profile.statusMessage?.trim().isNotEmpty == true
+                    ? ProfileStatusBubble(
+                        status: profile.statusMessage!,
+                        accent: accent,
+                        expanded: true,
+                      )
+                    : Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: palette.elevated,
+                            borderRadius: DeltiecordCorners.borderRadius,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _profilePresenceColour(
+                                    profile.presence,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(_profilePresenceLabel(profile.presence)),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(_profilePresenceLabel(profile.presence)),
-                    ],
-                  ),
-                ),
               ),
               if (onEdit != null || onClose != null)
                 Positioned(
@@ -396,7 +400,7 @@ class _ProfileHeader extends StatelessWidget {
                         IconButton.filledTonal(
                           tooltip: 'Edit profile',
                           onPressed: onEdit,
-                          icon: const Icon(Icons.edit_outlined),
+                          icon: const ThemeIcon(Icons.edit_outlined),
                         ),
                       if (onEdit != null && onClose != null)
                         const SizedBox(width: 8),
@@ -405,7 +409,7 @@ class _ProfileHeader extends StatelessWidget {
                           key: const Key('profile-close-button'),
                           tooltip: 'Close profile',
                           onPressed: onClose,
-                          icon: const Icon(Icons.close),
+                          icon: const ThemeIcon(Icons.close),
                         ),
                     ],
                   ),

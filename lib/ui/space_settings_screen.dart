@@ -370,6 +370,12 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
   Widget _channels() {
     final rooms = {for (final room in backend.rooms) room.id: room};
     final categories = backend.selectedSpaceCategories;
+    final categorized = categories
+        .expand((category) => category.roomIds)
+        .toSet();
+    final loose = backend.rooms
+        .where((room) => !categorized.contains(room.id))
+        .toList();
     final canManage = backend.canManageSpaceChannelLayout(widget.space.id);
     return _section('Channels', [
       Text(
@@ -378,6 +384,20 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
         'Arrow buttons remain available for keyboard and touch users.',
       ),
       const SizedBox(height: 12),
+      if (loose.isNotEmpty) ...[
+        const ListTile(title: Text('Uncategorised')),
+        for (var index = 0; index < loose.length; index++)
+          _draggableRoomTile(
+            loose[index],
+            ChannelCategorySummary(
+              id: '',
+              name: 'Uncategorised',
+              roomIds: loose.map((room) => room.id).toList(),
+            ),
+            index,
+            canManage,
+          ),
+      ],
       for (
         var categoryIndex = 0;
         categoryIndex < categories.length;
@@ -518,7 +538,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
             onPressed: canManage && index > 0
                 ? () => backend.moveRoomInSpace(
                     room.id,
-                    categoryId: category.id,
+                    categoryId: category.id.isEmpty ? null : category.id,
                     beforeRoomId: category.roomIds[index - 1],
                   )
                 : null,
@@ -529,7 +549,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
             onPressed: canManage && index < category.roomIds.length - 1
                 ? () => backend.moveRoomInSpace(
                     room.id,
-                    categoryId: category.id,
+                    categoryId: category.id.isEmpty ? null : category.id,
                     beforeRoomId: index + 2 < category.roomIds.length
                         ? category.roomIds[index + 2]
                         : null,
@@ -547,7 +567,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
           details.data != 'room:${room.id}',
       onAcceptWithDetails: (details) => backend.moveRoomInSpace(
         details.data.substring('room:'.length),
-        categoryId: category.id,
+        categoryId: category.id.isEmpty ? null : category.id,
         beforeRoomId: room.id,
       ),
       builder: (context, candidates, _) => ColoredBox(

@@ -126,7 +126,7 @@ class GifService {
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 8)
     ..idleTimeout = const Duration(seconds: 10)
-    ..userAgent = 'Deltiecord/$deltiecordVersion';
+    ..userAgent = kIsWeb ? null : 'Deltiecord/$deltiecordVersion';
   File? _favoritesFile;
   static List<GifSearchResult>? _favorites;
   static final _mediaCache = <Uri, Uint8List>{};

@@ -455,7 +455,11 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     if (enabledRooms != null) {
       for (final roomEntry in enabledRooms.entries) {
         final enabledRoom = _matrix.getRoomById(roomEntry.key);
-        if (enabledRoom == null || roomEntry.value is! Map) continue;
+        if (enabledRoom == null ||
+            enabledRoom.membership != Membership.join ||
+            roomEntry.value is! Map) {
+          continue;
+        }
         for (final stateKey
             in (roomEntry.value as Map).keys.whereType<String>()) {
           final event = enabledRoom.states['im.ponies.room_emotes']?[stateKey];
@@ -476,6 +480,75 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     _stickerPacks = List.unmodifiable(packs);
     _stickerPackSourceSignature = _stickerPackSourcesSignature();
     _notifyBackendListeners();
+  }
+
+  Future<StickerPackSummary?> _resolveStickerPack({
+    String? packId,
+    Uri? mediaUri,
+  }) async {
+    if (packId == null && mediaUri == null) return null;
+    await _refreshStickerPacks();
+    for (final pack in _stickerPacks) {
+      if (pack.id == packId ||
+          pack.stickers.any((item) => item.mxcUri == mediaUri)) {
+        return pack;
+      }
+    }
+    // Discovery must not depend on the currently selected server, and must
+    // never expose state from rooms the account has not joined.
+    for (final room in _matrix.rooms.where(
+      (room) => room.membership == Membership.join,
+    )) {
+      for (final entry
+          in (room.states['im.ponies.room_emotes'] ?? {}).entries) {
+        final images = entry.value.content.tryGetMap<String, Object?>('images');
+        if (images == null) continue;
+        final id = 'room:${room.id}:${entry.key}';
+        if (id != packId &&
+            !images.values.any(
+              (item) => item is Map && item['url'] == mediaUri?.toString(),
+            )) {
+          continue;
+        }
+        final stickers = <StickerSummary>[];
+        for (final image in images.entries) {
+          if (image.value is! Map) continue;
+          final data = Map<String, Object?>.from(image.value as Map);
+          final uri = Uri.tryParse('${data['url'] ?? ''}');
+          if (uri == null || !uri.isScheme('mxc')) continue;
+          final info = data.tryGetMap<String, Object?>('info');
+          stickers.add(
+            StickerSummary(
+              id: image.key,
+              name: '${data['body'] ?? image.key}',
+              body: data['body'] as String?,
+              mimeType: info?.tryGet<String>('mimetype') ?? 'image/png',
+              mxcUri: uri,
+              width: info?.tryGet<int>('w'),
+              height: info?.tryGet<int>('h'),
+              assetType: stickerAssetTypeFromImagePackItem(data),
+              packId: id,
+            ),
+          );
+        }
+        if (stickers.isEmpty) continue;
+        return StickerPackSummary(
+          id: id,
+          name:
+              entry.value.content
+                  .tryGetMap<String, Object?>('pack')
+                  ?.tryGet<String>('display_name') ??
+              'Stickers',
+          stickers: stickers,
+          roomScoped: true,
+          sourceRoomId: room.id,
+          stateKey: entry.key,
+          canManage: room.canChangeStateEvent('im.ponies.room_emotes'),
+          globallyEnabled: false,
+        );
+      }
+    }
+    return null;
   }
 
   bool _stickerPackSourcesChanged() =>
@@ -505,6 +578,14 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       },
       'space': roomPacks(_selectedSpaceId),
       'room': roomPacks(_selectedRoomId),
+      'subscribed': {
+        for (final id
+            in (_matrix.accountData['im.ponies.emote_rooms']?.content
+                        .tryGetMap<String, Object?>('rooms') ??
+                    const <String, Object?>{})
+                .keys)
+          id: roomPacks(id),
+      },
     });
   }
 

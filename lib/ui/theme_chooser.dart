@@ -10,7 +10,13 @@ const themeNames = {
 };
 
 class ThemeChooser extends StatelessWidget {
-  const ThemeChooser({required this.value, required this.onChanged, super.key});
+  const ThemeChooser({
+    required this.value,
+    required this.onChanged,
+    this.customActive = false,
+    super.key,
+  });
+  final bool customActive;
   final DeltiecordThemeMode value;
   final ValueChanged<DeltiecordThemeMode> onChanged;
 
@@ -19,8 +25,8 @@ class ThemeChooser extends StatelessWidget {
     key: const Key('theme-chooser'),
     contentPadding: EdgeInsets.zero,
     leading: _Swatch(value),
-    title: const Text('Theme'),
-    subtitle: Text(themeNames[value]!),
+    title: Text(customActive ? 'Switch to a built-in theme' : 'Theme'),
+    subtitle: customActive ? null : Text(themeNames[value]!),
     trailing: const Icon(Icons.expand_more),
     onTap: () async {
       final next = await showDialog<DeltiecordThemeMode>(

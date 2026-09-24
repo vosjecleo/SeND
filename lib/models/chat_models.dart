@@ -53,6 +53,8 @@ class AppPreferences {
     this.density = InterfaceDensity.compact,
     this.compactness = 0.5,
     this.themeMode = DeltiecordThemeMode.regular,
+    this.themeJson = '',
+    this.themeSettings = const {},
     this.interfaceScale = 1,
     this.fontScale = 1,
     this.use24HourTime = true,
@@ -101,6 +103,8 @@ class AppPreferences {
   final InterfaceDensity density;
   final double compactness;
   final DeltiecordThemeMode themeMode;
+  final String themeJson;
+  final Map<String, Object?> themeSettings;
   final double interfaceScale;
   final double fontScale;
   final bool use24HourTime;
@@ -158,6 +162,8 @@ class AppPreferences {
     InterfaceDensity? density,
     double? compactness,
     DeltiecordThemeMode? themeMode,
+    String? themeJson,
+    Map<String, Object?>? themeSettings,
     double? interfaceScale,
     double? fontScale,
     bool? use24HourTime,
@@ -206,6 +212,8 @@ class AppPreferences {
     density: density ?? this.density,
     compactness: compactness ?? this.compactness,
     themeMode: themeMode ?? this.themeMode,
+    themeJson: themeJson ?? this.themeJson,
+    themeSettings: themeSettings ?? this.themeSettings,
     interfaceScale: interfaceScale ?? this.interfaceScale,
     fontScale: fontScale ?? this.fontScale,
     use24HourTime: use24HourTime ?? this.use24HourTime,
