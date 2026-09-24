@@ -1,5 +1,8 @@
 # Deltiecord architecture
 
+Current baseline: 0.9.34+106. See [release readiness](RELEASE_READINESS.md)
+for the distinction between implemented features and validated behaviour.
+
 ## Data flow and boundaries
 
 Flutter widgets depend on `ChatBackend` and the SDK-independent models in
@@ -57,19 +60,21 @@ immediately, and hydrates avatars, replies, and homeserver link previews
 afterward. Four bounded room snapshots keep warm A to B to A switches useful
 while a new SDK timeline is being acquired.
 
-The visible timeline uses configurable chunks (30 messages by default) and a
-hard materialized cap of 120 events. History insertion and eviction preserve a
-stable Matrix event ID plus its viewport offset. Search, pin, reply, and
-notification navigation reconstruct a bounded timeline around the target
-instead of paginating from the present. Metadata hydration is serialized so
-sync bursts cannot start overlapping avatar/preview passes.
+Timeline history and caches are bounded separately. Search, pin, reply and
+notification navigation can reconstruct history around a target rather than
+paginating from the present. Preserve stable Matrix event identities and avoid
+changing scroll bookkeeping as a side effect of metadata or feature work.
+The [scroll investigation](timeline-scroll-investigation-99.md) remains an
+investigation record, not proof that every jitter cause has been eliminated.
 
 ## Media pipeline
 
 Matrix media remains behind `ChatBackend`. Images and small files use bounded
 downloads. Encrypted video is exposed to the native player through
 `MediaRangeProxy`, a loopback-only HTTP range server with random capability
-paths. Tokens, AES keys, and IVs remain in memory and are cleared on release,
+paths. Encrypted ciphertext must be fully downloaded and checked against its
+declared SHA-256 before decryption/playback; seeking then reuses the verified
+cache. This is not early unauthenticated streaming. Tokens, AES keys, and IVs remain in memory and are cleared on release,
 expiry, logout, and shutdown. Decrypted files opened externally are written to
 a private temporary directory and removed by age, not immediately while an
 external application may still be reading them.
@@ -78,11 +83,12 @@ Link previews use the configured homeserver by default. A bounded URL-level
 cache avoids duplicate preview requests. The optional direct fallback is off by
 default and uses DNS/address validation plus pinned sockets so redirects and DNS
 rebinding cannot target local services. GIF search uses the documented
-Deltiecord GIPHY proxy and downloads a selected result only after user action.
+Deltiecord KLIPY proxy. Picker previews and selected media use bounded shared
+fetches/caches; older GIPHY favourites remain supported.
 
 ## Mobile UI boundary
 
-`lib/ui/mobile` contains the Android shell, navigation rail, timeline, details
+`lib/ui/mobile` contains the phone shell (Android and mobile web), navigation rail, timeline, details
 panel, profile sheet, media views, and MatrixRTC presentation. Those widgets use
 only `ChatBackend` and SDK-independent models. Navigation, timeline, and details
 remain mounted as sliding layers so drawer gestures preserve room scroll state
@@ -117,13 +123,36 @@ state or account data so other clients can ignore them safely.
 Avatar, decrypted preview, reply, and link-preview caches are pruned with room
 or timeline lifetimes. Flutter's decoded image cache is bounded at startup.
 
-User profiles use a field-aware LRU pool. Presence is overlaid from Matrix
-`/sync` continuously, status has a one-minute fallback refresh, and extensible
-text fields refresh every five minutes while a profile remains active. Avatar,
-profile-banner, and voice-background bytes are shared by every profile surface
-and are downloaded again only for an explicit full-profile refresh or a local
-profile edit. Matrix currently provides no general sync event for remote
-extensible-profile text changes, hence the slower metadata fallback poll.
+User profiles use a field-aware shared cache. Cached profile data can be displayed
+while background refreshes run; media bytes are reused by URI across surfaces.
+Presence comes through Matrix sync, while extensible profile metadata needs
+separate refreshes. Profile editing and viewing use the shared profile-card layout
+and crop masks rather than independent approximations of banner/avatar geometry.
 Media players and playback sources are reference counted by message ID.
 Temporary files, local proxy capabilities, timers, stream subscriptions,
 editors, and WebRTC resources all have explicit shutdown paths.
+
+## Threads, forums and administration (106)
+
+`ThreadSession` is the SDK-independent discussion boundary. Matrix thread
+sessions own their timeline/subscriptions, page relations, reuse message/media
+sending and mapping, and dispose on close. Desktop shows a side pane; mobile
+opens a discussion page. Thread-specific receipts and notification navigation
+are separate from the main timeline's read frontier.
+
+Forums combine ordinary room history with the server thread index. Post metadata
+adds titles/tags to readable message bodies; replies remain standard threads.
+Following and personal cosmetic-event filters use existing account preferences.
+
+Administration stores ordered role metadata separately from permission updates.
+Applying roles writes standard room power levels with preserved manual baselines
+and per-Space contributions. There is no new database migration or parallel
+permission engine. See [the extension contract](MATRIX_EXTENSIONS.md).
+
+## Browser authentication (106)
+
+Login-method discovery precedes Matrix SSO or SDK OIDC/PKCE. Native platforms
+use an external browser and random loopback callback; web uses a same-origin
+callback/BroadcastChannel. Destination/session/state checks, cancellation and
+SDK persistence remain explicit. Login never substitutes for encryption-device
+verification. See [networking](networking.md) and [hosting](web-deployment.md).

@@ -1,5 +1,10 @@
 # Web build 99: deferred follow-up
 
+> Historical record: observations, plans and validation below apply to the named
+> build/date. For the current 0.9.34+106 milestone, see the [documentation index](README.md)
+> and [1.0 hardening checklist](RELEASE_READINESS.md). Open validation items are
+> not automatically resolved by a later release.
+
 Build 100 follow-up is now underway; see
 [the investigation and validation limits](web-performance-build-100.md).
 The original observations below are retained for context.

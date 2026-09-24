@@ -1,5 +1,9 @@
 # Deltiecord emoji names and aliases
 
+Applies to 0.9.34+106. This is the bundled Unicode catalogue; imported custom
+emoji names belong to their packs and can be edited through pack management.
+See [current documentation](../../docs/README.md).
+
 Edit `aliases.json` to change the canonical `:name:` or add aliases without
 modifying the upstream emoji catalogue in `emojis.json`.
 

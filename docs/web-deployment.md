@@ -1,5 +1,32 @@
 # Web/PWA deployment
 
+## Current deployment: 0.9.34+106 — 2026-09-24
+
+Build 106 passed Web/PWA CI (including browser autofill/mode-switch regression)
+and was deployed atomically to `chat.deltie.net`. Public `version.json` reports
+version `0.9.34`, build `106`; isolation headers were checked. All four platform
+artifacts are published as Latest. See [1.0 readiness](RELEASE_READINESS.md) for
+the distinction between feature-scope completion and real-device validation.
+
+**Pending operator action before browser SSO:** the new exact `/auth.html` nginx
+rule prevents callback codes/tokens entering access logs or caches. The PWA
+files are deployed, but this privileged configuration change was not applied.
+On Deltie, the inspected, narrowly scoped candidate and backup/rollback script
+are staged under `/home/cleo/deltiecord-106-server`:
+
+```sh
+ssh -t deltie 'sudo bash /home/cleo/deltiecord-106-server/apply-auth-nginx.sh'
+```
+
+The script refuses a changed live snippet, backs it up, validates nginx, and
+reloads only after validation. Other hosts should adapt only the callback rule
+from `server/chat-nginx.conf` after reviewing their live configuration. Do not
+overwrite unrelated Matrix, RTC, TLS or proxy configuration. This does not enable
+an identity provider on the password-only Deltie homeserver. Real-provider and
+iOS standalone-PWA callback behaviour still need testing.
+
+## Routine updates
+
 For subsequent published releases, `/home/cleo/update-deltiecord.sh` on deltie
 can re-select the latest web artifact from the local downloads manifest. Run it
 as `cleo`, without sudo. It validates the artifact name and SHA-256, takes an
@@ -15,7 +42,7 @@ without remote renderer dependencies, and packages `dist/*-web.tar.gz`.
 
 ## Hosting prerequisites
 
-### Build 99 deployment status — 2026-09-23
+### Historical build 99 cutover — 2026-09-23
 
 The owner completed the approved cutover from Element to Deltiecord at
 `chat.deltie.net`. Post-cutover checks confirm version 0.9.30 build 99, active
@@ -31,7 +58,7 @@ Reported first-release issues are tracked in
 [the build 99 follow-up notes](web-build-99-follow-up.md). No fixes for those
 reports are included in this deployment verification.
 
-Deployment is **not complete** until the chosen host has all of these:
+A new host's deployment is **not complete** until it has all of these:
 
 - HTTPS with a valid certificate, serving the complete archive at `/`.
 - `Cross-Origin-Opener-Policy: same-origin` and
@@ -63,14 +90,14 @@ extracts into an immutable version directory, and atomically switches a
 `current` symlink. Rollback is selecting the previous release directory. The
 release publisher transfers this script with the checksum-verified archive.
 
-**Existing installation:** inspection found Element already serving
+**Historical pre-cutover installation:** inspection found Element already serving
 `chat.deltie.net`. The owner approved replacing Element there. Preserve its
 files/configuration and browser data; do not clear
 Element's IndexedDB. Inspect existing service-worker scope/caches during the
 cutover. The SSH account currently also needs privileged assistance to update
 nginx/certificates/services. No such server changes were made during inspection.
 
-## Approved chat.deltie.net cutover (owner action)
+## Historical chat.deltie.net cutover (completed; do not rerun for updates)
 
 The release stages the following files under `/home/cleo/deltiecord-99-server`
 on `deltie`. The private KLIPY key is copied separately with mode 0600 and is

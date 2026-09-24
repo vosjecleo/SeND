@@ -1,8 +1,10 @@
 # Deltiecord Matrix extensions
 
 Deltiecord uses normal Matrix rooms, Spaces, events, encryption, media, and
-MatrixRTC. The fields below add presentation metadata only. Other clients can
-safely ignore every `net.deltiecord.*` value.
+MatrixRTC. Namespaced fields add presentation and lifecycle metadata; standard
+membership/power levels remain authoritative. Other clients can ignore unknown
+fields, but will not implement Deltiecord's role-propagation or timeout-restoration
+behaviour. Current baseline: 0.9.34+106.
 
 ## Room presentation
 
@@ -14,7 +16,7 @@ safely ignore every `net.deltiecord.*` value.
 { "kind": "text" }
 ```
 
-`kind` is `text` or `voice`. Missing, unknown, or ignored state is presented as
+`kind` is `text`, `voice` or `forum`. Missing, unknown, or ignored state is presented as
 a normal text room. A voice room remains an interoperable Matrix room and uses
 standard MatrixRTC state for participation.
 
@@ -191,7 +193,7 @@ clients can ignore the state; the power-level restriction remains visible and
 interoperable. Rooms that deny the moderator permission to write this custom
 state can only restore automatically while the initiating client remains open.
 
-## Standard interoperable events used by build 78
+## Standard interoperable events
 
 Polls use Matrix poll events from MSC3381 through matrix-dart-sdk. Stickers are
 sent as `m.sticker`; packs are read from the established FluffyChat-compatible
@@ -222,3 +224,59 @@ short status message use standard Matrix presence APIs. A homeserver or client
 that ignores the custom fields still sees a normal Matrix profile. The ordinary
 profile banner is deliberately not reused as an RTC background: each image has
 a different crop and privacy/presentation purpose.
+
+## Threads and forum posts (106)
+
+Replies use standard `m.thread` relations and fallback reply metadata. A forum
+is an ordinary room with `kind: "forum"`; thread roots contain readable message
+bodies (or image attachments) plus optional `net.deltiecord.forum.post` content:
+
+```json
+{"version": 1, "title": "A discussion", "tags": ["help"]}
+```
+
+Titles allow 1–120 graphemes; at most five unique tags allow 24 graphemes each.
+Invalid metadata falls back to normal message rendering. Existing edits retain
+forum metadata when replacement content does not provide it. The thread index
+discovers older roots; unsupported homeservers fall back to ordinary history.
+Threads share room membership/access. Following is an account-synced list under
+`followed_threads` in `net.deltiecord.settings`, not an independent push rule.
+
+## Named roles and Administration (106)
+
+`net.deltiecord.space.roles` is Space state with an empty state key:
+
+```json
+{
+  "version": 1,
+  "roles": [{"id": "helpers", "name": "Helpers", "power_level": 50, "color": 4285109721}],
+  "members": {"@user:example.org": ["helpers"]}
+}
+```
+
+Stable IDs survive renaming/reordering. Multiple assigned roles contribute their
+maximum power level; the first ordered role with a colour supplies name colour.
+Role labels are server-profile presentation, not global identity changes.
+
+Saving metadata and applying member powers are separate confirmed actions.
+Standard `m.room.power_levels` remains the authority. Its
+`net.deltiecord.role_power` map records each affected user's manual `baseline`,
+last `applied` value and contributing `spaces`, preserving explicit overrides
+and shared-child-room contributions. Authority checks and partial failures are
+reported rather than silently replacing every child's permissions.
+
+Administration Rules edits standard power-level defaults, action thresholds,
+event thresholds and `notifications.room`. Encrypted inner message types cannot
+be independently enforced by the homeserver; upload/account/alias policy is not
+turned into a client-side permission system.
+
+## Personal room event visibility (106)
+
+`room_event_visibility` in `net.deltiecord.settings` contains `defaults` and
+per-room `rooms` maps with boolean keys `avatar`, `name`, `membership`, `profile`
+and `room`. Missing room values inherit defaults; missing defaults show events.
+These are display filters, not deletion or room policy. Security/encryption and
+moderation events are not hidden by cosmetic filters.
+
+Pronoun entries are limited to 16 graphemes on write and old longer entries are
+truncated for display. No SQL migration is needed for these additions.

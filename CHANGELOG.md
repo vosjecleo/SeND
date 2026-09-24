@@ -1,5 +1,9 @@
 # Changelog
 
+Current latest: **0.9.34+106**. This is the feature-scope milestone; subsequent
+work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
+Historical entries preserve the scope and terminology of their own releases.
+
 ## Deltiecord 0.9.34 build 106 — 2026-09-24
 
 - Keep onboarding text scrollable with navigation outside the content viewport.
@@ -14,6 +18,15 @@
 - Administration: named multi-role assignments, ordered name
   colours, server-profile badges, and explicit room permission propagation with
   manual-power preservation and partial-failure reporting.
+- Split Administration into Roles and Rules. Roles have stable IDs, names,
+  colours and numeric power levels; highest assigned power wins, while the first
+  ordered coloured role supplies the displayed colour. Saving definitions does
+  not silently rewrite child-room permissions.
+- Expose applicable Matrix thresholds for membership/moderation, message/state
+  events, encryption, room access/history/metadata, channel/category ordering,
+  server packs, role definitions, pages, voice membership and notifications.
+  Preserve manual powers and contributions from multiple Spaces during explicit
+  propagation; report authority violations and partial failures.
 - Add standard Matrix discussions in a desktop side pane or mobile page, with
   paginated replies, shared media rendering, attachments, edits, reactions,
   thread-specific receipts and notification navigation. Collapse replies in the
@@ -22,9 +35,26 @@
   title/tag metadata, image covers, search/filtering, recent-activity sorting,
   unread indicators and an account-synced Following list. Failed posts retain
   their drafts for retry. Following organises posts; room rules control alerts.
+- Discover active older forum roots through the server thread index, with an
+  ordinary-history fallback for unsupported homeservers. Titles allow 120
+  graphemes; posts support up to five tags and optional image covers.
 - Discover homeserver browser-login methods and support Matrix SSO / SDK OIDC
   with PKCE, state-bound callbacks, cancellation and SDK token persistence.
   Device encryption verification/recovery remains a separate step.
+- Use external browsers with random loopback callbacks on native platforms and
+  same-origin validated callbacks on web. The Android return link carries no
+  login credentials. Prepare a narrow nginx callback rule that disables access
+  logging/caching; operator application remains required on Deltie.
+- Keep data in existing Matrix events/state/account data; no new SQL migration.
+  Preserve standard message/media fallbacks for clients without forum/role UI.
+- Validation: 366 tests passed with one existing skip; static analysis clean.
+  All four platform CI builds passed, including Linux package smoke tests and
+  the web autofill regression. Stabilize the browser test's semantic-layout
+  timing and retain diagnostic screenshots on failure.
+
+Published as Latest on GitHub and deltie.net; PWA deployment verified at build
+106. Stable was not promoted. Documentation was subsequently reconciled with
+this milestone, with current guides separated from historical investigations.
 
 Hardware/cross-client authentication validation remains outstanding. Hosted
 browser SSO requires the narrowly scoped auth callback hosting rule.

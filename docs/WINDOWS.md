@@ -1,5 +1,14 @@
 # Windows support
 
+Current published baseline: 0.9.34+106. CI passed for the installer and portable
+build. The feature set is in place; [1.0 hardening](RELEASE_READINESS.md) still
+requires native-device validation, not just successful compilation.
+
+Build 106 resets rich-composer state after sending to address pasted background
+styles, adds desktop discussions/forums and shared profile editing, and provides
+external-browser SSO/OIDC. Check clipboard paste/send on both light and dark
+themes, browser callback return/cancellation, and session restoration on hardware.
+
 Deltiecord uses Flutter's standard Windows desktop runner. CI builds a complete
 portable directory and packages it both as a ZIP and a per-user Inno Setup
 installer. Extract the entire portable ZIP before running `deltiecord.exe`;
@@ -11,7 +20,7 @@ uninstalling does not delete Matrix sessions or other per-user application data.
 
 ## Build locally
 
-Use Flutter 3.44.9 with the Windows desktop workload and Visual Studio's
+Use Flutter 3.47.0 with the Windows desktop workload and Visual Studio's
 "Desktop development with C++" workload:
 
 ```powershell

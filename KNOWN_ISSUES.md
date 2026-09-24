@@ -1,5 +1,38 @@
 # Known issues
 
+## Current baseline: 0.9.34+106
+
+Feature scope is complete; this remains a Latest/pre-1.0 build, not a declaration
+that all known bugs are resolved. The [1.0 readiness checklist](docs/RELEASE_READINESS.md)
+tracks the hardening phase and required evidence.
+
+- **Unvalidated device paths:** real iOS PWA keyboard/safe-area and browser-login
+  behaviour; Windows clipboard style reset; Android browser-login return/process
+  interruption; physical-device RTC, notification and media lifecycle coverage.
+- **Authentication:** SSO/OIDC is discovered from the homeserver, not automatically
+  enabled on deltie.net. Its callback nginx rule was staged but not applied during
+  build 106 deployment. Account login is separate from device encryption trust;
+  complete interactive verification coverage still needs validation.
+- **Collaboration:** encrypted threads/forums and administration need two-client
+  and mixed-client validation, particularly historical pages, limited-sync resume,
+  receipts and shared-Space power propagation. See the [106 tracker](docs/build-106-plan.md).
+- **Performance:** image-heavy scroll jitter and account/browser-dependent latency
+  remain investigation areas; past hypotheses are not confirmed universal causes.
+- **Protocol/product limits:** threads inherit room access; Following does not
+  subscribe independently to push; roles use numeric Matrix power levels; locally
+  scheduled sends wait until the client is connected; complete missed-call inbox
+  indexing is not claimed. Namespaced settings are not universally cross-client.
+- **Browser limits:** storage can be evicted, media codecs vary, installed iOS
+  notifications need real-device checks, and native macOS/iOS packages are not
+  supplied. See [web deployment](docs/web-deployment.md).
+
+## Historical notes
+
+The records below describe older releases, including their then-current channel
+names. They are not the current issue list. In particular, pack authoring/imports
+and named roles have since shipped; old “not included” statements apply only to
+the versions named below.
+
 ## v0.9.25 build 79 stable notes
 
 - Fixed in build 79: UnifiedPush endpoint registration is callback-driven and

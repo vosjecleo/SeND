@@ -2,6 +2,9 @@
 
 Deltiecord intentionally limits the network destinations it contacts.
 
+Current baseline: 0.9.34+106. Security claims describe implemented boundaries,
+not an independent security certification; see [1.0 readiness](RELEASE_READINESS.md).
+
 ## Configured Matrix homeserver
 
 Automatic after login. Sync, authentication, room state, profile data, search,
@@ -33,13 +36,14 @@ MatrixRTC state is exchanged through Matrix. Media may connect to ICE, STUN,
 TURN, and MatrixRTC infrastructure advertised by the homeserver/RTC setup.
 Linux screen sharing uses standard desktop portals and PipeWire where required.
 
-## GIPHY proxy and media
+## KLIPY proxy and legacy GIF media
 
 Opening the GIF picker can request trending results from
-`https://deltie.net/api/servers/giphy/search`. Typing a search sends the query
-to that HTTPS proxy. The proxy holds the shared GIPHY API key; release binaries
-do not contain it. Selecting a result triggers a bounded download from an
-HTTPS `giphy.com` host after DNS/public-address and redirect validation.
+`https://deltie.net/api/servers/klipy/search` (same-origin API routing on web).
+Typing a search sends the query to that HTTPS proxy. The proxy holds the shared
+KLIPY API key; release binaries do not contain it. Previews and selected GIFs
+contact validated provider media hosts. Older GIPHY favourites remain readable;
+that legacy traffic is not evidence that new search uses GIPHY.
 
 Search JSON is capped at 2 MiB and GIF downloads at 25 MiB. Both use connection
 and inactivity timeouts, status/content-type validation, and bounded redirects.
@@ -61,6 +65,30 @@ range server to `127.0.0.1` on a random port. Random capability paths refer to
 credentials and AES material held only in memory. URLs and logs never contain
 Matrix access tokens, keys, or IVs. Entries expire, are LRU bounded, and are
 removed when playback ends, on logout, and at shutdown.
+
+Encrypted video must first pass a full-ciphertext declared SHA-256 check before
+being exposed to the decoder. Seeking reuses the verified encrypted cache;
+the loopback range interface does not imply unauthenticated early streaming.
+Web uses bounded decrypted Blob playback rather than the native loopback proxy.
+
+## Browser authentication and PWA push
+
+On explicit browser sign-in, login-method discovery contacts the chosen
+homeserver. SSO/OIDC opens its advertised identity-provider flow; OIDC uses SDK
+PKCE and session persistence. Native callback listeners bind only loopback at a
+random port/path. Web callbacks validate origin, path, session and state before
+handing the result back through a same-origin BroadcastChannel. Callback query
+strings must not be logged or cached by hosting infrastructure. Tokens are not
+stored in callback localStorage. See [the required nginx rule](web-deployment.md).
+
+Account authentication does not verify encryption devices or restore lost keys.
+Browser/PWA storage partition behaviour and real-provider round trips need
+device testing. Closing or interrupting an unfinished sign-in may require retry.
+
+The hosted PWA's Web Push gateway accepts short-lived Matrix OpenID proof and
+opaque subscription capabilities, not Matrix access tokens or decrypted message
+bodies. Browser alerts contain generic room activity; OS/browser push services
+are part of delivery. This is separate from Android's ntfy distributor path.
 
 ## X/Twitter preview compatibility
 

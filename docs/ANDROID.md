@@ -1,5 +1,14 @@
 # Android implementation and testing
 
+Build 106 APKs/AAB passed CI and are published as Latest. This is the feature-scope
+milestone, not a replacement for the [1.0 device checklist](RELEASE_READINESS.md).
+
+Build 106 adds the mobile discussion/forum UI, shared profile-card crop previews,
+event filters and Administration. Browser SSO uses an external browser and a
+random-port loopback callback; the return intent only foregrounds Deltiecord.
+Exercise cancellation, process interruption and encrypted-session recovery on
+real devices before considering this flow fully validated.
+
 Deltiecord's Android application uses the shared `ChatBackend`, Matrix backend,
 models, encryption/session storage, timeline, media, profile, settings, and
 MatrixRTC layers. Phone-specific presentation lives in `lib/ui/mobile`; the
@@ -90,8 +99,10 @@ capture permissions are requested when the corresponding feature needs them.
 Screen sharing uses the WebRTC/Android MediaProjection path exposed by the
 current plugin and begins only after explicit user action.
 
-Secure Matrix credentials use `flutter_secure_storage`; files and databases use
-the normal Android application-data/cache directories. Media/file picking,
+Secure Matrix credentials use `flutter_secure_storage`; the Matrix SQLite store
+uses SQLCipher with a secure-storage key and verified migration of old databases.
+This does not claim every cache/file is encrypted. See the
+[security review](build-103-security-review.md). Media/file picking,
 clipboard access, external URLs, camera/microphone capture, media playback, and
 RTC continue through the existing cross-platform services and plugins.
 

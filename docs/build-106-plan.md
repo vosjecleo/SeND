@@ -1,7 +1,10 @@
 # 0.9.34+106 implementation and validation tracker
 
-Implementation approved. No commit, push, package build, installation or release
-has been performed; installed/released 105 remains unchanged.
+Released on 2026-09-24 as **0.9.34+106 Latest** on GitHub and deltie.net.
+All four CI targets passed. The verified Linux artifact was installed locally
+and chat.deltie.net was switched to build 106. Release tag: `v0.9.34-b106`;
+source commit: `b0ef233fa2106325b89fad3f683ed197f2cd388a`.
+This closes feature scope; see [1.0 hardening gates](RELEASE_READINESS.md).
 
 ## Scope audit
 
@@ -76,13 +79,13 @@ replace unrelated TLS/Matrix/RTC configuration. This patch enables no identity
 provider on deltie.net. Its current password-only configuration cannot exercise
 an actual SSO/OIDC sign-in.
 
-## Validation still required before release
+## Validation still required before stable/1.0
 
 - Real Windows clipboard paste/send in light/dark modes.
 - iOS PWA/rounded-screen safe areas and keyboard cycles; real identity-provider
   redirects, including standalone PWA/browser storage partition behaviour.
-- Android loopback return while the browser is foregrounded, cancellation/process
-  interruption, and native package/platform compilation on CI.
+- Android loopback return while the browser is foregrounded and cancellation/process
+  interruption. Native package/platform compilation passed on CI.
 - Real homeserver SSO/OIDC, refresh after relaunch, cancellation during exchange
   and subsequent device verification/encryption recovery.
 - Two-client encrypted discussions/forums: older pages, reactions/edits, limited-
@@ -102,4 +105,8 @@ Final local regression checks (2026-09-24):
 - Full Flutter test suite: 366 passed, one existing skip.
 - Flutter static analysis: no issues found.
 - Callback JavaScript syntax and `git diff --check`: clean.
-- No package builds, commits, pushes, releases or server deployment performed.
+- All four platform workflows and publication passed; ten artifact checksums were
+  verified before publication to Deltie. PWA `version.json` reports 0.9.34 / 106.
+- The browser autofill regression passed after allowing semantic-layout geometry
+  to settle before its mode-switch click. Failure screenshots are retained by CI.
+- The `/auth.html` nginx rule remains an operator step, not a completed deployment.

@@ -1,4 +1,9 @@
-# Linux release packaging
+# Release packaging and publication
+
+Current published baseline: 0.9.34+106. Linux, Windows, Android and Web/PWA CI
+passed; the project remains on Latest while [1.0 hardening](../docs/RELEASE_READINESS.md)
+continues. Documentation-only commits use `[skip ci]` and do not move release
+tags or deployed binaries.
 
 ## Automated publication
 
@@ -10,7 +15,8 @@ packaging/publish-release.sh --channel latest
 
 Use `stable` or `both` to select the deltie.net channel. `--clear-stable`
 removes all stable-channel entries without deleting historical artifacts;
-`--install-host` installs the verified Debian package locally. The script runs
+`--install-host` installs a verified Debian or Arch package locally through
+`pkexec`. The script runs
 the full preflight, pushes `main` and the
 version tag to GitHub and the Deltie mirror, waits for the existing GitHub
 Actions platform builds, verifies the exact ten-artifact checksum set, then
@@ -26,7 +32,7 @@ requires exactly one web archive. Existing native and stable channel entries
 are preserved. Omit the marker and flag for the next all-platform release.
 
 Run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from the
-repository root. GIF search uses Deltiecord's HTTPS proxy; the GIPHY key exists
+repository root. GIF search uses Deltiecord's HTTPS proxy; the KLIPY key exists
 only on that server and is never compiled into release binaries.
 The script creates the Debian package, AppImage, checksums, and build metadata in
 `dist/`. On Arch hosts with `makepkg`, it also creates a native
@@ -37,12 +43,12 @@ Use the release script rather than invoking `flutter build` directly. It also
 applies the release-only Rust FFI retention flag required by the current
 flutter_vodozemac dependency.
 
-Install the Debian package with `sudo apt install ./dist/deltiecord-0.9.29+98-linux-debian-amd64.deb`.
+Install the Debian package with `sudo apt install ./dist/deltiecord-0.9.34+106-linux-debian-amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
 remains in the user's normal XDG application-data and Secret Service stores.
 
-Run the AppImage with `chmod +x dist/deltiecord-0.9.29+98-linux-appimage-x86_64.AppImage` followed by
-`./dist/deltiecord-0.9.29+98-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
+Run the AppImage with `chmod +x dist/deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage` followed by
+`./dist/deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
 required for persisted login and E2EE keys. Audio requires a reachable PulseAudio
 or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
@@ -57,7 +63,7 @@ libsecret, PulseAudio, ALSA, libv4l, libmpv, and PipeWire. `appstreamcli validat
 packaging/linux/net.deltie.deltiecord.metainfo.xml` validates the desktop
 metadata before packaging.
 
-Flutter 3.44.9, rustup 1.29.0, and Rust 1.97.1 are pinned in CI. Downloaded
+Flutter 3.47.0, rustup 1.29.0, and Rust 1.97.1 are pinned in CI. Downloaded
 Flutter/rustup/AppImage executables are verified against committed SHA-256
 values before execution. Cargokit's `stable` toolchain name is locally aliased
 to the pinned Rust toolchain so a build cannot silently advance to a new Rust

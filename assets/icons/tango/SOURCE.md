@@ -1,5 +1,8 @@
 # Tango icon subset
 
+Bundled by the Aero example theme in the 0.9.34+106 baseline. See
+[JSON theme and icon-pack constraints](../../../docs/themes.md).
+
 Original: Tango Desktop Project, tango-icon-theme 0.8.90 (2009).
 Public domain; see COPYING.
 

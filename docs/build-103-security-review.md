@@ -1,5 +1,10 @@
 # Build 103 security and validation handoff
 
+> Historical record: observations, plans and validation below apply to the named
+> build/date. For the current 0.9.34+106 milestone, see the [documentation index](README.md)
+> and [1.0 hardening checklist](RELEASE_READINESS.md). Open validation items are
+> not automatically resolved by a later release.
+
 This review records source/host validation, not a completed native-device
 security certification. Subsequent CI-only compilation and latest publication
 were authorized on 2026-09-24; the physical-device checks below remain outstanding.

@@ -1,5 +1,9 @@
 # JSON themes (schema 1)
 
+Current baseline: 0.9.34+106; schema 1 is unchanged by this patch. Theme selection,
+responsive layout, contrast and lifecycle behaviour are part of the
+[1.0 hardening checklist](RELEASE_READINESS.md), not a new theme-format redesign.
+
 In Appearance, choose **Try Aero Glass** or **Import JSON theme**. Choosing a
 built-in appearance clears the custom theme. Theme documents and their chosen
 settings follow the existing appearance-sync preference; disabling sync keeps

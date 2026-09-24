@@ -1,5 +1,10 @@
 # Build 101 patch queue
 
+> Historical record: observations, plans and validation below apply to the named
+> build/date. For the current 0.9.34+106 milestone, see the [documentation index](README.md)
+> and [1.0 hardening checklist](RELEASE_READINESS.md). Open validation items are
+> not automatically resolved by a later release.
+
 Implementation baseline: 0.9.30+100. The changes below are implemented for 101;
 automated validation is recorded in the changelog and release handoff. Physical
 device notification delivery and large-account/iOS performance still need runtime

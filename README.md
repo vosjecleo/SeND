@@ -1,12 +1,12 @@
 # Deltiecord
 
-> **Latest release: version 0.9.33 build 105**
+> **Latest release: version 0.9.34 build 106 — feature-scope milestone**
 >
 > Deltiecord now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
 > See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
-> Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 105 adds
-> [declarative JSON themes and Aero Glass](docs/themes.md), a polished profile
-> preview, shared-pack discovery and web attachment/media fixes.
+> Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 106 adds
+> Matrix threads, forums, named server roles and administration rules, browser
+> SSO/OIDC, and shared profile editing/layout improvements.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 
@@ -102,7 +102,8 @@ Notable features include:
 
 - End-to-end encrypted Matrix messaging
 - GIF search and trending, powered by KLIPY; favourites include older GIPHY saves
-- Inline video streaming, including encrypted media without requiring the entire file to download first
+- Inline video playback; encrypted attachments are downloaded and their declared
+  ciphertext hash verified before playback, then support local ranged seeking
 - Separate voice channels using MatrixRTC
 - Voice, video and screen sharing, with participant grids, speaking indicators,
   fullscreen streams, per-user volume controls, mute and deafen controls
@@ -125,6 +126,11 @@ Notable features include:
 - WYSIWYG message composition
 - Spoilers
 - Replies
+- Matrix threads in a desktop side pane or mobile discussion page
+- Forum channels with titles, tags, image covers, filtering and followed posts
+- Named multi-role server administration backed by Matrix power levels
+- Per-room event visibility with inherited personal defaults
+- Discovered browser SSO/OIDC alongside password login
 - Message editing and deletion
 - Emoji reactions
 - Searchable emoji picker
@@ -141,6 +147,9 @@ Notable features include:
 - Personal saved messages and a local scheduled-send queue
 - Matrix polls, including disclosed and undisclosed results
 - FluffyChat-compatible Matrix sticker packs
+- Personal/shared sticker and custom emoji packs, Telegram/ZIP imports,
+  inline custom emojis, pack editing, favourites and usage history
+- Voice-message recording with pause/stop controls and waveform feedback
 - Per-room notification modes, temporary mutes, manual unread markers, and a
   persistent first-unread separator
 - Member moderation, invitations, join-request handling, aliases, and power
@@ -167,6 +176,8 @@ Notable features include:
 - Multiple UI density and appearance settings
 - Platform-native text and colour emoji fonts
 - Custom profile theming
+- Declarative JSON themes with semantic tokens, fallback inheritance, custom
+  controls/icon packs and a bundled [Aero Glass example](docs/themes.md)
 
 Deltiecord now includes a dedicated Android phone interface. It reuses the same
 Matrix, encryption, timeline, profile, media, settings, and RTC layers without
@@ -201,32 +212,27 @@ For more detail, see [Networking and privacy](docs/networking.md).
 
 ---
 
-## Current limitations
+## Feature complete in scope; hardening toward 1.0
 
-Deltiecord is not finished yet.
+Build 106 closes the planned feature-expansion phase. In that theoretical sense,
+Deltiecord is feature complete. It does **not** mean every flow is bug-free,
+every Matrix client behaves identically, or every device has been validated.
 
-Some features are still missing or incomplete, including:
+From here, work focuses on hardening, bug fixes, performance, accessibility,
+security review, interoperability and release reliability—not another planned
+major feature expansion. See the [1.0 readiness checklist](docs/RELEASE_READINESS.md)
+and [known issues and boundaries](KNOWN_ISSUES.md).
 
-- Named Space/server roles. Matrix power levels remain the interoperable
-  permission mechanism in build 76.
-- complete missed-call history in the unified inbox
-- final interactive SAS confirmation UI for device verification requests
-- background delivery of locally scheduled messages while Deltiecord is fully
-  stopped; overdue entries are sent on the next connected launch
-- complete cross-client synchronization of all Deltiecord preferences
-- further performance and memory optimization
-- broader interoperability testing
-- complete testing across all supported desktop environments and hardware combinations
-
-Build 76 returns the current release to the prerelease channel because it adds
-several new interoperable and namespaced Matrix workflows at once. The version
-remains below 1.0 while broader platform and hardware validation continues.
+In particular, threads inherit room access, forum Following is not a separate
+push subscription, and named roles use Matrix's numeric power-level hierarchy.
+SSO authenticates an account; it does not replace encryption-device verification.
+The hosted app's new SSO callback requires an operator-applied nginx rule.
 
 The intended meaning of the version numbers is roughly:
 
 ```text
-0.9.x   Feature-complete pre-1.0 releases
-1.0     Stable desktop release
+0.9.x   Feature-scope complete; pre-1.0 hardening releases
+1.0     Stability milestone after documented release gates are met
 ```
 
 The work between 0.9 and 1.0 is primarily bug fixing, testing, performance work, security review, packaging and general release hardening rather than another major feature expansion.
@@ -254,6 +260,7 @@ Deltiecord has currently been built and/or tested on:
 - Linux Mint
 - Windows
 - Android
+- Web/PWA on desktop and mobile, including iPhone/iPad Home Screen installation
 
 Linux is currently the primary development platform.
 
@@ -296,4 +303,6 @@ See [LICENSE](LICENSE) for Deltiecord's license and
 
 ---
 
-**Current release candidate: v0.9.29 build 98**
+**Current latest release: v0.9.34 build 106. Not a stable/1.0 declaration.**
+
+Find technical guides and historical reports in the [documentation index](docs/README.md).

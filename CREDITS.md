@@ -1,5 +1,9 @@
 # Credits and acknowledgements
 
+Reviewed for the 0.9.34+106 feature-scope milestone. Credits describe dependency
+and reference provenance, not an endorsement or security certification. See the
+[documentation index](docs/README.md) for current implementation guides.
+
 Deltiecord is original application code built on open-source libraries and
 public services. No third-party client repository has been vendored into this
 repository. Where an upstream workflow has been adapted, it is called out

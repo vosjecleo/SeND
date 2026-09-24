@@ -6,10 +6,11 @@ and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire'
 PulseAudio compatibility service is supported. Packaged dependencies include
 these tools; standalone AppImage users must provide them on the host.
 
-Deltiecord 0.9.29 build 98 is the current release candidate for Android,
-x86-64 Windows, and Linux.
+Deltiecord 0.9.34 build 106 is the current latest release for Android,
+x86-64 Windows, Linux, and Web/PWA. It marks feature-scope completion, not a
+stable-release certification. See [1.0 readiness](docs/RELEASE_READINESS.md).
 Download official builds from the [Deltiecord releases page](https://deltie.net/cord)
-or the eventual GitHub release after this candidate is validated.
+or the [published GitHub release](https://github.com/vosjecleo/deltiecord/releases/tag/v0.9.34-b106).
 
 Before installing a downloaded build, verify it against the included
 `SHA256SUMS` file:
@@ -21,7 +22,7 @@ sha256sum -c SHA256SUMS
 ## Android
 
 Download the APK matching the device architecture. Most current phones use
-`deltiecord-0.9.29+98-android-arm64-v8a.apk`; older 32-bit phones use
+`deltiecord-0.9.34+106-android-arm64-v8a.apk`; older 32-bit phones use
 `armeabi-v7a`, while `x86_64` is primarily for emulators. Verify
 its checksum, allow installation from the browser or file manager when Android
 asks, then open the APK. The APK uses Deltiecord's persistent release-signing
@@ -45,7 +46,7 @@ still require broader real-device testing.
 
 ### Installer
 
-Download `deltiecord-0.9.29+98-windows-x64-setup.exe`, run it, and follow the
+Download `deltiecord-0.9.34+106-windows-x64-setup.exe`, run it, and follow the
 installer. A normal per-user installation does not require administrator
 privileges. The installer creates a Start Menu entry and can optionally create
 a desktop shortcut.
@@ -59,7 +60,7 @@ per-user application data.
 
 ### Portable build
 
-Download `deltiecord-0.9.29+98-windows-x64-portable.zip`, extract the entire
+Download `deltiecord-0.9.34+106-windows-x64-portable.zip`, extract the entire
 archive, and run `deltiecord.exe` from the extracted directory. Do not move only
 the executable: its accompanying DLLs, plugins, data, and assets are required.
 
@@ -70,11 +71,11 @@ issues.
 
 ## Debian, Ubuntu, and Linux Mint
 
-Download `deltiecord-0.9.29+98-linux-debian-amd64.deb`, open a terminal in its directory, and
+Download `deltiecord-0.9.34+106-linux-debian-amd64.deb`, open a terminal in its directory, and
 install it with APT:
 
 ```sh
-sudo apt install ./deltiecord-0.9.29+98-linux-debian-amd64.deb
+sudo apt install ./deltiecord-0.9.34+106-linux-debian-amd64.deb
 ```
 
 APT installs the package and its declared runtime dependencies. Launch it from
@@ -95,10 +96,10 @@ data.
 
 ## Arch Linux
 
-Download `deltiecord-0.9.29+98-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
+Download `deltiecord-0.9.34+106-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
 
 ```sh
-sudo pacman -U ./deltiecord-0.9.29+98-linux-arch-x86_64.pkg.tar.zst
+sudo pacman -U ./deltiecord-0.9.34+106-linux-arch-x86_64.pkg.tar.zst
 ```
 
 Launch Deltiecord from the application menu or run `deltiecord`. Remove the
@@ -107,11 +108,11 @@ package with `sudo pacman -R deltiecord`; user data remains untouched.
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download
-`deltiecord-0.9.29+98-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
+`deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
 
 ```sh
-chmod +x deltiecord-0.9.29+98-linux-appimage-x86_64.AppImage
-./deltiecord-0.9.29+98-linux-appimage-x86_64.AppImage
+chmod +x deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage
+./deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage
 ```
 
 The AppImage contains the Flutter application but deliberately relies on some
@@ -122,6 +123,22 @@ storage, and PulseAudio or PipeWire-Pulse for audio.
 On Wayland, screen sharing requires PipeWire, `xdg-desktop-portal`, and a portal
 backend for the desktop environment, such as `xdg-desktop-portal-gtk` or
 `xdg-desktop-portal-kde`.
+
+## Web/PWA, including iPhone/iPad
+
+Open [chat.deltie.net](https://chat.deltie.net). On iPhone/iPad, use Safari's
+Share → Add to Home Screen, then open the installed app. Android and desktop
+browsers can use their Install app option. This is the Flutter web target, not
+a native macOS/iOS package. Keep your Matrix recovery key before clearing site
+data; browser storage can be evicted. Enable notifications from the installed
+app's settings and validate delivery on your device.
+
+Password sign-in remains available. **SSO / browser sign-in** discovers what
+the chosen homeserver supports; it does not create an identity provider. Device
+verification and encryption recovery remain separate. Self-hosters must apply
+the [callback hosting safeguards](docs/web-deployment.md) before browser SSO.
+
+See [browser limitations](KNOWN_ISSUES.md) and [deployment](docs/web-deployment.md).
 
 ## Application data
 
@@ -190,7 +207,7 @@ More packaging details are in [packaging/README.md](packaging/README.md).
 
 ### Windows source build
 
-Install Flutter 3.44.9, Git, Rust 1.97.1, and Visual Studio with the **Desktop
+Install Flutter 3.47.0, Git, Rust 1.97.1, and Visual Studio with the **Desktop
 development with C++** workload. Then run in PowerShell:
 
 ```powershell
