@@ -58,6 +58,13 @@ jobs:
           export PUPPETEER_MODULE="$PWD/tool/browser-tests/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js"
           export CHROME_EXECUTABLE="$(command -v google-chrome)"
           node tool/web_autofill_test.mjs
+      - name: Upload browser regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-browser-diagnostics
+          path: web-autofill-failure.png
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: deltiecord-web

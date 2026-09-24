@@ -60,8 +60,28 @@ try {
   await page.waitForFunction(() => !document.querySelector('#deltiecord-login button').disabled);
   await page.$eval('flt-semantics-placeholder', node => node.click());
   const toggle = await page.waitForSelector('::-p-text(Create a deltie.net account)');
+  // Enabling Flutter semantics can relayout the platform-view form. Wait for
+  // the semantic button geometry to settle before generating a pointer event.
+  await new Promise(resolve => setTimeout(resolve, 500));
+  console.log('Registration toggle geometry', await toggle.evaluate(node => {
+    const r = node.getBoundingClientRect();
+    return {x:r.x,y:r.y,width:r.width,height:r.height,
+      hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,1000)};
+  }));
   await toggle.click();
-  await page.waitForFunction(() => document.querySelector('#deltiecord-password').autocomplete === 'new-password');
+  try {
+    await page.waitForFunction(() => document.querySelector('#deltiecord-password').autocomplete === 'new-password');
+  } catch (error) {
+    await page.screenshot({path:'web-autofill-failure.png'});
+    console.log('Mode switch state', await page.evaluate(() => ({
+      forms:document.querySelectorAll('#deltiecord-login').length,
+      modes:[...document.querySelectorAll('#deltiecord-password')].map(n => n.autocomplete),
+      buttons:[...document.querySelectorAll('[role=button]')].map(n=>({
+        label:n.getAttribute('aria-label'),text:n.textContent,rect:n.getBoundingClientRect().toJSON(),
+      })),
+    })));
+    throw error;
+  }
   assert.equal(await page.$eval('#deltiecord-password', n => n.value), '');
   await fill({username: 'test', password: 'new-password', 'password-confirmation': 'wrong'});
   await page.click('#deltiecord-login button');
