@@ -6,7 +6,7 @@ void main() {
   test('foreground rejection and room clearing share publication lock', () {
     final publisher = File(
       'android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordNotificationPublisher.kt',
-    ).readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     expect(publisher, contains('@Synchronized\n    fun publish('));
     expect(publisher, contains('@Synchronized\n    fun clearRoom('));
     final publish = publisher.substring(publisher.indexOf('fun publish('));
