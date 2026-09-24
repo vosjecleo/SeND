@@ -542,10 +542,7 @@ void main() {
     expect(find.byKey(const Key('space-settings-name')), findsOneWidget);
     expect(find.byKey(const Key('space-settings-topic')), findsOneWidget);
     expect(find.byKey(const Key('space-settings-muted')), findsOneWidget);
-    expect(
-      find.text('Manage roles and permissions'),
-      findsOneWidget,
-    );
+    expect(find.text('Manage roles and permissions'), findsOneWidget);
     expect(
       find.text('1 text rooms  •  1 voice rooms  •  1 categories'),
       findsOneWidget,
