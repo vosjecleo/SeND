@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_models.dart';
+import '../models/space_administration.dart';
+import 'thread_session.dart';
+import '../models/forum_post.dart';
+import '../models/login_methods.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
@@ -50,6 +54,16 @@ abstract class ChatBackend extends ChangeNotifier {
   DateTime? get selectedRoomMutedUntil => null;
   bool get notificationPreviewsEnabled;
   List<ChatMessage> get messages;
+  bool get canLoadMoreForumThreads => false;
+  Future<void> loadForumThreads({bool refresh = false}) async {}
+  Future<ThreadSession> openThread(String roomId, String rootId) =>
+      throw UnsupportedError('Threads are unavailable');
+  Future<void> createForumPost(
+    String roomId,
+    ForumPost post,
+    String body, {
+    AttachmentDraft? cover,
+  }) => throw UnsupportedError('Forums are unavailable');
   List<MentionSuggestion> get mentionSuggestions;
   List<String> get typingUserNames;
   List<RoomMemberSummary> get selectedRoomMembers;
@@ -63,6 +77,8 @@ abstract class ChatBackend extends ChangeNotifier {
 
   /// Incremented when a notification requests the invitation inbox.
   int get inboxRequestRevision => 0;
+  ({String roomId, String rootId, int revision})? get threadNavigationRequest =>
+      null;
   List<StickerPackSummary> get stickerPacks => const [];
   List<StickerSummary> get customEmojis => stickerPacks
       .expand((pack) => pack.stickers)
@@ -129,6 +145,11 @@ abstract class ChatBackend extends ChangeNotifier {
   void setConversationAtPresent(bool atPresent) {}
 
   Future<void> initialize();
+  Future<LoginMethods> discoverLoginMethods(Uri homeserver) async =>
+      LoginMethods(homeserver: homeserver, password: true);
+  Future<void> loginWithBrowser(Uri homeserver, {required bool oidc}) =>
+      throw UnsupportedError('Browser sign-in is unavailable');
+  Future<void> cancelBrowserLogin() async {}
   Future<void> login({
     required Uri homeserver,
     required String username,
@@ -177,6 +198,20 @@ abstract class ChatBackend extends ChangeNotifier {
     String? beforeRoomId,
   });
   int spaceChannelLayoutPowerLevel(String spaceId) => 100;
+  Future<SpaceAdministration> getSpaceAdministration(String spaceId) =>
+      throw UnsupportedError('Administration is unavailable');
+  Future<void> saveSpaceRoles(String spaceId, SpaceRoles roles) =>
+      throw UnsupportedError('Role editing is unavailable');
+  Future<void> applySpaceRolePower(
+    String spaceId,
+    String roomId,
+    SpaceRoles reviewedRoles,
+  ) => throw UnsupportedError('Role power is unavailable');
+  Future<void> setAdministrationRule(
+    String roomId,
+    AdministrationRule rule,
+    int level,
+  ) => throw UnsupportedError('Permission editing is unavailable');
   bool canManageSpaceChannelLayout(String spaceId) => false;
   bool canSetSpaceChannelLayoutPowerLevel(String spaceId) => false;
   Future<void> setSpaceChannelLayoutPowerLevel(

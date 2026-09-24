@@ -291,29 +291,66 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
 
   Future<void> _createRoom(BuildContext context) async {
     final controller = TextEditingController();
+    var presentation = RoomPresentation.text;
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create room'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Create room'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Room name'),
+                ),
+                DropdownButton<RoomPresentation>(
+                  isExpanded: true,
+                  value: presentation,
+                  items: const [
+                    DropdownMenuItem(
+                      value: RoomPresentation.text,
+                      child: Text('Text'),
+                    ),
+                    DropdownMenuItem(
+                      value: RoomPresentation.voice,
+                      child: Text('Voice'),
+                    ),
+                    DropdownMenuItem(
+                      value: RoomPresentation.forum,
+                      child: Text('Forum'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => presentation = value);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Create'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
     controller.dispose();
     if (name != null && name.isNotEmpty) {
       await backend.createRoom(
         name: name,
-        presentation: RoomPresentation.text,
+        presentation: presentation,
         encrypted: true,
       );
     }

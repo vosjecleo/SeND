@@ -12,6 +12,14 @@ import '../models/chat_models.dart';
 
 const spoilerEditorColor = '#010101';
 
+/// Clearing text alone preserves Quill's terminal paragraph and pending
+/// clipboard styles (including background colours). A new message is a new
+/// document, not a deletion within the previous formatted paragraph.
+void resetRichComposer(QuillController controller) {
+  controller.toggledStyle = const Style();
+  controller.document = Document();
+}
+
 /// Keep existing formatting on mobile edits while its platform text field
 /// handles IME input. Only the changed range is replaced, not the whole draft.
 void reconcileRichMessageDocument(

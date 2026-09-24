@@ -69,7 +69,7 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _FirstRunTourDialog(backend: widget.backend),
+      builder: (context) => FirstRunTourDialog(backend: widget.backend),
     );
     await _store.markComplete(userId);
   }
@@ -84,16 +84,16 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
   Widget build(BuildContext context) => widget.child;
 }
 
-class _FirstRunTourDialog extends StatefulWidget {
-  const _FirstRunTourDialog({required this.backend});
+class FirstRunTourDialog extends StatefulWidget {
+  const FirstRunTourDialog({required this.backend, super.key});
 
   final ChatBackend backend;
 
   @override
-  State<_FirstRunTourDialog> createState() => _FirstRunTourDialogState();
+  State<FirstRunTourDialog> createState() => _FirstRunTourDialogState();
 }
 
-class _FirstRunTourDialogState extends State<_FirstRunTourDialog> {
+class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
   int _page = 0;
 
   @override
@@ -116,6 +116,7 @@ class _FirstRunTourDialogState extends State<_FirstRunTourDialog> {
             'to linked websites.',
         child: DropdownButtonFormField<DirectLinkPreviewMode>(
           key: const ValueKey('tour-link-preview-mode'),
+          isExpanded: true,
           initialValue: widget.backend.preferences.directLinkPreviewMode,
           decoration: const InputDecoration(labelText: 'Direct link previews'),
           items: const [
@@ -129,7 +130,10 @@ class _FirstRunTourDialogState extends State<_FirstRunTourDialog> {
             ),
             DropdownMenuItem(
               value: DirectLinkPreviewMode.allPublicSites,
-              child: Text('All public websites'),
+              child: Text(
+                'All public websites',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
           onChanged: (mode) {
@@ -186,13 +190,17 @@ class _FirstRunTourDialogState extends State<_FirstRunTourDialog> {
     ];
     return AlertDialog(
       title: Text('Getting started · ${_page + 1}/${pages.length}'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: AnimatedSwitcher(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          child: KeyedSubtree(key: ValueKey(_page), child: pages[_page]),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          key: ValueKey('tour-scroll-$_page'),
+          clipBehavior: Clip.hardEdge,
+          child: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            child: KeyedSubtree(key: ValueKey(_page), child: pages[_page]),
+          ),
         ),
       ),
       actions: [

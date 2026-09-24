@@ -11,6 +11,7 @@ Future<Client> createMatrixClient() async => Client(
   importantStateEvents: {
     deltiecordRoomPresentationEventType,
     deltiecordSpaceChannelsEventType,
+    deltiecordSpaceRolesEventType,
   },
   shareKeysWith: ShareKeysWith.all,
 );

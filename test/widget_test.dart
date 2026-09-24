@@ -543,7 +543,7 @@ void main() {
     expect(find.byKey(const Key('space-settings-topic')), findsOneWidget);
     expect(find.byKey(const Key('space-settings-muted')), findsOneWidget);
     expect(
-      find.byKey(const Key('space-settings-layout-slider')),
+      find.text('Manage roles and permissions'),
       findsOneWidget,
     );
     expect(
@@ -2449,13 +2449,13 @@ void main() {
     await tester.tap(senderName);
     await tester.pumpAndSettle();
 
-    expect(find.text('@alice:example.org'), findsOneWidget);
-    expect(find.text('she/her'), findsOneWidget);
+    expect(find.textContaining('@alice:example.org'), findsOneWidget);
+    expect(find.textContaining('she/her'), findsOneWidget);
     expect(find.text('Matrix enthusiast'), findsOneWidget);
     final compactPopup = find.byKey(const Key('compact-profile-popup'));
     expect(compactPopup, findsOneWidget);
-    final compactGradient = tester.widget<DecoratedBox>(
-      find.byKey(const Key('compact-profile-gradient')),
+    final compactGradient = tester.widget<Container>(
+      find.byKey(const Key('profile-card')),
     );
     expect((compactGradient.decoration as BoxDecoration).gradient, isNotNull);
     expect(
@@ -2553,7 +2553,7 @@ void main() {
       tester.getBottomLeft(popup).dy,
       lessThan(tester.getTopLeft(userIsland).dy),
     );
-    expect(find.text('Edit profile'), findsOneWidget);
+    expect(find.byTooltip('Edit profile'), findsOneWidget);
     expect(find.text('Message'), findsNothing);
     expect(find.text('Block'), findsNothing);
   });
@@ -2610,7 +2610,7 @@ void main() {
       findsOneWidget,
     );
     final recipientGradient = tester.widget<Container>(
-      find.byKey(const Key('recipient-profile-gradient')),
+      find.byKey(const Key('profile-card')),
     );
     final recipientDecoration = recipientGradient.decoration as BoxDecoration;
     expect(recipientDecoration.gradient, isNotNull);
@@ -2622,7 +2622,7 @@ void main() {
     final panelRect = tester.getRect(
       find.byKey(const Key('recipient-profile-gradient')),
     );
-    final aboutRect = tester.getRect(find.byKey(const Key('recipient-bio')));
+    final aboutRect = tester.getRect(find.text('Matrix enthusiast'));
     final footerRect = tester.getRect(
       find.byKey(const Key('view-full-profile-island')),
     );

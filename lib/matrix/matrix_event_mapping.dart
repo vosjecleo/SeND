@@ -36,11 +36,65 @@ extension _MatrixEventMapping on MatrixBackend {
   List<ChatMessage> get _mappedMessages {
     final timeline = _timeline;
     if (timeline == null) return const [];
-    return _timelineWindowEvents(timeline)
+    if (_presentationFor(timeline.room) == RoomPresentation.forum) {
+      final events = <String, Event>{
+        ..._forumRoots,
+        for (final event in timeline.events) event.eventId: event,
+      };
+      return _mapTimelineEvents(
+        timeline,
+        events.values.where(
+          (event) => event.relationshipType != RelationshipTypes.thread,
+        ),
+      );
+    }
+    final ids = timeline.events.map((event) => event.eventId).toSet();
+    final representedRoots = <String>{};
+    return _mapTimelineEvents(
+      timeline,
+      _timelineWindowEvents(timeline).where(
+        (event) =>
+            event.relationshipType != RelationshipTypes.thread ||
+            (!ids.contains(event.relationshipEventId) &&
+                representedRoots.add(
+                  event.relationshipEventId ?? event.eventId,
+                )),
+      ),
+    );
+  }
+
+  List<ChatMessage> _mapTimelineEvents(
+    Timeline timeline,
+    Iterable<Event> events,
+  ) {
+    final roles = _rolesForRoom(timeline.room);
+    final threadEvents = <String, List<Event>>{};
+    for (final event in timeline.events) {
+      if (event.relationshipType == RelationshipTypes.thread &&
+          event.relationshipEventId != null) {
+        (threadEvents[event.relationshipEventId!] ??= []).add(event);
+      }
+    }
+    return events
         .where((event) => !_dismissedLocalEchoIds.contains(event.eventId))
         .where((event) => _isVisibleTimelineEvent(event))
+        .where(_isPersonallyVisibleEvent)
         .where((event) => event.relationshipType != RelationshipTypes.edit)
         .map((event) {
+          final replies = threadEvents[event.eventId] ?? const <Event>[];
+          final bundle = event.unsigned
+              ?.tryGetMap<String, dynamic>('m.relations')
+              ?.tryGetMap<String, dynamic>('m.thread');
+          final latest = bundle?.tryGetMap<String, dynamic>('latest_event');
+          var latestTime = latest?.tryGet<int>('origin_server_ts');
+          for (final reply in replies) {
+            latestTime = max(
+              latestTime ?? 0,
+              reply.originServerTs.millisecondsSinceEpoch,
+            );
+          }
+          final read =
+              event.room.receiptState.byThread[event.eventId]?.latestOwnReceipt;
           final displayEvent = event.type == EventTypes.Message
               ? event.getDisplayEvent(timeline)
               : event;
@@ -72,7 +126,22 @@ extension _MatrixEventMapping on MatrixBackend {
                         : '');
           return ChatMessage(
             id: event.eventId,
+            forumPost: ForumPost.fromJson(
+              displayEvent.content[forumPostKey] ?? event.content[forumPostKey],
+            ),
+            threadReplyCount: max(
+              replies.length,
+              bundle?.tryGet<int>('count') ?? 0,
+            ),
+            threadLatestActivity: latestTime == null
+                ? null
+                : DateTime.fromMillisecondsSinceEpoch(latestTime),
+            threadUnread: latestTime != null && latestTime > (read?.ts ?? 0),
             sender: event.senderFromMemoryOrFallback.calcDisplayname(),
+            senderColor: roles.colorFor(event.senderId),
+            threadRootId: event.relationshipType == RelationshipTypes.thread
+                ? event.relationshipEventId
+                : null,
             body: body,
             timestamp: event.originServerTs,
             pending: event.status.isSending,
@@ -163,7 +232,14 @@ extension _MatrixEventMapping on MatrixBackend {
     );
     if (eventIndex < 0) return const [];
     final readers = <ReceiptReaderSummary>[];
-    for (final entry in room.receiptState.global.otherUsers.entries) {
+    final receipts = event.relationshipType == RelationshipTypes.thread
+        ? room.receiptState.byThread[event.relationshipEventId]?.otherUsers ??
+              <String, LatestReceiptStateData>{}
+        : {
+            ...room.receiptState.global.otherUsers,
+            ...?room.receiptState.mainThread?.otherUsers,
+          };
+    for (final entry in receipts.entries) {
       if (entry.key == _matrix.userID) continue;
       final receiptIndex = timeline.events.indexWhere(
         (candidate) => candidate.eventId == entry.value.eventId,
@@ -191,6 +267,30 @@ extension _MatrixEventMapping on MatrixBackend {
       event.type == EventTypes.RoomTopic ||
       event.type == EventTypes.RoomAvatar ||
       event.type == EventTypes.Encryption;
+
+  bool _isPersonallyVisibleEvent(Event event) {
+    final category = switch (event.type) {
+      EventTypes.RoomMember => switch (event.roomMemberChangeType) {
+        RoomMemberChangeType.avatar => CosmeticRoomEvent.avatar,
+        RoomMemberChangeType.displayname => CosmeticRoomEvent.name,
+        RoomMemberChangeType.other => CosmeticRoomEvent.profile,
+        RoomMemberChangeType.join ||
+        RoomMemberChangeType.acceptInvite ||
+        RoomMemberChangeType.rejectInvite ||
+        RoomMemberChangeType.withdrawInvitation ||
+        RoomMemberChangeType.leave ||
+        RoomMemberChangeType.invite ||
+        RoomMemberChangeType.knock => CosmeticRoomEvent.membership,
+        _ => null, // Never hide kicks, bans, or security warnings.
+      },
+      EventTypes.RoomName ||
+      EventTypes.RoomTopic ||
+      EventTypes.RoomAvatar => CosmeticRoomEvent.room,
+      _ => null,
+    };
+    return category == null ||
+        _preferences.roomEventVisibility.visible(event.room.id, category);
+  }
 
   String _systemEventBody(Event event) {
     final actor = event.senderFromMemoryOrFallback.calcDisplayname();

@@ -166,6 +166,13 @@ extension _MatrixTimelineSupport on MatrixBackend {
     final retainedEventIds = timeline.events
         .map((event) => event.eventId)
         .toSet();
+    retainedEventIds.addAll(_forumRoots.keys);
+    for (final session in _threadSessions) {
+      retainedEventIds.addAll(
+        session._timeline?.events.map((event) => event.eventId) ??
+            const <String>[],
+      );
+    }
     _replyPreviews.removeWhere(
       (eventId, _) => !retainedEventIds.contains(eventId),
     );
@@ -334,7 +341,8 @@ extension _MatrixTimelineSupport on MatrixBackend {
           _mayAdvanceReadMarker) {
         String? newestSyncedEventId;
         for (final event in initialTimeline.events) {
-          if (event.status.isSynced) {
+          if (event.status.isSynced &&
+              event.relationshipType != RelationshipTypes.thread) {
             newestSyncedEventId = event.eventId;
             break;
           }
@@ -345,7 +353,25 @@ extension _MatrixTimelineSupport on MatrixBackend {
         }
         // Timeline.setReadMarker sends both the fully-read marker and the
         // account's configured public/private receipt for this event.
-        await initialTimeline.setReadMarker(eventId: newestSyncedEventId);
+        final hasThreads = initialTimeline.events.any(
+          (event) => event.relationshipType == RelationshipTypes.thread,
+        );
+        if (hasThreads) {
+          await _matrix.postReceipt(
+            roomId,
+            ReceiptType.mReadPrivate,
+            newestSyncedEventId,
+            threadId: 'main',
+          );
+          await _matrix.postReceipt(
+            roomId,
+            ReceiptType.mRead,
+            newestSyncedEventId,
+            threadId: 'main',
+          );
+        } else {
+          await initialTimeline.setReadMarker(eventId: newestSyncedEventId);
+        }
         _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
       }
     } catch (_) {

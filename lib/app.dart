@@ -13,6 +13,8 @@ import 'backend/chat_backend.dart';
 import 'models/chat_models.dart';
 import 'services/desktop_window_service.dart';
 import 'services/font_preferences.dart';
+import 'services/browser_safe_area.dart';
+import 'ui/scaled_media.dart';
 import 'services/chat_notifications.dart';
 import 'ui/chat_shell.dart';
 import 'ui/deltiecord_theme.dart';
@@ -392,12 +394,16 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           builder: (context, child) {
             final media = MediaQuery.of(context);
             final interfaceScale = preferences.interfaceScale;
-            final scaledMedia = media.copyWith(
-              size: media.size / interfaceScale,
-              textScaler: TextScaler.linear(preferences.fontScale),
-              disableAnimations: preferences.reducedMotion,
-              highContrast: preferences.highContrast,
-            );
+            final scaledMedia =
+                scaledAppMedia(
+                  media,
+                  interfaceScale,
+                  mobile ? browserSafeAreaInsets() : EdgeInsets.zero,
+                ).copyWith(
+                  textScaler: TextScaler.linear(preferences.fontScale),
+                  disableAnimations: preferences.reducedMotion,
+                  highContrast: preferences.highContrast,
+                );
             final content = MediaQuery(
               data: scaledMedia,
               child: mobile ? _InAppNotificationOverlay(child: child!) : child!,

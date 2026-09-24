@@ -7,6 +7,26 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('fresh composer drops pasted background and pending formatting', () {
+    final controller = QuillController.basic();
+    addTearDown(controller.dispose);
+    controller.document.insert(0, 'caption');
+    controller.document.format(0, 7, const BackgroundAttribute('#ffffff'));
+    controller.toggledStyle = Style.fromJson({
+      'background': '#ffffff',
+      'bold': true,
+    });
+    resetRichComposer(controller);
+    expect(controller.document.toPlainText(), '\n');
+    expect(controller.toggledStyle.isEmpty, isTrue);
+    expect(controller.document.toDelta().toJson(), [
+      {'insert': '\n'},
+    ]);
+    controller.document.insert(0, 'next');
+    expect(controller.document.toDelta().toJson(), [
+      {'insert': 'next\n'},
+    ]);
+  });
   test('mobile range edits preserve untouched rich formatting', () {
     final document = richMessageDocument(
       'bold plain',

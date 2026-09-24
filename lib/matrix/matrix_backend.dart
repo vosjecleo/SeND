@@ -15,7 +15,14 @@ import 'package:flutter/foundation.dart'
 import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import '../backend/chat_backend.dart';
+import '../backend/thread_session.dart';
+import '../models/forum_post.dart';
+import '../models/login_methods.dart';
+import '../services/auth_browser.dart';
+import '../services/auth_callback.dart';
 import '../models/chat_models.dart';
+import '../models/room_event_visibility.dart';
+import '../models/space_administration.dart';
 import '../services/chat_notifications.dart';
 import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
@@ -32,6 +39,7 @@ import '../services/link_preview_service.dart';
 import '../services/web_preview_proxy.dart';
 import '../services/message_order.dart';
 import '../services/profile_refresh_policy.dart';
+import '../services/profile_text.dart';
 import '../services/poll_tally.dart';
 import '../services/personal_sticker_packs.dart';
 import '../services/secret_redaction.dart';
@@ -48,9 +56,12 @@ part 'matrix_timeline_support.dart';
 part 'matrix_room_metadata.dart';
 part 'matrix_link_previews.dart';
 part 'matrix_session.dart';
+part 'matrix_browser_auth.dart';
 part 'matrix_crypto.dart';
 part 'matrix_room_operations.dart';
+part 'matrix_administration.dart';
 part 'matrix_messages.dart';
+part 'matrix_threads.dart';
 part 'matrix_media.dart';
 part 'matrix_profiles.dart';
 part 'matrix_advanced_features.dart';
@@ -81,6 +92,97 @@ double _readPlatformFontScale(Map<String, dynamic>? content) {
 /// consulted as behavioral references; no source from either client is copied.
 /// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
+  final Set<_MatrixThreadSession> _threadSessions = {};
+  final Map<String, Event> _forumRoots = {};
+  String? _forumCursor;
+  bool _forumHasMore = true;
+  bool _forumLoading = false;
+  @override
+  bool get canLoadMoreForumThreads => _forumHasMore;
+  @override
+  Future<void> loadForumThreads({bool refresh = false}) =>
+      _loadForumThreads(refresh: refresh);
+  ({String roomId, String rootId, int revision})? _threadNavigationRequest;
+  @override
+  ({String roomId, String rootId, int revision})? get threadNavigationRequest =>
+      _threadNavigationRequest;
+  bool _browserAuthenticationActive = false;
+  bool _browserAuthenticationCanceled = false;
+  AuthBrowser? _activeAuthBrowser;
+
+  @override
+  Future<void> cancelBrowserLogin() async {
+    _browserAuthenticationCanceled = true;
+    await _activeAuthBrowser?.close();
+  }
+
+  @override
+  Future<LoginMethods> discoverLoginMethods(Uri homeserver) =>
+      _discoverLoginMethods(homeserver);
+
+  @override
+  Future<void> loginWithBrowser(Uri homeserver, {required bool oidc}) =>
+      _loginWithBrowser(homeserver, oidc: oidc);
+
+  @override
+  Future<void> createForumPost(
+    String roomId,
+    ForumPost post,
+    String body, {
+    AttachmentDraft? cover,
+  }) async {
+    final checked = ForumPost.validated(post.title, post.tags);
+    final room = _matrix.getRoomById(roomId);
+    if (room == null ||
+        room.membership != Membership.join ||
+        _presentationFor(room) != RoomPresentation.forum) {
+      throw StateError('This forum is unavailable.');
+    }
+    if (body.trim().isEmpty) {
+      throw const FormatException('Write a post before sending.');
+    }
+    await _prepareEncryptedSend(room);
+    if (cover != null) {
+      if (!cover.mimeType.startsWith('image/')) {
+        throw const FormatException('Choose an image for the post cover.');
+      }
+      await _sendAttachment(
+        AttachmentDraft(
+          bytes: cover.bytes,
+          name: cover.name,
+          mimeType: cover.mimeType,
+          spoiler: cover.spoiler,
+          caption: '${checked.title}\n\n${body.trim()}',
+        ),
+        roomId: roomId,
+        additionalContent: {forumPostKey: checked.toJson()},
+      );
+      return;
+    }
+    await room.sendEvent({
+      'msgtype': MessageTypes.Text,
+      'body': '${checked.title}\n\n${body.trim()}',
+      forumPostKey: checked.toJson(),
+    });
+  }
+
+  @override
+  Future<ThreadSession> openThread(String roomId, String rootId) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null || room.membership != Membership.join) {
+      throw StateError('Join the room before opening its discussions.');
+    }
+    final session = _MatrixThreadSession(this, room, rootId);
+    _threadSessions.add(session);
+    try {
+      await session.initialize();
+      return session;
+    } catch (_) {
+      session.dispose();
+      rethrow;
+    }
+  }
+
   static const _maximumCachedProfiles = 48;
   static const _maximumCachedProfileMediaBytes = 32 * 1024 * 1024;
   static const _maximumCachedAttachmentBytes = 64 * 1024 * 1024;
@@ -441,6 +543,7 @@ class MatrixBackend extends ChatBackend {
   List<RoomMemberSummary> get selectedRoomMembers {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
     if (room == null) return const [];
+    final roles = _rolesForRoom(room);
     final members = room
         .getParticipants()
         .map((user) {
@@ -451,6 +554,7 @@ class MatrixBackend extends ChatBackend {
           return RoomMemberSummary(
             userId: user.id,
             displayName: user.calcDisplayname(),
+            nameColor: roles.colorFor(user.id),
             avatarBytes:
                 _senderAvatarBytes['${room.id}|${user.id}'] ??
                 _senderAvatarBytes[user.id],
@@ -869,6 +973,25 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<void> updatePreferences(AppPreferences preferences) =>
       _updatePreferences(preferences);
+
+  @override
+  Future<SpaceAdministration> getSpaceAdministration(String spaceId) =>
+      _getSpaceAdministration(spaceId);
+  @override
+  Future<void> saveSpaceRoles(String spaceId, SpaceRoles roles) =>
+      _saveSpaceRoles(spaceId, roles);
+  @override
+  Future<void> applySpaceRolePower(
+    String spaceId,
+    String roomId,
+    SpaceRoles reviewedRoles,
+  ) => _applySpaceRolePower(spaceId, roomId, reviewedRoles);
+  @override
+  Future<void> setAdministrationRule(
+    String roomId,
+    AdministrationRule rule,
+    int level,
+  ) => _setAdministrationRule(roomId, rule, level);
 
   @override
   Future<void> setAppearanceSync(
@@ -1292,6 +1415,13 @@ class MatrixBackend extends ChatBackend {
       _getAttachmentReference(messageId);
 
   Future<void> _closeTimeline() async {
+    _forumRoots.clear();
+    _forumCursor = null;
+    _forumHasMore = true;
+    _forumLoading = false;
+    for (final session in _threadSessions.toList()) {
+      session.dispose();
+    }
     _timelineGeneration++;
     _timelineHydrationRequested = false;
     _timeline?.cancelSubscriptions();
@@ -1321,6 +1451,12 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _browserAuthenticationCanceled = true;
+    final authBrowser = _activeAuthBrowser;
+    if (authBrowser != null) unawaited(authBrowser.close());
+    for (final session in _threadSessions.toList()) {
+      session.dispose();
+    }
     _backendUpdates.dispose();
     _typingStopTimer?.cancel();
     _settingsSaveTimer?.cancel();

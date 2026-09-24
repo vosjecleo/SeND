@@ -52,6 +52,7 @@ Future<Client> createMatrixClient() async {
     importantStateEvents: {
       deltiecordRoomPresentationEventType,
       deltiecordSpaceChannelsEventType,
+      deltiecordSpaceRolesEventType,
     },
     // Deltiecord warns about verification separately. Excluding an unverified
     // device here would create ciphertext its owner cannot decrypt.

@@ -7,6 +7,7 @@ import '../../models/chat_models.dart';
 import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
 import '../settings_screen.dart';
+import '../chat_shell.dart' show ForumView, openDiscussionById;
 import '../advanced_chat_views.dart';
 import 'mobile_details_panel.dart';
 import 'mobile_navigation.dart';
@@ -30,6 +31,7 @@ class MobileChatShell extends StatefulWidget {
 class _MobileChatShellState extends State<MobileChatShell>
     with WidgetsBindingObserver {
   bool _navigationVisible = true;
+  int _threadRevision = 0;
   bool _detailsVisible = false;
   final Map<String, ({String text, List<CustomEmojiTextSpan> emojis})> _drafts =
       {};
@@ -71,6 +73,15 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   void _backendChanged() {
+    final request = backend.threadNavigationRequest;
+    if (request != null && request.revision != _threadRevision) {
+      _threadRevision = request.revision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && backend.selectedRoom?.id == request.roomId) {
+          openDiscussionById(context, backend, request.roomId, request.rootId);
+        }
+      });
+    }
     if (!mounted) return;
     if (backend.status == SessionStatus.signedOut) {
       _drafts.clear();
@@ -261,6 +272,13 @@ class _MobileChatShellState extends State<MobileChatShell>
                               setState(() => _navigationVisible = true),
                           onOpenDetails: () =>
                               setState(() => _detailsVisible = true),
+                        )
+                      : room.presentation == RoomPresentation.forum
+                      ? ForumView(
+                          backend: backend,
+                          room: room,
+                          onOpenNavigation: () =>
+                              setState(() => _navigationVisible = true),
                         )
                       : MobileTimelineView(
                           key: ValueKey('mobile-room-${room.id}'),

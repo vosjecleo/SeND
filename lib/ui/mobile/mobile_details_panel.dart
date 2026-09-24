@@ -86,7 +86,14 @@ class MobileDetailsPanel extends StatelessWidget {
                 fallback: member.displayName,
                 presence: member.presence,
               ),
-              title: Text(member.displayName),
+              title: Text(
+                member.displayName,
+                style: TextStyle(
+                  color: member.nameColor == null
+                      ? null
+                      : Color(member.nameColor!),
+                ),
+              ),
               subtitle: Text(
                 member.powerLevel >= 100
                     ? 'Administrator'

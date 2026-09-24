@@ -87,6 +87,9 @@ extension _MatrixProfiles on MatrixBackend {
     final key = '$spaceId|${profile.userId}';
     return UserProfileSummary(
       userId: profile.userId,
+      serverRoleNames: _rolesForSpace(
+        spaceId,
+      ).forUser(profile.userId).map((role) => role.name).toList(),
       displayName: displayName?.trim().isNotEmpty == true
           ? displayName!
           : profile.displayName,
@@ -594,7 +597,7 @@ extension _MatrixProfiles on MatrixBackend {
             : normalizedStatus;
       }
       await setText(_profileBioField, bio);
-      await setText(_profilePronounsField, pronouns);
+      await setText(_profilePronounsField, normalizedProfilePronouns(pronouns));
       await setText('m.tz', timezone);
       if (profileColor != null) {
         await setText(

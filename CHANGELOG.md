@@ -1,5 +1,35 @@
 # Changelog
 
+## Deltiecord 0.9.34 build 106 — 2026-09-24
+
+- Keep onboarding text scrollable with navigation outside the content viewport.
+- Share the profile layout across desktop/mobile cards and editors, use a
+  consistent banner ratio, and position crop drafts behind the real card masks.
+- Use connected thought-bubble outlines and limit pronouns to 16 graphemes.
+- Start a fresh rich-text document after sending to discard pasted styles.
+- Merge PWA safe-area insets without double padding; scale all layout insets
+  with the interface rather than shifting every device by a fixed amount.
+- Add personal account-synced room event filters, with global defaults and
+  room overrides. Encryption notices and moderation actions remain visible.
+- Administration: named multi-role assignments, ordered name
+  colours, server-profile badges, and explicit room permission propagation with
+  manual-power preservation and partial-failure reporting.
+- Add standard Matrix discussions in a desktop side pane or mobile page, with
+  paginated replies, shared media rendering, attachments, edits, reactions,
+  thread-specific receipts and notification navigation. Collapse replies in the
+  main timeline without changing its pagination/scroll machinery.
+- Add forum room presentation, readable Matrix post bodies plus declarative
+  title/tag metadata, image covers, search/filtering, recent-activity sorting,
+  unread indicators and an account-synced Following list. Failed posts retain
+  their drafts for retry. Following organises posts; room rules control alerts.
+- Discover homeserver browser-login methods and support Matrix SSO / SDK OIDC
+  with PKCE, state-bound callbacks, cancellation and SDK token persistence.
+  Device encryption verification/recovery remains a separate step.
+
+Hardware/cross-client authentication validation remains outstanding. Hosted
+browser SSO requires the narrowly scoped auth callback hosting rule.
+See `docs/build-106-plan.md` for details and implementation boundaries.
+
 ## Deltiecord 0.9.33 build 105 — 2026-09-24
 
 - Fix web attachment selection by reading browser File objects directly while

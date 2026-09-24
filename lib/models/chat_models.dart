@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:webrtc_interface/webrtc_interface.dart';
 
 import '../services/font_preferences.dart';
+import 'room_event_visibility.dart';
+import 'forum_post.dart';
 
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
@@ -98,6 +100,8 @@ class AppPreferences {
     this.shareDesktopAudio = false,
     this.enableChannelDragAndDrop = false,
     this.participantVolumes = const {},
+    this.roomEventVisibility = const RoomEventVisibility(),
+    this.followedThreads = const {},
   });
 
   final InterfaceDensity density;
@@ -157,6 +161,8 @@ class AppPreferences {
   final bool shareDesktopAudio;
   final bool enableChannelDragAndDrop;
   final Map<String, double> participantVolumes;
+  final RoomEventVisibility roomEventVisibility;
+  final Set<String> followedThreads;
 
   AppPreferences copyWith({
     InterfaceDensity? density,
@@ -208,7 +214,11 @@ class AppPreferences {
     bool? shareDesktopAudio,
     bool? enableChannelDragAndDrop,
     Map<String, double>? participantVolumes,
+    RoomEventVisibility? roomEventVisibility,
+    Set<String>? followedThreads,
   }) => AppPreferences(
+    roomEventVisibility: roomEventVisibility ?? this.roomEventVisibility,
+    followedThreads: followedThreads ?? this.followedThreads,
     density: density ?? this.density,
     compactness: compactness ?? this.compactness,
     themeMode: themeMode ?? this.themeMode,
@@ -319,7 +329,7 @@ class SpaceSummary {
   final bool muted;
 }
 
-enum RoomPresentation { text, voice }
+enum RoomPresentation { text, voice, forum }
 
 /// Deltiecord channel grouping stored on a Matrix Space.
 class ChannelCategorySummary {
@@ -413,6 +423,7 @@ class RoomMemberSummary {
     this.membership = 'join',
     this.canKick = false,
     this.canBan = false,
+    this.nameColor,
   });
 
   final String userId;
@@ -425,6 +436,7 @@ class RoomMemberSummary {
   final String membership;
   final bool canKick;
   final bool canBan;
+  final int? nameColor;
 }
 
 class UserProfileSummary {
@@ -444,6 +456,7 @@ class UserProfileSummary {
     this.voiceBackgroundBytes,
     this.extensibleFieldsSupported = true,
     this.blocked = false,
+    this.serverRoleNames = const [],
   });
 
   final String userId;
@@ -454,6 +467,7 @@ class UserProfileSummary {
   final String? bio;
   final String? pronouns;
   final String? timezone;
+  final List<String> serverRoleNames;
   final String? statusMessage;
 
   /// Top colour of Deltiecord's interoperable, client-namespaced gradient.
@@ -583,6 +597,12 @@ class ChatMessage {
     this.bookmarked = false,
     this.pinned = false,
     this.pingedCurrentUser = false,
+    this.senderColor,
+    this.threadRootId,
+    this.forumPost,
+    this.threadReplyCount = 0,
+    this.threadLatestActivity,
+    this.threadUnread = false,
   });
 
   final String id;
@@ -618,6 +638,12 @@ class ChatMessage {
   final bool bookmarked;
   final bool pinned;
   final bool pingedCurrentUser;
+  final int? senderColor;
+  final String? threadRootId;
+  final ForumPost? forumPost;
+  final int threadReplyCount;
+  final DateTime? threadLatestActivity;
+  final bool threadUnread;
 }
 
 class PollSummary {

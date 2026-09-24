@@ -15,6 +15,9 @@ class DeltiecordProfileCard extends StatelessWidget {
     this.onBlock,
     this.blocked = false,
     this.preview = false,
+    this.avatarPreview,
+    this.bannerPreview,
+    this.minimumHeight = 0,
     super.key,
   });
 
@@ -25,6 +28,11 @@ class DeltiecordProfileCard extends StatelessWidget {
   final VoidCallback? onBlock;
   final bool blocked;
   final bool preview;
+
+  /// Crop editors inject the draft image into the same masks as saved profiles.
+  final Widget? avatarPreview;
+  final Widget? bannerPreview;
+  final double minimumHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +55,7 @@ class DeltiecordProfileCard extends StatelessWidget {
     final timezone = profile.timezone;
     return Container(
       key: const Key('profile-card'),
+      constraints: BoxConstraints(minHeight: minimumHeight),
       foregroundDecoration: BoxDecoration(
         borderRadius: DeltiecordCorners.borderRadius,
         border: Border.all(color: accent.withValues(alpha: .8), width: 1.25),
@@ -73,9 +82,11 @@ class DeltiecordProfileCard extends StatelessWidget {
             secondaryAccent: secondaryAccent,
             onEdit: onEdit,
             onClose: onClose,
+            avatarPreview: avatarPreview,
+            bannerPreview: bannerPreview,
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(30, 4, 30, 26),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -90,7 +101,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: SelectableText(
-                        '${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns}' : ''}',
+                        '${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns!.characters.take(16)}' : ''}',
                         style: TextStyle(
                           color: palette.muted,
                           fontSize: DeltiecordTypeScale.normal,
@@ -106,6 +117,17 @@ class DeltiecordProfileCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (profile.serverRoleNames.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final name in profile.serverRoleNames)
+                        Chip(label: Text(name)),
+                    ],
+                  ),
+                ],
                 if (profile.bio?.trim().isNotEmpty == true || preview) ...[
                   const SizedBox(height: 18),
                   Text(
@@ -195,40 +217,57 @@ class ProfileStatusBubble extends StatelessWidget {
     );
     return Tooltip(
       message: status,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: -5,
-            top: 10,
-            child: Transform.rotate(
-              angle: .785398,
-              child: SizedBox.square(
-                dimension: 12,
-                child: ColoredBox(color: fill),
-              ),
-            ),
+      child: CustomPaint(
+        painter: _ThoughtBubblePainter(fill, accent.withValues(alpha: .3)),
+        child: Container(
+          width: expanded ? double.infinity : null,
+          constraints: const BoxConstraints(maxWidth: 360),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Text(
+            status.replaceAll(RegExp(r'\s+'), ' ').trim(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
           ),
-          Container(
-            width: expanded ? double.infinity : null,
-            constraints: const BoxConstraints(maxWidth: 360),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: accent.withValues(alpha: .18)),
-            ),
-            child: Text(
-              status.replaceAll(RegExp(r'\s+'), ' ').trim(),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// Union the overlapping lobes before stroking, so the thought trail belongs
+/// to the bubble instead of leaving detached circles or interior outline seams.
+class _ThoughtBubblePainter extends CustomPainter {
+  const _ThoughtBubblePainter(this.fill, this.outline);
+  final Color fill;
+  final Color outline;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    var path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(16)),
+      );
+    for (final circle in [
+      const Rect.fromLTWH(1, -9, 18, 18),
+      const Rect.fromLTWH(-6, -16, 12, 12),
+      const Rect.fromLTWH(-11, -21, 8, 8),
+    ]) {
+      path = Path.combine(PathOperation.union, path, Path()..addOval(circle));
+    }
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = outline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ThoughtBubblePainter oldDelegate) =>
+      oldDelegate.fill != fill || oldDelegate.outline != outline;
 }
 
 class _ProfileHeader extends StatelessWidget {
@@ -238,6 +277,8 @@ class _ProfileHeader extends StatelessWidget {
     required this.secondaryAccent,
     required this.onEdit,
     required this.onClose,
+    this.avatarPreview,
+    this.bannerPreview,
   });
 
   final UserProfileSummary profile;
@@ -245,13 +286,18 @@ class _ProfileHeader extends StatelessWidget {
   final Color secondaryAccent;
   final VoidCallback? onEdit;
   final VoidCallback? onClose;
+  final Widget? avatarPreview;
+  final Widget? bannerPreview;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.deltiecord;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bannerHeight = (constraints.maxWidth / 3).clamp(180.0, 260.0);
+        // The editor exports a 3:1 banner; never crop it again in a different
+        // ratio for popovers, narrow phones or the desktop sidebar.
+        final bannerHeight = constraints.maxWidth / 3;
+        final avatarSize = (constraints.maxWidth * .26).clamp(64.0, 124.0);
         return SizedBox(
           height: bannerHeight + 60,
           child: Stack(
@@ -262,33 +308,35 @@ class _ProfileHeader extends StatelessWidget {
                 top: 0,
                 right: 0,
                 height: bannerHeight,
-                child: profile.bannerBytes == null
-                    ? DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              accent.withValues(alpha: 0.72),
-                              secondaryAccent.withValues(alpha: 0.8),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Image.memory(
-                        profile.bannerBytes!,
-                        fit: BoxFit.cover,
-                        cacheWidth: 1440,
-                        gaplessPlayback: true,
-                        filterQuality: FilterQuality.high,
-                      ),
+                child:
+                    bannerPreview ??
+                    (profile.bannerBytes == null
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  accent.withValues(alpha: 0.72),
+                                  secondaryAccent.withValues(alpha: 0.8),
+                                ],
+                              ),
+                            ),
+                          )
+                        : Image.memory(
+                            profile.bannerBytes!,
+                            fit: BoxFit.cover,
+                            cacheWidth: 1440,
+                            gaplessPlayback: true,
+                            filterQuality: FilterQuality.high,
+                          )),
               ),
               Positioned(
-                left: 30,
+                left: 16,
                 bottom: 0,
                 child: Container(
-                  width: 124,
-                  height: 124,
+                  width: avatarSize,
+                  height: avatarSize,
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
                     shape:
@@ -311,32 +359,34 @@ class _ProfileHeader extends StatelessWidget {
                     clipBehavior: Clip.antiAlias,
                     child: ColoredBox(
                       color: palette.elevated,
-                      child: profile.avatarBytes == null
-                          ? Center(
-                              child: Text(
-                                profile.displayName.characters.firstOrNull
-                                        ?.toUpperCase() ??
-                                    '?',
-                                style: const TextStyle(
-                                  fontSize: 42,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            )
-                          : Image.memory(
-                              profile.avatarBytes!,
-                              fit: BoxFit.cover,
-                              cacheWidth: 256,
-                              cacheHeight: 256,
-                              gaplessPlayback: true,
-                              filterQuality: FilterQuality.high,
-                            ),
+                      child:
+                          avatarPreview ??
+                          (profile.avatarBytes == null
+                              ? Center(
+                                  child: Text(
+                                    profile.displayName.characters.firstOrNull
+                                            ?.toUpperCase() ??
+                                        '?',
+                                    style: const TextStyle(
+                                      fontSize: 42,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                )
+                              : Image.memory(
+                                  profile.avatarBytes!,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 256,
+                                  cacheHeight: 256,
+                                  gaplessPlayback: true,
+                                  filterQuality: FilterQuality.high,
+                                )),
                     ),
                   ),
                 ),
               ),
               Positioned(
-                left: 132,
+                left: 16 + avatarSize - 22,
                 bottom: 12,
                 child: Container(
                   width: 22,
@@ -350,8 +400,8 @@ class _ProfileHeader extends StatelessWidget {
               ),
               Positioned(
                 right: 20,
-                left: 168,
-                bottom: 14,
+                left: 28 + avatarSize,
+                bottom: 34,
                 child: profile.statusMessage?.trim().isNotEmpty == true
                     ? ProfileStatusBubble(
                         status: profile.statusMessage!,

@@ -56,6 +56,8 @@ extension _MatrixMedia on MatrixBackend {
     AttachmentDraft attachment, {
     String? roomId,
     String? replyToMessageId,
+    String? threadRootEventId,
+    Map<String, dynamic>? additionalContent,
   }) async {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
@@ -88,12 +90,15 @@ extension _MatrixMedia on MatrixBackend {
                 mimeType: attachment.mimeType,
                 duration: attachment.durationMilliseconds,
               ),
+              threadRootEventId: threadRootEventId,
+              threadLastEventId: threadRootEventId,
               txid: transactionId,
               inReplyTo: replyEvent,
               // sendAudioEvent in our SDK adds the waveform but not the voice
               // marker. Other clients need both to distinguish a recording
               // from a generic audio upload. Encryption stays in the SDK.
               extraContent: {
+                ...?additionalContent,
                 'org.matrix.msc3245.voice': <String, Object?>{},
                 'org.matrix.msc1767.audio': {
                   'duration': attachment.durationMilliseconds,
@@ -103,6 +108,8 @@ extension _MatrixMedia on MatrixBackend {
             )
           : room.sendFileEvent(
               file,
+              threadRootEventId: threadRootEventId,
+              threadLastEventId: threadRootEventId,
               txid: transactionId,
               inReplyTo: replyEvent,
               // Re-encoding large images here is CPU-heavy and stalls Flutter's UI
@@ -110,10 +117,12 @@ extension _MatrixMedia on MatrixBackend {
               // original image without a redundant full-resolution shrink pass.
               shrinkImageMaxDimension: null,
               extraContent:
-                  attachment.spoiler ||
+                  additionalContent != null ||
+                      attachment.spoiler ||
                       attachment.gifSource != null ||
                       attachment.caption?.trim().isNotEmpty == true
                   ? {
+                      ...?additionalContent,
                       if (attachment.gifSource != null)
                         'net.deltiecord.gif_source': attachment.gifSource
                             .toString(),

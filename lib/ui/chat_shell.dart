@@ -20,13 +20,15 @@ import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
+import '../backend/thread_session.dart';
+import '../models/forum_post.dart';
+import '../services/browser_file_picker.dart';
 import '../models/chat_models.dart';
 import '../services/gif_service.dart';
 import '../services/clipboard_image.dart';
 import '../services/encoded_image_dimensions.dart';
 import '../services/secret_redaction.dart';
 import '../services/temporary_attachment_store.dart';
-import '../services/timezone_catalog.dart';
 import '../services/emoji_repository.dart';
 import '../services/emoji_completion.dart';
 import '../services/custom_emoji.dart';
@@ -56,6 +58,7 @@ import 'space_settings_screen.dart';
 import 'typing_indicator.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
+import 'room_event_visibility_dialog.dart';
 import 'media_album.dart';
 import 'encryption_attention_banner.dart';
 import 'lifecycle_memory_image.dart';
@@ -67,6 +70,8 @@ part 'message_row.dart';
 part 'message_media.dart';
 part 'recipient_profile_panel.dart';
 part 'member_sidebar.dart';
+part 'thread_view.dart';
+part 'forum_view.dart';
 
 // The two bottom panels meet across separate widget trees. Keeping their
 // geometry shared prevents one-pixel seams when either side is refactored.
@@ -137,6 +142,12 @@ class _ChatShellState extends State<ChatShell> {
   String? _draftRoomId;
   bool _restoringDraft = false;
   bool _sidePanelVisible = true;
+  String? _threadRootId;
+
+  void _openDiscussion(String rootId) => setState(() {
+    _threadRootId = rootId;
+    _sidePanelVisible = true;
+  });
   bool _sidePanelAvailable = false;
   _SidePanelView _sidePanelView = _SidePanelView.profile;
   RoomMemberSummary? _sidePanelMember;
@@ -214,8 +225,27 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   int _inboxRevision = 0;
+  int _threadRevision = 0;
 
   void _handleBackendRoomChange() {
+    final request = widget.backend.threadNavigationRequest;
+    if (request != null && request.revision != _threadRevision) {
+      _threadRevision = request.revision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.backend.selectedRoom?.id == request.roomId) {
+          if (MediaQuery.sizeOf(context).width >= 1100) {
+            _openDiscussion(request.rootId);
+          } else {
+            openDiscussionById(
+              context,
+              widget.backend,
+              request.roomId,
+              request.rootId,
+            );
+          }
+        }
+      });
+    }
     if (_inboxRevision != widget.backend.inboxRequestRevision) {
       _inboxRevision = widget.backend.inboxRequestRevision;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -252,6 +282,7 @@ class _ChatShellState extends State<ChatShell> {
     if (roomId == _draftRoomId) return;
     _storeCurrentDraft();
     _restoreDraft(roomId);
+    _threadRootId = null;
     _sidePanelMember = null;
     _sidePanelView = widget.backend.selectedRoom?.isDirect == true
         ? _SidePanelView.profile
@@ -407,7 +438,7 @@ class _ChatShellState extends State<ChatShell> {
     // never be cleared by completion of the previous request.
     _restoringDraft = true;
     try {
-      _message.clear();
+      resetRichComposer(_message);
     } finally {
       _restoringDraft = false;
     }
@@ -528,7 +559,7 @@ class _ChatShellState extends State<ChatShell> {
     );
     _restoringDraft = true;
     try {
-      _message.clear();
+      resetRichComposer(_message);
     } finally {
       _restoringDraft = false;
     }
@@ -773,7 +804,9 @@ class _ChatShellState extends State<ChatShell> {
                             otherRoomMembers.length > 1);
                     final hasSidePanel =
                         constraints.maxWidth >= 1100 &&
-                        (directRecipient != null || showMemberSidebar);
+                        (directRecipient != null ||
+                            showMemberSidebar ||
+                            _threadRootId != null);
                     _sidePanelAvailable = hasSidePanel;
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
@@ -822,6 +855,12 @@ class _ChatShellState extends State<ChatShell> {
                                           widget.backend.activeVoiceRoomId ==
                                               selectedRoom.id
                                     ? VoiceRoomView(
+                                        backend: widget.backend,
+                                        room: selectedRoom,
+                                      )
+                                    : selectedRoom.presentation ==
+                                          RoomPresentation.forum
+                                    ? ForumView(
                                         backend: widget.backend,
                                         room: selectedRoom,
                                       )
@@ -897,12 +936,21 @@ class _ChatShellState extends State<ChatShell> {
                                       ),
                                     );
                                   },
-                                  child:
-                                      _sidePanelView ==
-                                              _SidePanelView.profile &&
-                                          (_sidePanelMember ??
-                                                  directRecipient) !=
-                                              null
+                                  child: _threadRootId != null
+                                      ? ThreadView(
+                                          key: ValueKey(_threadRootId),
+                                          backend: widget.backend,
+                                          roomId: selectedRoom!.id,
+                                          rootId: _threadRootId!,
+                                          onClose: () => setState(
+                                            () => _threadRootId = null,
+                                          ),
+                                        )
+                                      : _sidePanelView ==
+                                                _SidePanelView.profile &&
+                                            (_sidePanelMember ??
+                                                    directRecipient) !=
+                                                null
                                       ? _RecipientProfilePanel(
                                           backend: widget.backend,
                                           member:

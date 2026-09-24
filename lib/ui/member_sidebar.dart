@@ -286,7 +286,8 @@ class _MemberSidebarTile extends StatelessWidget {
           member.displayName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
+            color: member.nameColor == null ? null : Color(member.nameColor!),
             fontSize: DeltiecordTypeScale.bigChat,
             fontWeight: FontWeight.w600,
           ),

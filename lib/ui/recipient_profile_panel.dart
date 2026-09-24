@@ -104,178 +104,19 @@ class _RecipientProfileContents extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.deltiecord;
-    final accent = Color(
-      profile.profileColor ?? Theme.of(context).colorScheme.primary.toARGB32(),
-    );
-    final secondary = Color(
-      profile.profileColorSecondary ??
-          Color.lerp(accent, palette.rail, 0.58)!.toARGB32(),
-    );
-    final gradientTop = Color.alphaBlend(
-      accent.withValues(alpha: 0.42),
-      palette.panel,
-    );
-    final gradientBottom = Color.alphaBlend(
-      secondary.withValues(alpha: 0.48),
-      palette.panel,
-    );
-    final radius = Theme.of(context).extension<ThemeChrome>()?.radius ?? 12;
     return Column(
       children: [
         Expanded(
-          child: Container(
-            key: const Key('recipient-profile-gradient'),
-            clipBehavior: Clip.antiAlias,
-            foregroundDecoration: BoxDecoration(
-              border: Border.all(
-                color: accent.withValues(alpha: .8),
-                width: 1.25,
-              ),
-              borderRadius: BorderRadius.circular(radius),
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radius),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x28000000),
-                  blurRadius: 14,
-                  offset: Offset(0, 3),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                key: const Key('recipient-profile-gradient'),
+                child: DeltiecordProfileCard(
+                  profile: profile,
+                  minimumHeight: constraints.maxHeight,
                 ),
-              ],
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [gradientTop, gradientBottom],
-              ),
-            ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          height: 170,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned.fill(
-                                bottom: 46,
-                                child: profile.bannerBytes == null
-                                    ? DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [accent, secondary],
-                                          ),
-                                        ),
-                                      )
-                                    : Image.memory(
-                                        profile.bannerBytes!,
-                                        fit: BoxFit.cover,
-                                        cacheWidth: 720,
-                                        filterQuality: FilterQuality.medium,
-                                      ),
-                              ),
-                              Positioned(
-                                left: 16,
-                                bottom: 4,
-                                child: _RecipientAvatar(
-                                  profile: profile,
-                                  fallback: member,
-                                  panelColor: gradientTop,
-                                ),
-                              ),
-                              if (profile.statusMessage?.trim().isNotEmpty ==
-                                  true)
-                                Positioned(
-                                  left: 114,
-                                  right: 16,
-                                  bottom: 8,
-                                  child: ProfileStatusBubble(
-                                    status: profile.statusMessage!,
-                                    accent: accent,
-                                    expanded: true,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                profile.displayName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(text: profile.userId),
-                                    if (profile.pronouns?.trim().isNotEmpty ==
-                                        true)
-                                      TextSpan(
-                                        text: '  •  ${profile.pronouns}',
-                                      ),
-                                  ],
-                                ),
-                                style: TextStyle(
-                                  color: palette.muted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              if (profile.bio?.trim().isNotEmpty == true) ...[
-                                const SizedBox(height: 20),
-                                Text(
-                                  profile.bio!,
-                                  key: const Key('recipient-bio'),
-                                  style: const TextStyle(height: 1.4),
-                                ),
-                              ],
-                              if (profile.timezone?.trim().isNotEmpty ==
-                                  true) ...[
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    ThemeIcon(
-                                      Icons.schedule,
-                                      size: 16,
-                                      color: accent,
-                                    ),
-                                    const SizedBox(width: 7),
-                                    Expanded(
-                                      child: Text(
-                                        '${TimezoneCatalog.offsetLabel(profile.timezone)}'
-                                        '  •  ${TimezoneCatalog.localTimeLabel(profile.timezone)} local time',
-                                        style: TextStyle(color: palette.muted),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              if (loading) ...[
-                                const SizedBox(height: 12),
-                                const LinearProgressIndicator(minHeight: 2),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
         SizedBox(
@@ -312,76 +153,6 @@ class _RecipientProfileContents extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RecipientAvatar extends StatelessWidget {
-  const _RecipientAvatar({
-    required this.profile,
-    required this.fallback,
-    required this.panelColor,
-  });
-
-  final UserProfileSummary profile;
-  final RoomMemberSummary fallback;
-  final Color panelColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final bytes = profile.avatarBytes ?? fallback.avatarBytes;
-    final presence = profile.presence;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: 88,
-          height: 88,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: panelColor,
-            shape:
-                Theme.of(context).extension<ThemeChrome>()?.glassAvatars == true
-                ? BoxShape.rectangle
-                : BoxShape.circle,
-            borderRadius:
-                Theme.of(context).extension<ThemeChrome>()?.glassAvatars == true
-                ? BorderRadius.circular(10)
-                : null,
-          ),
-          child: ThemeAvatar(
-            backgroundImage: bytes == null
-                ? null
-                : ResizeImage(MemoryImage(bytes), width: 192, height: 192),
-            child: bytes == null
-                ? Text(
-                    profile.displayName.trim().isEmpty
-                        ? '?'
-                        : profile.displayName.characters.first,
-                    style: const TextStyle(fontSize: 30),
-                  )
-                : null,
-          ),
-        ),
-        Positioned(
-          right: 2,
-          bottom: 3,
-          child: Container(
-            width: 23,
-            height: 23,
-            decoration: BoxDecoration(
-              color: switch (presence) {
-                UserPresence.online => const Color(0xff23d18b),
-                UserPresence.away => const Color(0xffffc857),
-                UserPresence.doNotDisturb => const Color(0xffe5484d),
-                UserPresence.offline => const Color(0xff686a73),
-              },
-              shape: BoxShape.circle,
-              border: Border.all(color: panelColor, width: 4),
             ),
           ),
         ),

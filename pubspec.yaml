@@ -1,13 +1,14 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.9.33+105
+version: 0.9.34+106
 
 environment:
   sdk: ^3.12.0
 
 dependencies:
   archive: ^4.0.9
+  characters: ^1.4.1
   crypto: ^3.0.7
   file_picker: ^11.0.2
   flutter:

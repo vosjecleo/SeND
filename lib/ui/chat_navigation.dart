@@ -869,6 +869,11 @@ class _RoomPanelState extends State<_RoomPanel> {
               SegmentedButton<RoomPresentation>(
                 segments: const [
                   ButtonSegment(
+                    value: RoomPresentation.forum,
+                    icon: ThemeIcon(Icons.forum_outlined),
+                    label: Text('Forum'),
+                  ),
+                  ButtonSegment(
                     value: RoomPresentation.text,
                     icon: ThemeIcon(Icons.tag),
                     label: Text('Text'),
@@ -1791,6 +1796,11 @@ class _RoomListTile extends StatelessWidget {
                 const SizedBox(height: 12),
                 SegmentedButton<RoomPresentation>(
                   segments: const [
+                    ButtonSegment(
+                      value: RoomPresentation.forum,
+                      icon: ThemeIcon(Icons.forum_outlined),
+                      label: Text('Forum'),
+                    ),
                     ButtonSegment(
                       value: RoomPresentation.text,
                       icon: ThemeIcon(Icons.tag),

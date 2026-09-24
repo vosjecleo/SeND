@@ -1444,7 +1444,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final globalProfile = await _matrix.getProfileFromUserId(userId);
     final effectiveAvatarUri = avatarUri ?? globalProfile.avatarUrl;
     final nickname = profile.nickname?.trim();
-    final pronouns = profile.pronouns?.trim();
+    final pronouns = normalizedProfilePronouns(profile.pronouns);
     final space = _matrix.getRoomById(profile.spaceId);
     if (space != null) {
       final targets = <Room>[

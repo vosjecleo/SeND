@@ -254,6 +254,7 @@ extension _MatrixSession on MatrixBackend {
       _roomsMarkingRead.clear();
       _lastMarkedReadEventIds.clear();
       _firstUnreadEventIds.clear();
+      _threadNavigationRequest = null;
       _lastNotificationEventIds.clear();
       _roomPresentationOverrides.clear();
       _spaceChannelLayoutOverrides.clear();
@@ -792,7 +793,20 @@ extension _MatrixSession on MatrixBackend {
     if (room == null || room.membership != Membership.join) return;
     try {
       await _selectRoom(target.roomId);
-      await _jumpToEvent(target.eventId);
+      final event = await room.getEventById(target.eventId);
+      final rootId = event?.relationshipType == RelationshipTypes.thread
+          ? event?.relationshipEventId
+          : null;
+      if (rootId != null) {
+        _threadNavigationRequest = (
+          roomId: room.id,
+          rootId: rootId,
+          revision: (_threadNavigationRequest?.revision ?? 0) + 1,
+        );
+        _notifyBackendListeners();
+      } else {
+        await _jumpToEvent(target.eventId);
+      }
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();
@@ -917,6 +931,12 @@ extension _MatrixSession on MatrixBackend {
       shareDesktopAudio: content?.tryGet<bool>('share_desktop_audio') ?? false,
       enableChannelDragAndDrop:
           content?.tryGet<bool>('enable_channel_drag_and_drop') ?? false,
+      roomEventVisibility: RoomEventVisibility.fromJson(
+        content?['room_event_visibility'],
+      ),
+      followedThreads: content?['followed_threads'] is List
+          ? (content!['followed_threads'] as List).whereType<String>().toSet()
+          : const {},
       participantVolumes:
           content
               ?.tryGetMap<String, Object?>('participant_volumes')
@@ -1130,6 +1150,8 @@ extension _MatrixSession on MatrixBackend {
         'share_desktop_audio': preferences.shareDesktopAudio,
         'enable_channel_drag_and_drop': preferences.enableChannelDragAndDrop,
         'participant_volumes': preferences.participantVolumes,
+        'room_event_visibility': preferences.roomEventVisibility.toJson(),
+        'followed_threads': preferences.followedThreads.toList(),
       };
       _settingsEchoGuard.expect(existing, payload);
       await _matrix.setAccountData(

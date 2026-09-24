@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'json_theme.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
-import '../services/timezone_catalog.dart';
 import 'deltiecord_theme.dart';
 import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
@@ -146,12 +144,16 @@ class _ProfilePopoverPositioner extends StatelessWidget {
         left = anchor.left
             .clamp(12.0, constraints.maxWidth - width - 12.0)
             .toDouble();
-        final maxHeight = max(220.0, anchor.top - 24.0);
+        final bottom = (constraints.maxHeight - anchor.top + 8).clamp(
+          12.0,
+          max(12.0, constraints.maxHeight - 232),
+        );
+        final maxHeight = max(0.0, constraints.maxHeight - bottom - 12);
         return Stack(
           children: [
             Positioned(
               left: left,
-              bottom: constraints.maxHeight - anchor.top + 8,
+              bottom: bottom.toDouble(),
               width: width,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxHeight),
@@ -293,218 +295,37 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
       if (profile == null) {
         return const _ProfileLoadingCard(compact: true);
       }
-      final accent = Color(
-        profile.profileColor ??
-            Theme.of(context).colorScheme.primary.toARGB32(),
-      );
-      final secondary = Color(
-        profile.profileColorSecondary ??
-            Color.lerp(accent, context.deltiecord.rail, 0.62)!.toARGB32(),
-      );
       return Material(
         key: const Key('compact-profile-popup'),
         color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: DeltiecordCorners.borderRadius,
-          side: BorderSide(color: accent.withValues(alpha: .8), width: 1.25),
-        ),
-        clipBehavior: Clip.antiAlias,
-        elevation: 14,
-        child: DecoratedBox(
-          key: const Key('compact-profile-gradient'),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.alphaBlend(
-                  accent.withValues(alpha: 0.42),
-                  context.deltiecord.surface,
-                ),
-                Color.alphaBlend(
-                  secondary.withValues(alpha: 0.48),
-                  context.deltiecord.surface,
-                ),
-              ],
-            ),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: 142,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        bottom: 40,
-                        child: profile.bannerBytes == null
-                            ? DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [accent, secondary],
-                                  ),
-                                ),
-                              )
-                            : Image.memory(
-                                profile.bannerBytes!,
-                                fit: BoxFit.cover,
-                                cacheWidth: 680,
-                              ),
-                      ),
-                      Positioned(
-                        left: 18,
-                        bottom: 5,
-                        child: Container(
-                          width: 82,
-                          height: 82,
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: context.deltiecord.surface,
-                            shape: BoxShape.circle,
-                          ),
-                          child: ThemeAvatar(
-                            backgroundColor: context.deltiecord.elevated,
-                            backgroundImage: profile.avatarBytes == null
-                                ? null
-                                : ResizeImage(
-                                    MemoryImage(profile.avatarBytes!),
-                                    width: 164,
-                                    height: 164,
-                                  ),
-                            child: profile.avatarBytes == null
-                                ? Text(
-                                    profile.displayName.characters.firstOrNull
-                                            ?.toUpperCase() ??
-                                        '?',
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 84,
-                        bottom: 8,
-                        child: Container(
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: _popoverPresenceColour(profile.presence),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: context.deltiecord.surface,
-                              width: 3,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            profile.displayName,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          if (profile.pronouns?.trim().isNotEmpty == true)
-                            Text(
-                              profile.pronouns!,
-                              style: TextStyle(color: context.deltiecord.muted),
-                            ),
-                        ],
-                      ),
-                      Text(
-                        profile.userId,
-                        style: TextStyle(color: context.deltiecord.muted),
-                      ),
-                      if (profile.statusMessage?.trim().isNotEmpty == true) ...[
-                        const SizedBox(height: 10),
-                        ProfileStatusBubble(
-                          status: profile.statusMessage!,
-                          accent: accent,
-                          expanded: true,
-                        ),
-                      ],
-                      if (profile.timezone?.trim().isNotEmpty == true) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          '${TimezoneCatalog.offsetLabel(profile.timezone)}'
-                          '  •  ${TimezoneCatalog.localTimeLabel(profile.timezone)} local time',
-                          style: TextStyle(color: context.deltiecord.muted),
-                        ),
-                      ],
-                      if (profile.bio?.trim().isNotEmpty == true) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          profile.bio!,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      if (widget.own)
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _edit(profile),
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Edit profile'),
-                          ),
-                        )
-                      else
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: () async {
-                              Navigator.of(context).pop();
-                              await widget.backend.startDirectChat(
-                                widget.member.userId,
-                              );
-                            },
-                            icon: const Icon(Icons.chat_bubble_outline),
-                            label: const Text('Message'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: accent,
-                              foregroundColor: deltiecordContrastingForeground(
-                                accent,
-                              ),
-                            ),
-                          ),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: TextButton(
-                          onPressed: _openFullProfile,
-                          child: const Text('View full profile'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DeltiecordProfileCard(
+                profile: profile,
+                onEdit: widget.own ? () => _edit(profile) : null,
+                onMessage: widget.own
+                    ? null
+                    : () async {
+                        Navigator.of(context).pop();
+                        await widget.backend.startDirectChat(
+                          widget.member.userId,
+                        );
+                      },
+              ),
+              TextButton(
+                onPressed: _openFullProfile,
+                child: const Text('View full profile'),
+              ),
+            ],
           ),
         ),
       );
     },
   );
 }
-
-Color _popoverPresenceColour(UserPresence presence) => switch (presence) {
-  UserPresence.online => const Color(0xff23d887),
-  UserPresence.away => const Color(0xffffc857),
-  UserPresence.doNotDisturb => const Color(0xffe5484d),
-  UserPresence.offline => const Color(0xff747680),
-};
 
 class _ProfileDialog extends StatefulWidget {
   const _ProfileDialog({
@@ -585,7 +406,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     elevation: 0,
     child: ConstrainedBox(
       constraints: const BoxConstraints(
-        minWidth: 620,
+        minWidth: 0,
         maxWidth: 700,
         maxHeight: 860,
       ),

@@ -1,12 +1,13 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/avatar_color.dart';
+import '../services/profile_text.dart';
 import '../services/timezone_catalog.dart';
 import '../services/secret_redaction.dart';
 import 'accent_color_picker.dart';
@@ -68,7 +69,9 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     text: widget.spaceOverride?.nickname ?? widget.initialProfile.displayName,
   );
   late final _pronouns = TextEditingController(
-    text: widget.spaceOverride?.pronouns ?? widget.initialProfile.pronouns,
+    text: normalizedProfilePronouns(
+      widget.spaceOverride?.pronouns ?? widget.initialProfile.pronouns,
+    ),
   );
   late final _bio = TextEditingController(
     text: widget.spaceOverride?.bio ?? widget.initialProfile.bio,
@@ -141,7 +144,8 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     if (!_spaceProfile) return;
     setState(() {
       _displayName.text = widget.initialProfile.displayName;
-      _pronouns.text = widget.initialProfile.pronouns ?? '';
+      _pronouns.text =
+          normalizedProfilePronouns(widget.initialProfile.pronouns) ?? '';
       _bio.text = widget.initialProfile.bio ?? '';
       _status.text = widget.initialProfile.statusMessage ?? '';
       _timezone = widget.initialProfile.timezone;
@@ -211,6 +215,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       aspectRatio: 1,
       maximumWidth: 1024,
       circularPreview: true,
+      profile: _preview,
     );
     if (cropped == null || !mounted) return;
     setState(() {
@@ -235,6 +240,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       context,
       bytes: bytes,
       title: 'Crop profile banner',
+      profile: _preview,
       aspectRatio: 3,
       maximumWidth: 1920,
     );
@@ -466,6 +472,10 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                             const SizedBox(height: 12),
                             TextField(
                               controller: _pronouns,
+                              maxLength: 16,
+                              inputFormatters: [
+                                LengthLimitingTextInputFormatter(16),
+                              ],
                               enabled: widget
                                   .initialProfile
                                   .extensibleFieldsSupported,
@@ -475,7 +485,9 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                                     ? IconButton(
                                         tooltip: 'Use general pronouns',
                                         onPressed: () => _pronouns.text =
-                                            widget.initialProfile.pronouns ??
+                                            normalizedProfilePronouns(
+                                              widget.initialProfile.pronouns,
+                                            ) ??
                                             '',
                                         icon: const Icon(Icons.restart_alt),
                                       )

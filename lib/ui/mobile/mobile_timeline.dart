@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../room_event_visibility_dialog.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' show Document, LinkAttribute;
@@ -10,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
 import '../../backend/chat_backend.dart';
+import '../chat_shell.dart' show openDiscussion;
 import '../../models/chat_models.dart';
 import '../../services/emoji_completion.dart';
 import '../../services/android_shared_content.dart';
@@ -677,6 +679,12 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
               tooltip: 'More',
               onSelected: (value) async {
                 switch (value) {
+                  case 'events':
+                    await showRoomEventVisibility(
+                      context,
+                      backend,
+                      widget.room.id,
+                    );
                   case 'members':
                     widget.onOpenDetails();
                   case 'invite':
@@ -760,6 +768,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                   value: 'notifications',
                   child: Text('Notification settings'),
                 ),
+                PopupMenuItem(value: 'events', child: Text('Timeline events')),
                 PopupMenuItem(
                   value: 'unread',
                   child: Text('Toggle read / unread'),
@@ -1675,7 +1684,10 @@ class _MobileMessageRow extends StatelessWidget {
                               Flexible(
                                 child: Text(
                                   message.sender,
-                                  style: const TextStyle(
+                                  style: TextStyle(
+                                    color: message.senderColor == null
+                                        ? null
+                                        : Color(message.senderColor!),
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -1809,6 +1821,23 @@ class _MobileMessageRow extends StatelessWidget {
                             backend: backend,
                           ),
                         ),
+                      if (message.threadReplyCount > 0 ||
+                          message.threadRootId != null)
+                        TextButton.icon(
+                          onPressed: () =>
+                              openDiscussion(context, backend, message),
+                          icon: Icon(
+                            message.threadUnread
+                                ? Icons.mark_chat_unread_outlined
+                                : Icons.forum_outlined,
+                            size: 16,
+                          ),
+                          label: Text(
+                            message.threadRootId != null
+                                ? 'View discussion'
+                                : '${message.threadReplyCount} replies',
+                          ),
+                        ),
                       if (message.reactions.isNotEmpty)
                         Wrap(
                           spacing: 4,
@@ -1871,6 +1900,12 @@ class _MobileMessageRow extends StatelessWidget {
               title: const Text('Reply'),
               onTap: () => Navigator.pop(context, 'reply'),
             ),
+            if (!message.pending && !message.failed)
+              ListTile(
+                leading: const Icon(Icons.forum_outlined),
+                title: const Text('Open discussion'),
+                onTap: () => Navigator.pop(context, 'thread'),
+              ),
             ListTile(
               leading: const Icon(Icons.add_reaction_outlined),
               title: const Text('React'),
@@ -1920,6 +1955,8 @@ class _MobileMessageRow extends StatelessWidget {
       ),
     );
     switch (action) {
+      case 'thread':
+        if (context.mounted) openDiscussion(context, backend, message);
       case 'retry':
         await backend.retryMessage(message.id);
       case 'discard':

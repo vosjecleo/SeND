@@ -15,6 +15,7 @@ class _MessageRow extends StatefulWidget {
     required this.message,
     this.showReceipt = false,
     this.receiptIds = const {},
+    this.allowThreadNavigation = true,
     this.albumMessages,
     required this.highlighted,
     required this.startsGroup,
@@ -35,6 +36,7 @@ class _MessageRow extends StatefulWidget {
   final ChatMessage message;
   final bool showReceipt;
   final Set<String> receiptIds;
+  final bool allowThreadNavigation;
   final List<ChatMessage>? albumMessages;
   final bool highlighted;
   final bool startsGroup;
@@ -190,6 +192,14 @@ class _MessageRowState extends State<_MessageRow> {
                 borderRadius: DeltiecordCorners.borderRadius,
               ),
               child: _MessageActions(
+                onThread:
+                    !widget.allowThreadNavigation ||
+                        message.pending ||
+                        message.failed
+                    ? null
+                    : () => _performAction(
+                        () => openDiscussion(context, widget.backend, message),
+                      ),
                 onReply: () => _performAction(widget.onReply),
                 onCopy: () {
                   unawaited(
@@ -351,7 +361,10 @@ class _MessageRowState extends State<_MessageRow> {
                                             'message-sender-${message.id}',
                                           ),
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
+                                            color: message.senderColor == null
+                                                ? null
+                                                : Color(message.senderColor!),
                                             fontSize:
                                                 DeltiecordTypeScale.bigChat,
                                             fontWeight: FontWeight.w600,
@@ -522,6 +535,27 @@ class _MessageRowState extends State<_MessageRow> {
                                     color: Color(0xffb8bfff),
                                   ),
                                 ),
+                              if (widget.allowThreadNavigation &&
+                                  (message.threadReplyCount > 0 ||
+                                      message.threadRootId != null))
+                                TextButton.icon(
+                                  onPressed: () => openDiscussion(
+                                    context,
+                                    widget.backend,
+                                    message,
+                                  ),
+                                  icon: Icon(
+                                    message.threadUnread
+                                        ? Icons.mark_chat_unread_outlined
+                                        : Icons.forum_outlined,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    message.threadRootId != null
+                                        ? 'View discussion'
+                                        : '${message.threadReplyCount} replies',
+                                  ),
+                                ),
                               if (message.reactions.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
@@ -685,6 +719,7 @@ class _UnreadDivider extends StatelessWidget {
 
 class _MessageActions extends StatelessWidget {
   const _MessageActions({
+    this.onThread,
     required this.onReply,
     required this.onCopy,
     required this.onBookmark,
@@ -699,6 +734,7 @@ class _MessageActions extends StatelessWidget {
   });
 
   final VoidCallback onReply;
+  final VoidCallback? onThread;
   final VoidCallback onCopy;
   final VoidCallback onBookmark;
   final bool bookmarked;
@@ -714,6 +750,13 @@ class _MessageActions extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
+      if (onThread != null)
+        IconButton(
+          tooltip: 'Open discussion',
+          visualDensity: VisualDensity.compact,
+          onPressed: onThread,
+          icon: const Icon(Icons.forum_outlined, size: 16),
+        ),
       IconButton(
         key: const Key('message-action-reply'),
         visualDensity: VisualDensity.compact,

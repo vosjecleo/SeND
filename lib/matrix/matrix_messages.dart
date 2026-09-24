@@ -243,6 +243,7 @@ extension _MatrixMessages on MatrixBackend {
     String? formattedBody,
     String? replyToMessageId,
     String? editMessageId,
+    String? threadRootEventId,
   }) async {
     final originalValue = text.trim();
     final value = _preferences.improveTwitterLinks
@@ -268,6 +269,8 @@ extension _MatrixMessages on MatrixBackend {
           mentions.isEmpty) {
         operation = room.sendTextEvent(
           value,
+          threadRootEventId: threadRootEventId,
+          threadLastEventId: threadRootEventId,
           txid: transactionId,
           inReplyTo: replyEvent,
           editEventId: editMessageId,
@@ -291,6 +294,8 @@ extension _MatrixMessages on MatrixBackend {
             ...mentions,
           },
           inReplyTo: replyEvent,
+          threadRootEventId: threadRootEventId,
+          threadLastEventId: threadRootEventId,
           editEventId: editMessageId,
           txid: transactionId,
         );
@@ -410,6 +415,12 @@ extension _MatrixMessages on MatrixBackend {
   }
 
   Event? _eventById(String eventId) {
+    if (_forumRoots.containsKey(eventId)) return _forumRoots[eventId];
+    for (final session in _threadSessions) {
+      for (final event in session._timeline?.events ?? <Event>[]) {
+        if (event.eventId == eventId) return event;
+      }
+    }
     final timeline = _timeline;
     if (timeline == null) return null;
     for (final event in timeline.events) {

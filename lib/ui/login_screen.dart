@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'web_login_form.dart';
+import 'browser_login_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.backend, super.key});
@@ -90,6 +91,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 28),
+                        if (!_registering)
+                          TextButton.icon(
+                            onPressed: loading
+                                ? null
+                                : () => showDialog<void>(
+                                    context: context,
+                                    builder: (_) => BrowserLoginDialog(
+                                      backend: widget.backend,
+                                      homeserver: _homeserver.text,
+                                    ),
+                                  ),
+                            icon: const Icon(Icons.open_in_browser),
+                            label: const Text('SSO / browser sign-in'),
+                          ),
                         if (kIsWeb)
                           WebLoginForm(
                             registering: _registering,

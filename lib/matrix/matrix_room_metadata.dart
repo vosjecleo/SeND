@@ -47,9 +47,10 @@ extension _MatrixRoomMetadata on MatrixBackend {
         .getState(MatrixBackend._roomPresentationEventType)
         ?.content
         .tryGet<String>('kind');
-    return kind == RoomPresentation.voice.name
-        ? RoomPresentation.voice
-        : RoomPresentation.text;
+    return RoomPresentation.values
+            .where((value) => value.name == kind)
+            .firstOrNull ??
+        RoomPresentation.text;
   }
 
   List<VoiceParticipantSummary> _voiceParticipants(Room room) {

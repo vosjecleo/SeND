@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image;
 
+import '../models/chat_models.dart';
+import 'profile_card.dart';
+
 Future<Uint8List?> showProfileImageCropper(
   BuildContext context, {
   required Uint8List bytes,
@@ -11,6 +14,7 @@ Future<Uint8List?> showProfileImageCropper(
   required double aspectRatio,
   required int maximumWidth,
   bool circularPreview = false,
+  UserProfileSummary? profile,
 }) => showDialog<Uint8List>(
   context: context,
   barrierDismissible: false,
@@ -20,6 +24,7 @@ Future<Uint8List?> showProfileImageCropper(
     aspectRatio: aspectRatio,
     maximumWidth: maximumWidth,
     circularPreview: circularPreview,
+    profile: profile,
   ),
 );
 
@@ -70,6 +75,7 @@ class _ProfileImageCropper extends StatefulWidget {
     required this.aspectRatio,
     required this.maximumWidth,
     required this.circularPreview,
+    this.profile,
   });
 
   final Uint8List bytes;
@@ -77,6 +83,7 @@ class _ProfileImageCropper extends StatefulWidget {
   final double aspectRatio;
   final int maximumWidth;
   final bool circularPreview;
+  final UserProfileSummary? profile;
 
   @override
   State<_ProfileImageCropper> createState() => _ProfileImageCropperState();
@@ -133,7 +140,7 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
     });
     try {
       final region = _region;
-      final result = await compute(_cropProfileImage, (
+      final result = await compute(cropProfileImage, (
         bytes: widget.bytes,
         left: region.left.round(),
         top: region.top.round(),
@@ -153,19 +160,45 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
   }
 
   void _pan(DragUpdateDetails details, Size viewport) {
+    final region = _region;
+    final scale = viewport.width / region.width;
+    final travelX = _imageWidth! - region.width;
+    final travelY = _imageHeight! - region.height;
     setState(() {
-      _horizontal = (_horizontal - details.delta.dx / viewport.width).clamp(
-        0,
-        1,
-      );
-      _vertical = (_vertical - details.delta.dy / viewport.height).clamp(0, 1);
+      if (travelX > 0) {
+        _horizontal = (_horizontal - details.delta.dx / scale / travelX).clamp(
+          0,
+          1,
+        );
+      }
+      if (travelY > 0) {
+        _vertical = (_vertical - details.delta.dy / scale / travelY).clamp(
+          0,
+          1,
+        );
+      }
     });
   }
+
+  Widget _interactiveCrop() => LayoutBuilder(
+    builder: (context, constraints) {
+      return GestureDetector(
+        onPanUpdate: _processing
+            ? null
+            : (details) => _pan(details, constraints.biggest),
+        child: _CropPreview(
+          bytes: widget.bytes,
+          imageWidth: _imageWidth!,
+          imageHeight: _imageHeight!,
+          region: _region,
+        ),
+      );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
     final previewWidth = widget.circularPreview ? 360.0 : 720.0;
-    final previewHeight = previewWidth / widget.aspectRatio;
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 820, maxHeight: 820),
@@ -175,59 +208,87 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              const Text(
-                'Drag the preview or use the position controls. Zooming crops '
-                'more tightly; only the visible area will be uploaded.',
-              ),
-              const SizedBox(height: 14),
               Flexible(
-                child: Center(
-                  child: SizedBox(
-                    width: previewWidth,
-                    height: previewHeight,
-                    child: _imageWidth == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : GestureDetector(
-                            onPanUpdate: (details) => _pan(
-                              details,
-                              Size(previewWidth, previewHeight),
-                            ),
-                            child: _CropPreview(
-                              bytes: widget.bytes,
-                              imageWidth: _imageWidth!,
-                              imageHeight: _imageHeight!,
-                              region: _region,
-                              circular: widget.circularPreview,
-                            ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Drag the preview or use the position controls. Zooming crops '
+                        'more tightly; only the visible area will be uploaded.',
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        height: (MediaQuery.sizeOf(context).height * .45).clamp(
+                          120.0,
+                          440.0,
+                        ),
+                        child: SingleChildScrollView(
+                          child: _imageWidth == null
+                              ? const SizedBox(
+                                  height: 120,
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              : widget.profile != null
+                              ? DeltiecordProfileCard(
+                                  profile: widget.profile!,
+                                  preview: true,
+                                  avatarPreview: widget.circularPreview
+                                      ? _interactiveCrop()
+                                      : null,
+                                  bannerPreview: widget.circularPreview
+                                      ? null
+                                      : _interactiveCrop(),
+                                )
+                              : Center(
+                                  child: SizedBox(
+                                    width: previewWidth,
+                                    child: AspectRatio(
+                                      aspectRatio: widget.aspectRatio,
+                                      child: _interactiveCrop(),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _CropSlider(
+                        label: 'Zoom',
+                        value: _zoom,
+                        min: 1,
+                        max: 4,
+                        onChanged: (value) => setState(() => _zoom = value),
+                      ),
+                      _CropSlider(
+                        label: 'Horizontal',
+                        value: _horizontal,
+                        onChanged: (value) =>
+                            setState(() => _horizontal = value),
+                      ),
+                      _CropSlider(
+                        label: 'Vertical',
+                        value: _vertical,
+                        onChanged: (value) => setState(() => _vertical = value),
+                      ),
+                      if (_error case final error?)
+                        Text(
+                          error,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
                           ),
+                        ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              _CropSlider(
-                label: 'Zoom',
-                value: _zoom,
-                min: 1,
-                max: 4,
-                onChanged: (value) => setState(() => _zoom = value),
-              ),
-              _CropSlider(
-                label: 'Horizontal',
-                value: _horizontal,
-                onChanged: (value) => setState(() => _horizontal = value),
-              ),
-              _CropSlider(
-                label: 'Vertical',
-                value: _vertical,
-                onChanged: (value) => setState(() => _vertical = value),
-              ),
-              if (_error case final error?)
-                Text(
-                  error,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -263,14 +324,12 @@ class _CropPreview extends StatelessWidget {
     required this.imageWidth,
     required this.imageHeight,
     required this.region,
-    required this.circular,
   });
 
   final Uint8List bytes;
   final int imageWidth;
   final int imageHeight;
   final ProfileCropRegion region;
-  final bool circular;
 
   @override
   Widget build(BuildContext context) {
@@ -291,20 +350,7 @@ class _CropPreview extends StatelessWidget {
         );
       },
     );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black,
-        shape: circular ? BoxShape.circle : BoxShape.rectangle,
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: circular ? ClipOval(child: preview) : ClipRect(child: preview),
-      ),
-    );
+    return ClipRect(child: preview);
   }
 }
 
@@ -334,7 +380,8 @@ class _CropSlider extends StatelessWidget {
   );
 }
 
-Uint8List _cropProfileImage(
+@visibleForTesting
+Uint8List cropProfileImage(
   ({
     Uint8List bytes,
     int left,

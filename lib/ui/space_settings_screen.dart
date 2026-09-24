@@ -8,6 +8,7 @@ import 'deltiecord_theme.dart';
 import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
 import 'settings_page_transition.dart';
+import 'space_administration_panel.dart';
 
 enum _SpaceSettingsPage { basic, channels, roles, pages, serverProfile }
 
@@ -137,9 +138,6 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
   SpaceProfileOverride? _spaceProfileOverride;
   RoomNotificationMode _suggested = RoomNotificationMode.mentionsOnly;
   late bool _spaceMuted = widget.space.muted;
-  late int _layoutPowerLevel = backend.spaceChannelLayoutPowerLevel(
-    widget.space.id,
-  );
   bool _loading = true;
   late bool _mobileMenu = widget.initialPage == _SpaceSettingsPage.basic;
 
@@ -341,27 +339,10 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
       value: _spaceMuted,
       onChanged: (value) => setState(() => _spaceMuted = value),
     ),
-    Row(
-      children: [
-        const Expanded(
-          child: Text(
-            'Channel and category management',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Text('Power level $_layoutPowerLevel'),
-      ],
-    ),
-    Slider(
-      key: const Key('space-settings-layout-slider'),
-      value: _layoutPowerLevel.toDouble(),
-      min: 0,
-      max: 100,
-      divisions: 100,
-      label: '$_layoutPowerLevel',
-      onChanged: backend.canSetSpaceChannelLayoutPowerLevel(widget.space.id)
-          ? (value) => setState(() => _layoutPowerLevel = value.round())
-          : null,
+    TextButton.icon(
+      onPressed: () => setState(() => _page = _SpaceSettingsPage.roles),
+      icon: const Icon(Icons.admin_panel_settings_outlined),
+      label: const Text('Manage roles and permissions'),
     ),
     const SizedBox(height: 18),
     FilledButton(onPressed: _saveBasic, child: const Text('Save changes')),
@@ -589,11 +570,8 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
     );
   }
 
-  Widget _roles() => _section('Roles', const [
-    Text(
-      'Matrix power levels currently provide moderation permissions. Named '
-      'Deltiecord roles are reserved for a future interoperable extension.',
-    ),
+  Widget _roles() => _section('Administration', [
+    SpaceAdministrationPanel(backend: backend, spaceId: widget.space.id),
   ]);
 
   Widget _pages() => _section('Pages', [
@@ -711,13 +689,6 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
     if (_spaceMuted != widget.space.muted) {
       await backend.setRoomMuted(widget.space.id, _spaceMuted);
     }
-    if (_layoutPowerLevel !=
-        backend.spaceChannelLayoutPowerLevel(widget.space.id)) {
-      await backend.setSpaceChannelLayoutPowerLevel(
-        widget.space.id,
-        _layoutPowerLevel,
-      );
-    }
     _saved();
   }
 
@@ -744,7 +715,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
 String _pageLabel(_SpaceSettingsPage page) => switch (page) {
   _SpaceSettingsPage.basic => 'Basic',
   _SpaceSettingsPage.channels => 'Channels',
-  _SpaceSettingsPage.roles => 'Roles',
+  _SpaceSettingsPage.roles => 'Administration',
   _SpaceSettingsPage.pages => 'Pages',
   _SpaceSettingsPage.serverProfile => 'Server profile',
 };

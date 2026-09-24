@@ -655,6 +655,12 @@ class _ConversationState extends State<_Conversation> {
                             icon: const ThemeIcon(Icons.more_horiz, size: 22),
                             onSelected: (value) async {
                               switch (value) {
+                                case 'events':
+                                  await showRoomEventVisibility(
+                                    context,
+                                    backend,
+                                    room.id,
+                                  );
                                 case 'notifications':
                                   await showRoomNotificationControls(
                                     context,
@@ -794,6 +800,10 @@ class _ConversationState extends State<_Conversation> {
                               const PopupMenuItem(
                                 value: 'notifications',
                                 child: Text('Notification settings'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'events',
+                                child: Text('Timeline events'),
                               ),
                               const PopupMenuItem(
                                 value: 'unread',
