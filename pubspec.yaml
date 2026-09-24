@@ -1,7 +1,7 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.9.31+103
+version: 0.9.32+104
 
 environment:
   sdk: ^3.12.0
@@ -30,6 +30,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   package_info_plus: ^9.0.0
+  record: ^7.1.1
   sqflite: ^2.4.3
   sqflite_sqlcipher: ^3.4.1
   flutter_quill_delta_from_html: ^1.5.3
@@ -57,4 +58,6 @@ flutter:
   assets:
     - assets/emoji/emojis.json
     - assets/emoji/aliases.json
+    - assets/emoji/shortcodes.json
+    - assets/emoji/SHORTCODES-LICENSE.txt
     - assets/audio/

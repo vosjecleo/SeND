@@ -35,6 +35,13 @@ dependency under its own license.
 
 ## Feature libraries and services
 
+- [emoji-data](https://github.com/iamcal/emoji-data), by Cal Henderson, supplies
+  familiar emoji shortcodes (MIT; pinned revision
+  `13ee711e222ea17fe537bfea953c687866f16411`). Its license is included in
+  `assets/emoji/SHORTCODES-LICENSE.txt`. Existing catalogue keywords remain.
+- [record](https://github.com/llfbandit/record) provides cross-platform microphone
+  recording, under the BSD-3-Clause license. Flutter includes dependency notices.
+
 - [Flutter](https://github.com/flutter/flutter) and Dart provide the application
   framework and Linux desktop runtime. Flutter is BSD-3-Clause licensed.
 - [flutter-webrtc](https://github.com/flutter-webrtc/flutter-webrtc) provides

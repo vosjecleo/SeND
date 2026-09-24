@@ -1,12 +1,12 @@
 pkgname=deltiecord
-pkgver=0.9.31
-pkgrel=103
+pkgver=0.9.32
+pkgrel=104
 pkgdesc='Compact Matrix desktop client'
 arch=('x86_64')
 url='https://deltie.net/cord'
 license=('AGPL-3.0-or-later')
 options=('!debug' '!lto')
-depends=('gtk3' 'libsecret' 'libpulse' 'alsa-lib' 'libv4l' 'mpv' 'pipewire' 'xdg-desktop-portal')
+depends=('gtk3' 'libsecret' 'libpulse' 'alsa-lib' 'libv4l' 'mpv' 'ffmpeg' 'pipewire' 'xdg-desktop-portal')
 makedepends=('flutter' 'cmake' 'clang' 'ninja')
 source=()
 sha256sums=()

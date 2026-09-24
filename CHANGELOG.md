@@ -1,5 +1,29 @@
 # Changelog
 
+## Deltiecord 0.9.32 build 104 — source prepared, release pending
+
+- Add composer voice messages: microphone when empty, live waveform and timer,
+  pause/resume, stop-to-review, local playback, delete and explicit send. Reuse
+  Matrix voice-message attachments and encryption; retain recordings on send
+  failure. Limit recording to ten active minutes and reject uploads over 16 MiB.
+- Make receipt/edited markers smaller and subdued; keep media-only and sticker
+  receipts alongside their media and preserve album receipt frontiers.
+- Reconcile the visible room's notification on every foreground/resume, including
+  unchanged room selection; serialize native dismissal against publication and
+  reject publication in the foreground. Dismissal does not advance read markers.
+- Replace the fixed theme-button grid with a compact selector and theme dialog.
+  Serialize preference writes, reject known stale settings echoes, and cache
+  theme data rather than app widgets so live scale/theme changes reach builders.
+- Bound mobile send feedback to the button and theme its ink colours. Remove
+  the separate GIF favourites background while retaining its category heading.
+- Apply colour-emoji font selection to picker and message emoji spans. Prefer
+  familiar Discord-style shortcodes, preserve older search aliases, and add
+  `sobbing` for the loudly crying face (`sob`).
+- Speech-to-text remains a proposal, not an enabled upload service. Platform
+  recording, Linux emoji appearance and notification races need device checks
+  after release compilation is approved; no build/deployment accompanies this
+  source-only push.
+
 ## Deltiecord 0.9.31 build 103 — 2026-09-24
 
 - Move sent/read progress markers and edited labels after message content.

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'gif_favourite_button.dart';
+import 'voice_message_composer.dart';
 import '../services/platform_io.dart';
 import 'dart:math';
 import 'dart:ui' as ui;

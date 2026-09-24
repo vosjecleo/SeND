@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/chat_models.dart';
 
 const _familiarAliases = <String, List<String>>{
-  '😭': ['sob', 'cry', 'loudly_crying'],
+  '😭': ['sob', 'sobbing', 'cry', 'loudly_crying'],
   '😂': ['joy', 'tears_of_joy'],
   '🤣': ['rofl'],
   '❤️': ['heart', 'love'],
@@ -59,6 +59,7 @@ class EmojiEntry {
     required this.name,
     required this.aliases,
     required this.category,
+    this.primaryAlias,
     this.customEmoji,
   });
 
@@ -66,6 +67,8 @@ class EmojiEntry {
   final String name;
   final List<String> aliases;
   final EmojiCategory category;
+  final String? primaryAlias;
+  String get shortcode => primaryAlias ?? aliases.firstOrNull ?? name;
   final StickerSummary? customEmoji;
 
   bool get isCustom => customEmoji != null;
@@ -75,7 +78,8 @@ class EmojiEntry {
   bool matches(String query) {
     final normalized = _normalizeEmojiSearchTerm(query);
     if (normalized.isEmpty) return true;
-    return name.toLowerCase().contains(normalized) ||
+    return _normalizeEmojiSearchTerm(shortcode).contains(normalized) ||
+        name.toLowerCase().contains(normalized) ||
         aliases.any(
           (alias) => _normalizeEmojiSearchTerm(alias).contains(normalized),
         );
@@ -83,6 +87,7 @@ class EmojiEntry {
 
   int score(String query) {
     final normalized = _normalizeEmojiSearchTerm(query);
+    if (_normalizeEmojiSearchTerm(shortcode) == normalized) return -1;
     final lowerName = name.toLowerCase();
     if (aliases.any(
       (alias) => _normalizeEmojiSearchTerm(alias) == normalized,
@@ -169,23 +174,29 @@ class EmojiRepository {
     final sources = await Future.wait([
       rootBundle.loadString('assets/emoji/emojis.json'),
       rootBundle.loadString('assets/emoji/aliases.json'),
+      rootBundle.loadString('assets/emoji/shortcodes.json'),
     ]);
     final decoded = jsonDecode(sources[0]) as Map<String, dynamic>;
     final overrides = jsonDecode(sources[1]) as Map<String, dynamic>;
+    final shortcodes = jsonDecode(sources[2]) as Map<String, dynamic>;
     final entries = decoded.entries.toList(growable: false);
     final catalog = entries.indexed.map((indexedEntry) {
       final index = indexedEntry.$1;
       final entry = indexedEntry.$2;
       final data = entry.value as Map<String, dynamic>;
       final override = overrides[entry.key] as Map<String, dynamic>?;
+      final names = (shortcodes[entry.key] as List? ?? const []).cast<String>();
       final aliases =
           (data['keywords'] as List? ?? const []).whereType<String>().toSet()
             ..addAll(_familiarAliases[entry.key] ?? const [])
+            ..addAll(names)
             ..addAll(
               (override?['aliases'] as List? ?? const []).whereType<String>(),
             );
       return EmojiEntry(
         emoji: entry.key,
+        primaryAlias:
+            override?['primary_alias'] as String? ?? names.firstOrNull,
         name:
             override?['name'] as String? ??
             data['name'] as String? ??
@@ -207,6 +218,7 @@ class EmojiRepository {
       catalog.add(
         EmojiEntry(
           emoji: overrideEntry.key,
+          primaryAlias: data['primary_alias'] as String?,
           name: data['name'] as String? ?? overrideEntry.key,
           aliases: (data['aliases'] as List? ?? const [])
               .whereType<String>()
@@ -249,6 +261,12 @@ class EmojiRepository {
   Future<EmojiEntry?> exactAlias(String alias) async {
     final normalized = _normalizeEmojiSearchTerm(alias);
     final entries = await load();
+    final primary = entries
+        .where(
+          (entry) => _normalizeEmojiSearchTerm(entry.shortcode) == normalized,
+        )
+        .firstOrNull;
+    if (primary != null) return primary;
     return entries
         .where(
           (entry) =>

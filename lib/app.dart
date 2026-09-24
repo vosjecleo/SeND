@@ -40,7 +40,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
   ChatBackend get backend => widget.backend;
   TargetPlatform? get platformOverride => widget.platformOverride;
   Object? _configuration;
-  Widget? _configuredApp;
+  ThemeData? _cachedTheme;
 
   @override
   void initState() {
@@ -61,7 +61,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
     // without replacing Navigator, conversation state, drafts or the session.
     setState(() {
       _configuration = null;
-      _configuredApp = null;
+      _cachedTheme = null;
     });
   }
 
@@ -89,17 +89,6 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           preferences.showNativeTitleBar,
           preferences.rememberWindowState,
         );
-        if (_configuration == configuration && _configuredApp != null) {
-          return _configuredApp!;
-        }
-        _configuration = configuration;
-        final emojiFontFamily = normalizeEmojiFontFamily(
-          preferences.emojiFontFamily,
-        );
-        // Flutter widget tests default to an Android target platform even when
-        // executing on a desktop host. Runtime platform detection keeps the
-        // established desktop test/UI contract while [platformOverride] makes
-        // the dedicated mobile tree directly widget-testable.
         final mobile =
             platformOverride == TargetPlatform.android ||
             platformOverride == TargetPlatform.iOS ||
@@ -108,125 +97,122 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                     ? defaultTargetPlatform == TargetPlatform.android ||
                           defaultTargetPlatform == TargetPlatform.iOS
                     : Platform.isAndroid || Platform.isIOS));
-        if (backend.status == SessionStatus.signedIn && !mobile && !kIsWeb) {
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => DesktopWindowService.apply(preferences),
+        if (_configuration != configuration || _cachedTheme == null) {
+          _configuration = configuration;
+          final emojiFontFamily = normalizeEmojiFontFamily(
+            preferences.emojiFontFamily,
           );
-        }
-        final contrast = preferences.highContrast;
-        final basePalette = DeltiecordPalette.forMode(preferences.themeMode);
-        final accent = Color(preferences.accentColor);
-        final palette = contrast
-            ? basePalette.copyWith(
-                // Higher contrast strengthens neutral hierarchy. Accent is
-                // reserved for focus, selection, and message attention; using
-                // it for every separator made clipped edges visually harsh.
-                divider:
-                    ThemeData.estimateBrightnessForColor(
-                          basePalette.background,
-                        ) ==
-                        Brightness.dark
-                    ? const Color(0xff747780)
-                    : const Color(0xff77736c),
-                muted:
-                    ThemeData.estimateBrightnessForColor(
-                          basePalette.background,
-                        ) ==
-                        Brightness.dark
-                    ? const Color(0xffd4d6dc)
-                    : const Color(0xff3f4147),
-                hover: accent.withValues(alpha: 0.16),
+          // Flutter widget tests default to an Android target platform even when
+          // executing on a desktop host. Runtime platform detection keeps the
+          // established desktop test/UI contract while [platformOverride] makes
+          // the dedicated mobile tree directly widget-testable.
+          if (backend.status == SessionStatus.signedIn && !mobile && !kIsWeb) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => DesktopWindowService.apply(preferences),
+            );
+          }
+          final contrast = preferences.highContrast;
+          final basePalette = DeltiecordPalette.forMode(preferences.themeMode);
+          final accent = Color(preferences.accentColor);
+          final palette = contrast
+              ? basePalette.copyWith(
+                  // Higher contrast strengthens neutral hierarchy. Accent is
+                  // reserved for focus, selection, and message attention; using
+                  // it for every separator made clipped edges visually harsh.
+                  divider:
+                      ThemeData.estimateBrightnessForColor(
+                            basePalette.background,
+                          ) ==
+                          Brightness.dark
+                      ? const Color(0xff747780)
+                      : const Color(0xff77736c),
+                  muted:
+                      ThemeData.estimateBrightnessForColor(
+                            basePalette.background,
+                          ) ==
+                          Brightness.dark
+                      ? const Color(0xffd4d6dc)
+                      : const Color(0xff3f4147),
+                  hover: accent.withValues(alpha: 0.16),
+                )
+              : basePalette;
+          final brightness = preferences.themeMode == DeltiecordThemeMode.light
+              ? Brightness.light
+              : Brightness.dark;
+          final colorScheme =
+              ColorScheme.fromSeed(
+                seedColor: accent,
+                brightness: brightness,
+                contrastLevel: contrast ? 1 : 0,
+              ).copyWith(
+                surface: palette.surface,
+                surfaceContainerLowest: palette.background,
+                surfaceContainerLow: palette.surface,
+                surfaceContainer: palette.surface,
+                surfaceContainerHigh: palette.elevated,
+                surfaceContainerHighest: palette.hover,
+                surfaceTint: Colors.transparent,
+                onSurface: palette.text,
+              );
+          final baseText = ThemeData(brightness: brightness).textTheme;
+          final textTheme = baseText
+              .copyWith(
+                displayLarge: baseText.displayLarge?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                displayMedium: baseText.displayMedium?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                displaySmall: baseText.displaySmall?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                headlineLarge: baseText.headlineLarge?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                headlineMedium: baseText.headlineMedium?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                headlineSmall: baseText.headlineSmall?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                titleLarge: baseText.titleLarge?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigUi,
+                ),
+                titleMedium: baseText.titleMedium?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigChat,
+                ),
+                titleSmall: baseText.titleSmall?.copyWith(
+                  fontSize: DeltiecordTypeScale.bigChat,
+                ),
+                bodyLarge: baseText.bodyLarge?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
+                bodyMedium: baseText.bodyMedium?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
+                bodySmall: baseText.bodySmall?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
+                labelLarge: baseText.labelLarge?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
+                labelMedium: baseText.labelMedium?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
+                labelSmall: baseText.labelSmall?.copyWith(
+                  fontSize: DeltiecordTypeScale.normal,
+                ),
               )
-            : basePalette;
-        final brightness = preferences.themeMode == DeltiecordThemeMode.light
-            ? Brightness.light
-            : Brightness.dark;
-        final colorScheme =
-            ColorScheme.fromSeed(
-              seedColor: accent,
-              brightness: brightness,
-              contrastLevel: contrast ? 1 : 0,
-            ).copyWith(
-              surface: palette.surface,
-              surfaceContainerLowest: palette.background,
-              surfaceContainerLow: palette.surface,
-              surfaceContainer: palette.surface,
-              surfaceContainerHigh: palette.elevated,
-              surfaceContainerHighest: palette.hover,
-              surfaceTint: Colors.transparent,
-              onSurface: palette.text,
-            );
-        final baseText = ThemeData(brightness: brightness).textTheme;
-        final textTheme = baseText
-            .copyWith(
-              displayLarge: baseText.displayLarge?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              displayMedium: baseText.displayMedium?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              displaySmall: baseText.displaySmall?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              headlineLarge: baseText.headlineLarge?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              headlineMedium: baseText.headlineMedium?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              headlineSmall: baseText.headlineSmall?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              titleLarge: baseText.titleLarge?.copyWith(
-                fontSize: DeltiecordTypeScale.bigUi,
-              ),
-              titleMedium: baseText.titleMedium?.copyWith(
-                fontSize: DeltiecordTypeScale.bigChat,
-              ),
-              titleSmall: baseText.titleSmall?.copyWith(
-                fontSize: DeltiecordTypeScale.bigChat,
-              ),
-              bodyLarge: baseText.bodyLarge?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-              bodyMedium: baseText.bodyMedium?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-              bodySmall: baseText.bodySmall?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-              labelLarge: baseText.labelLarge?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-              labelMedium: baseText.labelMedium?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-              labelSmall: baseText.labelSmall?.copyWith(
-                fontSize: DeltiecordTypeScale.normal,
-              ),
-            )
-            .apply(
-              fontFamily: preferences.fontFamily == 'System'
-                  ? null
-                  : preferences.fontFamily,
-              // Let each platform select its native colour-emoji face. The
-              // old bundled Noto font did not shape reliably in Flutter and
-              // changed ordinary text metrics on some hosts.
-              fontFamilyFallback: null,
-            );
-        return _configuredApp = MaterialApp(
-          title: 'Deltiecord',
-          debugShowCheckedModeBanner: false,
-          themeAnimationDuration: preferences.reducedMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 200),
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            FlutterQuillLocalizations.delegate,
-          ],
-          theme: ThemeData(
+              .apply(
+                fontFamily: preferences.fontFamily == 'System'
+                    ? null
+                    : preferences.fontFamily,
+                // Let each platform select its native colour-emoji face. The
+                // old bundled Noto font did not shape reliably in Flutter and
+                // changed ordinary text metrics on some hosts.
+                fontFamilyFallback: null,
+              );
+          _cachedTheme = ThemeData(
             brightness: brightness,
             colorScheme: colorScheme,
             iconTheme: IconThemeData(color: colorScheme.primary),
@@ -370,7 +356,21 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                 fontSize: DeltiecordTypeScale.normal,
               ),
             ),
-          ),
+          );
+        }
+        return MaterialApp(
+          title: 'Deltiecord',
+          debugShowCheckedModeBanner: false,
+          themeAnimationDuration: preferences.reducedMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            FlutterQuillLocalizations.delegate,
+          ],
+          theme: _cachedTheme,
           builder: (context, child) {
             final media = MediaQuery.of(context);
             final interfaceScale = preferences.interfaceScale;

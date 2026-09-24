@@ -2,13 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'emoji_typography.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
-import 'deltiecord_theme.dart';
 
 Future<void> _confirmFormattedLink(BuildContext context, Uri uri) async {
   final open = await showDialog<bool>(
@@ -97,9 +97,7 @@ List<InlineSpan> _emojiAwareTextSpans(
     spans.add(
       TextSpan(
         text: buffer.toString(),
-        style: bufferedEmoji == true
-            ? style.copyWith(fontFamily: context.deltiecordEmojiFont)
-            : style,
+        style: bufferedEmoji == true ? colourEmojiStyle(style) : style,
       ),
     );
     buffer.clear();

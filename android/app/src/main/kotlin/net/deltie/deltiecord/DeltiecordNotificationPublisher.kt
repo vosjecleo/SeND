@@ -125,6 +125,7 @@ object DeltiecordNotificationPublisher {
         expectedAppGeneration: Long? = null,
         expectedRoomGeneration: Long? = null,
     ): Boolean {
+        if (DeltiecordEngineRegistry.appInForeground) return false
         if (expectedAppGeneration != null &&
             expectedAppGeneration != appGeneration(context)
         ) return false
@@ -607,6 +608,7 @@ object DeltiecordNotificationPublisher {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }
 
+    @Synchronized
     fun clearRoom(context: Context, roomId: String) {
         loadHistory(context, roomId).forEach { entry ->
             entry.optString("avatarPath").takeIf(String::isNotBlank)?.let(::File)?.delete()

@@ -10,6 +10,7 @@ extension _MatrixSession on MatrixBackend {
     try {
       _settingsSaveTimer?.cancel();
       _pendingPreferences = null;
+      _settingsEchoGuard.clear();
       await _syncSubscription?.cancel();
       await _loginSubscription?.cancel();
       await _syncStatusSubscription?.cancel();
@@ -226,6 +227,7 @@ extension _MatrixSession on MatrixBackend {
     try {
       _settingsSaveTimer?.cancel();
       _pendingPreferences = null;
+      _settingsEchoGuard.clear();
       _stopProfileRefreshTimer();
       await _disposeVoice();
       await _closeTimeline();
@@ -817,6 +819,7 @@ extension _MatrixSession on MatrixBackend {
             ),
       );
     if (_pendingPreferences != null) return;
+    if (!_settingsEchoGuard.accepts(content)) return;
     final accountPreferences = AppPreferences(
       density: content?.tryGet<String>('density') == 'cozy'
           ? InterfaceDensity.cozy
@@ -1047,75 +1050,87 @@ extension _MatrixSession on MatrixBackend {
     await _updatePreferences(next);
   }
 
-  Future<void> _persistPreferences(AppPreferences preferences) async {
+  Future<void> _persistPreferences(AppPreferences preferences) {
+    final queued = _preferencesWriteQueue.then((_) async {
+      // A newer local edit can supersede a queued request before it starts.
+      if (identical(_pendingPreferences, preferences)) {
+        await _writePreferences(preferences);
+      }
+    });
+    _preferencesWriteQueue = queued.catchError((Object _) {});
+    return queued;
+  }
+
+  Future<void> _writePreferences(AppPreferences preferences) async {
     if (_matrix.userID == null || !_settingsHydrated) return;
     final existing =
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     try {
+      final payload = <String, Object?>{
+        ...?existing,
+        if (preferences.syncAppearance) ...{
+          'density': preferences.density.name,
+          'compactness': preferences.compactness,
+          'theme_mode': preferences.themeMode.name,
+          // Version 1 had only light/dark/oled. Keeping an explicit schema
+          // marker lets legacy `dark` retain its old Regular appearance
+          // while version 2 can use `dark` for the deeper charcoal palette.
+          'theme_schema_version': 2,
+          'interface_scale': preferences.interfaceScale,
+          _platformFontScaleKey: preferences.fontScale,
+          'room_panel_width': preferences.roomPanelWidth,
+          'side_panel_width': preferences.sidePanelWidth,
+          'reduced_motion': preferences.reducedMotion,
+          'high_contrast': preferences.highContrast,
+          'autoplay_gifs': preferences.autoplayGifs,
+          'accent_color': preferences.accentColor,
+          'font_family': preferences.fontFamily,
+          'emoji_font_family': preferences.emojiFontFamily,
+          'show_native_title_bar': preferences.showNativeTitleBar,
+        },
+        'use_24_hour_time': preferences.use24HourTime,
+        'notifications_enabled': preferences.notificationsEnabled,
+        'notification_sound': preferences.notificationSound,
+        'notification_vibration': preferences.notificationVibration,
+        'notification_alert_cadence': preferences.notificationAlertCadence.name,
+        'send_read_receipts': preferences.sendReadReceipts,
+        'send_typing_notifications': preferences.sendTypingNotifications,
+        'share_presence': preferences.sharePresence,
+        'desktop_idle_minutes': preferences.desktopIdleMinutes,
+        'fetch_direct_link_previews': preferences.fetchDirectLinkPreviews,
+        'direct_link_preview_mode': preferences.directLinkPreviewMode.name,
+        'trusted_preview_domains_added':
+            preferences.trustedPreviewDomainsAdded.toList()..sort(),
+        'trusted_preview_domains_removed':
+            preferences.trustedPreviewDomainsRemoved.toList()..sort(),
+        'improve_twitter_links': preferences.improveTwitterLinks,
+        'remember_window_state': preferences.rememberWindowState,
+        'shortcut_bindings': {
+          for (final entry in preferences.shortcutBindings.entries)
+            entry.key.name: entry.value,
+        },
+        'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
+        'receipt_member_threshold': preferences.readReceiptMemberThreshold,
+        'timeline_chunk_size': preferences.timelineChunkSize,
+        'timeline_chunk_cap': preferences.timelineChunkCap,
+        'preferred_audio_input': preferences.preferredAudioInputId,
+        'preferred_audio_output': preferences.preferredAudioOutputId,
+        'preferred_camera': preferences.preferredCameraId,
+        'echo_cancellation': preferences.echoCancellation,
+        'noise_suppression': preferences.noiseSuppression,
+        'auto_gain_control': preferences.autoGainControl,
+        'microphone_volume': preferences.microphoneVolume,
+        'output_volume': preferences.outputVolume,
+        'call_sound': preferences.callSound,
+        'share_desktop_audio': preferences.shareDesktopAudio,
+        'enable_channel_drag_and_drop': preferences.enableChannelDragAndDrop,
+        'participant_volumes': preferences.participantVolumes,
+      };
+      _settingsEchoGuard.expect(existing, payload);
       await _matrix.setAccountData(
         _matrix.userID!,
         MatrixBackend._settingsAccountDataType,
-        {
-          ...?existing,
-          if (preferences.syncAppearance) ...{
-            'density': preferences.density.name,
-            'compactness': preferences.compactness,
-            'theme_mode': preferences.themeMode.name,
-            // Version 1 had only light/dark/oled. Keeping an explicit schema
-            // marker lets legacy `dark` retain its old Regular appearance
-            // while version 2 can use `dark` for the deeper charcoal palette.
-            'theme_schema_version': 2,
-            'interface_scale': preferences.interfaceScale,
-            _platformFontScaleKey: preferences.fontScale,
-            'room_panel_width': preferences.roomPanelWidth,
-            'side_panel_width': preferences.sidePanelWidth,
-            'reduced_motion': preferences.reducedMotion,
-            'high_contrast': preferences.highContrast,
-            'autoplay_gifs': preferences.autoplayGifs,
-            'accent_color': preferences.accentColor,
-            'font_family': preferences.fontFamily,
-            'emoji_font_family': preferences.emojiFontFamily,
-            'show_native_title_bar': preferences.showNativeTitleBar,
-          },
-          'use_24_hour_time': preferences.use24HourTime,
-          'notifications_enabled': preferences.notificationsEnabled,
-          'notification_sound': preferences.notificationSound,
-          'notification_vibration': preferences.notificationVibration,
-          'notification_alert_cadence':
-              preferences.notificationAlertCadence.name,
-          'send_read_receipts': preferences.sendReadReceipts,
-          'send_typing_notifications': preferences.sendTypingNotifications,
-          'share_presence': preferences.sharePresence,
-          'desktop_idle_minutes': preferences.desktopIdleMinutes,
-          'fetch_direct_link_previews': preferences.fetchDirectLinkPreviews,
-          'direct_link_preview_mode': preferences.directLinkPreviewMode.name,
-          'trusted_preview_domains_added':
-              preferences.trustedPreviewDomainsAdded.toList()..sort(),
-          'trusted_preview_domains_removed':
-              preferences.trustedPreviewDomainsRemoved.toList()..sort(),
-          'improve_twitter_links': preferences.improveTwitterLinks,
-          'remember_window_state': preferences.rememberWindowState,
-          'shortcut_bindings': {
-            for (final entry in preferences.shortcutBindings.entries)
-              entry.key.name: entry.value,
-          },
-          'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
-          'receipt_member_threshold': preferences.readReceiptMemberThreshold,
-          'timeline_chunk_size': preferences.timelineChunkSize,
-          'timeline_chunk_cap': preferences.timelineChunkCap,
-          'preferred_audio_input': preferences.preferredAudioInputId,
-          'preferred_audio_output': preferences.preferredAudioOutputId,
-          'preferred_camera': preferences.preferredCameraId,
-          'echo_cancellation': preferences.echoCancellation,
-          'noise_suppression': preferences.noiseSuppression,
-          'auto_gain_control': preferences.autoGainControl,
-          'microphone_volume': preferences.microphoneVolume,
-          'output_volume': preferences.outputVolume,
-          'call_sound': preferences.callSound,
-          'share_desktop_audio': preferences.shareDesktopAudio,
-          'enable_channel_drag_and_drop': preferences.enableChannelDragAndDrop,
-          'participant_volumes': preferences.participantVolumes,
-        },
+        payload,
       );
       if (preferences.syncAppearance) _accountPreferences = preferences;
       if (identical(_pendingPreferences, preferences)) {

@@ -1,5 +1,11 @@
 # Installing Deltiecord
 
+Voice-message recording (build 104 onward) needs a microphone and OS/browser
+permission. On Linux, install `ffmpeg` and the PulseAudio client tools `parecord`
+and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire's
+PulseAudio compatibility service is supported. Packaged dependencies include
+these tools; standalone AppImage users must provide them on the host.
+
 Deltiecord 0.9.29 build 98 is the current release candidate for Android,
 x86-64 Windows, and Linux.
 Download official builds from the [Deltiecord releases page](https://deltie.net/cord)

@@ -262,9 +262,13 @@ void main() {
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('theme-chooser')));
+    await tester.pumpAndSettle();
     expect(find.text('Light'), findsOneWidget);
     expect(find.text('Dark'), findsOneWidget);
     expect(find.text('Night'), findsOneWidget);
+    await tester.tap(find.text('Light'));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('interface-scale-slider')), findsOneWidget);
     expect(find.byKey(const Key('compactness-slider')), findsNothing);
     final colourWheelButton = find.textContaining('Open colour wheel');
@@ -3735,6 +3739,7 @@ void main() {
       find.byKey(const ValueKey('mobile-composer-field')),
       'Send tomorrow',
     );
+    await tester.pump();
 
     await tester.longPress(find.bySemanticsLabel('Send; hold to send later'));
     await tester.pumpAndSettle();

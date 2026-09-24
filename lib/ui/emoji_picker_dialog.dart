@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../backend/chat_backend.dart';
 import '../services/emoji_repository.dart';
+import 'emoji_typography.dart';
 import '../services/favourite_reactions_store.dart';
 import 'deltiecord_theme.dart';
 import 'matrix_html_text.dart';
@@ -239,7 +240,7 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
       );
       return Tooltip(
         message:
-            '${entry.name}  :${entry.aliases.firstOrNull ?? entry.name}:\n'
+            '${entry.name}  :${entry.shortcode}:\n'
             'Long-press to ${favourite ? 'unfavourite' : 'favourite'}',
         child: InkWell(
           key: ValueKey('emoji-picker-result-${entry.favouriteKey}'),
@@ -263,10 +264,7 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
                       )
                     : Text(
                         entry.emoji,
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontFamily: context.deltiecordEmojiFont,
-                        ),
+                        style: colourEmojiStyle(const TextStyle(fontSize: 25)),
                       ),
               ),
               if (favourite)

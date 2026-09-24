@@ -17,8 +17,8 @@ void main() {
       backend.notifyListeners();
       await tester.pump();
       expect(
-        tester.widget<MaterialApp>(find.byType(MaterialApp)),
-        same(original),
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).theme,
+        same(original.theme),
       );
     }
     await backend.updatePreferences(

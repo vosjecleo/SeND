@@ -81,16 +81,25 @@ extension _MatrixMedia on MatrixBackend {
             );
       final transactionId = _matrix.generateUniqueTransactionId();
       final operation = attachment.voiceMessage
-          ? room.sendAudioEvent(
+          ? room.sendFileEvent(
               MatrixAudioFile(
                 bytes: attachment.bytes,
                 name: attachment.name,
                 mimeType: attachment.mimeType,
                 duration: attachment.durationMilliseconds,
               ),
-              replyTo: replyEvent,
-              durationInMs: attachment.durationMilliseconds,
-              waveform: attachment.waveform,
+              txid: transactionId,
+              inReplyTo: replyEvent,
+              // sendAudioEvent in our SDK adds the waveform but not the voice
+              // marker. Other clients need both to distinguish a recording
+              // from a generic audio upload. Encryption stays in the SDK.
+              extraContent: {
+                'org.matrix.msc3245.voice': <String, Object?>{},
+                'org.matrix.msc1767.audio': {
+                  'duration': attachment.durationMilliseconds,
+                  'waveform': attachment.waveform,
+                },
+              },
             )
           : room.sendFileEvent(
               file,

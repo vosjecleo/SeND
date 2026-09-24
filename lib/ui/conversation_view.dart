@@ -907,6 +907,7 @@ class _ConversationState extends State<_Conversation> {
                                             const _UnreadDivider(),
                                           _MessageRow(
                                             message: message,
+                                            receiptIds: receipts,
                                             showReceipt: receipts.contains(
                                               message.id,
                                             ),
@@ -1036,34 +1037,44 @@ class _ConversationState extends State<_Conversation> {
                     selectedIndex: widget.mentionSelectionIndex,
                     onSelected: widget.onMentionSelected,
                   ),
-                _RichComposer(
-                  key: widget.composerKey,
+                VoiceMessageComposer(
+                  key: ValueKey('voice-composer-${room.id}'),
                   backend: backend,
-                  controller: widget.controller,
-                  focusNode: widget.composerFocus,
-                  roomName: room.name,
+                  roomId: room.id,
                   replyToMessageId: widget.replyingTo?.id,
-                  // The editor remains live while this only gates attachment
-                  // and submit controls for the in-flight request.
-                  enabled: !widget.sending,
-                  sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-                  onSend: widget.onSend,
-                  onSchedule: widget.onSchedule,
-                  onPoll: widget.onPoll,
-                  onSticker: widget.onSticker,
-                  onAttach: widget.onAttach,
-                  onGif: widget.onGif,
-                  onPasteImage: widget.onPasteImage,
-                  pendingAttachments: widget.pendingAttachments,
-                  onRemoveAttachment: widget.onRemoveAttachment,
-                  onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
-                  mentionSuggestions: widget.mentionSuggestions,
-                  mentionSelectionIndex: widget.mentionSelectionIndex,
-                  onMentionSelected: widget.onMentionSelected,
-                  onMentionSelectionChanged: widget.onMentionSelectionChanged,
-                  maxHeight: max(
-                    _bottomPanelHeightFor(context),
-                    (MediaQuery.sizeOf(context).height - 56) / 3,
+                  onSent: widget.onCancelComposerAction,
+                  builder: (startRecording) => _RichComposer(
+                    key: widget.composerKey,
+                    backend: backend,
+                    controller: widget.controller,
+                    focusNode: widget.composerFocus,
+                    roomName: room.name,
+                    replyToMessageId: widget.replyingTo?.id,
+                    // The editor remains live while this only gates attachment
+                    // and submit controls for the in-flight request.
+                    enabled: !widget.sending,
+                    sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
+                    onSend: widget.onSend,
+                    onRecord: widget.editingMessage == null
+                        ? startRecording
+                        : null,
+                    onSchedule: widget.onSchedule,
+                    onPoll: widget.onPoll,
+                    onSticker: widget.onSticker,
+                    onAttach: widget.onAttach,
+                    onGif: widget.onGif,
+                    onPasteImage: widget.onPasteImage,
+                    pendingAttachments: widget.pendingAttachments,
+                    onRemoveAttachment: widget.onRemoveAttachment,
+                    onToggleAttachmentSpoiler: widget.onToggleAttachmentSpoiler,
+                    mentionSuggestions: widget.mentionSuggestions,
+                    mentionSelectionIndex: widget.mentionSelectionIndex,
+                    onMentionSelected: widget.onMentionSelected,
+                    onMentionSelectionChanged: widget.onMentionSelectionChanged,
+                    maxHeight: max(
+                      _bottomPanelHeightFor(context),
+                      (MediaQuery.sizeOf(context).height - 56) / 3,
+                    ),
                   ),
                 ),
               ],

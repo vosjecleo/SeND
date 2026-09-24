@@ -13,6 +13,7 @@ import '../services/secret_redaction.dart';
 import '../services/unified_push.dart';
 import '../services/update_checker.dart';
 import 'accent_color_picker.dart';
+import 'theme_chooser.dart';
 import 'security_center.dart';
 import 'app_shortcuts.dart';
 import 'profile_card.dart';
@@ -1025,39 +1026,11 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         onChanged: _changeAppearanceSync,
       ),
       const SizedBox(height: 12),
-      const Text('Theme'),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final minimum = 120 * MediaQuery.textScalerOf(context).scale(1);
-          final columns = constraints.maxWidth >= minimum * 4 + 24
-              ? 4
-              : constraints.maxWidth >= minimum * 2 + 8
-              ? 2
-              : 1;
-          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-          return Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final option in const [
-                (DeltiecordThemeMode.light, 'Light'),
-                (DeltiecordThemeMode.regular, 'Gray'),
-                (DeltiecordThemeMode.dark, 'Dark'),
-                (DeltiecordThemeMode.night, 'Night'),
-              ])
-                SizedBox(
-                  width: width,
-                  child: ChoiceChip(
-                    label: Text(option.$2, maxLines: 1),
-                    selected: preferences.themeMode == option.$1,
-                    onSelected: (_) => backend.updatePreferences(
-                      preferences.copyWith(themeMode: option.$1),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+      ThemeChooser(
+        value: preferences.themeMode,
+        onChanged: (mode) => backend.updatePreferences(
+          backend.preferences.copyWith(themeMode: mode),
+        ),
       ),
       const SizedBox(height: 20),
       Text('Interface scale — ${(preferences.interfaceScale * 100).round()}%'),

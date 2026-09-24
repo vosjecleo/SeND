@@ -19,6 +19,7 @@ import '../../services/favourite_reactions_store.dart';
 import '../../services/gif_service.dart';
 import '../deltiecord_theme.dart';
 import '../expression_picker.dart';
+import '../voice_message_composer.dart';
 import 'mobile_attachment_picker.dart';
 import '../../services/clipboard_image.dart';
 import '../advanced_chat_dialogs.dart';
@@ -877,6 +878,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                         date: message.timestamp.toLocal(),
                                       ),
                                     _MobileMessageRow(
+                                      receiptIds: receipts,
                                       backend: backend,
                                       navigationGestureActive:
                                           widget.navigationGestureActive,
@@ -984,52 +986,60 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                     ],
                   ),
           ),
-          _MobileComposer(
+          VoiceMessageComposer(
+            key: ValueKey('voice-composer-${widget.room.id}'),
             backend: backend,
-            controller: _composer,
-            focusNode: _focus,
-            sending: _sending,
-            attachments: _attachments,
-            contextMessage: _edit ?? _reply,
-            editing: _edit != null,
-            onClearContext: () => setState(() {
-              if (_edit != null) {
-                _customEmojiSpans = [];
-                _composer.clear();
-              }
-              _reply = null;
-              _edit = null;
-            }),
-            onRemoveAttachment: (attachment) =>
-                setState(() => _attachments.remove(attachment)),
-            onToggleAttachmentSpoiler: (attachment) {
-              final index = _attachments.indexOf(attachment);
-              if (index < 0) return;
-              setState(() {
-                _attachments[index] = AttachmentDraft(
-                  bytes: attachment.bytes,
-                  name: attachment.name,
-                  mimeType: attachment.mimeType,
-                  spoiler: !attachment.spoiler,
-                  caption: attachment.caption,
-                );
-              });
-            },
-            onAdd: _showAddMenu,
-            onEmoji: _showEmojiPicker,
-            onPasteImage: _pasteClipboardImage,
-            onSend: _send,
-            onSchedule: _scheduleCurrentMessage,
-            onContentInserted: _insertKeyboardContent,
-            emojiMatches: _emojiMatches,
-            emojiCompletionActive: _emojiStart != null,
-            emojiSelection: _emojiSelection,
-            onEmojiSelected: _acceptEmojiCompletion,
-            onEmojiSelectionChanged: (index) =>
-                setState(() => _emojiSelection = index),
-            onDismissEmojiCompletion: _clearEmojiCompletion,
-            mentionMatches: _mentionMatches,
-            onMentionSelected: _acceptMention,
+            roomId: widget.room.id,
+            replyToMessageId: _reply?.id,
+            onSent: () => setState(() => _reply = null),
+            builder: (startRecording) => _MobileComposer(
+              backend: backend,
+              controller: _composer,
+              focusNode: _focus,
+              sending: _sending,
+              attachments: _attachments,
+              contextMessage: _edit ?? _reply,
+              editing: _edit != null,
+              onClearContext: () => setState(() {
+                if (_edit != null) {
+                  _customEmojiSpans = [];
+                  _composer.clear();
+                }
+                _reply = null;
+                _edit = null;
+              }),
+              onRemoveAttachment: (attachment) =>
+                  setState(() => _attachments.remove(attachment)),
+              onToggleAttachmentSpoiler: (attachment) {
+                final index = _attachments.indexOf(attachment);
+                if (index < 0) return;
+                setState(() {
+                  _attachments[index] = AttachmentDraft(
+                    bytes: attachment.bytes,
+                    name: attachment.name,
+                    mimeType: attachment.mimeType,
+                    spoiler: !attachment.spoiler,
+                    caption: attachment.caption,
+                  );
+                });
+              },
+              onAdd: _showAddMenu,
+              onEmoji: _showEmojiPicker,
+              onPasteImage: _pasteClipboardImage,
+              onSend: _send,
+              onRecord: _edit == null ? startRecording : null,
+              onSchedule: _scheduleCurrentMessage,
+              onContentInserted: _insertKeyboardContent,
+              emojiMatches: _emojiMatches,
+              emojiCompletionActive: _emojiStart != null,
+              emojiSelection: _emojiSelection,
+              onEmojiSelected: _acceptEmojiCompletion,
+              onEmojiSelectionChanged: (index) =>
+                  setState(() => _emojiSelection = index),
+              onDismissEmojiCompletion: _clearEmojiCompletion,
+              mentionMatches: _mentionMatches,
+              onMentionSelected: _acceptMention,
+            ),
           ),
         ],
       ),
@@ -1487,6 +1497,7 @@ class _MobileMessageRow extends StatelessWidget {
     required this.navigationGestureActive,
     required this.message,
     this.showReceipt = false,
+    this.receiptIds = const {},
     this.albumMessages,
     required this.grouped,
     required this.highlighted,
@@ -1499,6 +1510,7 @@ class _MobileMessageRow extends StatelessWidget {
   final bool navigationGestureActive;
   final ChatMessage message;
   final bool showReceipt;
+  final Set<String> receiptIds;
   final List<ChatMessage>? albumMessages;
   final bool grouped;
   final bool highlighted;
@@ -1719,22 +1731,32 @@ class _MobileMessageRow extends StatelessWidget {
                       if (message.poll != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 5),
-                          child: PollCard(backend: backend, message: message),
+                          child: MediaWithMessageMetadata(
+                            message: message,
+                            showReceipt: showReceipt,
+                            child: PollCard(backend: backend, message: message),
+                          ),
                         ),
                       if (albumMessages case final album?)
                         Padding(
                           padding: const EdgeInsets.only(top: 5),
-                          child: MediaAlbumGrid(
-                            messages: album,
-                            height: 250,
-                            itemBuilder: (context, albumMessage) => FittedBox(
-                              fit: BoxFit.cover,
-                              clipBehavior: Clip.hardEdge,
-                              child: SizedBox.square(
-                                dimension: 250,
-                                child: MobileAttachmentView(
-                                  backend: backend,
-                                  message: albumMessage,
+                          child: MediaWithMessageMetadata(
+                            message: message,
+                            showReceipt: showReceipt,
+                            album: album,
+                            receiptIds: receiptIds,
+                            child: MediaAlbumGrid(
+                              messages: album,
+                              height: 250,
+                              itemBuilder: (context, albumMessage) => FittedBox(
+                                fit: BoxFit.cover,
+                                clipBehavior: Clip.hardEdge,
+                                child: SizedBox.square(
+                                  dimension: 250,
+                                  child: MobileAttachmentView(
+                                    backend: backend,
+                                    message: albumMessage,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1746,19 +1768,14 @@ class _MobileMessageRow extends StatelessWidget {
                             'mobile-message-attachment-${message.id}',
                           ),
                           padding: const EdgeInsets.only(top: 5),
-                          child: MobileAttachmentView(
-                            backend: backend,
+                          child: MediaWithMessageMetadata(
                             message: message,
-                          ),
-                        ),
-                      if ((showReceipt || message.edited) &&
-                          (message.body.isEmpty || message.poll != null))
-                        Text.rich(
-                          messageMetadata(
-                            context,
-                            message,
-                            showReceipt: showReceipt,
-                            onReaders: () => _showReaders(context),
+                            enabled: message.body.isEmpty,
+                            showReceipt: message.body.isEmpty && showReceipt,
+                            child: MobileAttachmentView(
+                              backend: backend,
+                              message: message,
+                            ),
                           ),
                         ),
                       for (final preview in message.linkPreviews)
@@ -2004,6 +2021,7 @@ class _MobileComposer extends StatefulWidget {
     required this.onEmoji,
     required this.onPasteImage,
     required this.onSend,
+    this.onRecord,
     required this.onSchedule,
     required this.onContentInserted,
     required this.emojiMatches,
@@ -2029,6 +2047,7 @@ class _MobileComposer extends StatefulWidget {
   final VoidCallback onEmoji;
   final VoidCallback onPasteImage;
   final VoidCallback onSend;
+  final VoidCallback? onRecord;
   final VoidCallback onSchedule;
   final ValueChanged<KeyboardInsertedContent> onContentInserted;
   final List<EmojiEntry> emojiMatches;
@@ -2045,6 +2064,15 @@ class _MobileComposer extends StatefulWidget {
 }
 
 class _MobileComposerState extends State<_MobileComposer> {
+  bool get _canRecord =>
+      widget.onRecord != null &&
+      widget.attachments.isEmpty &&
+      widget.controller.text.trim().isEmpty &&
+      !widget.editing;
+  void _textChanged() {
+    if (mounted) setState(() {});
+  }
+
   final _emojiOverlay = OverlayPortalController();
   final _emojiAnchor = LayerLink();
 
@@ -2052,6 +2080,13 @@ class _MobileComposerState extends State<_MobileComposer> {
   void initState() {
     super.initState();
     _scheduleEmojiOverlaySync();
+    widget.controller.addListener(_textChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_textChanged);
+    super.dispose();
   }
 
   @override
@@ -2157,7 +2192,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              ':${widget.emojiMatches[index].aliases.firstOrNull ?? widget.emojiMatches[index].name}:',
+                              ':${widget.emojiMatches[index].shortcode}:',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2319,10 +2354,25 @@ class _MobileComposerState extends State<_MobileComposer> {
                   ),
                   Semantics(
                     button: true,
-                    label: 'Send; hold to send later',
+                    label: _canRecord
+                        ? 'Record voice message'
+                        : 'Send; hold to send later',
                     child: InkResponse(
-                      onTap: widget.sending ? null : widget.onSend,
-                      onLongPress: widget.sending ? null : widget.onSchedule,
+                      containedInkWell: true,
+                      highlightShape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(12),
+                      splashColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.12),
+                      highlightColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.08),
+                      onTap: widget.sending
+                          ? null
+                          : (_canRecord ? widget.onRecord : widget.onSend),
+                      onLongPress: widget.sending || _canRecord
+                          ? null
+                          : widget.onSchedule,
                       radius: 26,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -2336,7 +2386,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.send),
+                            : Icon(_canRecord ? Icons.mic : Icons.send),
                       ),
                     ),
                   ),

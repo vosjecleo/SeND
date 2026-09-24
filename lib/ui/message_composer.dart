@@ -8,6 +8,7 @@ class _RichComposer extends StatefulWidget {
     required this.roomName,
     required this.enabled,
     required this.onSend,
+    this.onRecord,
     required this.onSchedule,
     required this.onPoll,
     required this.onSticker,
@@ -33,6 +34,7 @@ class _RichComposer extends StatefulWidget {
   final String roomName;
   final bool enabled;
   final VoidCallback onSend;
+  final VoidCallback? onRecord;
   final VoidCallback onSchedule;
   final VoidCallback onPoll;
   final VoidCallback onSticker;
@@ -99,6 +101,10 @@ class _MentionPicker extends StatelessWidget {
 }
 
 class _RichComposerState extends State<_RichComposer> {
+  bool get _canRecord =>
+      widget.onRecord != null &&
+      widget.pendingAttachments.isEmpty &&
+      widget.controller.document.toPlainText().trim().isEmpty;
   final _scrollController = ScrollController();
   final _pickerGiphy = GifService();
   final _emojiOverlay = OverlayPortalController();
@@ -392,8 +398,7 @@ class _RichComposerState extends State<_RichComposer> {
                                         ),
                                 ),
                                 TextSpan(
-                                  text:
-                                      '  :${_emojiMatches[index].aliases.firstOrNull ?? _emojiMatches[index].name}:',
+                                  text: '  :${_emojiMatches[index].shortcode}:',
                                 ),
                               ],
                             ),
@@ -757,16 +762,20 @@ class _RichComposerState extends State<_RichComposer> {
                       height: controlHeight,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onSecondaryTap: widget.enabled
+                        onSecondaryTap: widget.enabled && !_canRecord
                             ? widget.onSchedule
                             : null,
-                        onLongPress: widget.enabled ? widget.onSchedule : null,
+                        onLongPress: widget.enabled && !_canRecord
+                            ? widget.onSchedule
+                            : null,
                         child: IconButton(
-                          tooltip: 'Send',
+                          tooltip: _canRecord ? 'Record voice message' : 'Send',
                           padding: EdgeInsets.zero,
-                          onPressed: widget.enabled ? widget.onSend : null,
+                          onPressed: widget.enabled
+                              ? (_canRecord ? widget.onRecord : widget.onSend)
+                              : null,
                           icon: Icon(
-                            Icons.send,
+                            _canRecord ? Icons.mic : Icons.send,
                             size: 25,
                             color: Theme.of(context).colorScheme.primary,
                           ),

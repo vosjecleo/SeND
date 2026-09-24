@@ -174,39 +174,37 @@ class _GiphyDialogState extends State<GiphyDialog> {
                     slivers: [
                       if (_query.text.trim().isEmpty && _favorites.isNotEmpty)
                         SliverToBoxAdapter(
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Favourites'),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    height: 110,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: _favorites.length,
-                                      separatorBuilder: (_, _) =>
-                                          const SizedBox(width: 6),
-                                      itemBuilder: (context, index) => SizedBox(
-                                        width: 110,
-                                        child: InkWell(
-                                          onTap: () => Navigator.pop(
-                                            context,
-                                            _favorites[index],
-                                          ),
-                                          child: _GifPreview(
-                                            service: widget.service,
-                                            gif: _favorites[index],
-                                            autoplay: widget.autoplay,
-                                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Favourites'),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 110,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _favorites.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 6),
+                                    itemBuilder: (context, index) => SizedBox(
+                                      width: 110,
+                                      child: InkWell(
+                                        onTap: () => Navigator.pop(
+                                          context,
+                                          _favorites[index],
+                                        ),
+                                        child: _GifPreview(
+                                          service: widget.service,
+                                          gif: _favorites[index],
+                                          autoplay: widget.autoplay,
                                         ),
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

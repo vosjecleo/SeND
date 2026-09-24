@@ -7,7 +7,10 @@ InlineSpan messageMetadata(
   required bool showReceipt,
   VoidCallback? onReaders,
 }) {
-  final color = Theme.of(context).colorScheme.onSurfaceVariant;
+  final scheme = Theme.of(context).colorScheme;
+  final color = MediaQuery.highContrastOf(context)
+      ? scheme.onSurface
+      : Color.lerp(scheme.onSurface, scheme.surface, 0.42)!;
   InlineSpan receipt(List<ReceiptReaderSummary> readers, String sentLabel) =>
       WidgetSpan(
         alignment: PlaceholderAlignment.middle,
@@ -21,7 +24,7 @@ InlineSpan messageMetadata(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: Icon(
                 readers.isEmpty ? Icons.check : Icons.done_all,
-                size: 12,
+                size: 10,
                 color: color,
               ),
             ),
@@ -29,7 +32,7 @@ InlineSpan messageMetadata(
         ),
       );
   return TextSpan(
-    style: TextStyle(fontSize: 11, color: color, fontStyle: FontStyle.normal),
+    style: TextStyle(fontSize: 10, color: color, fontStyle: FontStyle.normal),
     children: [
       if (showReceipt) receipt(message.readBy, 'Sent to homeserver'),
       if (message.edited) const TextSpan(text: ' (edited)'),
@@ -40,4 +43,61 @@ InlineSpan messageMetadata(
         receipt(message.editReadBy, 'Edit sent'),
     ],
   );
+}
+
+class MediaWithMessageMetadata extends StatelessWidget {
+  const MediaWithMessageMetadata({
+    required this.child,
+    required this.message,
+    required this.showReceipt,
+    this.album = const [],
+    this.receiptIds = const {},
+    this.enabled = true,
+    super.key,
+  });
+  final Widget child;
+  final ChatMessage message;
+  final bool showReceipt;
+  final List<ChatMessage> album;
+  final Set<String> receiptIds;
+  final bool enabled;
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    final entries = album.isEmpty
+        ? [if (showReceipt || message.edited) message]
+        : album
+              .where((item) => receiptIds.contains(item.id) || item.edited)
+              .toList();
+    if (entries.isEmpty) return child;
+    return Row(
+      key: ValueKey('media-receipt-${message.id}'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Flexible(child: child),
+        const SizedBox(width: 3),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final item in entries)
+              Tooltip(
+                message: album.isEmpty
+                    ? 'Message status'
+                    : 'Attachment ${album.indexOf(item) + 1} of ${album.length}',
+                child: Text.rich(
+                  messageMetadata(
+                    context,
+                    item,
+                    showReceipt: album.isEmpty
+                        ? showReceipt
+                        : receiptIds.contains(item.id),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 }

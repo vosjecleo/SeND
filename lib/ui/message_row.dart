@@ -13,6 +13,7 @@ class _MessageRow extends StatefulWidget {
   const _MessageRow({
     required this.message,
     this.showReceipt = false,
+    this.receiptIds = const {},
     this.albumMessages,
     required this.highlighted,
     required this.startsGroup,
@@ -32,6 +33,7 @@ class _MessageRow extends StatefulWidget {
 
   final ChatMessage message;
   final bool showReceipt;
+  final Set<String> receiptIds;
   final List<ChatMessage>? albumMessages;
   final bool highlighted;
   final bool startsGroup;
@@ -409,36 +411,46 @@ class _MessageRowState extends State<_MessageRow> {
                               if (message.poll != null)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
-                                  child: PollCard(
-                                    backend: widget.backend,
+                                  child: MediaWithMessageMetadata(
                                     message: message,
+                                    showReceipt: widget.showReceipt,
+                                    child: PollCard(
+                                      backend: widget.backend,
+                                      message: message,
+                                    ),
                                   ),
                                 ),
                               if (widget.albumMessages case final album?)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 430,
-                                    ),
-                                    child: MediaAlbumGrid(
-                                      messages: album,
-                                      height: 300,
-                                      itemBuilder: (context, albumMessage) =>
-                                          FittedBox(
-                                            fit: BoxFit.cover,
-                                            clipBehavior: Clip.hardEdge,
-                                            child: SizedBox.square(
-                                              dimension: 300,
-                                              child: _AttachmentView(
-                                                backend: widget.backend,
-                                                messageId: albumMessage.id,
-                                                attachment:
-                                                    albumMessage.attachment!,
-                                                gallery: widget.mediaMessages,
+                                  child: MediaWithMessageMetadata(
+                                    message: message,
+                                    showReceipt: widget.showReceipt,
+                                    album: album,
+                                    receiptIds: widget.receiptIds,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 430,
+                                      ),
+                                      child: MediaAlbumGrid(
+                                        messages: album,
+                                        height: 300,
+                                        itemBuilder: (context, albumMessage) =>
+                                            FittedBox(
+                                              fit: BoxFit.cover,
+                                              clipBehavior: Clip.hardEdge,
+                                              child: SizedBox.square(
+                                                dimension: 300,
+                                                child: _AttachmentView(
+                                                  backend: widget.backend,
+                                                  messageId: albumMessage.id,
+                                                  attachment:
+                                                      albumMessage.attachment!,
+                                                  gallery: widget.mediaMessages,
+                                                ),
                                               ),
                                             ),
-                                          ),
+                                      ),
                                     ),
                                   ),
                                 )
@@ -446,11 +458,18 @@ class _MessageRowState extends State<_MessageRow> {
                                   case final attachment?)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
-                                  child: _AttachmentView(
-                                    backend: widget.backend,
-                                    messageId: message.id,
-                                    attachment: attachment,
-                                    gallery: widget.mediaMessages,
+                                  child: MediaWithMessageMetadata(
+                                    message: message,
+                                    enabled: message.body.isEmpty,
+                                    showReceipt:
+                                        message.body.isEmpty &&
+                                        widget.showReceipt,
+                                    child: _AttachmentView(
+                                      backend: widget.backend,
+                                      messageId: message.id,
+                                      attachment: attachment,
+                                      gallery: widget.mediaMessages,
+                                    ),
                                   ),
                                 ),
                               for (final preview in message.linkPreviews)
@@ -459,16 +478,6 @@ class _MessageRowState extends State<_MessageRow> {
                                   child: _LinkPreviewCard(
                                     preview: preview,
                                     backend: widget.backend,
-                                  ),
-                                ),
-                              if ((widget.showReceipt || message.edited) &&
-                                  (message.body.isEmpty ||
-                                      message.poll != null))
-                                Text.rich(
-                                  messageMetadata(
-                                    context,
-                                    message,
-                                    showReceipt: widget.showReceipt,
                                   ),
                                 ),
                               if (message.queued)

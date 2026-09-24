@@ -3,6 +3,29 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('foreground rejection and room clearing share publication lock', () {
+    final publisher = File(
+      'android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordNotificationPublisher.kt',
+    ).readAsStringSync();
+    expect(publisher, contains('@Synchronized\n    fun publish('));
+    expect(publisher, contains('@Synchronized\n    fun clearRoom('));
+    final publish = publisher.substring(publisher.indexOf('fun publish('));
+    expect(
+      publish,
+      contains('if (DeltiecordEngineRegistry.appInForeground) return false'),
+    );
+    expect(
+      publish.indexOf(
+        'if (DeltiecordEngineRegistry.appInForeground) return false',
+      ),
+      lessThan(publish.indexOf('val shouldAlert = shouldAlert')),
+    );
+    final clear = publisher.substring(
+      publisher.indexOf('fun clearRoom('),
+      publisher.indexOf('fun resetAlertCadenceOnAppOpen('),
+    );
+    expect(clear, contains('invalidateRoomAlertState(context, roomId)'));
+  });
   test('Android excludes all app-private state from backup and transfer', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',

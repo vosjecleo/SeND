@@ -102,6 +102,7 @@ class _LinkPreviewCard extends StatelessWidget {
         ? maxHeight * aspectRatio
         : maxWidth;
     return Align(
+      widthFactor: 1,
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: mediaWidth,
@@ -759,10 +760,15 @@ class _AttachmentViewState extends State<_AttachmentView> {
   @override
   Widget build(BuildContext context) {
     if (widget.attachment.sticker) {
-      return Align(alignment: Alignment.centerLeft, child: _buildSticker());
+      return Align(
+        widthFactor: 1,
+        alignment: Alignment.centerLeft,
+        child: _buildSticker(),
+      );
     }
     if (widget.attachment.spoiler && !_revealed) {
       return Align(
+        widthFactor: 1,
         alignment: Alignment.centerLeft,
         child: SizedBox(
           width: 208,
@@ -859,6 +865,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
           );
         }
         return Align(
+          widthFactor: 1,
           alignment: Alignment.centerLeft,
           child: SizedBox(
             width: frame.width,
@@ -1171,6 +1178,7 @@ class _InlineVideoState extends State<_InlineVideo> {
                 : Image.memory(snapshot.data!, fit: BoxFit.contain),
           );
     return Align(
+      widthFactor: 1,
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: width,

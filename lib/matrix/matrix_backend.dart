@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/settings_echo_guard.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -130,6 +131,8 @@ class MatrixBackend extends ChatBackend {
       0;
   Timer? _settingsSaveTimer;
   AppPreferences? _pendingPreferences;
+  final _settingsEchoGuard = SettingsEchoGuard();
+  Future<void> _preferencesWriteQueue = Future.value();
   String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
@@ -639,8 +642,12 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void setApplicationForeground(bool foreground) {
-    if (_applicationForeground == foreground) return;
+    if (_applicationForeground == foreground) {
+      if (foreground) _dismissVisibleRoomNotification();
+      return;
+    }
     _applicationForeground = foreground;
+    if (foreground) _dismissVisibleRoomNotification();
     if (foreground && Platform.isAndroid) {
       unawaited(_restoreUnifiedPushPusher());
     }
@@ -649,6 +656,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void refreshApplicationState() {
+    _dismissVisibleRoomNotification();
     // Account-data settings are applied by the authoritative /sync listener.
     // Re-reading the SDK cache on resume can resurrect the value from before
     // a recent write and make theme changes appear stuck until restart.
@@ -664,14 +672,19 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void setConversationVisible(bool visible) {
-    if (_conversationVisible == visible) return;
     _conversationVisible = visible;
+    _dismissVisibleRoomNotification();
+    if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
+  }
+
+  void _dismissVisibleRoomNotification() {
     final roomId = _selectedRoomId;
-    if (visible && roomId != null) {
+    // Dismissal is about what is visible, not whether history is scrolled to
+    // the newest event. Read receipts retain their stricter at-present guard.
+    if (_applicationForeground && _conversationVisible && roomId != null) {
       InAppNotificationCenter.dismissRoom(roomId);
       unawaited(_notifications.clearRoom(roomId));
     }
-    if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
   }
 
   @override
