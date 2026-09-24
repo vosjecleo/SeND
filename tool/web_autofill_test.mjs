@@ -8,6 +8,10 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  // DOM state checks must not depend on animation frames. Headless CI can
+  // throttle RAF while Flutter's platform-view/semantics layers are replaced;
+  // the form has already switched by the time a RAF-based wait times out.
+  const waitForDOM = predicate => page.waitForFunction(predicate, {polling: 100});
   await page.setViewport({width: 1100, height: 900});
   const logins = [];
   let registrations = 0;
@@ -57,7 +61,7 @@ try {
   for (let n = 0; n < 100 && !logins.length; n++) await new Promise(r => setTimeout(r, 100));
   assert.equal(logins[0]?.identifier?.user, 'synthetic-autofill');
   assert.equal(logins[0]?.password, 'not-a-real-password');
-  await page.waitForFunction(() => !document.querySelector('#deltiecord-login button').disabled);
+  await waitForDOM(() => !document.querySelector('#deltiecord-login button').disabled);
   await page.$eval('flt-semantics-placeholder', node => node.click());
   const toggle = await page.waitForSelector('::-p-text(Create a deltie.net account)');
   // Enabling Flutter semantics can relayout the platform-view form. Wait for
@@ -70,7 +74,7 @@ try {
   }));
   await toggle.click();
   try {
-    await page.waitForFunction(() => document.querySelector('#deltiecord-password').autocomplete === 'new-password');
+    await waitForDOM(() => document.querySelector('#deltiecord-password')?.autocomplete === 'new-password');
   } catch (error) {
     await page.screenshot({path:'web-autofill-failure.png'});
     console.log('Mode switch state', await page.evaluate(() => ({
@@ -95,10 +99,10 @@ try {
   assert.equal(await page.$eval('#deltiecord-username', n => n.validity.customError), true);
   assert.equal(registrations, 0);
   await (await page.waitForSelector('::-p-text(I already have an account)')).click();
-  await page.waitForFunction(() => document.querySelector('#deltiecord-password').autocomplete === 'current-password');
+  await waitForDOM(() => document.querySelector('#deltiecord-password')?.autocomplete === 'current-password');
   assert.equal(await page.$eval('#deltiecord-password', n => n.value), '');
   await page.setViewport({width: 390, height: 844});
-  await page.waitForFunction(() => [...document.querySelectorAll('#deltiecord-login input')]
+  await waitForDOM(() => [...document.querySelectorAll('#deltiecord-login input')]
     .filter(n => !n.disabled).every(n => {
       const r = n.getBoundingClientRect(); return r.left >= 0 && r.right <= 390;
     }));
