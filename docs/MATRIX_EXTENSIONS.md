@@ -4,7 +4,7 @@ Deltiecord uses normal Matrix rooms, Spaces, events, encryption, media, and
 MatrixRTC. Namespaced fields add presentation and lifecycle metadata; standard
 membership/power levels remain authoritative. Other clients can ignore unknown
 fields, but will not implement Deltiecord's role-propagation or timeout-restoration
-behaviour. Current baseline: 0.9.34+106.
+behaviour. Current baseline: 0.9.34+107.
 
 ## Room presentation
 
@@ -277,6 +277,31 @@ per-room `rooms` maps with boolean keys `avatar`, `name`, `membership`, `profile
 and `room`. Missing room values inherit defaults; missing defaults show events.
 These are display filters, not deletion or room policy. Security/encryption and
 moderation events are not hidden by cosmetic filters.
+
+## Shared Space/room display and access policy (107)
+
+State event `net.deltiecord.space.policy`, empty state key, may be stored on a
+Space or a child room:
+
+```json
+{
+  "version": 1,
+  "default_channel_access": "restricted",
+  "event_visibility": {"avatar": false, "name": false}
+}
+```
+
+Visibility accepts the five cosmetic keys above. A room's explicit boolean wins
+over its parent Space, then personal settings supply the fallback. Missing flags
+inherit; protected security/moderation events remain visible. This is a shared
+Deltiecord display policy, not event deletion or enforcement on other clients.
+
+`default_channel_access` on a Space controls newly created channels: `invite`
+(the fallback), `restricted` (Space members may join), or `public`. Actual access
+uses standard `m.room.join_rules`; history uses `m.room.history_visibility` and
+directory listing uses the standard directory API. Saving a default does not
+modify existing channels; bulk updates require a separate confirmation. Space
+membership does not automatically join every child room.
 
 Pronoun entries are limited to 16 graphemes on write and old longer entries are
 truncated for display. No SQL migration is needed for these additions.

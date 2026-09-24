@@ -1,10 +1,10 @@
 # Web/PWA deployment
 
-## Current deployment: 0.9.34+106 — 2026-09-24
+## Current deployment: 0.9.34+107 — 2026-09-25
 
-Build 106 passed Web/PWA CI (including browser autofill/mode-switch regression)
+Build 107 passed Web/PWA CI (including browser autofill/mode-switch regression)
 and was deployed atomically to `chat.deltie.net`. Public `version.json` reports
-version `0.9.34`, build `106`; isolation headers were checked. All four platform
+version `0.9.34`, build `107`. All four platform
 artifacts are published as Latest. See [1.0 readiness](RELEASE_READINESS.md) for
 the distinction between feature-scope completion and real-device validation.
 

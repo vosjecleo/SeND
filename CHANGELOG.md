@@ -1,6 +1,6 @@
 # Changelog
 
-Current latest: **0.9.34+106**. This is the feature-scope milestone; subsequent
+Current latest: **0.9.34+107**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope and terminology of their own releases.
 

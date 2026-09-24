@@ -1,6 +1,7 @@
 # 0.9.34+107 implementation and validation
 
-Status: implementation complete; release validation and CI publication underway.
+Status: published as Latest on GitHub and Deltie; PWA deployed to
+`chat.deltie.net`. Release tag: `v0.9.34-b107`, source commit `5ba5050`.
 
 ## Behaviour and compatibility
 
@@ -28,7 +29,13 @@ visible author group and do not span calendar-day boundaries.
 
 ## Validation
 
-- Static analysis and Flutter regression tests run locally.
+- Static analysis passed; 372 Flutter tests passed, one skipped; 25 server tests
+  passed. Linux, Windows, Android and Web/PWA CI all passed on the tagged commit.
+- All ten published artifact checksums verified before Deltie deployment;
+  public PWA version and release manifest both confirmed build 107.
+- The first Web CI run compiled successfully but timed out in a RAF-polled
+  browser test even though the form switched modes. DOM polling fixed the test;
+  the corrected commit passed browser autofill, mode switching and validation.
 - Regression coverage: receipt stream ordering, album author headers on desktop
   and mobile, gallery swiping, Windows-target accent/icon/hover colours.
 - Still required on devices: Windows-to-Linux/Android read receipts; Windows
@@ -41,4 +48,5 @@ visible author group and do not span calendar-day boundaries.
 GPU tuning remains deferred: sampled high usage did not have a confirmed trigger.
 Guest-access controls and room-version upgrades are not added by this patch.
 No live server configuration, memberships, permissions or account state were
-changed during implementation. Build 106 remains the published Latest release.
+changed during implementation. Publication updated the download manifest and
+atomically switched the PWA to build 107. Stable remains unchanged.

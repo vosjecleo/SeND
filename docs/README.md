@@ -1,6 +1,6 @@
 # Documentation index
 
-Current baseline: **0.9.34+106**, published 2026-09-24. Feature scope is complete;
+Current baseline: **0.9.34+107**, published 2026-09-25. Feature scope is complete;
 the project is now focused on hardening and bug fixes toward 1.0.
 
 ## Current guides
@@ -22,6 +22,7 @@ These retain observations, plans and test results from their named builds.
 Historical wording is not a statement that an old release is current, nor that
 every proposed fix was implemented or verified on hardware.
 
+- [107 hardening changes and validation](build-107-plan.md)
 - [106 scope, implementation boundaries and validation](build-106-plan.md)
 - [104 plan](build-104-patch-plan.md), [103 plan](build-103-patch-plan.md),
   [103 security review](build-103-security-review.md), [101 plan](build-101-patch-plan.md)

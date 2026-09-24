@@ -1,12 +1,14 @@
 # Deltiecord
 
-> **Latest release: version 0.9.34 build 106 — feature-scope milestone**
+> **Latest release: version 0.9.34 build 107 — hardening and bug fixes**
 >
 > Deltiecord now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
 > See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
 > Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 106 adds
 > Matrix threads, forums, named server roles and administration rules, browser
 > SSO/OIDC, and shared profile editing/layout improvements.
+> Build 107 improves Space access and administration, shared event filters,
+> read receipts, mobile media navigation, profile layout and accent colours.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 
@@ -303,6 +305,6 @@ See [LICENSE](LICENSE) for Deltiecord's license and
 
 ---
 
-**Current latest release: v0.9.34 build 106. Not a stable/1.0 declaration.**
+**Current latest release: v0.9.34 build 107. Not a stable/1.0 declaration.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).
