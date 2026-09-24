@@ -1037,9 +1037,13 @@ class ReplyPreview {
     required this.eventId,
     required this.sender,
     required this.body,
+    this.senderId,
+    this.senderColor,
   });
 
   final String eventId;
   final String sender;
   final String body;
+  final String? senderId;
+  final int? senderColor;
 }

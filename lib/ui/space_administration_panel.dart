@@ -1,6 +1,59 @@
 import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/space_administration.dart';
+import 'room_access_dialog.dart';
+import 'member_management.dart';
+
+class _PermissionEditor extends StatefulWidget {
+  const _PermissionEditor({
+    required this.initialValue,
+    required this.label,
+    required this.enabled,
+    required this.onSave,
+    super.key,
+  });
+  final int initialValue;
+  final String label;
+  final bool enabled;
+  final ValueChanged<String> onSave;
+  @override
+  State<_PermissionEditor> createState() => _PermissionEditorState();
+}
+
+class _PermissionEditorState extends State<_PermissionEditor> {
+  late String _value = '${widget.initialValue}';
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(widget.label, style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 6),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: TextFormField(
+              initialValue: _value,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Required power level',
+              ),
+              onChanged: (v) => _value = v,
+              onFieldSubmitted: widget.onSave,
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Save permission',
+            onPressed: widget.enabled ? () => widget.onSave(_value) : null,
+            icon: const Icon(Icons.check),
+          ),
+        ],
+      ),
+    ],
+  );
+}
 
 class SpaceAdministrationPanel extends StatefulWidget {
   const SpaceAdministrationPanel({
@@ -23,20 +76,48 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
   bool _busy = false;
   bool _dirty = false;
   String? _notice;
+  Object? _revision;
+  bool _loading = false;
+  SpaceRoles? _reviewedRoles;
 
   @override
   void initState() {
     super.initState();
+    _revision = widget.backend.spaceAdministrationRevision(widget.spaceId);
+    widget.backend.addListener(_backendChanged);
     _load();
   }
 
+  void _backendChanged() {
+    final revision = widget.backend.spaceAdministrationRevision(widget.spaceId);
+    if (_revision == revision) return;
+    _revision = revision;
+    if (_dirty || _busy) {
+      setState(
+        () => _notice =
+            'Administration changed remotely. Reload before saving your draft.',
+      );
+    } else {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.backend.removeListener(_backendChanged);
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    if (_loading) return;
+    _loading = true;
     try {
       final data = await widget.backend.getSpaceAdministration(widget.spaceId);
       if (mounted) {
         setState(() {
           _data = data;
           _roles = data.roles;
+          _reviewedRoles = data.roles;
           _target ??= widget.spaceId;
           _dirty = false;
         });
@@ -48,6 +129,8 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
               'Could not load administration. Check your connection and access, then retry.',
         );
       }
+    } finally {
+      _loading = false;
     }
   }
 
@@ -151,7 +234,12 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       _notice = null;
     });
     try {
-      await widget.backend.saveSpaceRoles(widget.spaceId, _roles);
+      await widget.backend.saveSpaceRoles(
+        widget.spaceId,
+        _roles,
+        expected: _reviewedRoles,
+      );
+      _reviewedRoles = _roles;
       if (mounted) {
         setState(() {
           _dirty = false;
@@ -163,7 +251,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       if (mounted) {
         setState(
           () => _notice =
-              'Roles could not be saved. No permission changes were requested.',
+              'Roles could not be saved. Check permission/connection, or reload if another administrator changed them. No permission changes were requested.',
         );
       }
     } finally {
@@ -255,6 +343,25 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       children: [
         if (_notice != null)
           Padding(padding: const EdgeInsets.all(8), child: Text(_notice!)),
+        TextButton(
+          onPressed: _busy ? null : _load,
+          child: const Text('Reload administration (discard draft)'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _busy
+              ? null
+              : () => showRoomAccessDialog(
+                  context,
+                  widget.backend,
+                  widget.spaceId,
+                  isSpace: true,
+                  children: data.rooms
+                      .where((room) => room.id != widget.spaceId)
+                      .toList(),
+                ),
+          icon: const Icon(Icons.lock_outline),
+          label: const Text('Space access and shared timeline settings'),
+        ),
         Text('Roles', style: Theme.of(context).textTheme.titleLarge),
         const Text(
           'Topmost assigned colour wins; the highest assigned power level controls privileges. Role badges belong to server profiles, not direct messages.',
@@ -391,6 +498,25 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
                 ? null
                 : (value) => setState(() => _children = value ?? false),
           ),
+        if (_target != widget.spaceId)
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => showRoomAccessDialog(
+                    context,
+                    widget.backend,
+                    target.id,
+                    spaceId: widget.spaceId,
+                  ),
+            child: const Text('Channel access and timeline settings'),
+          ),
+        TextButton.icon(
+          onPressed: _busy
+              ? null
+              : () => showBannedMembers(context, widget.backend, target.id),
+          icon: const Icon(Icons.person_off_outlined),
+          label: const Text('Banned members'),
+        ),
         OutlinedButton(
           onPressed: _busy || _dirty || !data.canEditRoles
               ? null
@@ -400,24 +526,19 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
         for (final rule in administrationRules)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
-            child: TextFormField(
+            child: _PermissionEditor(
               key: ValueKey(
                 '${target.id}/${rule.key}/${rule.level(target.powerLevels)}',
               ),
-              initialValue: '${rule.level(target.powerLevels)}',
-              keyboardType: TextInputType.number,
+              initialValue: rule.level(target.powerLevels),
+              label: rule.label,
               enabled: !_busy && !_dirty && target.canEdit,
-              decoration: InputDecoration(
-                labelText: rule.label,
-                helperText:
-                    'Server-enforced · Enter a level and press Enter/Done',
-              ),
-              onFieldSubmitted: (value) {
+              onSave: (value) {
                 final level = int.tryParse(value);
-                if (level == null || level < 0 || level > data.ownPower) {
+                if (level == null || level < 0 || level > target.ownPower) {
                   setState(
-                    () =>
-                        _notice = 'Choose a level from 0 to ${data.ownPower}.',
+                    () => _notice =
+                        'Choose a level from 0 to ${target.ownPower} for this room.',
                   );
                   return;
                 }

@@ -1,0 +1,44 @@
+# 0.9.34+107 implementation and validation
+
+Status: implementation complete; release validation and CI publication underway.
+
+## Behaviour and compatibility
+
+Channel access uses Matrix join rules, history visibility and directory APIs.
+Space policy is shared declarative state (`net.deltiecord.space.policy`): new
+channel access defaults and cosmetic timeline-event visibility. Room overrides
+take precedence over Space defaults, then personal preferences. Other Matrix
+clients need not honour these display preferences. Existing channels are changed
+only by the explicit, confirmed bulk action; public access is never silently
+enabled. Restricted access allows Space members to join, not automatic joining.
+
+Roles retain their existing shared state format. Edits compare a fresh snapshot
+to the reviewed draft and reject stale saves. This is not an atomic server-side
+compare-and-swap. Role definitions and explicit child-room power propagation
+remain separate; inaccessible targets produce partial-failure reports.
+
+Receipt aggregation retains readers from either global or main-thread positions
+instead of overwriting a newer position with an older one. Public marker writes
+still respect the user's receipt preference, foreground state and visible/latest
+timeline guards. Windows-specific failure reproduction remains outstanding.
+
+Mobile media paging shares downloaded image futures within the gallery, supports
+zoom and spoilers, and keeps save/reference/favourite controls. Albums begin a
+visible author group and do not span calendar-day boundaries.
+
+## Validation
+
+- Static analysis and Flutter regression tests run locally.
+- Regression coverage: receipt stream ordering, album author headers on desktop
+  and mobile, gallery swiping, Windows-target accent/icon/hover colours.
+- Still required on devices: Windows-to-Linux/Android read receipts; Windows
+  accent changes; small-screen profile/permission layouts; mobile zoom/swipe and
+  video transitions; multi-account Space access, shared filters and role updates;
+  startup update prompt against a published newer build.
+
+## Explicit boundaries
+
+GPU tuning remains deferred: sampled high usage did not have a confirmed trigger.
+Guest-access controls and room-version upgrades are not added by this patch.
+No live server configuration, memberships, permissions or account state were
+changed during implementation. Build 106 remains the published Latest release.

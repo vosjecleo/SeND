@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../models/space_administration.dart';
 
 Future<void> showMemberManagement(
   BuildContext context,
@@ -31,16 +32,26 @@ Future<void> showMemberManagement(
             ),
           ],
           if (member.canChangePowerLevel)
+            if (backend.selectedRoomSpaceId != null)
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('Server roles'),
+                onTap: () => Navigator.pop(context, 'roles'),
+              ),
+          if (member.canChangePowerLevel)
             ListTile(
               leading: const Icon(Icons.admin_panel_settings_outlined),
               title: const Text('Edit power level'),
               subtitle: Text('${member.powerLevel}'),
               onTap: () => Navigator.pop(context, 'power'),
             ),
-          if (member.canKick)
+          if (member.canChangePowerLevel)
             ListTile(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Timeout for 10 minutes'),
+              subtitle: const Text(
+                'Restored by an online authorised Deltiecord client; may expire late if all are offline.',
+              ),
               onTap: () => Navigator.pop(context, 'timeout'),
             ),
           if (member.canKick)
@@ -66,31 +77,179 @@ Future<void> showMemberManagement(
     ),
   );
   if (action == null || !context.mounted) return;
-  switch (action) {
-    case 'approve-knock':
-      await backend.approveKnock(member.userId);
-    case 'reject-knock':
-      await backend.rejectKnock(member.userId);
-    case 'power':
-      final level = await _askPowerLevel(context, member);
-      if (level != null) {
-        await backend.setMemberPowerLevel(member.userId, level);
-      }
-    case 'timeout':
-      await backend.timeoutMember(
-        member.userId,
-        DateTime.now().add(const Duration(minutes: 10)),
+  try {
+    switch (action) {
+      case 'roles':
+        await showMemberRoles(context, backend, member);
+      case 'approve-knock':
+        await backend.approveKnock(member.userId);
+      case 'reject-knock':
+        await backend.rejectKnock(member.userId);
+      case 'power':
+        final level = await _askPowerLevel(context, member);
+        if (level != null) {
+          await backend.setMemberPowerLevel(member.userId, level);
+        }
+      case 'timeout':
+        await backend.timeoutMember(
+          member.userId,
+          DateTime.now().add(const Duration(minutes: 10)),
+        );
+      case 'kick':
+        final reason = await _askReason(context, 'Kick ${member.displayName}?');
+        if (reason != null) {
+          await backend.kickMember(member.userId, reason: reason);
+        }
+      case 'ban':
+        final reason = await _askReason(context, 'Ban ${member.displayName}?');
+        if (reason != null) {
+          await backend.banMember(member.userId, reason: reason);
+        }
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not apply this action. Check your permissions and connection, then retry.',
+          ),
+        ),
       );
-    case 'kick':
-      final reason = await _askReason(context, 'Kick ${member.displayName}?');
-      if (reason != null) {
-        await backend.kickMember(member.userId, reason: reason);
-      }
-    case 'ban':
-      final reason = await _askReason(context, 'Ban ${member.displayName}?');
-      if (reason != null) {
-        await backend.banMember(member.userId, reason: reason);
-      }
+    }
+  }
+}
+
+Future<void> showMemberRoles(
+  BuildContext context,
+  ChatBackend backend,
+  RoomMemberSummary member,
+) async {
+  final spaceId = backend.selectedRoomSpaceId;
+  if (spaceId == null) return;
+  final data = await backend.getSpaceAdministration(spaceId);
+  if (!context.mounted || !data.canEditRoles) return;
+  final selected = {...?data.roles.members[member.userId]};
+  final accepted = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, update) => AlertDialog(
+        title: Text('Roles — ${member.displayName}'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Saves shared role names and colours. Apply role power in Administration to change room permissions.',
+                ),
+                for (final role in data.roles.roles)
+                  CheckboxListTile(
+                    title: Text(role.name),
+                    value: selected.contains(role.id),
+                    onChanged: (value) => update(() {
+                      if (value == true) {
+                        selected.add(role.id);
+                      } else {
+                        selected.remove(role.id);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (accepted == true) {
+    await backend.saveSpaceRoles(
+      spaceId,
+      SpaceRoles(
+        roles: data.roles.roles,
+        members: {...data.roles.members, member.userId: selected},
+      ),
+      expected: data.roles,
+    );
+  }
+}
+
+Future<void> showBannedMembers(
+  BuildContext context,
+  ChatBackend backend,
+  String roomId,
+) async {
+  try {
+    final members = await backend.getBannedMembers(roomId);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Banned members'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (members.isEmpty) const Text('No banned members.'),
+                  for (final member in members.entries)
+                    ListTile(
+                      title: Text(member.value),
+                      subtitle: Text(member.key),
+                      trailing: IconButton(
+                        tooltip: 'Unban',
+                        icon: const Icon(Icons.person_add_alt),
+                        onPressed: () async {
+                          try {
+                            await backend.unbanRoomMember(roomId, member.key);
+                            if (context.mounted) {
+                              update(() => members.remove(member.key));
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Unban failed. Check permissions and connection.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load banned members.')),
+      );
+    }
   }
 }
 

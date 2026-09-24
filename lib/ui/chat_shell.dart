@@ -59,6 +59,7 @@ import 'typing_indicator.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
 import 'room_event_visibility_dialog.dart';
+import 'room_access_dialog.dart';
 import 'media_album.dart';
 import 'encryption_attention_banner.dart';
 import 'lifecycle_memory_image.dart';

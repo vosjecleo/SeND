@@ -1,6 +1,31 @@
 import 'dart:math' as math;
 
 const spaceRolesEventType = 'net.deltiecord.space.roles';
+const spacePolicyEventType = 'net.deltiecord.space.policy';
+
+class RoomAccessSettings {
+  const RoomAccessSettings({
+    required this.roomId,
+    required this.joinRule,
+    required this.historyVisibility,
+    required this.discoverable,
+    required this.canEditAccess,
+    required this.canEditHistory,
+    required this.canEditPolicy,
+    this.defaultChannelAccess = 'invite',
+    this.eventVisibility = const {},
+    this.allowedSpaceIds = const [],
+    this.roomVersion = '',
+  });
+  final String roomId,
+      joinRule,
+      historyVisibility,
+      defaultChannelAccess,
+      roomVersion;
+  final bool discoverable, canEditAccess, canEditHistory, canEditPolicy;
+  final List<String> allowedSpaceIds;
+  final Map<String, bool> eventVisibility;
+}
 
 /// Compute a single atomic power-level event, retaining manual power and
 /// contributions from other Spaces sharing a child room. Any authority error
@@ -213,6 +238,11 @@ class AdministrationRule {
 
 const administrationRules = [
   AdministrationRule(
+    'policy',
+    'Edit channel defaults and shared timeline visibility',
+    eventType: spacePolicyEventType,
+  ),
+  AdministrationRule(
     'voice_membership',
     'Join/leave voice sessions',
     eventType: 'com.famedly.call.member',
@@ -363,11 +393,13 @@ class AdministrationRoom {
     required this.name,
     required this.powerLevels,
     required this.canEdit,
+    this.ownPower = 0,
   });
   final String id;
   final String name;
   final Map<String, dynamic> powerLevels;
   final bool canEdit;
+  final int ownPower;
 }
 
 class SpaceAdministration {

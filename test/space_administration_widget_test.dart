@@ -36,7 +36,11 @@ class _AdministrationBackend extends FakeBackend {
         ownPower: 100,
       );
   @override
-  Future<void> saveSpaceRoles(String spaceId, SpaceRoles roles) async {
+  Future<void> saveSpaceRoles(
+    String spaceId,
+    SpaceRoles roles, {
+    SpaceRoles? expected,
+  }) async {
     saved = roles;
   }
 

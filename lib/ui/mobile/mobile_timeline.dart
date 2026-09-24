@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../room_event_visibility_dialog.dart';
+import '../room_access_dialog.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' show Document, LinkAttribute;
@@ -685,6 +686,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                       backend,
                       widget.room.id,
                     );
+                  case 'access':
+                    await showRoomAccessDialog(
+                      context,
+                      backend,
+                      widget.room.id,
+                      spaceId: backend.selectedRoomSpaceId,
+                    );
                   case 'members':
                     widget.onOpenDetails();
                   case 'invite':
@@ -769,6 +777,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                   child: Text('Notification settings'),
                 ),
                 PopupMenuItem(value: 'events', child: Text('Timeline events')),
+                PopupMenuItem(
+                  value: 'access',
+                  child: Text('Room access and shared settings'),
+                ),
                 PopupMenuItem(
                   value: 'unread',
                   child: Text('Toggle read / unread'),
@@ -864,6 +876,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                     ? messages[index + 1]
                                     : null;
                                 final grouped =
+                                    !mediaAlbums.albums.containsKey(
+                                      message.id,
+                                    ) &&
                                     older != null &&
                                     !older.system &&
                                     !message.system &&
@@ -1650,7 +1665,10 @@ class _MobileMessageRow extends StatelessWidget {
                                         children: [
                                           TextSpan(
                                             text: '${reply.sender}  ',
-                                            style: const TextStyle(
+                                            style: TextStyle(
+                                              color: reply.senderColor == null
+                                                  ? null
+                                                  : Color(reply.senderColor!),
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),

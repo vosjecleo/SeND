@@ -6,6 +6,7 @@ import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -131,16 +132,14 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
   );
 
   Future<void> _openImageFullscreen() async {
-    final bytes = await widget.backend.downloadAttachment(widget.message.id);
-    if (mounted) {
-      _showImageFullscreen(
-        context,
-        bytes,
-        onActions: _showMediaActions,
-        gifSource: widget.message.attachment?.gifSource,
-        autoplay: !widget.backend.preferences.reducedMotion,
-      );
-    }
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (_) => MobileMediaGallery(
+        backend: widget.backend,
+        initialMessage: widget.message,
+      ),
+    );
   }
 
   Future<void> _showMediaActions() async {
@@ -231,18 +230,7 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
       case 'fullscreen':
         if (!mounted) return;
         if (image) {
-          final bytes = await widget.backend.downloadAttachment(
-            widget.message.id,
-          );
-          if (mounted) {
-            _showImageFullscreen(
-              context,
-              bytes,
-              onActions: _showMediaActions,
-              gifSource: attachment.gifSource,
-              autoplay: !widget.backend.preferences.reducedMotion,
-            );
-          }
+          await _openImageFullscreen();
         } else if (video) {
           await _videoKey.currentState?.showFullscreen(
             onActions: _showMediaActions,
@@ -415,6 +403,269 @@ class _MobileImageState extends State<_MobileImage>
       ),
     );
   }
+}
+
+/// A snapshot of the current room's media: swiping never changes rooms or
+/// follows a live timeline insertion underneath the user's finger.
+class MobileMediaGallery extends StatefulWidget {
+  const MobileMediaGallery({
+    required this.backend,
+    required this.initialMessage,
+    super.key,
+  });
+  final ChatBackend backend;
+  final ChatMessage initialMessage;
+  @override
+  State<MobileMediaGallery> createState() => _MobileMediaGalleryState();
+}
+
+class _MobileMediaGalleryState extends State<MobileMediaGallery> {
+  late final List<ChatMessage> _messages;
+  late final PageController _pages;
+  final _zoom = TransformationController();
+  final _downloads = <String, Future<Uint8List>>{};
+  late int _index;
+  bool _zoomed = false;
+  bool _saving = false;
+
+  Future<void> _actions() async {
+    final message = _messages[_index];
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Save media'),
+              onTap: () => Navigator.pop(context, 'save'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Copy media reference'),
+              onTap: () => Navigator.pop(context, 'copy'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted || _saving) return;
+    setState(() => _saving = true);
+    try {
+      if (action == 'copy') {
+        final reference = await widget.backend.getAttachmentReference(
+          message.id,
+        );
+        if (reference == null) throw StateError('No safe reference');
+        await Clipboard.setData(ClipboardData(text: reference));
+      } else {
+        final attachment = message.attachment!;
+        final bytes = await widget.backend.downloadAttachment(message.id);
+        if (Platform.isAndroid && !kIsWeb) {
+          await AndroidMediaSaver.save(
+            bytes: bytes,
+            suggestedName: attachment.name,
+            mimeType: attachment.mimeType,
+          );
+        } else {
+          final path = await FilePicker.saveFile(
+            dialogTitle: 'Save media',
+            fileName: attachment.name,
+            bytes: bytes,
+          );
+          if (path != null && !kIsWeb) {
+            await File(path).writeAsBytes(bytes, flush: true);
+          }
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not complete this media action. Please retry.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final candidates = {
+      for (final m in widget.backend.messages) m.id: m,
+      widget.initialMessage.id: widget.initialMessage,
+    };
+    _messages =
+        candidates.values
+            .where(
+              (m) =>
+                  !m.redacted &&
+                  m.attachment != null &&
+                  !m.attachment!.sticker &&
+                  (m.attachment!.kind == AttachmentKind.image ||
+                      m.attachment!.kind == AttachmentKind.video),
+            )
+            .toList()
+          ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    _index = _messages.indexWhere((m) => m.id == widget.initialMessage.id);
+    _pages = PageController(initialPage: _index);
+    _zoom.addListener(_zoomChanged);
+  }
+
+  void _zoomChanged() {
+    final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+    if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+  }
+
+  void _move(int delta) {
+    final next = _index + delta;
+    if (next < 0 || next >= _messages.length) return;
+    _zoom.value = Matrix4.identity();
+    _pages.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _zoom.dispose();
+    _pages.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    backgroundColor: Colors.black,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: PageView.builder(
+            controller: _pages,
+            physics: _zoomed
+                ? const NeverScrollableScrollPhysics()
+                : const PageScrollPhysics(),
+            itemCount: _messages.length,
+            onPageChanged: (index) => setState(() {
+              _index = index;
+              _zoom.value = Matrix4.identity();
+            }),
+            itemBuilder: (context, index) {
+              final m = _messages[index];
+              if (m.attachment!.spoiler &&
+                  !SpoilerReveals.forBackend(widget.backend).contains(m.id)) {
+                return Center(
+                  child: TextButton(
+                    onPressed: () => setState(
+                      () => SpoilerReveals.forBackend(
+                        widget.backend,
+                      ).reveal(m.id),
+                    ),
+                    child: const Text('Spoiler — tap to reveal'),
+                  ),
+                );
+              }
+              if (m.attachment!.kind == AttachmentKind.video) {
+                return index == _index
+                    ? Center(
+                        child: _MobilePlayer(
+                          key: ValueKey(m.id),
+                          backend: widget.backend,
+                          message: m,
+                          audioOnly: false,
+                        ),
+                      )
+                    : const SizedBox.shrink();
+              }
+              return FutureBuilder<Uint8List>(
+                future: _downloads.putIfAbsent(
+                  m.id,
+                  () => widget.backend.downloadAttachment(m.id),
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: TextButton(
+                        onPressed: () =>
+                            setState(() => _downloads.remove(m.id)),
+                        child: const Text('Could not load image — retry'),
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return InteractiveViewer(
+                    transformationController: index == _index ? _zoom : null,
+                    panEnabled: index == _index && _zoomed,
+                    minScale: 1,
+                    maxScale: 6,
+                    child: Center(
+                      child: LifecycleMemoryImage(
+                        bytes: snapshot.data!,
+                        animated: m.attachment!.animated,
+                        autoplay:
+                            index == _index &&
+                            !widget.backend.preferences.reducedMotion,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        _fullscreenCloseButton(context),
+        if (!_saving) _fullscreenActionsButton(context, _actions),
+        if (isFavouriteableGifUri(_messages[_index].attachment!.gifSource))
+          Positioned(
+            left: 12,
+            top: 12,
+            child: SafeArea(
+              child: GifFavouriteButton(
+                uri: _messages[_index].attachment!.gifSource!,
+              ),
+            ),
+          ),
+        Positioned(
+          bottom: 12,
+          left: 12,
+          right: 12,
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  tooltip: 'Previous media',
+                  onPressed: _index > 0 ? () => _move(-1) : null,
+                  color: Colors.white,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text(
+                  '${_index + 1} / ${_messages.length}',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                IconButton(
+                  tooltip: 'Next media',
+                  onPressed: _index < _messages.length - 1
+                      ? () => _move(1)
+                      : null,
+                  color: Colors.white,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 void _showImageFullscreen(

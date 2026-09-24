@@ -198,10 +198,34 @@ abstract class ChatBackend extends ChangeNotifier {
     String? beforeRoomId,
   });
   int spaceChannelLayoutPowerLevel(String spaceId) => 100;
+  Future<RoomAccessSettings> getRoomAccessSettings(String roomId) =>
+      throw UnsupportedError('Access settings unavailable');
+  Future<void> setRoomAccess(
+    String roomId,
+    String joinRule, {
+    String? spaceId,
+  }) => throw UnsupportedError('Access settings unavailable');
+  Future<void> setRoomHistoryVisibility(String roomId, String value) =>
+      throw UnsupportedError('History settings unavailable');
+  Future<void> setRoomDiscoverable(String roomId, bool value) =>
+      throw UnsupportedError('Directory settings unavailable');
+  Future<void> setSpacePolicy(
+    String spaceId, {
+    required String defaultChannelAccess,
+    required Map<String, bool> eventVisibility,
+  }) => throw UnsupportedError('Space policy unavailable');
   Future<SpaceAdministration> getSpaceAdministration(String spaceId) =>
       throw UnsupportedError('Administration is unavailable');
-  Future<void> saveSpaceRoles(String spaceId, SpaceRoles roles) =>
-      throw UnsupportedError('Role editing is unavailable');
+  Object? spaceAdministrationRevision(String spaceId) => null;
+  String? get selectedRoomSpaceId => selectedSpaceId;
+  Future<Map<String, String>> getBannedMembers(String roomId) async => const {};
+  Future<void> unbanRoomMember(String roomId, String userId) =>
+      throw UnsupportedError('Unban unavailable');
+  Future<void> saveSpaceRoles(
+    String spaceId,
+    SpaceRoles roles, {
+    SpaceRoles? expected,
+  }) => throw UnsupportedError('Role editing is unavailable');
   Future<void> applySpaceRolePower(
     String spaceId,
     String roomId,

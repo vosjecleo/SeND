@@ -661,6 +661,13 @@ class _ConversationState extends State<_Conversation> {
                                     backend,
                                     room.id,
                                   );
+                                case 'access':
+                                  await showRoomAccessDialog(
+                                    context,
+                                    backend,
+                                    room.id,
+                                    spaceId: backend.selectedRoomSpaceId,
+                                  );
                                 case 'notifications':
                                   await showRoomNotificationControls(
                                     context,
@@ -806,6 +813,10 @@ class _ConversationState extends State<_Conversation> {
                                 child: Text('Timeline events'),
                               ),
                               const PopupMenuItem(
+                                value: 'access',
+                                child: Text('Room access and shared settings'),
+                              ),
+                              const PopupMenuItem(
                                 value: 'unread',
                                 child: Text('Toggle read / unread'),
                               ),
@@ -918,6 +929,9 @@ class _ConversationState extends State<_Conversation> {
                                             ? messages[index + 1]
                                             : null;
                                         final startsGroup =
+                                            mediaAlbums.albums.containsKey(
+                                              message.id,
+                                            ) ||
                                             older == null ||
                                             !DateUtils.isSameDay(
                                               older.timestamp.toLocal(),

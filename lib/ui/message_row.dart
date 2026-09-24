@@ -313,7 +313,14 @@ class _MessageRowState extends State<_MessageRow> {
                                               children: [
                                                 TextSpan(
                                                   text: '${reply.sender}  ',
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
+                                                    color:
+                                                        reply.senderColor ==
+                                                            null
+                                                        ? null
+                                                        : Color(
+                                                            reply.senderColor!,
+                                                          ),
                                                     fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
@@ -628,6 +635,20 @@ class _MessageRowState extends State<_MessageRow> {
                       child: GestureDetector(
                         key: ValueKey('message-avatar-${message.id}'),
                         onTap: _showSenderProfile,
+                        onSecondaryTap: () {
+                          final member = widget.backend.selectedRoomMembers
+                              .where(
+                                (member) => member.userId == message.senderId,
+                              )
+                              .firstOrNull;
+                          if (member != null) {
+                            showMemberManagement(
+                              context,
+                              widget.backend,
+                              member,
+                            );
+                          }
+                        },
                         onTapDown: (details) =>
                             _profileAnchorPosition = details.globalPosition,
                         child: ThemeAvatar(

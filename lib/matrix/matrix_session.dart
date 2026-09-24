@@ -31,12 +31,23 @@ extension _MatrixSession on MatrixBackend {
         // sync makes the SDK's room-state cache current.
         _spaceChannelLayoutOverrides.clear();
         _spaceRoomOrderOverrides.clear();
+        final roleSignature = jsonEncode([
+          for (final space in _matrix.rooms.where((room) => room.isSpace))
+            [space.id, space.getState(spaceRolesEventType)?.content],
+        ]);
+        if (_roleProfileSignature != roleSignature) {
+          _roleProfileSignature = roleSignature;
+          _profileRevision++;
+        }
         _applySyncedProfilePresence();
         _loadSettings();
         if (_stickerPackSourcesChanged()) unawaited(_refreshStickerPacks());
         unawaited(_enforceCallDeviceHandoff());
         unawaited(_restoreExpiredMemberTimeouts());
         _notifyBackendListeners();
+        // Retry failed receipt writes even when this sync contains only
+        // ephemeral/account updates rather than a new timeline event.
+        unawaited(_markSelectedRoomRead());
         unawaited(_refreshRoomMetadata());
         unawaited(_notifyNewMessages());
       });
@@ -261,6 +272,9 @@ extension _MatrixSession on MatrixBackend {
       _spaceRoomOrderOverrides.clear();
       _collapsedChannelCategories.clear();
       _roomMessageCache.clear();
+      _discoveredSpaceRooms.clear();
+      _reviewedSpaceRoles.clear();
+      _roleProfileSignature = null;
       _offlineSendRooms.clear();
       _dismissedLocalEchoIds.clear();
       _scheduledMessageTimer?.cancel();

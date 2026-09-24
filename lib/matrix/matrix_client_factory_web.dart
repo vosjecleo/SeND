@@ -12,6 +12,7 @@ Future<Client> createMatrixClient() async => Client(
     deltiecordRoomPresentationEventType,
     deltiecordSpaceChannelsEventType,
     deltiecordSpaceRolesEventType,
+    'net.deltiecord.space.policy',
   },
   shareKeysWith: ShareKeysWith.all,
 );

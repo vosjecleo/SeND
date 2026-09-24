@@ -141,7 +141,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                           Brightness.dark
                       ? const Color(0xffd4d6dc)
                       : const Color(0xff3f4147),
-                  hover: accent.withValues(alpha: 0.16),
+                  hover: basePalette.hover,
                 )
               : basePalette;
           final brightness =
@@ -163,10 +163,8 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                 surfaceContainerHighest: palette.hover,
                 surfaceTint: Colors.transparent,
                 onSurface: palette.text,
-                primary: customTheme?.accent,
-                onPrimary: customTheme == null
-                    ? null
-                    : deltiecordContrastingForeground(customTheme.accent),
+                primary: accent,
+                onPrimary: deltiecordContrastingForeground(accent),
                 secondary: customTheme?.secondary,
                 onSecondary: customTheme == null
                     ? null
@@ -236,6 +234,15 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           _cachedTheme = ThemeData(
             brightness: brightness,
             colorScheme: colorScheme,
+            iconButtonTheme: IconButtonThemeData(
+              style: ButtonStyle(
+                foregroundColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.disabled)
+                      ? palette.muted.withValues(alpha: .5)
+                      : colorScheme.primary,
+                ),
+              ),
+            ),
             iconTheme: IconThemeData(
               color: colorScheme.primary,
               shadows: customTheme?.chrome.classicIcons == true && !contrast

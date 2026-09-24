@@ -107,6 +107,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
       final displayEvent = repliedTo.getDisplayEvent(timeline);
       _replyPreviews[event.eventId] = ReplyPreview(
         eventId: originalEventId,
+        senderId: displayEvent.senderId,
         sender: displayEvent.senderFromMemoryOrFallback.calcDisplayname(),
         body: displayEvent.calcUnlocalizedBody(
           hideReply: true,
@@ -370,7 +371,10 @@ extension _MatrixTimelineSupport on MatrixBackend {
             threadId: 'main',
           );
         } else {
-          await initialTimeline.setReadMarker(eventId: newestSyncedEventId);
+          await initialTimeline.setReadMarker(
+            eventId: newestSyncedEventId,
+            public: true,
+          );
         }
         _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
       }

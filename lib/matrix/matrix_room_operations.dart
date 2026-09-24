@@ -372,6 +372,7 @@ extension _MatrixRoomOperations on MatrixBackend {
   }
 
   void _selectSpace(String? spaceId) {
+    if (spaceId != null) unawaited(_discoverSpaceRooms(spaceId));
     if (_selectedSpaceId == spaceId) {
       // Android may recreate the rendering surface while preserving this
       // backend. Re-publish an idempotent rail selection so a resumed room
@@ -406,6 +407,11 @@ extension _MatrixRoomOperations on MatrixBackend {
     _notifyBackendListeners();
     unawaited(_refreshStickerPacks());
     try {
+      if (_matrix.getRoomById(roomId)?.membership != Membership.join) {
+        await _matrix.joinRoom(roomId);
+        await _matrix.waitForRoomInSync(roomId, join: true);
+      }
+      if (!_isCurrentSelection(roomId, generation)) return;
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
       if (_presentationFor(room) == RoomPresentation.voice) {
@@ -560,15 +566,20 @@ extension _MatrixRoomOperations on MatrixBackend {
         preset: CreateRoomPreset.privateChat,
         visibility: Visibility.private,
         topic: topic.trim().isEmpty ? null : topic.trim(),
-        initialState: encrypted
-            ? [
-                StateEvent(
-                  type: EventTypes.Encryption,
-                  stateKey: '',
-                  content: {'algorithm': 'm.megolm.v1.aes-sha2'},
-                ),
-              ]
-            : null,
+        initialState: [
+          if (_selectedSpaceId case final spaceId?)
+            StateEvent(
+              type: EventTypes.RoomJoinRules,
+              stateKey: '',
+              content: await _channelJoinRule(spaceId),
+            ),
+          if (encrypted)
+            StateEvent(
+              type: EventTypes.Encryption,
+              stateKey: '',
+              content: {'algorithm': 'm.megolm.v1.aes-sha2'},
+            ),
+        ],
       );
       await _matrix.waitForRoomInSync(roomId, join: true);
       final room = _matrix.getRoomById(roomId);

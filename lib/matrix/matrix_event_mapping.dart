@@ -165,7 +165,7 @@ extension _MatrixEventMapping on MatrixBackend {
                     (attachment == null || attachment.caption != null)
                 ? displayEvent.formattedText
                 : null,
-            reply: _replyPreviews[event.eventId],
+            reply: _colouredReply(event, roles),
             avatarBytes: _senderAvatarBytes[event.senderId],
             linkPreview: blocked
                 ? null
@@ -233,26 +233,36 @@ extension _MatrixEventMapping on MatrixBackend {
     if (eventIndex < 0) return const [];
     final readers = <ReceiptReaderSummary>[];
     final receipts = event.relationshipType == RelationshipTypes.thread
-        ? room.receiptState.byThread[event.relationshipEventId]?.otherUsers ??
-              <String, LatestReceiptStateData>{}
-        : {
-            ...room.receiptState.global.otherUsers,
-            ...?room.receiptState.mainThread?.otherUsers,
-          };
-    for (final entry in receipts.entries) {
-      if (entry.key == _matrix.userID) continue;
-      final receiptIndex = timeline.events.indexWhere(
-        (candidate) => candidate.eventId == entry.value.eventId,
+        ? [
+            room.receiptState.byThread[event.relationshipEventId]?.otherUsers ??
+                <String, LatestReceiptStateData>{},
+          ]
+        : [
+            room.receiptState.global.otherUsers,
+            room.receiptState.mainThread?.otherUsers ??
+                <String, LatestReceiptStateData>{},
+          ];
+    final seen = readersAtOrBeyond(
+      eventIndex: eventIndex,
+      eventPositions: {
+        for (final (index, item) in timeline.events.indexed)
+          item.eventId: index,
+      },
+      streams: receipts.map(
+        (stream) => {
+          for (final entry in stream.entries) entry.key: entry.value.eventId,
+        },
+      ),
+      ownUserId: _matrix.userID,
+    );
+    for (final userId in seen) {
+      final user = room.unsafeGetUserFromMemoryOrFallback(userId);
+      readers.add(
+        ReceiptReaderSummary(
+          userId: userId,
+          displayName: user.calcDisplayname(),
+        ),
       );
-      if (receiptIndex >= 0 && receiptIndex <= eventIndex) {
-        final user = room.unsafeGetUserFromMemoryOrFallback(entry.key);
-        readers.add(
-          ReceiptReaderSummary(
-            userId: entry.key,
-            displayName: user.calcDisplayname(),
-          ),
-        );
-      }
     }
     return readers;
   }
@@ -267,6 +277,20 @@ extension _MatrixEventMapping on MatrixBackend {
       event.type == EventTypes.RoomTopic ||
       event.type == EventTypes.RoomAvatar ||
       event.type == EventTypes.Encryption;
+
+  ReplyPreview? _colouredReply(Event event, SpaceRoles roles) {
+    final reply = _replyPreviews[event.eventId];
+    if (reply == null) return null;
+    return ReplyPreview(
+      eventId: reply.eventId,
+      sender: reply.sender,
+      body: reply.body,
+      senderId: reply.senderId,
+      senderColor: reply.senderId == null
+          ? null
+          : roles.colorFor(reply.senderId!),
+    );
+  }
 
   bool _isPersonallyVisibleEvent(Event event) {
     final category = switch (event.type) {
@@ -288,8 +312,20 @@ extension _MatrixEventMapping on MatrixBackend {
       EventTypes.RoomAvatar => CosmeticRoomEvent.room,
       _ => null,
     };
-    return category == null ||
-        _preferences.roomEventVisibility.visible(event.room.id, category);
+    if (category == null) return true;
+    final space = _spaceForRoom(event.room);
+    final shared = space
+        ?.getState(spacePolicyEventType)
+        ?.content['event_visibility'];
+    final override = event.room
+        .getState(spacePolicyEventType)
+        ?.content['event_visibility'];
+    final value =
+        (override is Map ? override[category.name] : null) ??
+        (shared is Map ? shared[category.name] : null);
+    return value is bool
+        ? value
+        : _preferences.roomEventVisibility.visible(event.room.id, category);
   }
 
   String _systemEventBody(Event event) {

@@ -22,6 +22,7 @@ import '../services/auth_browser.dart';
 import '../services/auth_callback.dart';
 import '../models/chat_models.dart';
 import '../models/room_event_visibility.dart';
+import '../services/receipt_positions.dart';
 import '../models/space_administration.dart';
 import '../services/chat_notifications.dart';
 import '../services/favourite_reactions_store.dart';
@@ -630,7 +631,15 @@ class MatrixBackend extends ChatBackend {
     final visible = selectedSpaceId == null
         ? _homeRooms
         : _roomsForSpace(selectedSpaceId);
-    return visible.map(_roomSummary).toList(growable: false);
+    final joined = visible.map(_roomSummary).toList(growable: false);
+    final ids = joined.map((room) => room.id).toSet();
+    return [
+      ...joined,
+      if (selectedSpaceId != null)
+        ...?_discoveredSpaceRooms[selectedSpaceId]?.where(
+          (room) => !ids.contains(room.id),
+        ),
+    ];
   }
 
   @override
@@ -755,6 +764,7 @@ class MatrixBackend extends ChatBackend {
   void setApplicationForeground(bool foreground) {
     if (_applicationForeground == foreground) {
       if (foreground) _dismissVisibleRoomNotification();
+      if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
       return;
     }
     _applicationForeground = foreground;
@@ -977,9 +987,82 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<SpaceAdministration> getSpaceAdministration(String spaceId) =>
       _getSpaceAdministration(spaceId);
+  final Map<String, List<RoomSummary>> _discoveredSpaceRooms = {};
+  final Set<String> _discoveringSpaces = {};
+  final Map<String, SpaceRoles> _reviewedSpaceRoles = {};
+  String? _roleProfileSignature;
   @override
-  Future<void> saveSpaceRoles(String spaceId, SpaceRoles roles) =>
-      _saveSpaceRoles(spaceId, roles);
+  Future<RoomAccessSettings> getRoomAccessSettings(String roomId) =>
+      _getRoomAccessSettings(roomId);
+  @override
+  Future<void> setRoomAccess(
+    String roomId,
+    String joinRule, {
+    String? spaceId,
+  }) => _setRoomAccess(roomId, joinRule, spaceId: spaceId);
+  @override
+  Future<void> setRoomHistoryVisibility(String roomId, String value) =>
+      _setRoomHistoryVisibility(roomId, value);
+  @override
+  Future<void> setRoomDiscoverable(String roomId, bool value) =>
+      _matrix.setRoomVisibilityOnDirectory(
+        roomId,
+        visibility: value ? Visibility.public : Visibility.private,
+      );
+  @override
+  Future<void> setSpacePolicy(
+    String spaceId, {
+    required String defaultChannelAccess,
+    required Map<String, bool> eventVisibility,
+  }) => _setSpacePolicy(spaceId, defaultChannelAccess, eventVisibility);
+  @override
+  Object? spaceAdministrationRevision(String spaceId) {
+    final space = _client?.getRoomById(spaceId);
+    if (space == null) return null;
+    return jsonEncode([
+      space.getState(spaceRolesEventType)?.content,
+      for (final id in {
+        spaceId,
+        ...space.spaceChildren.map((child) => child.roomId).whereType<String>(),
+      })
+        [
+          id,
+          _client
+              ?.getRoomById(id)
+              ?.getState(EventTypes.RoomPowerLevels)
+              ?.content,
+        ],
+    ]);
+  }
+
+  @override
+  String? get selectedRoomSpaceId {
+    final room = _client?.getRoomById(_selectedRoomId ?? '');
+    return room == null ? _selectedSpaceId : _spaceForRoom(room)?.id;
+  }
+
+  @override
+  Future<Map<String, String>> getBannedMembers(String roomId) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null) throw StateError('Join this room first.');
+    final members = await room.requestParticipants(
+      [Membership.ban],
+      false,
+      false,
+      true,
+    );
+    return {for (final member in members) member.id: member.calcDisplayname()};
+  }
+
+  @override
+  Future<void> unbanRoomMember(String roomId, String userId) =>
+      _matrix.unban(roomId, userId);
+  @override
+  Future<void> saveSpaceRoles(
+    String spaceId,
+    SpaceRoles roles, {
+    SpaceRoles? expected,
+  }) => _saveSpaceRoles(spaceId, roles, expected: expected);
   @override
   Future<void> applySpaceRolePower(
     String spaceId,

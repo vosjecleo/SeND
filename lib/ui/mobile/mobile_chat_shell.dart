@@ -274,11 +274,13 @@ class _MobileChatShellState extends State<MobileChatShell>
                               setState(() => _detailsVisible = true),
                         )
                       : room.presentation == RoomPresentation.forum
-                      ? ForumView(
-                          backend: backend,
-                          room: room,
-                          onOpenNavigation: () =>
-                              setState(() => _navigationVisible = true),
+                      ? SafeArea(
+                          child: ForumView(
+                            backend: backend,
+                            room: room,
+                            onOpenNavigation: () =>
+                                setState(() => _navigationVisible = true),
+                          ),
                         )
                       : MobileTimelineView(
                           key: ValueKey('mobile-room-${room.id}'),

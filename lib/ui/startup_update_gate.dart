@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/update_checker.dart';
 
-/// Performs one silent, bounded release check after the signed-in UI appears.
+/// Performs a silent release check with bounded retries after sign-in.
 ///
 /// Update discovery must never delay Matrix startup. Network and parse errors
 /// are intentionally ignored here; the explicit checker in Settings remains
@@ -20,14 +20,18 @@ class StartupUpdateGate extends StatefulWidget {
   State<StartupUpdateGate> createState() => _StartupUpdateGateState();
 }
 
-class _StartupUpdateGateState extends State<StartupUpdateGate> {
+class _StartupUpdateGateState extends State<StartupUpdateGate>
+    with WidgetsBindingObserver {
   static bool _checkedThisProcess = false;
+  bool _checking = false;
+  int _attempts = 0;
+  Timer? _retry;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (!_checkedThisProcess) {
-      _checkedThisProcess = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_check());
       });
@@ -35,6 +39,9 @@ class _StartupUpdateGateState extends State<StartupUpdateGate> {
   }
 
   Future<void> _check() async {
+    if (!mounted || _checking || _checkedThisProcess || _attempts >= 3) return;
+    _checking = true;
+    _attempts++;
     final checker = UpdateChecker();
     try {
       final package = await PackageInfo.fromPlatform();
@@ -42,8 +49,10 @@ class _StartupUpdateGateState extends State<StartupUpdateGate> {
       final result = await checker.check(
         currentVersion: package.version,
         currentBuild: currentBuild,
-        stableOnly: true,
+        stableOnly: false,
       );
+      if (!mounted) return;
+      _checkedThisProcess = true;
       if (!mounted || !result.updateAvailable) return;
       await showDialog<void>(
         context: context,
@@ -72,9 +81,26 @@ class _StartupUpdateGateState extends State<StartupUpdateGate> {
       );
     } catch (_) {
       // Startup update checks are advisory and must not affect the session.
+      if (mounted && _attempts < 3) {
+        _retry?.cancel();
+        _retry = Timer(const Duration(minutes: 1), () => unawaited(_check()));
+      }
     } finally {
+      _checking = false;
       checker.close();
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_check());
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override

@@ -249,9 +249,9 @@ class _ThoughtBubblePainter extends CustomPainter {
         RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(16)),
       );
     for (final circle in [
-      const Rect.fromLTWH(1, -9, 18, 18),
-      const Rect.fromLTWH(-6, -16, 12, 12),
-      const Rect.fromLTWH(-11, -21, 8, 8),
+      Rect.fromLTWH(-8, size.height * .48, 18, 18),
+      Rect.fromLTWH(-16, size.height * .48 + 10, 12, 12),
+      Rect.fromLTWH(-21, size.height * .48 + 17, 8, 8),
     ]) {
       path = Path.combine(PathOperation.union, path, Path()..addOval(circle));
     }
@@ -337,7 +337,7 @@ class _ProfileHeader extends StatelessWidget {
                 child: Container(
                   width: avatarSize,
                   height: avatarSize,
-                  padding: const EdgeInsets.all(7),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape:
                         Theme.of(
@@ -386,15 +386,15 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ),
               Positioned(
-                left: 16 + avatarSize - 22,
-                bottom: 12,
+                left: 16 + avatarSize / 2 + avatarSize * .3535533906 - 11,
+                bottom: avatarSize / 2 - avatarSize * .3535533906 - 11,
                 child: Container(
                   width: 22,
                   height: 22,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _profilePresenceColour(profile.presence),
-                    border: Border.all(color: palette.surface, width: 4),
+                    border: Border.all(color: palette.surface, width: 3),
                   ),
                 ),
               ),

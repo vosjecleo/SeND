@@ -74,7 +74,7 @@ extension _MatrixProfiles on MatrixBackend {
   }
 
   UserProfileSummary _profileWithSpaceOverride(UserProfileSummary profile) {
-    final spaceId = _selectedSpaceId;
+    final spaceId = selectedRoomSpaceId;
     if (spaceId == null) return profile;
     final content = _matrix
         .getRoomById(spaceId)

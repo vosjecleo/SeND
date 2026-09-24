@@ -4,6 +4,27 @@ Current latest: **0.9.34+106**. This is the feature-scope milestone; subsequent
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope and terminology of their own releases.
 
+## Deltiecord 0.9.34 build 107 — 2026-09-25
+
+- Expose channel access, history visibility, directory listing and Space defaults;
+  discover accessible unjoined channels and join them when opened.
+- Add shared Space timeline-event defaults and room overrides, retaining
+  protected security/moderation events. These display policies apply in Deltiecord.
+- Improve permission editor readability, live role refresh, stale-draft detection,
+  member role assignment and banned-member management. Report inaccessible child
+  rooms individually during administration operations.
+- Resolve role colours from room membership, including reply authors and profiles.
+- Restore author headers on media albums and add mobile fullscreen media paging.
+- Merge read-receipt streams without losing newer positions; retry read markers
+  after sync and foreground updates while preserving visibility/privacy guards.
+- Thin profile-avatar borders, align presence indicators diagonally and curve
+  thought-bubble trails toward the avatar. Respect mobile forum safe areas.
+- Use exact chosen accents for controls and neutral message hover backgrounds,
+  including high-contrast themes.
+- Check the Latest release channel at startup and retry failed discovery.
+
+Validation and remaining device checks: `docs/build-107-plan.md`.
+
 ## Deltiecord 0.9.34 build 106 — 2026-09-24
 
 - Keep onboarding text scrollable with navigation outside the content viewport.

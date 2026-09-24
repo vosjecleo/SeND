@@ -23,6 +23,10 @@ class MediaAlbumIndex {
         final candidate = messages[cursor];
         final newer = run.last;
         if (!_eligible(candidate) ||
+            !DateUtils.isSameDay(
+              newer.timestamp.toLocal(),
+              candidate.timestamp.toLocal(),
+            ) ||
             candidate.senderId != first.senderId ||
             candidate.sender != first.sender ||
             newer.timestamp.difference(candidate.timestamp).abs() >=
