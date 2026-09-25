@@ -6,14 +6,13 @@ and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire'
 PulseAudio compatibility service is supported. Packaged dependencies include
 these tools; standalone AppImage users must provide them on the host.
 
-The current published release is 0.9.34 build 107 (originally Deltiecord) for Android,
+The current published release is SeND 0.9.35 build 108 for Android,
 x86-64 Windows, Linux, and Web/PWA. It marks feature-scope completion, not a
 stable-release certification. See [1.0 readiness](docs/RELEASE_READINESS.md).
 Download official builds from the [SeND releases page](https://deltie.net/SeND)
 or the [published GitHub releases](https://github.com/vosjecleo/SeND/releases/latest).
 
-The filename examples below target the upcoming **SeND 0.9.35+108**. Until it is
-published, use the actual filenames offered by the downloads page. Existing
+The filename examples below target **SeND 0.9.35+108**. Existing
 accounts survive the rename; the internal `deltiecord` executable/package name
 is retained for compatibility; new Linux packages also provide a `SeND` launcher.
 See [rename and update notes](docs/build-108-send.md).

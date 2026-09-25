@@ -132,10 +132,12 @@ as Safari requires; payloads still contain event IDs rather than decrypted text.
 Diagnostics display only permission/installation/subscription booleans, not
 push URLs, Matrix tokens or registration capabilities.
 
-Root-owned gateway update staged on deltie in `/home/cleo/send-push-108/`; run
-`sudo bash /home/cleo/send-push-108/install-web-push-update.sh`. This updates the
-existing worker, enables its queue dispatcher in its systemd unit, and adds only
-the exact standard push route to the inspected chat nginx snippet. It refuses
+The owner applied the root-owned gateway update from `/home/cleo/send-push-108/`.
+The installed worker hash matches the release source and its service is active;
+the public standard push route also passes the invalid-registration smoke test.
+The installer updated the existing worker, enabled its queue dispatcher in its
+systemd unit, and added only the exact standard push route to the inspected chat
+nginx snippet. It refuses
 to overwrite files changed since staging, keeps rollback copies, checks nginx
 syntax and service health, and leaves DNS, certificates and other hosts alone.
 The queue table is added to the existing private push database automatically.
@@ -155,9 +157,14 @@ For the activity/media scope and outstanding platform limitations, see
   channel isolation, invalid metadata rejection and persistence-identity guards.
 - Live Chromium mobile-viewport check: `/cord/` redirects to `/SeND/`, nine
   existing native downloads render, no error banner or horizontal overflow.
-- `/SeND/` and both old/new release manifest URLs return HTTP 200. Manifest is
-  still the published 0.9.34+107, not an invented/unbuilt 108 release.
+- `/SeND/` and both old/new release manifest URLs return HTTP 200 and advertise
+  0.9.35+108 as Latest. The PWA version endpoint reports build 108, its manifest
+  and page branding say SeND, and the server's atomic current link selects 108.
 - Packaging shell syntax checks and JavaScript syntax check pass. Windows
   installer handoff/replacement still requires Windows CI/manual validation.
 - Four credential-guard tests pass, including duplicate values, invalid signed
   authentication and network failures without exposing secret response data.
+- Corrected release commit `ea389fd29fe047d37843fd61427d36ef4d5789df`: Android,
+  Windows, Linux (Arch and Debian/AppImage) and Web/PWA CI all passed. GitHub
+  published `v0.9.35-b108`; all ten downloaded artifacts pass SHA-256 verification.
+  The canceled first build batch was not reused.

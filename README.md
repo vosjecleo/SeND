@@ -1,7 +1,7 @@
 # SeND
 
-> **Latest release: version 0.9.34 build 107 — hardening and bug fixes**
-> Next: **0.9.35+108**, the SeND rename and desktop activity update (unreleased).
+> **Latest release: SeND 0.9.35 build 108 — activity, pack editing and Web Push hardening**
+> Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
 > See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
@@ -10,6 +10,8 @@
 > SSO/OIDC, and shared profile editing/layout improvements.
 > Build 107 improves Space access and administration, shared event filters,
 > read receipts, mobile media navigation, profile layout and accent colours.
+> Build 108 adds opt-in desktop activity, Last.fm linking, a dedicated sticker/emoji
+> pack editor with animated resizing, direct update downloads and Web Push fixes.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 
