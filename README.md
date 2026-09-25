@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.35 build 109 — independent activities and PWA playback fixes**
+> **Latest release: SeND 0.9.35 build 110 — persistent history, pack tools and interaction polish**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -15,6 +15,10 @@
 > Build 109 separates game/music/history across devices, improves Last.fm resume
 > and artwork, and polishes mobile profile scrolling and WebKit GIF playback.
 > See [build 109 validation and device-test caveats](docs/build-109-activity.md).
+> Build 110 keeps opted-in Last.fm history visible offline, fixes album artwork,
+> adds 150-item pack merge/split tools, hold-to-favourite, mobile double-tap zoom,
+> compact timeline activity status, fixed desktop profile frames and mobile/PWA
+> update prompts. See [build 110 details](docs/build-110-polish.md).
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

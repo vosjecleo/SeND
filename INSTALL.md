@@ -6,18 +6,21 @@ and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire'
 PulseAudio compatibility service is supported. Packaged dependencies include
 these tools; standalone AppImage users must provide them on the host.
 
-The current published release is SeND 0.9.35 build 109 for Android,
+The current published release is SeND 0.9.35 build 110 for Android,
 x86-64 Windows, Linux, and Web/PWA. It marks feature-scope completion, not a
 stable-release certification. See [1.0 readiness](docs/RELEASE_READINESS.md).
 Download official builds from the [SeND releases page](https://deltie.net/SeND)
 or the [published GitHub releases](https://github.com/vosjecleo/SeND/releases/latest).
 
-The filename examples below target **SeND 0.9.35+109**. Existing
+The filename examples below target **SeND 0.9.35+110**. Existing
 accounts survive the rename; the internal `deltiecord` executable/package name
 is retained for compatibility; new Linux packages also provide a `SeND` launcher.
 See [rename and update notes](docs/build-108-send.md).
 Update publishing and viewing clients to build 109 together for independent
 game/music/history slots; build 108 does not read the new device-owned records.
+Build 110 is needed on both ends for persistent offline Last.fm history and its
+artwork. PWA users can choose **Reload app** when prompted for an update; finish
+uploads/recordings and save drafts first.
 
 Before installing a downloaded build, verify it against the included
 `SHA256SUMS` file:
@@ -29,7 +32,7 @@ sha256sum -c SHA256SUMS
 ## Android
 
 Download the APK matching the device architecture. Most current phones use
-`SeND-0.9.35+109-android-arm64-v8a.apk`; older 32-bit phones use
+`SeND-0.9.35+110-android-arm64-v8a.apk`; older 32-bit phones use
 `armeabi-v7a`, while `x86_64` is primarily for emulators. Verify
 its checksum, allow installation from the browser or file manager when Android
 asks, then open the APK. The APK uses SeND's persistent release-signing
@@ -53,7 +56,7 @@ still require broader real-device testing.
 
 ### Installer
 
-Download `SeND-0.9.35+109-windows-x64-setup.exe`, run it, and follow the
+Download `SeND-0.9.35+110-windows-x64-setup.exe`, run it, and follow the
 installer. A normal per-user installation does not require administrator
 privileges. The installer creates a Start Menu entry and can optionally create
 a desktop shortcut.
@@ -67,7 +70,7 @@ per-user application data.
 
 ### Portable build
 
-Download `SeND-0.9.35+109-windows-x64-portable.zip`, extract the entire
+Download `SeND-0.9.35+110-windows-x64-portable.zip`, extract the entire
 archive, and run `deltiecord.exe` from the extracted directory. Do not move only
 the executable: its accompanying DLLs, plugins, data, and assets are required.
 
@@ -78,11 +81,11 @@ issues.
 
 ## Debian, Ubuntu, and Linux Mint
 
-Download `SeND-0.9.35+109-linux-debian-amd64.deb`, open a terminal in its directory, and
+Download `SeND-0.9.35+110-linux-debian-amd64.deb`, open a terminal in its directory, and
 install it with APT:
 
 ```sh
-sudo apt install ./SeND-0.9.35+109-linux-debian-amd64.deb
+sudo apt install ./SeND-0.9.35+110-linux-debian-amd64.deb
 ```
 
 APT installs the package and its declared runtime dependencies. Launch it from
@@ -103,10 +106,10 @@ data.
 
 ## Arch Linux
 
-Download `SeND-0.9.35+109-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
+Download `SeND-0.9.35+110-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
 
 ```sh
-sudo pacman -U ./SeND-0.9.35+109-linux-arch-x86_64.pkg.tar.zst
+sudo pacman -U ./SeND-0.9.35+110-linux-arch-x86_64.pkg.tar.zst
 ```
 
 Launch SeND from the application menu or run `deltiecord`. Remove the
@@ -115,11 +118,11 @@ package with `sudo pacman -R deltiecord`; user data remains untouched.
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download
-`SeND-0.9.35+109-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
+`SeND-0.9.35+110-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
 
 ```sh
-chmod +x SeND-0.9.35+109-linux-appimage-x86_64.AppImage
-./SeND-0.9.35+109-linux-appimage-x86_64.AppImage
+chmod +x SeND-0.9.35+110-linux-appimage-x86_64.AppImage
+./SeND-0.9.35+110-linux-appimage-x86_64.AppImage
 ```
 
 The AppImage contains the Flutter application but deliberately relies on some

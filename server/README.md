@@ -1,6 +1,6 @@
 # SeND service helpers
 
-Current client baseline: 0.9.34+106. See [web hosting](../docs/web-deployment.md)
+Current client baseline: 0.9.35+110. See [web hosting](../docs/web-deployment.md)
 and [hardening gates](../docs/RELEASE_READINESS.md).
 
 `giphy_proxy.py` retains its historical filename but serves **KLIPY** search and

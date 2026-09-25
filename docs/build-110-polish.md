@@ -1,7 +1,13 @@
-# SeND 0.9.35+110 — local patch notes
+# SeND 0.9.35+110 — release notes
 
-Status: release candidate for build 110. See the release validation below;
-deployment status is recorded after CI and installation complete.
+Released on 2026-09-26 as latest on GitHub and deltie.net/SeND.
+Release commit: `d3d231f45fbc6c29bdbd0a5ca36523007d44a754`;
+tag: `v0.9.35-b110`. Android, both Linux package jobs, Windows and PWA CI,
+plus the publication workflow, all completed successfully. All ten artifacts
+passed SHA-256 verification before deployment. `chat.deltie.net/version.json`
+reports build 110, and the local Arch package is `deltiecord 0.9.35-110`.
+The existing media service is active with its two Telegram bounds set to 150;
+its KLIPY endpoint returned HTTP 200 after the scoped update.
 
 ## Last.fm history and artwork
 
@@ -36,9 +42,10 @@ footer while a live activity record exists, but need build 110 for offline histo
 - Reorganisation reuses verified accessible MXC references and original media
   type/dimensions, preserving animation without downloading or re-encoding it.
 - Maximum pack size is 150. Upload byte limits, conversion resource bounds, and
-  service rate limits are unchanged. The updated Telegram proxy must be deployed
-  using its existing service deployment process before 121–150-item Telegram
-  imports work end-to-end; no nginx or certificate changes are needed.
+  service rate limits are unchanged. Deltie's existing Telegram proxy was updated
+  using `server/install-media-limit-110.sh`, preserving a rollback copy and all
+  unrelated service code. Self-hosters must update the proxy before 121–150-item
+  Telegram imports work end-to-end; no nginx or certificate changes are needed.
 - Sticker tiles and fullscreen GIF media use long tap/click-and-hold to toggle
   favourites. Plain taps, swipes, and zoom gestures do not favourite media. Sticker
   star indicators are noninteractive. GIFs also expose a screen-reader action.
@@ -63,7 +70,7 @@ wait behind other dialogs. The PWA compares compiled build constants and offers
 
 ## Verification and remaining manual checks
 
-Local validation: Flutter analyzer clean; full suite **448 passed, 3 skipped**;
+Local validation: Flutter analyzer clean; final full suite **451 passed, 3 skipped**;
 final editor/gesture follow-up **13 passed**; Chromium browser animation,
 favourite gestures and update-gate tests **5 passed**; Telegram proxy tests
 **13 passed**. Formatting and `git diff --check` pass.
@@ -74,7 +81,7 @@ artwork parsing, independent history-error backoff, multi-device activity,
 merge aliases, split failure/retry, 150/151-item boundaries, long-press vs tap/drag,
 fixed profile frames, and startup/resume update checks.
 
-Before publishing, smoke-test on a physical iPhone: hold a fullscreen animated
+Remaining physical-iPhone smoke test: hold a fullscreen animated
 GIF, zoom/swipe without favouriting, view the full-width footer artwork while its
 owner is offline, and verify **Reload app** moves an installed PWA to a newer
 deployed build. Browser automation does not replace this iOS check.
