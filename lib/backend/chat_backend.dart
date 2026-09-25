@@ -18,6 +18,7 @@ abstract class ChatBackend extends ChangeNotifier {
   String? get activityWarning => null;
   bool get supportsActivityDetection => false;
   UserActivity? activityFor(String userId) => null;
+  List<UserActivity> activitiesFor(String userId) => [?activityFor(userId)];
   LastFmTrack? lastFmRecentFor(String userId) => null;
   Future<Uint8List?> loadActivityIcon(Uri uri) async => null;
   Future<void> updateActivitySettings(ActivitySettings value) async {}

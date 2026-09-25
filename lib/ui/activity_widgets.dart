@@ -73,83 +73,107 @@ class ActivityBlock extends StatelessWidget {
     return ListenableBuilder(
       listenable: backend,
       builder: (context, _) {
-        final activity = backend.activityFor(userId!);
-        if (activity == null) return const SizedBox.shrink();
-        return Container(
-          margin: EdgeInsets.symmetric(vertical: compact ? 0 : 10),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 18 : 12,
-            vertical: compact ? 8 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: context.deltiecord.elevated.withValues(alpha: .6),
-            borderRadius: BorderRadius.circular(compact ? 0 : 8),
-          ),
-          child: Row(
-            children: [
-              if (activity.icon != null)
-                _ActivityArtwork(
-                  backend: backend,
-                  activity: activity,
-                  size: compact
-                      ? 32
-                      : activity.kind == ActivityKind.music
-                      ? 64
-                      : 40,
-                )
-              else
-                Icon(activityIcon(activity.kind), size: compact ? 18 : 26),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        final activities = backend.activitiesFor(userId!);
+        if (activities.isEmpty) return const SizedBox.shrink();
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final activity in activities)
+              Container(
+                margin: EdgeInsets.symmetric(vertical: compact ? 0 : 10),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 18 : 12,
+                  vertical: compact ? 8 : 12,
+                ),
+                decoration: BoxDecoration(
+                  color: context.deltiecord.elevated.withValues(alpha: .6),
+                  borderRadius: BorderRadius.circular(compact ? 0 : 8),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      switch (activity.kind) {
-                        ActivityKind.game => 'Currently playing:',
-                        ActivityKind.music => 'Currently listening to:',
-                        ActivityKind.application => 'Currently using:',
-                      },
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.deltiecord.muted,
+                    if (activity.lastFmArtwork case final artwork?)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          artwork.toString(),
+                          width: compact ? 32 : 64,
+                          height: compact ? 32 : 64,
+                          fit: BoxFit.cover,
+                          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                          errorBuilder: (_, _, _) => SizedBox.square(
+                            dimension: compact ? 32 : 64,
+                            child: Icon(activityIcon(activity.kind)),
+                          ),
+                        ),
+                      )
+                    else if (activity.icon != null)
+                      _ActivityArtwork(
+                        backend: backend,
+                        activity: activity,
+                        size: compact
+                            ? 32
+                            : activity.kind == ActivityKind.music
+                            ? 64
+                            : 40,
+                      )
+                    else
+                      Icon(
+                        activityIcon(activity.kind),
+                        size: compact ? 18 : 26,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            switch (activity.kind) {
+                              ActivityKind.game => 'Currently playing:',
+                              ActivityKind.music => 'Currently listening to:',
+                              ActivityKind.application => 'Currently using:',
+                            },
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.deltiecord.muted,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            activity.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          if (activity.details.isNotEmpty)
+                            Text(
+                              activity.details,
+                              maxLines: compact ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (activity.playback != null)
+                            ActivityProgress(activity: activity),
+                          if (activity.lastFmUrl != null)
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 28),
+                              ),
+                              onPressed: () => launchUrl(
+                                activity.lastFmUrl!,
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              child: const Text(
+                                'Powered by Last.fm / AudioScrobbler',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      activity.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    if (activity.details.isNotEmpty)
-                      Text(
-                        activity.details,
-                        maxLines: compact ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    if (activity.playback != null)
-                      ActivityProgress(activity: activity),
-                    if (activity.lastFmUrl != null)
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 28),
-                        ),
-                        onPressed: () => launchUrl(
-                          activity.lastFmUrl!,
-                          mode: LaunchMode.externalApplication,
-                        ),
-                        child: const Text(
-                          'Powered by Last.fm / AudioScrobbler',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
                   ],
                 ),
               ),
-            ],
-          ),
+          ],
         );
       },
     );

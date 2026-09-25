@@ -1,8 +1,36 @@
 # Changelog
 
-Release target: **0.9.35+108**. Following the build 106 feature-scope milestone,
+Release target: **0.9.35+109**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.35 build 109 — 2026-09-25
+
+- Separate live game/program activity, live music, and Last.fm last-played
+  history. Profiles and DM activity blocks can show game and music together;
+  completed Last.fm tracks stay in their own optional footer.
+- Publish to device-owned profile fields so one device cannot overwrite or
+  clear another device's contribution. Combine unexpired contributions for
+  everyone, including the account's own other clients. Native music takes
+  priority over Last.fm now-playing; offline/invisible visibility rules remain.
+- Reduce profile presence-dot size proportionally to the avatar, preserving
+  its diagonal alignment in the desktop sidebar and other profile layouts.
+- Raise mobile profile sheets slightly and keep their rounded frame/gradient
+  stationary while contents scroll. Scrolling back through a long profile no
+  longer dismisses it accidentally.
+- Retain fresh Last.fm responses across quick background/resume cycles without
+  bypassing cache directives or rate limits. Display the largest supplied,
+  approved Last.fm album artwork without blocking the activity text.
+- Treat visible-but-unfocused PWA pages as foregrounded, so browser/input focus
+  changes do not stop activity fetching. Hidden pages still stop polling and
+  native desktop focus behaviour is unchanged.
+- Use browser-native animated image playback on WebKit (including iOS PWA),
+  backed by the already downloaded/decrypted GIF/WebP bytes. Preserve full
+  animation, pause on backgrounding, release Blob URLs on disposal, and retain
+  autoplay/reduced-motion controls. Visible web focus changes and identical
+  byte copies no longer stop/restart animations.
+
+Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.md).
 
 ## SeND 0.9.35 build 108 — 2026-09-25
 

@@ -6,6 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 void main() {
+  test('visible unfocused web views keep playing; hidden views stop', () {
+    expect(
+      imageLifecycleVisible(AppLifecycleState.inactive, browser: true),
+      isTrue,
+    );
+    expect(
+      imageLifecycleVisible(AppLifecycleState.inactive, browser: false),
+      isFalse,
+    );
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.detached,
+    ]) {
+      expect(imageLifecycleVisible(state, browser: true), isFalse);
+    }
+  });
   test('WebP animation is detected without MIME metadata', () {
     final header = Uint8List(30);
     header.setRange(0, 4, 'RIFF'.codeUnits);

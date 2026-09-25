@@ -18,7 +18,7 @@ Future<void> showMobileProfileSheet(
   showDragHandle: true,
   backgroundColor: Colors.transparent,
   builder: (context) => FractionallySizedBox(
-    heightFactor: 0.9,
+    heightFactor: 0.95,
     child: _MobileProfileCard(
       backend: backend,
       userId: userId,
@@ -30,8 +30,8 @@ Future<void> showMobileProfileSheet(
 /// Mobile host for the same profile card rendered on desktop.
 ///
 /// A raw downward gesture is observed outside Flutter's scroll gesture arena,
-/// so the sheet remains dismissible from anywhere without sacrificing its
-/// scrollable profile content.
+/// so a downward swipe starting at the top dismisses the sheet. Gestures that
+/// start within scrolled content must remain ordinary scrolling gestures.
 class _MobileProfileCard extends StatefulWidget {
   const _MobileProfileCard({
     required this.backend,
@@ -51,6 +51,7 @@ class _MobileProfileCardState extends State<_MobileProfileCard> {
   late Future<UserProfileSummary> _profile;
   late int _profileRevision;
   final Map<int, Offset> _pointerStarts = {};
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -85,13 +86,18 @@ class _MobileProfileCardState extends State<_MobileProfileCard> {
   @override
   void dispose() {
     widget.backend.removeListener(_backendChanged);
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.translucent,
-    onPointerDown: (event) => _pointerStarts[event.pointer] = event.position,
+    onPointerDown: (event) {
+      if (!_scrollController.hasClients || _scrollController.offset <= 0) {
+        _pointerStarts[event.pointer] = event.position;
+      }
+    },
     onPointerCancel: (event) => _pointerStarts.remove(event.pointer),
     onPointerUp: (event) {
       final start = _pointerStarts.remove(event.pointer);
@@ -115,33 +121,39 @@ class _MobileProfileCardState extends State<_MobileProfileCard> {
         return Stack(
           children: [
             Positioned.fill(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 20),
-                child: DeltiecordProfileCard(
-                  profile: profile,
-                  onClose: () => Navigator.pop(context),
-                  onEdit: own && widget.onEditOwnProfile != null
-                      ? () {
-                          Navigator.pop(context);
-                          widget.onEditOwnProfile!();
-                        }
-                      : null,
-                  onMessage: own
-                      ? null
-                      : () async {
-                          await widget.backend.startDirectChat(profile.userId);
-                          if (context.mounted) Navigator.pop(context);
-                        },
-                  onBlock: own
-                      ? null
-                      : () async {
-                          await widget.backend.setUserBlocked(
-                            profile.userId,
-                            !profile.blocked,
-                          );
-                          unawaited(_refreshInBackground());
-                        },
-                  blocked: profile.blocked,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 20),
+                  child: DeltiecordProfileCard(
+                    scrollController: _scrollController,
+                    profile: profile,
+                    onClose: () => Navigator.pop(context),
+                    onEdit: own && widget.onEditOwnProfile != null
+                        ? () {
+                            Navigator.pop(context);
+                            widget.onEditOwnProfile!();
+                          }
+                        : null,
+                    onMessage: own
+                        ? null
+                        : () async {
+                            await widget.backend.startDirectChat(
+                              profile.userId,
+                            );
+                            if (context.mounted) Navigator.pop(context);
+                          },
+                    onBlock: own
+                        ? null
+                        : () async {
+                            await widget.backend.setUserBlocked(
+                              profile.userId,
+                              !profile.blocked,
+                            );
+                            unawaited(_refreshInBackground());
+                          },
+                    blocked: profile.blocked,
+                  ),
                 ),
               ),
             ),

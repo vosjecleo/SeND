@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'ui/video_preparation_overlay.dart';
 import 'services/app_sounds.dart';
+import 'services/application_visibility.dart';
 import 'ui/activity_widgets.dart';
 import 'services/platform_io.dart';
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
@@ -665,7 +666,7 @@ class _ReadReceiptLifecycle extends StatefulWidget {
 
 class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
     with WidgetsBindingObserver {
-  bool _lifecycleForeground = true;
+  AppLifecycleState? _lifecycleState;
   bool _viewFocused = true;
 
   @override
@@ -706,8 +707,8 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
   void _publish(AppLifecycleState? state) {
     // A null lifecycle is used by some Flutter test bindings before their
     // first frame; the active widget tree is considered foregrounded there.
-    _lifecycleForeground = state == null || state == AppLifecycleState.resumed;
-    if (!_lifecycleForeground) {
+    _lifecycleState = state;
+    if (!applicationIsForeground(state, viewFocused: true)) {
       FocusManager.instance.primaryFocus?.unfocus();
       unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
       InAppNotificationCenter.dismiss();
@@ -722,7 +723,7 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
   }
 
   void _syncBackend() => widget.backend.setApplicationForeground(
-    _lifecycleForeground && _viewFocused,
+    applicationIsForeground(_lifecycleState, viewFocused: _viewFocused),
   );
 
   @override

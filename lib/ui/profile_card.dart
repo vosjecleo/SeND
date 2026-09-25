@@ -19,6 +19,7 @@ class DeltiecordProfileCard extends StatelessWidget {
     this.avatarPreview,
     this.bannerPreview,
     this.minimumHeight = 0,
+    this.scrollController,
     super.key,
   });
 
@@ -34,6 +35,10 @@ class DeltiecordProfileCard extends StatelessWidget {
   final Widget? avatarPreview;
   final Widget? bannerPreview;
   final double minimumHeight;
+
+  /// When supplied by a bounded mobile sheet, only the contents scroll; the
+  /// gradient, rounded mask and outline remain fixed in place.
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -73,131 +78,146 @@ class DeltiecordProfileCard extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ProfileHeader(
-            profile: profile,
-            accent: accent,
-            secondaryAccent: secondaryAccent,
-            onEdit: onEdit,
-            onClose: onClose,
-            avatarPreview: avatarPreview,
-            bannerPreview: bannerPreview,
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.displayName,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+      child: _ProfileScrollBody(
+        controller: scrollController,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ProfileHeader(
+              profile: profile,
+              accent: accent,
+              secondaryAccent: secondaryAccent,
+              onEdit: onEdit,
+              onClose: onClose,
+              avatarPreview: avatarPreview,
+              bannerPreview: bannerPreview,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile.displayName,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        '${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns!.characters.take(16)}' : ''}',
-                        style: TextStyle(
-                          color: palette.muted,
-                          fontSize: DeltiecordTypeScale.normal,
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          '${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns!.characters.take(16)}' : ''}',
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: DeltiecordTypeScale.normal,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Copy Matrix ID',
-                      onPressed: () => Clipboard.setData(
-                        ClipboardData(text: profile.userId),
+                      IconButton(
+                        tooltip: 'Copy Matrix ID',
+                        onPressed: () => Clipboard.setData(
+                          ClipboardData(text: profile.userId),
+                        ),
+                        icon: const ThemeIcon(Icons.copy_outlined, size: 18),
                       ),
-                      icon: const ThemeIcon(Icons.copy_outlined, size: 18),
+                    ],
+                  ),
+                  if (profile.serverRoleNames.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final name in profile.serverRoleNames)
+                          Chip(label: Text(name)),
+                      ],
                     ),
                   ],
-                ),
-                if (profile.serverRoleNames.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final name in profile.serverRoleNames)
-                        Chip(label: Text(name)),
-                    ],
-                  ),
-                ],
-                if (!preview) ActivityBlock(userId: profile.userId),
-                if (profile.bio?.trim().isNotEmpty == true || preview) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    profile.bio?.trim().isNotEmpty == true
-                        ? profile.bio!
-                        : 'Your bio preview will appear here.',
-                    style: const TextStyle(height: 1.4),
-                  ),
-                ],
-                if (timezone?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      const ThemeIcon(Icons.schedule, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)}',
-                          style: TextStyle(color: palette.muted),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (onMessage != null || onBlock != null) ...[
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      if (onMessage != null)
+                  if (!preview) ActivityBlock(userId: profile.userId),
+                  if (profile.bio?.trim().isNotEmpty == true || preview) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      profile.bio?.trim().isNotEmpty == true
+                          ? profile.bio!
+                          : 'Your bio preview will appear here.',
+                      style: const TextStyle(height: 1.4),
+                    ),
+                  ],
+                  if (timezone?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const ThemeIcon(Icons.schedule, size: 18),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: FilledButton.icon(
-                            onPressed: onMessage,
-                            icon: const ThemeIcon(Icons.chat_bubble_outline),
-                            label: const Text('Message'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: accent,
-                              foregroundColor: deltiecordContrastingForeground(
-                                accent,
+                          child: Text(
+                            '${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)}',
+                            style: TextStyle(color: palette.muted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (onMessage != null || onBlock != null) ...[
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        if (onMessage != null)
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: onMessage,
+                              icon: const ThemeIcon(Icons.chat_bubble_outline),
+                              label: const Text('Message'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: accent,
+                                foregroundColor:
+                                    deltiecordContrastingForeground(accent),
                               ),
                             ),
                           ),
-                        ),
-                      if (onMessage != null && onBlock != null)
-                        const SizedBox(width: 10),
-                      if (onBlock != null)
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: onBlock,
-                            icon: ThemeIcon(blocked ? Icons.undo : Icons.block),
-                            label: Text(blocked ? 'Unblock' : 'Block'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.error,
+                        if (onMessage != null && onBlock != null)
+                          const SizedBox(width: 10),
+                        if (onBlock != null)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: onBlock,
+                              icon: ThemeIcon(
+                                blocked ? Icons.undo : Icons.block,
+                              ),
+                              label: Text(blocked ? 'Unblock' : 'Block'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
+                  if (!preview) LastFmRecentBar(userId: profile.userId),
                 ],
-                if (!preview) LastFmRecentBar(userId: profile.userId),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+class _ProfileScrollBody extends StatelessWidget {
+  const _ProfileScrollBody({required this.controller, required this.child});
+  final ScrollController? controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => controller == null
+      ? child
+      : SingleChildScrollView(controller: controller, child: child);
 }
 
 class ProfileStatusBubble extends StatelessWidget {
@@ -301,6 +321,7 @@ class _ProfileHeader extends StatelessWidget {
         // ratio for popovers, narrow phones or the desktop sidebar.
         final bannerHeight = constraints.maxWidth / 3;
         final avatarSize = (constraints.maxWidth * .26).clamp(64.0, 124.0);
+        final presenceSize = (avatarSize * .18).clamp(14.0, 20.0);
         return SizedBox(
           height: bannerHeight + 60,
           child: Stack(
@@ -389,15 +410,22 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ),
               Positioned(
-                left: 16 + avatarSize / 2 + avatarSize * .3535533906 - 11,
-                bottom: avatarSize / 2 - avatarSize * .3535533906 - 11,
+                left:
+                    16 +
+                    avatarSize / 2 +
+                    avatarSize * .3535533906 -
+                    presenceSize / 2,
+                bottom:
+                    avatarSize / 2 -
+                    avatarSize * .3535533906 -
+                    presenceSize / 2,
                 child: Container(
-                  width: 22,
-                  height: 22,
+                  width: presenceSize,
+                  height: presenceSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _profilePresenceColour(profile.presence),
-                    border: Border.all(color: palette.surface, width: 3),
+                    border: Border.all(color: palette.surface, width: 2.5),
                   ),
                 ),
               ),

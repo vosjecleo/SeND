@@ -113,6 +113,9 @@ class MatrixBackend extends ChatBackend {
   @override
   UserActivity? activityFor(String userId) => _activities?.activityFor(userId);
   @override
+  List<UserActivity> activitiesFor(String userId) =>
+      _activities?.activitiesFor(userId).live ?? const [];
+  @override
   LastFmTrack? lastFmRecentFor(String userId) =>
       _activities?.lastFmRecentFor(userId);
 
@@ -140,15 +143,21 @@ class MatrixBackend extends ChatBackend {
     if (_activities != null || _client?.userID == null) return;
     final client = _matrix;
     final ownId = client.userID!;
+    final activityField = activityDeviceField(client.deviceID!);
     Future<void> writeRecord(Map<String, Object?>? record) async {
       if (!client.isLogged()) {
         throw const ActivityServiceError('M_UNKNOWN_TOKEN');
       }
       try {
-        await client.setProfileField(ownId, activityProfileField, {
-          activityProfileField: record,
-        });
+        if (record == null) {
+          await client.deleteProfileField(ownId, activityField);
+        } else {
+          await client.setProfileField(ownId, activityField, {
+            activityField: record,
+          });
+        }
       } on MatrixException catch (error) {
+        if (record == null && error.errcode == 'M_NOT_FOUND') return;
         throw ActivityServiceError(
           error.errcode,
           retryAfter: error.retryAfterMs == null
@@ -160,12 +169,21 @@ class MatrixBackend extends ChatBackend {
 
     final controller = ActivityController(
       userId: ownId,
+      deviceId: client.deviceID!,
       read: (id) async {
         try {
-          return (await client.getProfileField(
+          final fields = (await client.getUserProfile(
             id,
-            activityProfileField,
-          ))[activityProfileField];
+            maxCacheAge: Duration.zero,
+          )).additionalProperties;
+          return {
+            'devices': {
+              for (final entry in fields.entries)
+                if (entry.key == activityProfileField ||
+                    entry.key.startsWith(activityDevicePrefix))
+                  entry.key: entry.value,
+            },
+          };
         } on MatrixException catch (error) {
           if (error.errcode == 'M_NOT_FOUND' ||
               error.response?.statusCode == 404) {

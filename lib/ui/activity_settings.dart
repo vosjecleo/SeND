@@ -139,7 +139,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           'Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.',
         ),
         const Text(
-          'Last.fm refreshes only while this app is open and you are online. Offline activities are hidden. Sharing publishes your current activity to your Matrix profile.',
+          'Game/program, music, and Last.fm history are separate profile slots. Devices contribute independently; viewing includes activity shared by your other devices. Last.fm refreshes only while this app is open and you are online. Offline activities are hidden.',
         ),
         if (backend.supportsActivityDetection)
           SwitchListTile(
@@ -152,7 +152,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Share my current activity'),
+          title: const Text('Share activity from this device'),
           value: settings.share,
           onChanged: _saving ? null : (v) => save(settings.copyWith(share: v)),
         ),
@@ -160,7 +160,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Show Last.fm last listened track on my profile'),
           subtitle: const Text(
-            'Optional profile footer with the last completed track, artist and album. Requires a connected Last.fm account and activity sharing. Hidden while offline.',
+            'Publish the last completed track, artist and album from this device. Requires a connected Last.fm account and activity sharing. Other devices can also contribute; hidden while offline.',
           ),
           value: settings.showLastFmRecent,
           onChanged: _saving

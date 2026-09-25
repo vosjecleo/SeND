@@ -61,6 +61,7 @@ jobs:
           trap 'kill "$preview_pid"' EXIT
           export PUPPETEER_MODULE="$PWD/tool/browser-tests/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js"
           export CHROME_EXECUTABLE="$(command -v google-chrome)"
+          flutter test --no-pub --platform chrome test/browser_animation_test.dart
           node tool/web_autofill_test.mjs
       - name: Upload browser regression diagnostics
         if: failure()

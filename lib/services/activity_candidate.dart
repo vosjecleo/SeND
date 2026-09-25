@@ -11,6 +11,7 @@ class ActivityCandidate {
     this.running = true,
     this.playback,
     this.lastFmUrl,
+    this.lastFmArtwork,
   });
   final String id, name, details;
   final ActivityKind? kind;
@@ -18,4 +19,5 @@ class ActivityCandidate {
   final bool running;
   final ActivityPlayback? playback;
   final Uri? lastFmUrl;
+  final Uri? lastFmArtwork;
 }

@@ -1,8 +1,14 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'browser_animated_image.dart';
+
+bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
+    state == null ||
+    state == AppLifecycleState.resumed ||
+    (browser && state == AppLifecycleState.inactive);
 
 bool hasAnimatedImageHeader(Uint8List bytes) {
   bool at(int offset, String value) =>
@@ -70,9 +76,7 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _foreground =
-        WidgetsBinding.instance.lifecycleState == null ||
-        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _foreground = imageLifecycleVisible(WidgetsBinding.instance.lifecycleState);
     if (_animated) unawaited(_start());
   }
 
@@ -114,7 +118,10 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
       });
       // RenderImage still owns the old frame until this rebuild is painted.
       WidgetsBinding.instance.addPostFrameCallback((_) => previous?.dispose());
-      if (_foreground && widget.autoplay && codec.frameCount > 1) {
+      if (_foreground &&
+          widget.autoplay &&
+          codec.frameCount > 1 &&
+          !prefersBrowserAnimation) {
         final duration = next.duration < const Duration(milliseconds: 20)
             ? const Duration(milliseconds: 20)
             : next.duration;
@@ -128,7 +135,8 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
   @override
   void didUpdateWidget(covariant LifecycleMemoryImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.bytes, widget.bytes) ||
+    if ((!identical(oldWidget.bytes, widget.bytes) &&
+            !listEquals(oldWidget.bytes, widget.bytes)) ||
         oldWidget.autoplay != widget.autoplay ||
         oldWidget.animated != widget.animated) {
       _stop();
@@ -138,7 +146,12 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
+    // Web blur means visible but unfocused (including browser chrome/input
+    // focus changes), not backgrounded. Hidden/paused still stop all decoding.
+    final visible = imageLifecycleVisible(state);
+    if (visible == _foreground) return;
+    _foreground = visible;
+    if (mounted) setState(() {});
     if (!_foreground) {
       _stop();
     } else if (_animated) {
@@ -156,6 +169,20 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
 
   @override
   Widget build(BuildContext context) {
+    if (_animated &&
+        widget.autoplay &&
+        _foreground &&
+        prefersBrowserAnimation &&
+        _frame != null) {
+      return browserAnimatedImage(
+        bytes: widget.bytes,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
+        intrinsicWidth: _frame!.width.toDouble(),
+        intrinsicHeight: _frame!.height.toDouble(),
+      );
+    }
     if (!_animated) {
       return Image.memory(
         widget.bytes,

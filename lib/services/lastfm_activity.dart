@@ -6,6 +6,13 @@ import 'platform_io.dart';
 /// Foreground-only public now-playing reader shared by native and web clients.
 /// The controller owns lifecycle/consent; this class owns rate/cache bounds.
 class LastFmActivitySource {
+  LastFmActivitySource({
+    HttpClient Function()? clientFactory,
+    DateTime Function()? now,
+  }) : _clientFactory = clientFactory ?? HttpClient.new,
+       _now = now ?? DateTime.now;
+  final HttpClient Function() _clientFactory;
+  final DateTime Function() _now;
   DateTime? _after;
   String? _identity;
   ActivityCandidate? _cached;
@@ -15,6 +22,13 @@ class LastFmActivitySource {
     _cached = null;
     recent = null;
     // Preserve the rate-limit deadline across background/resume cycles.
+  }
+
+  /// Keep a still-fresh response for quick resume. The controller suppresses
+  /// publication in the background; retaining local cache does not share it.
+  /// Clearing it while retaining _after creates a minute-long empty result.
+  void suspend() {
+    if (_after == null || !_now().isBefore(_after!)) clear();
   }
 
   Future<ActivityCandidate?> scan(ActivitySettings settings) async {
@@ -30,11 +44,12 @@ class LastFmActivitySource {
       _after = null;
       _identity = identity;
     }
-    if (_after != null && DateTime.now().isBefore(_after!)) return _cached;
-    _after = DateTime.now().add(const Duration(minutes: 1));
+    if (_after != null && _now().isBefore(_after!)) return _cached;
+    _after = _now().add(const Duration(minutes: 1));
     _cached = null;
     recent = null;
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    final client = _clientFactory()
+      ..connectionTimeout = const Duration(seconds: 5);
     try {
       final request = await client.getUrl(
         Uri.https('ws.audioscrobbler.com', '/2.0/', {
@@ -49,7 +64,7 @@ class LastFmActivitySource {
         const Duration(seconds: 8),
       );
       if (response.statusCode == 429) {
-        _after = DateTime.now().add(
+        _after = _now().add(
           Duration(
             seconds:
                 (int.tryParse(response.headers.value('retry-after') ?? '') ??
@@ -68,7 +83,7 @@ class LastFmActivitySource {
       final data = jsonDecode(utf8.decode(bytes));
       if (data is! Map) return null;
       if (data['error'] == 29) {
-        _after = DateTime.now().add(const Duration(minutes: 5));
+        _after = _now().add(const Duration(minutes: 5));
         return null;
       }
       final cache = response.headers.value('cache-control') ?? '';
@@ -77,7 +92,7 @@ class LastFmActivitySource {
             RegExp(r'max-age=(\d+)').firstMatch(cache)?.group(1) ?? '',
           ) ??
           60;
-      _after = DateTime.now().add(
+      _after = _now().add(
         Duration(
           seconds: cache.contains('no-store') || cache.contains('no-cache')
               ? 0
@@ -146,12 +161,34 @@ ActivityCandidate? lastFmNowPlaying(Map data, String user) {
   }
 
   final artist = track['artist'];
+  Uri? artwork;
+  var artworkRank = -1;
+  final images = track['image'];
+  if (images is List) {
+    for (final image in images.take(12)) {
+      if (image is! Map) continue;
+      final url = validLastFmArtwork(image['#text']);
+      final rank = const [
+        'small',
+        'medium',
+        'large',
+        'extralarge',
+        'mega',
+      ].indexOf('${image['size']}');
+      if (url != null && rank > artworkRank) {
+        artwork = url;
+        artworkRank = rank;
+      }
+    }
+  }
   return ActivityCandidate(
     id: 'lastfm',
     name: bounded(track['name'], 128),
     kind: ActivityKind.music,
     details: bounded(artist is Map ? artist['#text'] : null, 256),
-    // No invented playback position and no API artwork re-publication.
+    // Written artwork-display permission confirmed by the owner. Reference the
+    // supplied CDN URL; do not mirror artwork or invent a larger rendition.
+    lastFmArtwork: artwork,
     lastFmUrl:
         validLastFmUrl(track['url']) ?? Uri.https('www.last.fm', '/user/$user'),
   );

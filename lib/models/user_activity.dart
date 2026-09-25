@@ -1,6 +1,65 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+
 enum ActivityKind { game, music, application }
 
 const activityProfileField = 'net.deltiecord.activity';
+const activityDevicePrefix = 'net.deltiecord.activity.device.';
+String activityDeviceField(String deviceId) =>
+    '$activityDevicePrefix${sha256.convert(utf8.encode(deviceId))}';
+
+/// Independently selected slots from unexpired device-owned profile fields.
+/// Native music wins over Last.fm now-playing; completed scrobbles never become
+/// a live activity. Selection is deterministic on every receiving client.
+class UserActivities {
+  const UserActivities({this.program, this.music, this.recent});
+  final UserActivity? program, music;
+  final LastFmTrack? recent;
+  UserActivity? get primary => program ?? music;
+  List<UserActivity> get live => [?program, ?music];
+
+  static UserActivities fromRecords(Map<String, Object?> records) {
+    final entries = records.entries
+        .where((e) => activityRecordExpiry(e.value) != null)
+        .toList();
+    entries.sort((a, b) {
+      final order = activityRecordExpiry(
+        b.value,
+      )!.compareTo(activityRecordExpiry(a.value)!);
+      return order == 0 ? a.key.compareTo(b.key) : order;
+    });
+    UserActivity? program, music;
+    LastFmTrack? recent;
+    for (final entry in entries.take(64)) {
+      final record = entry.value as Map;
+      final slots = record['slots'];
+      final legacy = UserActivity.fromJson(record);
+      final p = slots is Map
+          ? UserActivity.fromJson(slots['program'])
+          : legacy?.kind != ActivityKind.music
+          ? legacy
+          : null;
+      final m = slots is Map
+          ? UserActivity.fromJson(slots['music'])
+          : legacy?.kind == ActivityKind.music
+          ? legacy
+          : null;
+      if (p != null && p.kind != ActivityKind.music) program ??= p;
+      if (m != null &&
+          m.kind == ActivityKind.music &&
+          (music == null || (music.lastFmUrl != null && m.lastFmUrl == null))) {
+        music = m;
+      }
+      final track = LastFmTrack.fromJson(record['lastfm_recent']);
+      if (track != null &&
+          (recent == null || track.playedAt.isAfter(recent.playedAt))) {
+        recent = track;
+      }
+    }
+    return UserActivities(program: program, music: music, recent: recent);
+  }
+}
+
 const lastFmPublicDisplayApproved = bool.fromEnvironment(
   'LASTFM_PUBLIC_DISPLAY_APPROVED',
   defaultValue: true, // Written approval confirmed by the app owner.
@@ -138,6 +197,23 @@ Uri? validLastFmUrl(Object? value) {
       : null;
 }
 
+/// Only API-provided HTTPS Last.fm CDN artwork, never arbitrary profile URLs.
+Uri? validLastFmArtwork(Object? value) {
+  if (value is! String || value.length > 2048) return null;
+  final uri = Uri.tryParse(value);
+  return uri != null &&
+          uri.scheme == 'https' &&
+          uri.userInfo.isEmpty &&
+          !uri.hasPort &&
+          !uri.hasQuery &&
+          !uri.hasFragment &&
+          uri.path.startsWith('/i/u/') &&
+          (uri.host == 'lastfm.freetls.fastly.net' ||
+              uri.host == 'lastfm-img2.akamaized.net')
+      ? uri
+      : null;
+}
+
 /// Public, short-lived presentation metadata. Never contains process paths.
 class UserActivity {
   const UserActivity({
@@ -149,6 +225,7 @@ class UserActivity {
     this.startedAt,
     this.playback,
     this.lastFmUrl,
+    this.lastFmArtwork,
   });
   final ActivityKind kind;
   final String name;
@@ -157,6 +234,7 @@ class UserActivity {
   final DateTime? startedAt;
   final ActivityPlayback? playback;
   final Uri? lastFmUrl;
+  final Uri? lastFmArtwork;
   final DateTime expiresAt;
   bool get expired => !expiresAt.isAfter(DateTime.now());
   String get label =>
@@ -174,6 +252,8 @@ class UserActivity {
     if (startedAt != null) 'started_at': startedAt!.millisecondsSinceEpoch,
     if (playback != null) 'playback': playback!.toJson(),
     if (lastFmUrl != null) 'lastfm_url': lastFmUrl.toString(),
+    if (lastFmUrl != null && lastFmArtwork != null)
+      'lastfm_artwork': lastFmArtwork.toString(),
     'expires_at': expiresAt.millisecondsSinceEpoch,
   };
   static UserActivity? fromJson(Object? value, {DateTime? now}) {
@@ -214,6 +294,9 @@ class UserActivity {
           ? ActivityPlayback.fromJson(value['playback'], now: current)
           : null,
       lastFmUrl: validLastFmUrl(value['lastfm_url']),
+      lastFmArtwork: validLastFmUrl(value['lastfm_url']) == null
+          ? null
+          : validLastFmArtwork(value['lastfm_artwork']),
       startedAt:
           start is int && start > 0 && start <= current.millisecondsSinceEpoch
           ? DateTime.fromMillisecondsSinceEpoch(start)
