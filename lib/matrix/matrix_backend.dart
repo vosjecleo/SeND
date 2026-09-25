@@ -1,4 +1,9 @@
 import 'dart:async';
+import '../services/video_preparation.dart';
+import '../models/user_activity.dart';
+import '../services/activity_candidate.dart';
+import '../services/activity_controller.dart';
+import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
 import 'dart:collection';
 import 'dart:convert';
@@ -93,6 +98,111 @@ double _readPlatformFontScale(Map<String, dynamic>? content) {
 /// consulted as behavioral references; no source from either client is copied.
 /// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
+  ActivityController? _activities;
+  @override
+  ActivitySettings get activitySettings =>
+      _activities?.settings ?? const ActivitySettings();
+  @override
+  List<ActivityCandidate> get detectedApplications =>
+      _activities?.candidates ?? const [];
+  @override
+  String? get activityWarning => _activities?.warning;
+  @override
+  bool get supportsActivityDetection =>
+      !kIsWeb && (Platform.isLinux || Platform.isWindows);
+  @override
+  UserActivity? activityFor(String userId) => _activities?.activityFor(userId);
+  @override
+  LastFmTrack? lastFmRecentFor(String userId) =>
+      _activities?.lastFmRecentFor(userId);
+
+  bool _activityVisibleFor(String id) {
+    if (id == _client?.userID) {
+      return _preferences.sharePresence &&
+          _presenceMode != PresenceMode.invisible &&
+          _connectionStatus != ConnectionStatus.offline &&
+          (supportsActivityDetection || _applicationForeground);
+    }
+    return _matrixPresenceFor(
+          id,
+          _profileCache[id]?.profile.presence ?? UserPresence.offline,
+        ) !=
+        UserPresence.offline;
+  }
+
+  @override
+  Future<Uint8List?> loadActivityIcon(Uri uri) => _avatarMedia(uri, 384);
+  @override
+  Future<void> updateActivitySettings(ActivitySettings value) async =>
+      _activities?.update(value);
+
+  void _startActivities() {
+    if (_activities != null || _client?.userID == null) return;
+    final client = _matrix;
+    final ownId = client.userID!;
+    Future<void> writeRecord(Map<String, Object?>? record) async {
+      if (!client.isLogged()) {
+        throw const ActivityServiceError('M_UNKNOWN_TOKEN');
+      }
+      try {
+        await client.setProfileField(ownId, activityProfileField, {
+          activityProfileField: record,
+        });
+      } on MatrixException catch (error) {
+        throw ActivityServiceError(
+          error.errcode,
+          retryAfter: error.retryAfterMs == null
+              ? null
+              : Duration(milliseconds: error.retryAfterMs!),
+        );
+      }
+    }
+
+    final controller = ActivityController(
+      userId: ownId,
+      read: (id) async {
+        try {
+          return (await client.getProfileField(
+            id,
+            activityProfileField,
+          ))[activityProfileField];
+        } on MatrixException catch (error) {
+          if (error.errcode == 'M_NOT_FOUND' ||
+              error.response?.statusCode == 404) {
+            return null;
+          }
+          throw ActivityServiceError(
+            error.errcode,
+            retryAfter: error.retryAfterMs == null
+                ? null
+                : Duration(milliseconds: error.retryAfterMs!),
+          );
+        }
+      },
+      write: (activity) => writeRecord(activity?.toJson()),
+      writeProfile: writeRecord,
+      upload: (bytes) => client.uploadContent(
+        bytes,
+        filename: 'activity-icon.png',
+        contentType: 'image/png',
+      ),
+      canShare: () => _activityVisibleFor(ownId),
+      canView: _activityVisibleFor,
+      isForeground: () => _applicationForeground,
+    );
+    _activities = controller;
+    controller.addListener(_notifyBackendListeners);
+    unawaited(controller.start());
+  }
+
+  Future<void> _stopActivities({bool clear = false}) async {
+    final controller = _activities;
+    _activities = null;
+    if (controller == null) return;
+    controller.removeListener(_notifyBackendListeners);
+    await controller.close(clear: clear);
+  }
+
   final Set<_MatrixThreadSession> _threadSessions = {};
   final Map<String, Event> _forumRoots = {};
   String? _forumCursor;
@@ -295,6 +405,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _lastMarkedReadEventIds = {};
   bool _applicationForeground = true;
   bool _desktopIdle = true;
+  bool _desktopPresencePublishing = false;
   Timer? _desktopActivityLeaseTimer;
   bool _conversationVisible = false;
   bool _conversationAtPresent = false;
@@ -439,7 +550,7 @@ class MatrixBackend extends ChatBackend {
     if (timeline == null) return false;
     if (_timelineServerExhausted) return false;
     // The SDK's canRequestHistory flag only describes its own database cursor.
-    // Deltiecord also walks its persisted-event cursor before falling back to
+    // SeND also walks its persisted-event cursor before falling back to
     // the room continuation token, so any one signal can still have history.
     return !_timelineDatabaseExhausted ||
         timeline.canRequestHistory ||
@@ -554,6 +665,8 @@ class MatrixBackend extends ChatBackend {
           final presence = _matrix.presences[user.id]?.presence;
           return RoomMemberSummary(
             userId: user.id,
+            // ignore: deprecated_member_use
+            statusMessage: _matrix.presences[user.id]?.statusMsg,
             displayName: user.calcDisplayname(),
             nameColor: roles.colorFor(user.id),
             avatarBytes:
@@ -768,6 +881,8 @@ class MatrixBackend extends ChatBackend {
       return;
     }
     _applicationForeground = foreground;
+    _activities?.visibilityChanged();
+    if (foreground) _lastForegroundAlertAt.clear();
     // View focus can arrive after the lifecycle-resumed callback. Refresh on
     // this actual foreground transition too, rather than losing that wakeup.
     if (foreground) unawaited(_refreshTimelineAfterResume());
@@ -806,6 +921,7 @@ class MatrixBackend extends ChatBackend {
     // Dismissal is about what is visible, not whether history is scrolled to
     // the newest event. Read receipts retain their stricter at-present guard.
     if (_applicationForeground && _conversationVisible && roomId != null) {
+      _lastForegroundAlertAt.remove(roomId);
       InAppNotificationCenter.dismissRoom(roomId);
       unawaited(_notifications.clearRoom(roomId));
     }
@@ -1534,6 +1650,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    unawaited(_stopActivities());
     _browserAuthenticationCanceled = true;
     final authBrowser = _activeAuthBrowser;
     if (authBrowser != null) unawaited(authBrowser.close());

@@ -38,7 +38,7 @@ def prepare(output):
     index = Path('/srv/storage/www/deltie/cord/index.html')
     original = index.read_text()
     changed = replace_once(original, '      <div class="download-grid">',
-        '      <p><a href="https://chat.deltie.net">Open Deltiecord Web</a> '
+        '      <p><a href="https://chat.deltie.net">Open SeND Web</a> '
         '— install on iPhone/iPad, Android or desktop. '
         'iOS notifications require Home Screen installation and iOS 16.4+.</p>\n'
         '      <div class="download-grid">\n'

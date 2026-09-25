@@ -37,7 +37,7 @@ extension _MatrixRoomOperations on MatrixBackend {
     );
     events[MatrixBackend._spaceChannelsEventType] = powerLevel.clamp(0, 100);
     // Room ordering is carried by m.space.child state while categories use
-    // Deltiecord's namespaced layout state. Keep both at the same advertised
+    // SeND's namespaced layout state. Keep both at the same advertised
     // threshold so the configurable permission describes the whole action.
     events[EventTypes.SpaceChild] = powerLevel.clamp(0, 100);
     await _matrix.setRoomStateWithKey(spaceId, EventTypes.RoomPowerLevels, '', {
@@ -389,6 +389,7 @@ extension _MatrixRoomOperations on MatrixBackend {
   }
 
   Future<void> _selectRoom(String roomId) async {
+    _lastForegroundAlertAt.remove(roomId);
     InAppNotificationCenter.dismissRoom(roomId);
     unawaited(_notifications.clearRoom(roomId));
     if (_selectedRoomId == roomId && _timeline != null) return;

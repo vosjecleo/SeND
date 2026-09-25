@@ -1,9 +1,9 @@
-# Deltiecord Matrix extensions
+# SeND Matrix extensions
 
-Deltiecord uses normal Matrix rooms, Spaces, events, encryption, media, and
+SeND uses normal Matrix rooms, Spaces, events, encryption, media, and
 MatrixRTC. Namespaced fields add presentation and lifecycle metadata; standard
 membership/power levels remain authoritative. Other clients can ignore unknown
-fields, but will not implement Deltiecord's role-propagation or timeout-restoration
+fields, but will not implement SeND's role-propagation or timeout-restoration
 behaviour. Current baseline: 0.9.34+107.
 
 ## Room presentation
@@ -42,12 +42,12 @@ standard MatrixRTC state for participation.
 
 Category array order is display order. `rooms` maps child room IDs to category
 IDs; absent rooms are uncategorized. Actual room membership remains standard
-`m.space.child` state. Deltiecord writes the standard `order` property on
+`m.space.child` state. SeND writes the standard `order` property on
 `m.space.child` for room ordering, so clients that understand Matrix Space
 ordering can retain a useful order without understanding categories.
 
 The Space's standard `m.room.power_levels` event controls who may write this
-layout through an `events["net.deltiecord.space.channels"]` entry. Deltiecord
+layout through an `events["net.deltiecord.space.channels"]` entry. SeND
 initializes that entry to `100` (administrator) and exposes it in Space
 settings. This permission and the layout state sync to every client; clients
 that do not understand the namespaced layout can safely ignore it.
@@ -55,7 +55,7 @@ that do not understand the namespaced layout can safely ignore it.
 Collapsed categories are a per-account UI preference in
 `net.deltiecord.settings`, not public room state.
 
-## Synced Deltiecord settings
+## Synced SeND settings
 
 - Type: global user account data
 - Event type: `net.deltiecord.settings`
@@ -80,7 +80,7 @@ The object currently contains UI preferences such as:
 
 It also stores notification/privacy toggles, panel sizes, selected font names,
 read-receipt threshold, RTC processing choices, preferred device IDs, local
-participant volumes, and other Deltiecord presentation preferences. Unknown
+participant volumes, and other SeND presentation preferences. Unknown
 keys are preserved where possible. Other clients can ignore the entire event.
 It contains no passwords, access tokens, recovery keys, media keys, or drafts.
 
@@ -101,7 +101,7 @@ account-data object:
 ```
 
 `presence_mode` is `online`, `idle`, `doNotDisturb`, or `invisible`.
-Temporary mute timestamps are UTC instants; Deltiecord restores the normal
+Temporary mute timestamps are UTC instants; SeND restores the normal
 Matrix push rule after expiry. Do Not Disturb suppresses this client's local
 and push notifications. Other clients can ignore these hints.
 
@@ -154,7 +154,7 @@ see a normal Space.
 
 Nickname and avatar use Matrix's ordinary room-specific member profile, so
 other clients can display them. Pronouns and accent are optional namespaced
-keys on the same membership state and are safe to ignore. Deltiecord mirrors
+keys on the same membership state and are safe to ignore. SeND mirrors
 the chosen values to `net.deltiecord.space_profile_overrides` account data as
 an owner-only migration/cache fallback, but public presentation comes from
 room membership state.
@@ -164,8 +164,8 @@ room membership state.
 - Type: global user account data
 - Event type: `net.deltiecord.active_call_device`
 
-The value contains a Deltiecord device ID, Matrix room ID, and update timestamp.
-When a second Deltiecord device joins the call, the older device leaves. The
+The value contains a SeND device ID, Matrix room ID, and update timestamp.
+When a second SeND device joins the call, the older device leaves. The
 entry expires after ten minutes and contains no WebRTC credentials or media
 keys. MatrixRTC itself remains standard and other clients can ignore the hint.
 
@@ -186,7 +186,7 @@ keys. MatrixRTC itself remains standard and other clients can ignore the hint.
 }
 ```
 
-Matrix has no standard temporary-timeout primitive. Deltiecord enforces a
+Matrix has no standard temporary-timeout primitive. SeND enforces a
 timeout with the standard room power-level event and uses this state only to
 restore the previous level after expiry, including after a restart. Other
 clients can ignore the state; the power-level restriction remains visible and
@@ -204,7 +204,7 @@ membership and `m.room.power_levels` operations.
 
 ## Extensible profile fields
 
-Deltiecord checks the homeserver's `m.profile_fields` capability before writing
+SeND checks the homeserver's `m.profile_fields` capability before writing
 extended fields. Unsupported fields remain unavailable rather than being
 silently placed in account data.
 
@@ -294,7 +294,7 @@ Space or a child room:
 Visibility accepts the five cosmetic keys above. A room's explicit boolean wins
 over its parent Space, then personal settings supply the fallback. Missing flags
 inherit; protected security/moderation events remain visible. This is a shared
-Deltiecord display policy, not event deletion or enforcement on other clients.
+SeND display policy, not event deletion or enforcement on other clients.
 
 `default_channel_access` on a Space controls newly created channels: `invite`
 (the fallback), `restricted` (Space members may join), or `public`. Actual access

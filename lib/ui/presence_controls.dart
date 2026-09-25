@@ -15,9 +15,7 @@ Future<void> showPresenceControls(
         children: [
           const ListTile(
             title: Text('Set presence'),
-            subtitle: Text(
-              'Synced through Matrix presence and Deltiecord settings',
-            ),
+            subtitle: Text('Synced through Matrix presence and SeND settings'),
           ),
           for (final mode in PresenceMode.values)
             ListTile(

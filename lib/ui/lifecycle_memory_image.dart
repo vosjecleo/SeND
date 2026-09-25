@@ -4,6 +4,23 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+bool hasAnimatedImageHeader(Uint8List bytes) {
+  bool at(int offset, String value) =>
+      bytes.length >= offset + value.length &&
+      List.generate(
+        value.length,
+        (i) => bytes[offset + i] == value.codeUnitAt(i),
+      ).every((match) => match);
+  if (at(0, 'GIF87a') || at(0, 'GIF89a')) return true;
+  // WebP extended-header feature bit 1 indicates animation. Imported Telegram
+  // animations often arrive as WebP even when the message omits MIME metadata.
+  return bytes.length >= 21 &&
+      at(0, 'RIFF') &&
+      at(8, 'WEBP') &&
+      at(12, 'VP8X') &&
+      (bytes[20] & 2) != 0;
+}
+
 /// GIF providers also serve looping MP4/WebM renditions.
 bool shouldLoopLinkPreview(Uri pageUrl) {
   final host = pageUrl.host.toLowerCase();
@@ -47,13 +64,7 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
   int _generation = 0;
   bool _foreground = true;
   bool _failed = false;
-  bool get _animated =>
-      widget.animated ||
-      (widget.bytes.length >= 6 &&
-          widget.bytes[0] == 0x47 &&
-          widget.bytes[1] == 0x49 &&
-          widget.bytes[2] == 0x46 &&
-          widget.bytes[3] == 0x38);
+  bool get _animated => widget.animated || hasAnimatedImageHeader(widget.bytes);
 
   @override
   void initState() {

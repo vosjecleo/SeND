@@ -6,7 +6,7 @@ version="$(sed -n 's/^version: \([^+]*\).*/\1/p' "$repo_root/pubspec.yaml")"
 tools_dir="$repo_root/packaging/.tools"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-appdir="$work/Deltiecord.AppDir"
+appdir="$work/SeND.AppDir"
 plugin="$tools_dir/linuxdeploy-plugin-appimage-x86_64.AppImage"
 runtime="$tools_dir/appimage-runtime-x86_64"
 mkdir -p "$tools_dir" "$repo_root/dist"
@@ -39,10 +39,11 @@ ensure_tool() {
 ensure_tool "$plugin" "$plugin_url" "$plugin_sha256"
 ensure_tool "$runtime" "$runtime_url" "$runtime_sha256"
 "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
+printf 'appimage\n' >"$appdir/usr/lib/deltiecord/data/send-package"
 
 export ARCH=x86_64
 export VERSION="$version"
-export OUTPUT="$repo_root/dist/Deltiecord-${version}-x86_64.AppImage"
+export OUTPUT="$repo_root/dist/SeND-${version}-x86_64.AppImage"
 export LDAI_OUTPUT="$OUTPUT"
 export LDAI_RUNTIME_FILE="$runtime"
 export PATH="$tools_dir:$PATH"

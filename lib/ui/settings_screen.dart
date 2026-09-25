@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'update_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,12 +8,15 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
 import '../services/app_sounds.dart';
+import '../services/browser_lifecycle.dart' as browser;
 import '../services/microphone_test.dart';
 import '../services/link_preview_policy.dart';
 import '../services/secret_redaction.dart';
 import '../services/unified_push.dart';
 import '../services/update_checker.dart';
 import 'accent_color_picker.dart';
+import 'activity_settings.dart';
+import '../services/video_optimizer.dart';
 import 'theme_chooser.dart';
 import 'json_theme_settings.dart';
 import 'security_center.dart';
@@ -23,6 +27,7 @@ import 'deltiecord_theme.dart';
 
 enum _SettingsPage {
   account,
+  activity,
   devices,
   encryption,
   audioVideo,
@@ -300,6 +305,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               for (final group in const <String, List<_SettingsPage>>{
                 'Account': [
                   _SettingsPage.account,
+                  _SettingsPage.activity,
                   _SettingsPage.devices,
                   _SettingsPage.encryption,
                 ],
@@ -371,6 +377,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
 
   Widget _pageBody() => switch (_page) {
     _SettingsPage.account => _account(),
+    _SettingsPage.activity => _section('Activity', [
+      ActivitySettingsPanel(backend: backend),
+    ]),
     _SettingsPage.devices => _devices(),
     _SettingsPage.encryption => _section('Security', [
       OutlinedButton.icon(
@@ -607,7 +616,28 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           icon: const Icon(Icons.play_arrow),
           label: const Text('Test call sound'),
         ),
+        Text(
+          'Call sound volume: ${(backend.preferences.callVolume * 100).round()}%',
+        ),
+        Slider(
+          value: backend.preferences.callVolume,
+          onChanged: (value) => backend.updatePreferences(
+            backend.preferences.copyWith(callVolume: value),
+          ),
+        ),
       ],
+      if (videoOptimizationSupported)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Optimize videos before sending'),
+          subtitle: const Text(
+            'Desktop preview: local FFmpeg, H.264/AAC, up to 1080p / 30 fps and 24 MiB. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.',
+          ),
+          value: backend.preferences.optimizeVideos,
+          onChanged: (value) => backend.updatePreferences(
+            backend.preferences.copyWith(optimizeVideos: value),
+          ),
+        ),
       if (defaultTargetPlatform == TargetPlatform.linux) ...[
         const SizedBox(height: 12),
         const Text(
@@ -618,7 +648,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     _SettingsPage.notifications => _section('Notifications', [
       if (kIsWeb) ...[
         const Text(
-          'On iPhone/iPad, add Deltiecord to your Home Screen from Safari, '
+          'On iPhone/iPad, add SeND to your Home Screen from Safari, '
           'open that installed app, then enable notifications here (iOS 16.4 or later). '
           'Web alerts contain no decrypted message previews.',
         ),
@@ -645,6 +675,52 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   ),
                 );
               }
+            }
+          },
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.fact_check_outlined),
+          label: const Text('Check browser notification setup'),
+          onPressed: () async {
+            String report;
+            try {
+              report = await browser.browserPushDiagnostics();
+            } catch (_) {
+              report =
+                  'Could not read browser setup. Reload the app and try again.';
+            }
+            if (!mounted || !context.mounted) return;
+            await showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Browser notification setup'),
+                content: SingleChildScrollView(child: SelectableText(report)),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.send_outlined),
+          label: const Text('Send test push notification'),
+          onPressed: () async {
+            var message =
+                'Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.';
+            try {
+              await browser.testBrowserPush();
+            } catch (_) {
+              message =
+                  'Test push failed. Enable browser notifications again, then retry. Tests are limited to two per minute.';
+            }
+            if (mounted && context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
             }
           },
         ),
@@ -717,18 +793,31 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Notification sound'),
           subtitle: const Text(
-            'Allow the desktop notification service to play sound.',
+            'Play SeND’s notification sound on this desktop.',
           ),
           value: backend.preferences.notificationSound,
           onChanged: (value) => backend.updatePreferences(
             backend.preferences.copyWith(notificationSound: value),
           ),
         ),
+      if (!kIsWeb &&
+          defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.iOS) ...[
+        Text(
+          'Notification volume: ${(backend.preferences.notificationVolume * 100).round()}%',
+        ),
+        Slider(
+          value: backend.preferences.notificationVolume,
+          onChanged: (value) => backend.updatePreferences(
+            backend.preferences.copyWith(notificationVolume: value),
+          ),
+        ),
+      ],
       if (UnifiedPushPlatform.instance.supported) ...[
         const Divider(height: 28),
         Text('UnifiedPush', style: Theme.of(context).textTheme.titleMedium),
         const Text(
-          'Uses a distributor app such as ntfy to wake Deltiecord for Matrix '
+          'Uses a distributor app such as ntfy to wake SeND for Matrix '
           'activity. The distributor endpoint and Matrix gateway are kept on '
           'the same ntfy server, including custom servers.',
         ),
@@ -800,7 +889,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     _SettingsPage.storage => _section('Storage', [
       const Text(
         'Encrypted session data, room keys, thumbnails, and timeline caches are '
-        'stored in Deltiecord’s private per-user application-data directory.',
+        'stored in SeND’s private per-user application-data directory.',
       ),
       const SizedBox(height: 12),
       _value('Application data', _formatBytes(backend.storageUsageBytes)),
@@ -828,9 +917,10 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
     ]),
     _SettingsPage.shortcuts => _shortcuts(),
-    _SettingsPage.about => _section('About Deltiecord', [
+    _SettingsPage.about => _section('About SeND', [
       Text(
-        'Deltiecord v$deltiecordVersion+$deltiecordBuildNumber\n'
+        'SeND v$deltiecordVersion+$deltiecordBuildNumber\n'
+        'SeND is a recursive acronym: SeND is Not Discord.\n'
         'A compact, old-school ${defaultTargetPlatform == TargetPlatform.android ? 'mobile' : 'desktop'} Matrix client built with Flutter.',
       ),
       const SizedBox(height: 12),
@@ -841,7 +931,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       OutlinedButton.icon(
         onPressed: () {
           final report = [
-            'Deltiecord v$deltiecordVersion ($deltiecordBuildNumber)',
+            'SeND v$deltiecordVersion ($deltiecordBuildNumber)',
             'session=${backend.status.name}',
             'homeserver=${backend.homeserver}',
             'device=${backend.deviceId}',
@@ -1560,7 +1650,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       const SizedBox(height: 8),
       const Text(
         'All primary workflows remain keyboard reachable and use visible focus '
-        'indicators. Deltiecord does not communicate status by colour alone.',
+        'indicators. SeND does not communicate status by colour alone.',
       ),
     ]);
   }
@@ -1638,23 +1728,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         currentBuild: int.parse(deltiecordBuildNumber),
       );
       if (!mounted) return;
-      final message = result.updateAvailable
-          ? 'Deltiecord v${result.version} build ${result.build} is available.'
-          : 'Deltiecord is up to date.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: result.updateAvailable
-              ? SnackBarAction(
-                  label: 'Downloads',
-                  onPressed: () => launchUrl(
-                    Uri.parse(deltiecordReleasesPage),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                )
-              : null,
-        ),
-      );
+      if (result.updateAvailable) {
+        await showReleaseUpdate(context, result);
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('SeND is up to date.')));
     } catch (exception) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -1959,6 +2039,7 @@ class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
 
 IconData _iconFor(_SettingsPage page) => switch (page) {
   _SettingsPage.account => Icons.person_outline,
+  _SettingsPage.activity => Icons.sports_esports_outlined,
   _SettingsPage.devices => Icons.devices_outlined,
   _SettingsPage.encryption => Icons.shield_outlined,
   _SettingsPage.audioVideo => Icons.headset_mic_outlined,
@@ -1973,6 +2054,7 @@ IconData _iconFor(_SettingsPage page) => switch (page) {
 
 String _labelFor(_SettingsPage page) => switch (page) {
   _SettingsPage.account => 'Account',
+  _SettingsPage.activity => 'Activity',
   _SettingsPage.devices => 'Devices',
   _SettingsPage.encryption => 'Security',
   _SettingsPage.audioVideo => 'Audio & video',

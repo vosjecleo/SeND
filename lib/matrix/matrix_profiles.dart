@@ -301,6 +301,18 @@ extension _MatrixProfiles on MatrixBackend {
       status?.trim().isEmpty == true ? null : status?.trim();
 
   UserPresence _matrixPresenceFor(String userId, UserPresence fallback) {
+    if (userId == _client?.userID &&
+        supportsActivityDetection &&
+        _ownProfileHydrated) {
+      if (!_preferences.sharePresence ||
+          _presenceMode == PresenceMode.invisible) {
+        return UserPresence.offline;
+      }
+      return _presenceMode == PresenceMode.idle ||
+              (_presenceMode == PresenceMode.online && _desktopIdle)
+          ? UserPresence.away
+          : UserPresence.online;
+    }
     // ignore: deprecated_member_use
     return switch (_matrix.presences[userId]?.presence) {
       PresenceType.online => UserPresence.online,
@@ -348,6 +360,7 @@ extension _MatrixProfiles on MatrixBackend {
   );
 
   void _startProfileRefreshTimer() {
+    _startActivities();
     _profileRefreshTimer?.cancel();
     _profileRefreshTimer = Timer.periodic(
       ProfileRefreshPolicy.statusInterval,

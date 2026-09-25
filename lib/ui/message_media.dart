@@ -398,7 +398,7 @@ class _VideoPoster extends StatelessWidget {
 
 /// A bounded video surface with controls that always remain inside the media.
 /// media_kit's desktop controls assume a wider viewport and can overflow on
-/// portrait clips, so Deltiecord owns this compact overlay instead.
+/// portrait clips, so SeND owns this compact overlay instead.
 class _DeltiecordVideoSurface extends StatelessWidget {
   const _DeltiecordVideoSurface({
     required this.player,

@@ -22,6 +22,8 @@ These retain observations, plans and test results from their named builds.
 Historical wording is not a statement that an old release is current, nor that
 every proposed fix was implemented or verified on hardware.
 
+- [108 SeND rename, upgrade downloads and website migration](build-108-send.md)
+- [Activity/media preview and remaining platform limitations](activity-local-preview.md)
 - [107 hardening changes and validation](build-107-plan.md)
 - [106 scope, implementation boundaries and validation](build-106-plan.md)
 - [104 plan](build-104-patch-plan.md), [103 plan](build-103-patch-plan.md),

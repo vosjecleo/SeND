@@ -65,11 +65,11 @@
       return bytes;
     } finally { clearTimeout(timer); abort.abort(); }
   };
-  const heartbeat = () => {
+  const heartbeat = (hidden = false) => {
     if (!pushkey) return;
     fetch('/api/push/visibility', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({pushkey, visible: document.visibilityState === 'visible'}),
+      body: JSON.stringify({pushkey, visible: !hidden && document.visibilityState === 'visible'}),
       keepalive: true, cache: 'no-store',
     }).catch(() => {});
   };
@@ -79,7 +79,9 @@
     if (key) heartbeatTimer = setInterval(heartbeat, 30000);
     heartbeat();
   };
-  document.addEventListener('visibilitychange', heartbeat);
+  document.addEventListener('visibilitychange', () => heartbeat());
+  window.addEventListener('pagehide', () => heartbeat(true));
+  window.addEventListener('pageshow', () => heartbeat());
   window.deltieBrowserStart = async () => {
     if (!window.isSecureContext || !navigator.locks) return false;
     const acquired = new Promise(resolve => {
@@ -101,7 +103,7 @@
   window.deltieSubscribePush = async () => {
     // Call this directly from a button; Safari requires user activation.
     if (!('Notification' in window) || !('PushManager' in window)) {
-      throw new Error('Install Deltiecord to your Home Screen to enable notifications on supported iOS versions.');
+      throw new Error('Install SeND to your Home Screen to enable notifications on supported iOS versions.');
     }
     if (await Notification.requestPermission() !== 'granted') {
       throw new Error('Notification permission was not granted.');
@@ -112,11 +114,41 @@
     const raw = atob(config.public_key.replace(/-/g, '+').replace(/_/g, '/'));
     const key = Uint8Array.from(raw, c => c.charCodeAt(0));
     const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription() ||
-      await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: key});
+    let subscription = await registration.pushManager.getSubscription();
+    const previousKey = subscription?.options?.applicationServerKey;
+    if (subscription && (!previousKey || previousKey.byteLength !== key.length || !Array.from(new Uint8Array(previousKey)).every((byte, i) => byte === key[i]))) {
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+    subscription ||= await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: key});
     return JSON.stringify(subscription.toJSON());
   };
+  window.deltiePushDiagnostics = async () => {
+    const registration = await navigator.serviceWorker?.getRegistration('/');
+    const subscription = await registration?.pushManager?.getSubscription();
+    return JSON.stringify({
+      homeScreen: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+      permission: 'Notification' in window ? Notification.permission : 'unsupported',
+      worker: !!registration?.active,
+      subscribed: !!subscription,
+      registered: !!pushkey,
+    }, null, 2);
+  };
+  window.deltieTestPush = async () => {
+    if (!pushkey) throw new Error('Enable browser notifications first.');
+    const response = await fetch('/api/push/test', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pushkey}), cache: 'no-store',
+    });
+    if (!response.ok) throw new Error('Push test failed (' + response.status + '). Re-enable notifications; the server may need updating.');
+  };
   window.deltieClearNotifications = async roomId => {
+    if (pushkey && roomId) {
+      fetch('/api/push/read', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pushkey, room_id: roomId}), keepalive: true,
+      }).catch(() => {});
+    }
     const registration = await navigator.serviceWorker.ready;
     if (!registration.getNotifications) return;
     for (const notification of await registration.getNotifications()) {

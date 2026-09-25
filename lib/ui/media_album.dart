@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import '../backend/chat_backend.dart';
+import '../services/spoiler_reveals.dart';
+import 'deltiecord_theme.dart';
 
 import '../models/chat_models.dart';
 
@@ -112,7 +116,9 @@ class MediaAlbumGrid extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         height: height,
-        child: count == 2
+        child: count == 1
+            ? tile(0)
+            : count == 2
             ? Row(
                 children: [
                   Expanded(child: tile(0)),
@@ -135,6 +141,106 @@ class MediaAlbumGrid extends StatelessWidget {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+/// Album cells own their bounds. Do not fit a letterboxed standalone media
+/// widget into another box: that scales its blank space along with the image.
+class MediaAlbumTile extends StatefulWidget {
+  const MediaAlbumTile({
+    required this.backend,
+    required this.message,
+    required this.onOpen,
+    super.key,
+  });
+  final ChatBackend backend;
+  final ChatMessage message;
+  final VoidCallback onOpen;
+  @override
+  State<MediaAlbumTile> createState() => _MediaAlbumTileState();
+}
+
+class _MediaAlbumTileState extends State<MediaAlbumTile> {
+  Future<Uint8List>? _bytes;
+  Future<Uint8List> _load() async {
+    try {
+      return await widget.backend.downloadAttachment(
+        widget.message.id,
+        thumbnail: true,
+      );
+    } catch (_) {
+      if (widget.message.attachment!.kind == AttachmentKind.video) rethrow;
+      return widget.backend.downloadAttachment(widget.message.id);
+    }
+  }
+
+  @override
+  void didUpdateWidget(MediaAlbumTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id ||
+        oldWidget.backend != widget.backend) {
+      _bytes = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = widget.message.attachment!;
+    final reveals = SpoilerReveals.forBackend(widget.backend);
+    if (attachment.spoiler && !reveals.contains(widget.message.id)) {
+      return Material(
+        color: context.deltiecord.input.withValues(alpha: 1),
+        child: InkWell(
+          onTap: () => setState(() => reveals.reveal(widget.message.id)),
+          child: const Center(child: Icon(Icons.visibility_off_outlined)),
+        ),
+      );
+    }
+    _bytes ??= _load();
+    return InkWell(
+      onTap: widget.onOpen,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          FutureBuilder<Uint8List>(
+            future: _bytes,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                return Image.memory(
+                  snapshot.data!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const Center(child: Icon(Icons.broken_image_outlined)),
+                );
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: IconButton(
+                    tooltip: 'Retry preview',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () => setState(() => _bytes = _load()),
+                  ),
+                );
+              }
+              return const Center(
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              );
+            },
+          ),
+          if (attachment.kind == AttachmentKind.video)
+            const Center(
+              child: Icon(
+                Icons.play_circle_fill,
+                size: 40,
+                color: Colors.white,
+              ),
+            ),
+        ],
       ),
     );
   }

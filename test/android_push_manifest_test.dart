@@ -21,7 +21,7 @@ void main() {
     expect(activity, contains('.take(10)'));
   });
 
-  test('UnifiedPush receiver can wake Deltiecord while Flutter is stopped', () {
+  test('UnifiedPush receiver can wake SeND while Flutter is stopped', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();

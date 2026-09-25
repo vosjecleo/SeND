@@ -2,7 +2,7 @@
 
 ## Milestone: 0.9.34+106
 
-On 2026-09-24, Deltiecord reached the end of its planned feature-expansion phase.
+On 2026-09-24, SeND reached the end of its planned feature-expansion phase.
 The intended product is now implemented in the theoretical, feature-scope sense.
 The next phase is hardening and bug fixing, not a new feature roadmap.
 

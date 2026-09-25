@@ -849,6 +849,8 @@ class _ConversationState extends State<_Conversation> {
                         ),
                       ],
                     ),
+                  if (room.isDirect)
+                    ActivityBlock(userId: room.directUserId, compact: true),
                   EncryptionAttentionBanner(backend: backend, room: room),
                   Expanded(
                     child: Stack(

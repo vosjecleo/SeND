@@ -6,7 +6,7 @@ import 'matrix_state_types.dart';
 /// The SDK owns IndexedDB session and crypto persistence on browsers, just as
 /// it owns SQLite persistence on native. Never create a second token store.
 Future<Client> createMatrixClient() async => Client(
-  'Deltiecord',
+  'Deltiecord', // Persistent SDK client ID; preserve existing browser sessions.
   database: await MatrixSdkDatabase.init('deltiecord'),
   importantStateEvents: {
     deltiecordRoomPresentationEventType,

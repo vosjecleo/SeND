@@ -55,7 +55,7 @@ final class UnifiedPushDistributor {
 /// Platform boundary for the official Android UnifiedPush connector.
 ///
 /// External distributors such as ntfy return a private capability endpoint
-/// through the Android connector protocol. Deltiecord never logs or exposes
+/// through the Android connector protocol. SeND never logs or exposes
 /// that bearer capability.
 final class UnifiedPushPlatform {
   UnifiedPushPlatform._() {
@@ -147,7 +147,7 @@ final class UnifiedPushPlatform {
 
   /// Selects a known external distributor on a fresh installation.
   ///
-  /// An existing choice is never replaced. Deltiecord deliberately does not
+  /// An existing choice is never replaced. SeND deliberately does not
   /// auto-select its own package: embedded WebPush requires a configured VAPID
   /// gateway and cannot share the ntfy Matrix gateway contract.
   Future<bool> ensureDefaultDistributor(String instance) async {
@@ -275,7 +275,7 @@ String? normalizeUnifiedPushEndpoint(String value) {
   }
   var uri = Uri.tryParse(normalized);
   // Older ntfy Android configurations may report this custom origin as HTTP.
-  // Upgrade only Deltiecord's fixed, TLS-backed push host; arbitrary origins
+  // Upgrade only SeND's fixed, TLS-backed push host; arbitrary origins
   // are never rewritten or accepted.
   if (uri != null &&
       uri.scheme.toLowerCase() == 'http' &&
@@ -312,7 +312,7 @@ String? normalizeUnifiedPushEndpoint(String value) {
 /// Returns the Matrix push gateway belonging to a UnifiedPush endpoint.
 ///
 /// An ntfy capability is only meaningful to the ntfy server that issued it.
-/// Sending an `ntfy.sh` capability to Deltiecord's private ntfy gateway makes
+/// Sending an `ntfy.sh` capability to SeND's private ntfy gateway makes
 /// the gateway reject the device and causes the homeserver to delete its
 /// pusher. Keep the opaque capability and its Matrix gateway on one origin.
 Uri? matrixPushGatewayForUnifiedPushEndpoint(String value) {

@@ -398,6 +398,12 @@ class _MessageRowState extends State<_MessageRow> {
                                     ),
                                   ],
                                 ),
+                              if (widget.startsGroup ||
+                                  HeaderMessageMetadata.has(
+                                    context,
+                                    message.id,
+                                  ))
+                                const SizedBox(height: 2),
                               if (widget.albumMessages == null &&
                                   message.body.isNotEmpty &&
                                   message.poll == null)
@@ -466,17 +472,18 @@ class _MessageRowState extends State<_MessageRow> {
                                         messages: album,
                                         height: 300,
                                         itemBuilder: (context, albumMessage) =>
-                                            FittedBox(
-                                              fit: BoxFit.cover,
-                                              clipBehavior: Clip.hardEdge,
-                                              child: SizedBox.square(
-                                                dimension: 300,
-                                                child: _AttachmentView(
+                                            MediaAlbumTile(
+                                              key: ValueKey(albumMessage.id),
+                                              backend: widget.backend,
+                                              message: albumMessage,
+                                              onOpen: () => showDialog<void>(
+                                                context: context,
+                                                builder: (_) => _MediaLightbox(
                                                   backend: widget.backend,
-                                                  messageId: albumMessage.id,
-                                                  attachment:
-                                                      albumMessage.attachment!,
-                                                  gallery: widget.mediaMessages,
+                                                  messages:
+                                                      widget.mediaMessages,
+                                                  initialMessageId:
+                                                      albumMessage.id,
                                                 ),
                                               ),
                                             ),

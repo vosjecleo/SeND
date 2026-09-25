@@ -9,7 +9,7 @@ import java.io.IOException
 
 /** Writes explicit user downloads without requesting broad filesystem access. */
 internal object AndroidMediaSaver {
-    private const val DIRECTORY = "Deltiecord"
+    private const val DIRECTORY = "SeND"
     private const val MAX_FILENAME_LENGTH = 180
 
     fun save(

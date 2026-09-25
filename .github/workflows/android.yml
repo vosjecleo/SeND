@@ -98,6 +98,8 @@ jobs:
           STORE_PASSWORD: ${{ secrets.DELTIECORD_ANDROID_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DELTIECORD_ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.DELTIECORD_ANDROID_KEY_PASSWORD }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
           set -euo pipefail
           keystore="$RUNNER_TEMP/deltiecord-release.jks"
@@ -128,8 +130,8 @@ jobs:
           export DELTIECORD_ANDROID_STORE_PASSWORD="$effective_store_password"
           export DELTIECORD_ANDROID_KEY_ALIAS="$KEY_ALIAS"
           export DELTIECORD_ANDROID_KEY_PASSWORD="$effective_key_password"
-          flutter build apk --release --split-per-abi
-          flutter build appbundle --release
+          python3 packaging/flutter-with-credentials.py build apk --release --split-per-abi
+          python3 packaging/flutter-with-credentials.py build appbundle --release
 
       - name: Package Android releases
         shell: bash
@@ -137,10 +139,10 @@ jobs:
           set -euo pipefail
           release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/deltiecord-${release_id}-android-arm64-v8a.apk"
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/deltiecord-${release_id}-android-armeabi-v7a.apk"
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "dist/deltiecord-${release_id}-android-x86_64.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "dist/deltiecord-${release_id}-android.aab"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/SeND-${release_id}-android-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/SeND-${release_id}-android-armeabi-v7a.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "dist/SeND-${release_id}-android-x86_64.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/SeND-${release_id}-android.aab"
           (cd dist && sha256sum -- * >SHA256SUMS-android)
 
       - name: Upload Android artifacts

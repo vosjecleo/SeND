@@ -13,6 +13,7 @@ install -d "$appdir/usr/lib/deltiecord" "$appdir/usr/bin" \
   "$appdir/usr/share/doc/deltiecord"
 cp -a "$bundle/." "$appdir/usr/lib/deltiecord/"
 ln -s ../lib/deltiecord/deltiecord "$appdir/usr/bin/deltiecord"
+ln -s deltiecord "$appdir/usr/bin/SeND"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.desktop" \
   "$appdir/usr/share/applications/net.deltie.deltiecord.desktop"
 install -m 0644 "$repo_root/packaging/linux/net.deltie.deltiecord.metainfo.xml" \

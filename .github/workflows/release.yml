@@ -111,17 +111,17 @@ jobs:
           expected_count=2
           if [[ '${{ steps.release.outputs.web_only }}' != true ]]; then
             expected_count=11
-            copy_unique "deltiecord-${release_id}-windows-x64-portable.zip"
-            copy_unique "deltiecord-${release_id}-windows-x64-setup.exe"
-            copy_unique "deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
-            copy_unique "deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
-            copy_unique "deltiecord-${release_id}-linux-debian-amd64.deb"
-            copy_unique "deltiecord-${release_id}-android-arm64-v8a.apk"
-            copy_unique "deltiecord-${release_id}-android-armeabi-v7a.apk"
-            copy_unique "deltiecord-${release_id}-android-x86_64.apk"
-            copy_unique "deltiecord-${release_id}-android.aab"
+            copy_unique "SeND-${release_id}-windows-x64-portable.zip"
+            copy_unique "SeND-${release_id}-windows-x64-setup.exe"
+            copy_unique "SeND-${release_id}-linux-appimage-x86_64.AppImage"
+            copy_unique "SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+            copy_unique "SeND-${release_id}-linux-debian-amd64.deb"
+            copy_unique "SeND-${release_id}-android-arm64-v8a.apk"
+            copy_unique "SeND-${release_id}-android-armeabi-v7a.apk"
+            copy_unique "SeND-${release_id}-android-x86_64.apk"
+            copy_unique "SeND-${release_id}-android.aab"
           fi
-          copy_unique "deltiecord-${release_id}-web.tar.gz"
+          copy_unique "SeND-${release_id}-web.tar.gz"
 
           (cd release-assets && sha256sum -- * >SHA256SUMS)
           test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq "$expected_count"
@@ -137,12 +137,12 @@ jobs:
             scope='Web/PWA-only (native packages remain on their previous release)'
           fi
           cat >release-notes.md <<EOF
-          Deltiecord ${version} build ${build} is the latest ${scope} release for Matrix.
+          SeND ${version} build ${build} is the latest ${scope} release for Matrix.
 
           Try the web app at https://chat.deltie.net — including iPhone/iPad Home Screen installation.
 
           $(awk -v version="$version" -v build="$build" '
-            $0 ~ "^## Deltiecord " version " build " build { active=1; next }
+            $0 ~ "^## SeND " version " build " build { active=1; next }
             active && /^## / { exit }
             active { print }
           ' CHANGELOG.md)
@@ -164,7 +164,7 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Deltiecord ${version} build ${build}" \
+            --title "SeND ${version} build ${build}" \
             --notes-file release-notes.md \
             --latest \
             --verify-tag

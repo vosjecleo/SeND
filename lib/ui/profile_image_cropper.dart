@@ -153,7 +153,7 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
       if (mounted) {
         setState(() {
           _processing = false;
-          _error = 'Deltiecord could not crop this image.';
+          _error = 'SeND could not crop this image.';
         });
       }
     }

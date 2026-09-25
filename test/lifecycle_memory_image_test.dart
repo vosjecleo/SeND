@@ -6,6 +6,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 void main() {
+  test('WebP animation is detected without MIME metadata', () {
+    final header = Uint8List(30);
+    header.setRange(0, 4, 'RIFF'.codeUnits);
+    header.setRange(8, 12, 'WEBP'.codeUnits);
+    header.setRange(12, 16, 'VP8X'.codeUnits);
+    header[20] = 2;
+    expect(hasAnimatedImageHeader(header), isTrue);
+    header[20] = 0;
+    expect(hasAnimatedImageHeader(header), isFalse);
+    expect(hasAnimatedImageHeader(Uint8List(3)), isFalse);
+  });
   Uint8List animatedFixture() {
     final first = img.Image(width: 4, height: 4);
     img.fill(first, color: img.ColorRgb8(255, 0, 0));

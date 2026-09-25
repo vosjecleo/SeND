@@ -57,7 +57,7 @@ List<StickerDraftItem> applyCustomEmojiAliases(
   ];
 }
 
-/// Converts an oversized static emoji into a centred 128×128 PNG.
+/// Prepares centred media without stretching or flattening animated sources.
 ///
 /// The longest edge is reduced to 128 without changing the aspect ratio; the
 /// other edge is centred on transparent pixels. Assets already within the
@@ -67,7 +67,15 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
   String mimeType, {
   required CustomEmojiResizeFilter filter,
   bool trimTransparentPadding = false,
+  int targetDimension = StickerPackDraft.maximumEmojiDimension,
+  int maximumBytes = StickerPackDraft.maximumEmojiBytes,
+  bool forceResize = false,
 }) {
+  if (targetDimension < 16 ||
+      targetDimension > 512 ||
+      maximumBytes > 5 * 1024 * 1024) {
+    throw StateError('Invalid image preparation limits.');
+  }
   if (!const {
     'image/png',
     'image/jpeg',
@@ -90,10 +98,10 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
     throw StateError('Custom emoji has unsafe or unsupported dimensions.');
   }
   final withinLimits =
-      header.width <= StickerPackDraft.maximumEmojiDimension &&
-      header.height <= StickerPackDraft.maximumEmojiDimension &&
-      bytes.length <= StickerPackDraft.maximumEmojiBytes;
-  if (withinLimits && !trimTransparentPadding) {
+      header.width <= targetDimension &&
+      header.height <= targetDimension &&
+      bytes.length <= maximumBytes;
+  if (withinLimits && !trimTransparentPadding && !forceResize) {
     return PreparedCustomEmoji(
       bytes: bytes,
       mimeType: mimeType,
@@ -103,14 +111,107 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
     );
   }
 
+  if (header.numFrames > 240 ||
+      header.width * header.height * header.numFrames > 24 * 1024 * 1024) {
+    throw StateError(
+      'This animation is too large to edit safely. Keep its original media or use a smaller source.',
+    );
+  }
   final decoded = image.decodeImage(bytes);
   if (decoded == null) throw StateError('Could not decode custom emoji.');
+  if (decoded.numFrames > 1) {
+    var left = 0,
+        top = 0,
+        right = decoded.width - 1,
+        bottom = decoded.height - 1;
+    if (trimTransparentPadding) {
+      left = decoded.width;
+      top = decoded.height;
+      right = -1;
+      bottom = -1;
+      for (final frame in decoded.frames) {
+        final bounds = _visibleAlphaBounds(frame);
+        if (bounds == null) continue;
+        left = min(left, bounds.left);
+        top = min(top, bounds.top);
+        right = max(right, bounds.right);
+        bottom = max(bottom, bounds.bottom);
+      }
+      if (right < left) {
+        throw StateError('The animation contains no visible pixels.');
+      }
+    }
+    final cropped =
+        left != 0 ||
+        top != 0 ||
+        right != decoded.width - 1 ||
+        bottom != decoded.height - 1;
+    if (withinLimits && !cropped && !forceResize) {
+      return PreparedCustomEmoji(
+        bytes: bytes,
+        mimeType: mimeType,
+        width: decoded.width,
+        height: decoded.height,
+        resized: false,
+      );
+    }
+    final w = right - left + 1, h = bottom - top + 1;
+    final scale = targetDimension / max(w, h);
+    image.Image? animation;
+    for (final frame in decoded.frames) {
+      // Expand indexed GIF frames first; resizing a palette image otherwise
+      // silently uses nearest-neighbour, ignoring the user's filter choice.
+      final single = frame.convert(numChannels: 4, noAnimation: true);
+      final croppedFrame = image.copyCrop(
+        single,
+        x: left,
+        y: top,
+        width: w,
+        height: h,
+      );
+      final resized = image.copyResize(
+        croppedFrame,
+        width: max(1, (w * scale).round()),
+        height: max(1, (h * scale).round()),
+        interpolation: filter == CustomEmojiResizeFilter.bicubic
+            ? image.Interpolation.cubic
+            : image.Interpolation.linear,
+      );
+      final canvas = image.Image(
+        width: targetDimension,
+        height: targetDimension,
+        numChannels: 4,
+      )..frameDuration = max(10, frame.frameDuration);
+      image.compositeImage(
+        canvas,
+        resized,
+        dstX: (targetDimension - resized.width) ~/ 2,
+        dstY: (targetDimension - resized.height) ~/ 2,
+      );
+      final indexed = _transparentGifFrame(canvas);
+      if (animation == null) {
+        animation = indexed..loopCount = decoded.loopCount;
+      } else {
+        animation.addFrame(indexed);
+      }
+    }
+    final encoded = image.encodeGif(animation!);
+    if (encoded.length > maximumBytes) {
+      throw StateError(
+        'The prepared animation exceeds the size limit. Try a smaller output size; it was not flattened.',
+      );
+    }
+    return PreparedCustomEmoji(
+      bytes: encoded,
+      mimeType: 'image/gif',
+      width: targetDimension,
+      height: targetDimension,
+      resized: true,
+    );
+  }
   var oriented = image.bakeOrientation(decoded);
   var trimmed = false;
-  // Re-encoding animated WebP would silently discard its animation because
-  // package:image currently has only a static WebP encoder. Optional trimming
-  // therefore applies to static assets; valid animations retain their exact
-  // source bytes and canvas.
+  // Animations were handled above, including a shared crop across frames.
   if (trimTransparentPadding && header.numFrames == 1) {
     final bounds = _visibleAlphaBounds(oriented);
     if (bounds == null) {
@@ -130,7 +231,7 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
       trimmed = true;
     }
   }
-  if (withinLimits && !trimmed) {
+  if (withinLimits && !trimmed && !forceResize) {
     return PreparedCustomEmoji(
       bytes: bytes,
       mimeType: mimeType,
@@ -139,7 +240,7 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
       resized: false,
     );
   }
-  const target = StickerPackDraft.maximumEmojiDimension;
+  final target = targetDimension;
   final scale = target / max(oriented.width, oriented.height);
   final resizedWidth = max(1, (oriented.width * scale).round());
   final resizedHeight = max(1, (oriented.height * scale).round());
@@ -160,8 +261,8 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
     dstY: (target - resizedHeight) ~/ 2,
   );
   final encoded = Uint8List.fromList(image.encodePng(canvas, level: 6));
-  if (encoded.length > StickerPackDraft.maximumEmojiBytes) {
-    throw StateError('Resized emoji still exceeds 256 KiB.');
+  if (encoded.length > maximumBytes) {
+    throw StateError('Resized image still exceeds the size limit.');
   }
   return PreparedCustomEmoji(
     bytes: encoded,
@@ -170,6 +271,39 @@ PreparedCustomEmoji prepareCustomEmojiAsset(
     height: target,
     resized: true,
   );
+}
+
+// The GIF encoder's automatic RGB quantizer drops alpha. Reserve one explicit
+// transparent palette entry before encoding instead of creating black padding.
+image.Image _transparentGifFrame(image.Image source) {
+  final quantized = image.quantize(source, numberOfColors: 255);
+  final colors = quantized.palette!;
+  final palette = image.PaletteUint8(256, 4);
+  for (var i = 0; i < colors.numColors && i < 255; i++) {
+    palette.setRgba(
+      i,
+      colors.getRed(i),
+      colors.getGreen(i),
+      colors.getBlue(i),
+      255,
+    );
+  }
+  palette.setRgba(255, 0, 0, 0, 0);
+  final result = image.Image(
+    width: source.width,
+    height: source.height,
+    numChannels: 1,
+    withPalette: true,
+    palette: palette,
+  )..frameDuration = source.frameDuration;
+  for (final pixel in source) {
+    result.setPixelIndex(
+      pixel.x,
+      pixel.y,
+      pixel.a == 0 ? 255 : quantized.getPixel(pixel.x, pixel.y).index,
+    );
+  }
+  return result;
 }
 
 ({int left, int top, int right, int bottom})? _visibleAlphaBounds(

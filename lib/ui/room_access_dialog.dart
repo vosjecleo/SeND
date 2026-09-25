@@ -284,7 +284,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Text(
-                  'Applies to all Deltiecord members; channel settings override Space defaults. Other clients may still show these events. Messages, security and moderation events cannot be hidden here.',
+                  'Applies to all SeND members; channel settings override Space defaults. Other clients may still show these events. Messages, security and moderation events cannot be hidden here.',
                 ),
                 for (final event in CosmeticRoomEvent.values)
                   _choice(

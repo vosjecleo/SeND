@@ -25,8 +25,8 @@ Future<void> main() async {
         home: Scaffold(
           body: Center(
             child: Text(
-              'Deltiecord is already open in another tab, or browser storage is unavailable.\n'
-              'Close other Deltiecord tabs and reopen this page over HTTPS.',
+              'SeND is already open in another tab, or browser storage is unavailable.\n'
+              'Close other SeND tabs and reopen this page over HTTPS.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -35,7 +35,7 @@ Future<void> main() async {
     );
     return;
   }
-  // Desktop Flutter defaults to a 100 MiB decoded-image cache. Deltiecord also
+  // Desktop Flutter defaults to a 100 MiB decoded-image cache. SeND also
   // keeps bounded Matrix timeline data, WebRTC, and video decoders resident,
   // so a smaller cache avoids retaining old media previews unnecessarily.
   PaintingBinding.instance.imageCache

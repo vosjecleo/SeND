@@ -163,11 +163,11 @@ Further tracing confirmed this chain in SDK 10.1.0:
    last-event keys across rooms.
 2. `setInboundGroupSession` attempts to decrypt a room's last event. If successful,
    it calls `client.handleSync` with a synthetic room update to persist the result.
-3. `Client._handleSync` emits `onSync`; Deltiecord's listener notifies the global
+3. `Client._handleSync` emits `onSync`; SeND's listener notifies the global
    backend and requests another full metadata pass, just as for network sync.
 4. Each received room key is also broadcast to a live timeline. The SDK scans its
    events for matching encrypted sessions; successful decryption invokes timeline
-   update callbacks, which Deltiecord uses to notify and request hydration.
+   update callbacks, which SeND uses to notify and request hydration.
 
 This is a source-confirmed amplification path, not evidence that every imported
 key triggers a global sync or that every notification causes a separate painted

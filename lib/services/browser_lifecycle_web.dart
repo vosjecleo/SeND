@@ -12,6 +12,16 @@ external JSPromise<JSAny?> _clear(JSString roomId);
 external JSPromise<JSAny?> _disable();
 @JS('deltiePushLease')
 external void _lease(JSString key);
+@JS('deltiePushDiagnostics')
+external JSPromise<JSString> _diagnostics();
+@JS('deltieTestPush')
+external JSPromise<JSAny?> _testPush();
+
+Future<String> browserPushDiagnostics() async =>
+    (await _diagnostics().toDart).toDart;
+Future<void> testBrowserPush() async {
+  await _testPush().toDart;
+}
 
 Future<bool> initializeBrowser() async => (await _start().toDart).toDart;
 Future<String> subscribeBrowserPush() async =>

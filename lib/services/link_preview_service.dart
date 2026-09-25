@@ -676,7 +676,7 @@ class PinnedDirectPreviewTransport implements DirectPreviewTransport {
         ..headers.set(HttpHeaders.acceptHeader, accept)
         ..headers.set(
           HttpHeaders.userAgentHeader,
-          'Deltiecord/$deltiecordVersion (link preview)',
+          'SeND/$deltiecordVersion (link preview)',
         );
       for (final entry in headers.entries) {
         request.headers.set(entry.key, entry.value);

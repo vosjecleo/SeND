@@ -13,7 +13,7 @@ abstract final class TimelineWindowPolicy {
       min(120, max(1, chunkSize) * max(1, chunkCap));
 
   /// Database pagination must advance by fetched rows, independently of the
-  /// bounded number of events Deltiecord keeps materialized in the timeline.
+  /// bounded number of events SeND keeps materialized in the timeline.
   static int advanceDatabaseOffset(int currentOffset, int fetchedCount) =>
       currentOffset + max(0, fetchedCount);
 
@@ -78,7 +78,7 @@ abstract final class TimelineWindowPolicy {
   /// Trims the window and returns how many events were evicted.
   ///
   /// Callers use the result to distinguish an SDK timeline that is genuinely
-  /// at the live end from one whose newest events Deltiecord deliberately
+  /// at the live end from one whose newest events SeND deliberately
   /// evicted to stay within the bounded materialized window.
   static int trimNewestFirst<T>(
     List<T> events, {

@@ -89,11 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
+            // path_provider and secure storage derive existing data paths from
+            // these two values. Display branding uses FileDescription/window.
             VALUE "CompanyName", "Deltiecord contributors" "\0"
-            VALUE "FileDescription", "Deltiecord Matrix client" "\0"
+            VALUE "FileDescription", "SeND Matrix client" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "deltiecord" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Deltiecord contributors; AGPL-3.0-or-later" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 SeND contributors; AGPL-3.0-or-later" "\0"
             VALUE "OriginalFilename", "deltiecord.exe" "\0"
             VALUE "ProductName", "Deltiecord" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

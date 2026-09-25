@@ -1,4 +1,4 @@
-# Deltiecord 0.9.32+104 — proposed changelog and acceptance plan
+# SeND 0.9.32+104 — proposed changelog and acceptance plan
 
 > Historical record: observations, plans and validation below apply to the named
 > build/date. For the current 0.9.34+106 milestone, see the [documentation index](README.md)
@@ -106,7 +106,7 @@ substitute for the device scenarios below.
   ordinary text, punctuation and digits.
 - Verify a real Linux rendering capture, plus Windows/Android/browser fallback.
   Do not blindly reintroduce the previously broken bundled font.
-- Exported review file: /home/cleo/Documents/Deltiecord-0.9.32-104-emoji-alias-review.txt
+- Exported review file: /home/cleo/Documents/SeND-0.9.32-104-emoji-alias-review.txt
   Includes all 1,913 static catalogue entries; account-specific custom packs
   are not part of that dataset. Current main alias is the first merged keyword,
   not an explicit primary field. Export includes proposal columns; alias changes

@@ -21,22 +21,22 @@ packaging/arch/build-package.sh
 version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
 release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
 if [[ -f "dist/deltiecord_${release_id}_amd64.deb" ]]; then
-  mv "dist/deltiecord_${release_id}_amd64.deb" "dist/deltiecord-${release_id}-linux-debian-amd64.deb"
+  mv "dist/deltiecord_${release_id}_amd64.deb" "dist/SeND-${release_id}-linux-debian-amd64.deb"
 fi
-if [[ -f "dist/Deltiecord-${version}-x86_64.AppImage" ]]; then
-  mv "dist/Deltiecord-${version}-x86_64.AppImage" "dist/deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
+if [[ -f "dist/SeND-${version}-x86_64.AppImage" ]]; then
+  mv "dist/SeND-${version}-x86_64.AppImage" "dist/SeND-${release_id}-linux-appimage-x86_64.AppImage"
 fi
 mapfile -t packages < <(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
 if [[ "${#packages[@]}" -ne 1 ]]; then
   printf 'Expected exactly one Arch package, found %s\n' "${#packages[@]}" >&2
   exit 1
 fi
-mv -- "${packages[0]}" "dist/deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+mv -- "${packages[0]}" "dist/SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
 
 for artifact in \
-  "dist/deltiecord-${release_id}-linux-debian-amd64.deb" \
-  "dist/deltiecord-${release_id}-linux-appimage-x86_64.AppImage" \
-  "dist/deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"; do
+  "dist/SeND-${release_id}-linux-debian-amd64.deb" \
+  "dist/SeND-${release_id}-linux-appimage-x86_64.AppImage" \
+  "dist/SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"; do
   [[ -f "$artifact" ]] || {
     printf 'Missing required release artifact: %s\n' "$artifact" >&2
     exit 1
@@ -44,7 +44,7 @@ for artifact in \
 done
 commit="$(git rev-parse HEAD)"
 {
-  echo "Deltiecord $release_id"
+  echo "SeND $release_id"
   echo "Git commit: $commit"
   echo "Built: $(date --iso-8601=seconds)"
   echo "Architecture: x86_64"

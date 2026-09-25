@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Deltiecord
+Name=SeND
 Comment=Compact Matrix desktop client
-Exec=deltiecord
+Exec=SeND
 Icon=net.deltie.deltiecord
 Terminal=false
 Categories=Network;Chat;InstantMessaging;

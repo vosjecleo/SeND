@@ -249,7 +249,7 @@ Inspect the CURRENT implementation and SDK behavior before choosing fixes.
 
 - Report: the current WYSIWYG implementation is broken; specific failing cases
   still need reproduction. Inspect FluffyChat's current editor implementation
-  alongside Deltiecord's before deciding on fixes, rather than assuming an
+  alongside SeND's before deciding on fixes, rather than assuming an
   editor replacement is required.
 - Trace draft editing, selection/caret behavior, formatting, paste, custom emoji
   tokens, edit/cancel and outgoing Matrix plain-text/formatted-body generation.
@@ -323,7 +323,7 @@ These remain tracked, not diagnosed or promised fixed in this release yet:
 - WebGL cube DOES spin (corrected report); do not describe WebGL as unavailable.
 - Reported iOS version: 26.7; record exact device version/build during testing.
 - User plans hands-on testing. Test sheet is saved at:
-  `/home/cleo/Documents/Deltiecord-iOS-PWA-test-sheet.txt`.
+  `/home/cleo/Documents/SeND-iOS-PWA-test-sheet.txt`.
 - Potential diagnostic work: startup/resume phase timings, long-task counts,
   viewport bounds/offsets and non-sensitive session state. No credentials,
   recovery keys, tokens or message content in diagnostic output.

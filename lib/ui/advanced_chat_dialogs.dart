@@ -13,6 +13,9 @@ import '../services/custom_emoji.dart';
 import '../services/telegram_sticker_service.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
+import 'lifecycle_memory_image.dart';
+
+part 'sticker_pack_editor.dart';
 
 Future<PollDraft?> showPollComposer(BuildContext context) =>
     showDialog<PollDraft>(
@@ -683,7 +686,15 @@ class _StickerPreviewImageState extends State<_StickerPreviewImage> {
     future: _preview,
     builder: (context, snapshot) {
       final bytes = snapshot.data;
-      if (bytes != null) return Image.memory(bytes, fit: BoxFit.contain);
+      if (bytes != null) {
+        return LifecycleMemoryImage(
+          bytes: bytes,
+          animated: false,
+          autoplay:
+              widget.backend.preferences.autoplayGifs &&
+              !widget.backend.preferences.reducedMotion,
+        );
+      }
       if (snapshot.connectionState != ConnectionState.done) {
         return const Center(
           child: SizedBox.square(
@@ -753,8 +764,8 @@ Future<void> _manageStickerPacks(
           if (backend.stickerPacks.any(_isEditableEmojiPack))
             ListTile(
               leading: const ThemeIcon(Icons.edit_outlined),
-              title: const Text('Edit custom emoji pack'),
-              subtitle: const Text('Rename, crop, rescale or change aliases'),
+              title: const Text('Edit sticker or emoji pack'),
+              subtitle: const Text('Add, remove, crop or change aliases'),
               onTap: () => Navigator.pop(context, 'edit-emoji'),
             ),
           if (backend.stickerPacks.any((pack) => pack.sourceRoomId == null) &&
@@ -949,37 +960,33 @@ Future<String?> _askStickerPackName(
 
 const _cancelledPackDestination = '__cancelled__';
 
-bool _isEditableEmojiPack(StickerPackSummary pack) =>
-    pack.canManage &&
-    pack.stickers.isNotEmpty &&
-    pack.stickers.every((item) => item.assetType == StickerAssetType.emoji);
+bool _isEditableEmojiPack(StickerPackSummary pack) => pack.canManage;
 
 Future<void> _editExistingEmojiPack(
   BuildContext context,
   ChatBackend backend,
 ) async {
-  final packs = backend.stickerPacks
-      .where(_isEditableEmojiPack)
-      .toList(growable: false);
-  final selected = await showModalBottomSheet<StickerPackSummary>(
-    context: context,
-    showDragHandle: true,
+  final selected = await _showStickerSurface<StickerPackSummary>(
+    context,
+    surfaceKey: const ValueKey('edit-pack-select'),
+    desktopWidth: 560,
+    desktopHeight: 610,
+    mobileHeightFactor: .88,
     builder: (context) => SafeArea(
       child: ListView(
-        shrinkWrap: true,
         children: [
           const ListTile(
-            title: Text('Edit custom emoji pack'),
-            subtitle: Text('Choose a pack to rename or prepare again.'),
+            title: Text('Edit sticker or emoji pack'),
+            subtitle: Text(
+              'Add, remove, rename aliases or crop selected items.',
+            ),
           ),
-          for (final pack in packs)
+          for (final pack in backend.stickerPacks.where(
+            (pack) => pack.canManage,
+          ))
             ListTile(
-              leading: const ThemeIcon(Icons.add_reaction_outlined),
               title: Text(pack.name),
-              subtitle: Text(
-                '${pack.stickers.length} emoji · '
-                '${pack.roomScoped ? 'Server pack' : 'Personal pack'}',
-              ),
+              subtitle: Text('${pack.stickers.length} items'),
               onTap: () => Navigator.pop(context, pack),
             ),
         ],
@@ -987,68 +994,14 @@ Future<void> _editExistingEmojiPack(
     ),
   );
   if (selected == null || !context.mounted) return;
-
-  final progress = ValueNotifier<(int, int)>((0, selected.stickers.length));
-  try {
-    final items = await _withStickerProgress(
-      context,
-      label: 'Loading emoji pack…',
-      progress: progress,
-      operation: () async {
-        var completed = 0;
-        return Future.wait([
-          for (final sticker in selected.stickers)
-            backend.loadStickerPreview(sticker).then((bytes) {
-              progress.value = (++completed, selected.stickers.length);
-              if (bytes == null || bytes.isEmpty) {
-                throw StateError(
-                  'Could not load :${sticker.name}: for editing.',
-                );
-              }
-              return StickerDraftItem(
-                shortcode: sticker.name,
-                bytes: bytes,
-                mimeType: sticker.mimeType,
-                width: sticker.width,
-                height: sticker.height,
-                assetType: StickerAssetType.emoji,
-              );
-            }),
-        ]);
-      },
-    );
-    if (!context.mounted) return;
-    var prepared = await _prepareEmojiItems(context, items);
-    if (prepared == null || !context.mounted) return;
-    prepared = await _editEmojiAliases(context, prepared);
-    if (prepared == null || !context.mounted) return;
-    final name = await _askStickerPackName(
-      context,
-      initialValue: selected.name,
-    );
-    if (name == null || !context.mounted) return;
-    await _withStickerProgress(
-      context,
-      label: 'Saving edited emoji pack…',
-      operation: () => backend.replaceStickerPack(
-        selected,
-        StickerPackDraft(name: name, stickers: prepared!),
-      ),
-    );
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$name updated.')));
-    }
-  } catch (exception) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Emoji pack edit failed: $exception')),
-      );
-    }
-  } finally {
-    progress.dispose();
-  }
+  await _showStickerSurface<void>(
+    context,
+    surfaceKey: const ValueKey('edit-pack'),
+    desktopWidth: 720,
+    desktopHeight: 760,
+    mobileHeightFactor: .94,
+    builder: (context) => StickerPackEditor(backend: backend, pack: selected),
+  );
 }
 
 List<StickerDraftItem> _asAssetType(
@@ -1373,8 +1326,8 @@ class _EmojiResizeDialogState extends State<_EmojiResizeDialog> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Trim transparent padding'),
             subtitle: const Text(
-              'Optional. Enlarges visible static artwork while preserving '
-              'its aspect ratio. Animated emoji keep their original canvas.',
+              'Optional. Enlarges visible artwork without stretching. Animation '
+              'uses one shared crop across all frames to avoid jumping.',
             ),
             value: _trimTransparentPadding,
             onChanged: (value) =>
@@ -1385,7 +1338,8 @@ class _EmojiResizeDialogState extends State<_EmojiResizeDialog> {
             'image/webp',
           }.contains(widget.example.mimeType))
             const Text(
-              'Oversized animated images are converted to a static PNG.',
+              'Edited animations stay animated and are encoded as GIF. Images '
+              'that exceed safe processing limits fail without being flattened.',
               style: TextStyle(fontSize: DeltiecordTypeScale.normal),
             ),
         ],
@@ -1878,7 +1832,11 @@ class _TelegramStickerPreviewState extends State<_TelegramStickerPreview> {
     future: _bytes,
     builder: (context, snapshot) {
       if (snapshot.data case final bytes?) {
-        return Image.memory(bytes, fit: BoxFit.contain);
+        return LifecycleMemoryImage(
+          bytes: bytes,
+          animated: false,
+          autoplay: !MediaQuery.disableAnimationsOf(context),
+        );
       }
       if (snapshot.hasError) {
         return IconButton(

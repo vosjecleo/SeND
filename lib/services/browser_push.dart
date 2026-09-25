@@ -55,13 +55,13 @@ Future<void> enableBrowserPush(Client client) async {
       Pusher(
         appId: _appId,
         pushkey: pushkey,
-        appDisplayName: 'Deltiecord',
-        deviceDisplayName: 'Deltiecord Web',
+        appDisplayName: 'SeND',
+        deviceDisplayName: 'SeND Web',
         kind: 'http',
         lang: 'en',
         profileTag: 'deltiecord-web-${client.deviceID}',
         data: PusherData(
-          url: Uri.base.resolve('/api/push/_matrix/push/v1/notify'),
+          url: Uri.base.resolve('/_matrix/push/v1/notify'),
           format: 'event_id_only',
         ),
       ),

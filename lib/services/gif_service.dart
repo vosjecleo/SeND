@@ -111,7 +111,7 @@ class GifSearchResult {
 
 /// Provider-neutral picker/storage client. The proxy selects the provider;
 /// provider-specific response parsing stays at this boundary.
-/// Deltiecord's rate-limited server proxy adds the shared application key, so
+/// SeND's rate-limited server proxy adds the shared application key, so
 /// neither source archives nor release binaries contain that credential.
 class GifService {
   GifService();
@@ -126,7 +126,7 @@ class GifService {
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 8)
     ..idleTimeout = const Duration(seconds: 10)
-    ..userAgent = kIsWeb ? null : 'Deltiecord/$deltiecordVersion';
+    ..userAgent = kIsWeb ? null : 'SeND/$deltiecordVersion';
   File? _favoritesFile;
   static List<GifSearchResult>? _favorites;
   static final _mediaCache = <Uri, Uint8List>{};

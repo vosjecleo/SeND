@@ -5,6 +5,7 @@ import '../models/chat_models.dart';
 import '../services/timezone_catalog.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
+import 'activity_widgets.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -128,6 +129,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                     ],
                   ),
                 ],
+                if (!preview) ActivityBlock(userId: profile.userId),
                 if (profile.bio?.trim().isNotEmpty == true || preview) ...[
                   const SizedBox(height: 18),
                   Text(
@@ -145,7 +147,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)} local time',
+                          '${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)}',
                           style: TextStyle(color: palette.muted),
                         ),
                       ),
@@ -188,6 +190,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                     ],
                   ),
                 ],
+                if (!preview) LastFmRecentBar(userId: profile.userId),
               ],
             ),
           ),

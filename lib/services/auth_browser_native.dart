@@ -39,10 +39,10 @@ class AuthBrowser {
           "default-src 'none'; script-src 'nonce-$nonce'",
         );
       request.response.write(
-        '<!doctype html><title>Deltiecord sign-in</title>'
+        '<!doctype html><title>SeND sign-in</title>'
         '<script nonce="$nonce">history.replaceState(null,"",location.pathname)</script>'
-        '<p>Return to Deltiecord to finish signing in. You can close this tab.</p>'
-        '${Platform.isAndroid ? '<a href="net.deltie.deltiecord://login-complete">Open Deltiecord</a>' : ''}',
+        '<p>Return to SeND to finish signing in. You can close this tab.</p>'
+        '${Platform.isAndroid ? '<a href="net.deltie.deltiecord://login-complete">Open SeND</a>' : ''}',
       );
       await request.response.close();
       if (!browser._result.isCompleted) browser._result.complete(uri);

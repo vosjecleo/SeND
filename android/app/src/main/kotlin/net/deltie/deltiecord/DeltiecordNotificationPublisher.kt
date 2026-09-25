@@ -73,7 +73,7 @@ object DeltiecordNotificationPublisher {
         return MessageData(
             roomId = roomId.take(1024),
             eventId = eventId.take(1024),
-            roomName = (arguments["roomName"] as? String).orEmpty().ifBlank { "Deltiecord" }.take(160),
+            roomName = (arguments["roomName"] as? String).orEmpty().ifBlank { "SeND" }.take(160),
             senderName = (arguments["senderName"] as? String).orEmpty().ifBlank { "Matrix user" }.take(160),
             body = (arguments["body"] as? String).orEmpty().ifBlank { "New message" }.take(4096),
             timestamp = (arguments["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis(),
@@ -101,7 +101,7 @@ object DeltiecordNotificationPublisher {
         ensureBackgroundChannel(context)
         return builder(context, BACKGROUND_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Deltiecord")
+            .setContentTitle("SeND")
             .setContentText("Decrypting a new message")
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
@@ -115,7 +115,7 @@ object DeltiecordNotificationPublisher {
 
     /**
      * Publishes only when the notification lifecycle has not changed since the
-     * worker started. Opening Deltiecord or dismissing this room invalidates
+     * worker started. Opening SeND or dismissing this room invalidates
      * older workers so they cannot resurrect a cleared alert or its cooldown.
      */
     @Synchronized
@@ -184,7 +184,7 @@ object DeltiecordNotificationPublisher {
         )
         val notificationBuilder = builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(latest.optString("roomName", "Deltiecord"))
+            .setContentTitle(latest.optString("roomName", "SeND"))
             .setContentText(latest.optString("body", "New message"))
             .setLargeIcon(decoratedAvatar)
             .setCategory(Notification.CATEGORY_MESSAGE)
@@ -350,7 +350,7 @@ object DeltiecordNotificationPublisher {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val self = android.app.Person.Builder().setName("You").build()
             val style = Notification.MessagingStyle(self)
-                .setConversationTitle(history.last().optString("roomName", "Deltiecord"))
+                .setConversationTitle(history.last().optString("roomName", "SeND"))
                 .setGroupConversation(history.last().optBoolean("groupConversation", false))
             for (entry in history) {
                 val bitmap = bitmapFromPath(entry.optString("avatarPath"))
@@ -371,7 +371,7 @@ object DeltiecordNotificationPublisher {
         }
         @Suppress("DEPRECATION")
         val style = Notification.MessagingStyle("You")
-            .setConversationTitle(history.last().optString("roomName", "Deltiecord"))
+            .setConversationTitle(history.last().optString("roomName", "SeND"))
         for (entry in history) {
             @Suppress("DEPRECATION")
             val message = Notification.MessagingStyle.Message(

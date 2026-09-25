@@ -24,7 +24,7 @@ void main() {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedOut;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
-    expect(find.text('Deltiecord'), findsOneWidget);
+    expect(find.text('SeND'), findsOneWidget);
     expect(find.text('Homeserver'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
   });
@@ -40,7 +40,7 @@ void main() {
   });
 
   for (final mode in DeltiecordThemeMode.values) {
-    testWidgets('modal surfaces use the $mode Deltiecord theme palette', (
+    testWidgets('modal surfaces use the $mode SeND theme palette', (
       tester,
     ) async {
       final backend = FakeBackend()
@@ -293,6 +293,11 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Privacy'),
+      80,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Privacy'));
     await tester.pumpAndSettle();
 
@@ -407,7 +412,7 @@ void main() {
       ..deviceList = const [
         DeviceSessionSummary(
           id: 'TESTDEVICE',
-          displayName: 'Deltiecord Desktop',
+          displayName: 'SeND Desktop',
           current: true,
         ),
       ];
@@ -417,7 +422,7 @@ void main() {
     await tester.tap(find.text('Devices'));
     await tester.pump();
 
-    expect(find.text('Deltiecord Desktop (this device)'), findsOneWidget);
+    expect(find.text('SeND Desktop (this device)'), findsOneWidget);
     expect(find.textContaining('TESTDEVICE'), findsOneWidget);
   });
 
@@ -1416,8 +1421,24 @@ void main() {
     );
     timeline.position.jumpTo(timeline.position.maxScrollExtent * 0.72);
     await tester.pump();
-    final anchor = find.textContaining('Preview message').first;
-    final anchorText = tester.widget<Text>(anchor).data!;
+    // Anchor an actual selectable timeline message, not the removed DM-list
+    // last-message preview (which previously made this assertion vacuous).
+    final anchors = find.descendant(
+      of: find.byKey(const Key('message-timeline')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is EditableText &&
+            widget.controller.text.startsWith('Preview message'),
+      ),
+    );
+    final viewport = tester.getRect(find.byKey(const Key('message-timeline')));
+    final visibleElement = anchors.evaluate().firstWhere((element) {
+      final rect = tester.getRect(find.byWidget(element.widget));
+      return rect.top >= viewport.top + 30 &&
+          rect.bottom <= viewport.bottom - 30;
+    });
+    final anchor = find.byWidget(visibleElement.widget);
+    final anchorText = tester.widget<EditableText>(anchor).controller.text;
     final before = tester.getTopLeft(find.text(anchorText)).dy;
 
     backend.messageList = [
@@ -1595,12 +1616,12 @@ void main() {
     await tester.pump();
     final composer = tester.widget<QuillEditor>(find.byType(QuillEditor));
     expect(composer.focusNode.hasFocus, isTrue);
-    await _enterComposer(tester, 'hello from Deltiecord');
+    await _enterComposer(tester, 'hello from SeND');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
-    expect(backend.sentMessages, ['hello from Deltiecord']);
-    expect(find.text('hello from Deltiecord'), findsNothing);
+    expect(backend.sentMessages, ['hello from SeND']);
+    expect(find.text('hello from SeND'), findsNothing);
     expect(composer.focusNode.hasFocus, isTrue);
   });
 
@@ -2175,6 +2196,7 @@ void main() {
           id: '!alice:example.org',
           name: 'Alice',
           lastMessage: 'See you tomorrow',
+          statusMessage: 'Taking a walk',
           unreadCount: 0,
           usesChannelIcon: false,
           isDirect: true,
@@ -2189,8 +2211,9 @@ void main() {
     );
     final name = tester.widget<Text>(find.text('Alice'));
     expect(name.style?.fontSize, DeltiecordTypeScale.bigChat);
-    expect(name.style?.fontWeight, FontWeight.w700);
-    expect(find.text('See you tomorrow'), findsOneWidget);
+    expect(name.style?.fontWeight, FontWeight.w400);
+    expect(find.text('See you tomorrow'), findsNothing);
+    expect(find.text('Taking a walk'), findsOneWidget);
   });
 
   testWidgets('room panel filters rooms and starts a new direct message', (
@@ -2747,10 +2770,18 @@ void main() {
 
     expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
     expect(find.text('Members — 2'), findsOneWidget);
-    expect(find.text('Administrator'), findsOneWidget);
+    expect(
+      find.text('Admin'),
+      findsNWidgets(2),
+    ); // Display name plus role badge.
     await tester.tap(find.text('Alice'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recipient-profile-panel')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('close-recipient-profile')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('member-side-panel')), findsOneWidget);
+    await tester.tap(find.text('Alice'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Room tools'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Members'));
@@ -3208,6 +3239,9 @@ void main() {
           id: '!recent:test',
           name: 'Recent chat',
           lastMessage: 'A preview that must yield before the age overlaps it',
+          statusMessage:
+              'An online status that must yield before the age overlaps it',
+          presence: UserPresence.online,
           lastActivityAt: DateTime.now().subtract(const Duration(hours: 2)),
           unreadCount: 0,
           usesChannelIcon: false,
@@ -3218,7 +3252,7 @@ void main() {
 
     expect(find.text('2h'), findsOneWidget);
     expect(
-      find.text('A preview that must yield before the age overlaps it'),
+      find.text('An online status that must yield before the age overlaps it'),
       findsOneWidget,
     );
     expect(
@@ -3226,7 +3260,9 @@ void main() {
       greaterThan(
         tester
             .getTopLeft(
-              find.text('A preview that must yield before the age overlaps it'),
+              find.text(
+                'An online status that must yield before the age overlaps it',
+              ),
             )
             .dx,
       ),
@@ -3682,7 +3718,7 @@ void main() {
       ]
       ..messageList = [
         ChatMessage(
-          id: 'Deltiecord-45-123',
+          id: 'SeND-45-123',
           sender: 'Deltie',
           senderId: '@deltie:test',
           body: 'stuck',
@@ -3696,14 +3732,12 @@ void main() {
     await _pumpMobile(tester, backend);
     await tester.tap(find.text('Failed send').first);
     await tester.pumpAndSettle();
-    await tester.longPress(
-      find.byKey(const ValueKey('swipe-Deltiecord-45-123')),
-    );
+    await tester.longPress(find.byKey(const ValueKey('swipe-SeND-45-123')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Discard failed send'));
     await tester.pumpAndSettle();
 
-    expect(backend.cancelledMessageIds, ['Deltiecord-45-123']);
+    expect(backend.cancelledMessageIds, ['SeND-45-123']);
   });
 
   testWidgets('Android drafts survive room navigation', (tester) async {

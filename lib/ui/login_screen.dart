@@ -79,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Deltiecord',
+                          'SeND',
                           style: Theme.of(context).textTheme.headlineLarge,
                           textAlign: TextAlign.center,
                         ),
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               leading: Icon(Icons.dns_outlined),
                               title: Text('matrix.deltie.net'),
                               subtitle: Text(
-                                'New accounts currently use Deltiecord’s homeserver.',
+                                'New accounts currently use SeND’s homeserver.',
                               ),
                             )
                           else
@@ -267,8 +267,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          'Deltiecord works with compatible Matrix homeservers. '
-                          'A custom server may not provide Deltiecord’s dedicated '
+                          'SeND works with compatible Matrix homeservers. '
+                          'A custom server may not provide SeND’s dedicated '
                           'push endpoint, media conversion, or link-preview service, '
                           'and server policy can limit uploads or account features.',
                           textAlign: TextAlign.center,

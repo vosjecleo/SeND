@@ -13,7 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// Private, durable queue for messages waiting to be sent by this device.
 ///
 /// Homeserver delayed events are not yet universally available and cannot be
-/// assumed to preserve Deltiecord's encrypted-send path. Queue entries are
+/// assumed to preserve SeND's encrypted-send path. Queue entries are
 /// therefore owner-only local data and are sent while the client is running,
 /// or on the next launch after their due time.
 class ScheduledMessageStore {

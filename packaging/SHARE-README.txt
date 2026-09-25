@@ -1,4 +1,4 @@
-Deltiecord v0.9.29 build 97 release-candidate bundle
+SeND v0.9.29 build 97 release-candidate bundle
 ====================================================
 
 Linux AppImage:

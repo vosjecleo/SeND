@@ -5,11 +5,11 @@ milestone, not a replacement for the [1.0 device checklist](RELEASE_READINESS.md
 
 Build 106 adds the mobile discussion/forum UI, shared profile-card crop previews,
 event filters and Administration. Browser SSO uses an external browser and a
-random-port loopback callback; the return intent only foregrounds Deltiecord.
+random-port loopback callback; the return intent only foregrounds SeND.
 Exercise cancellation, process interruption and encrypted-session recovery on
 real devices before considering this flow fully validated.
 
-Deltiecord's Android application uses the shared `ChatBackend`, Matrix backend,
+SeND's Android application uses the shared `ChatBackend`, Matrix backend,
 models, encryption/session storage, timeline, media, profile, settings, and
 MatrixRTC layers. Phone-specific presentation lives in `lib/ui/mobile`; the
 desktop widget tree is selected independently.
@@ -48,18 +48,18 @@ release keystore independently before publishing that build.
 
 ## Notifications and background operation
 
-Deltiecord creates an Android message notification channel and preserves the
+SeND creates an Android message notification channel and preserves the
 existing encrypted-preview privacy preference. Notification payloads select the
 corresponding room/event when the process receives them.
 
 Notifications settings use the standard UnifiedPush Android connector. Install
 and configure an external distributor such as the ntfy Android app, then select
-it in Deltiecord. Deltiecord registers the complete private endpoint with the
+it in SeND. SeND registers the complete private endpoint with the
 Matrix HTTP push gateway on that same ntfy server. Neither distributor
 credentials nor generated endpoint capabilities are shipped or logged by
-Deltiecord.
+SeND.
 
-Registration is callback-driven: Deltiecord asks the selected distributor for
+Registration is callback-driven: SeND asks the selected distributor for
 an endpoint during setup, explicit refresh, or recovery from a registration
 failure, then waits for that callback before installing the Matrix pusher.
 Foreground resume verifies the existing pusher without rotating its endpoint.
@@ -80,7 +80,7 @@ use the smaller `arm64-v8a` APK.
 
 Push payloads are treated as generic Matrix room/event wake-ups, never as
 trusted plaintext. A short-lived foreground service protects the receiver-to-
-worker hand-off, then a bounded Android worker restores Deltiecord's local Matrix
+worker hand-off, then a bounded Android worker restores SeND's local Matrix
 session, synchronizes the named event and any room key, then decrypts the
 notification locally. The distributor and gateway never receive decrypted
 text, access tokens, or room keys. Android conversation notifications show the

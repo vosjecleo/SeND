@@ -29,7 +29,7 @@ done
 
 # Adaptive icons reserve the outer portion for launcher masks. Keeping the
 # complete mark in the central safe zone prevents circular launchers clipping
-# the Deltiecord triangle.
+# the SeND triangle.
 magick -size 432x432 canvas:none \
   \( "$source_icon" -fuzz 4% -transparent black -resize 288x288 \) \
   -gravity center -composite \

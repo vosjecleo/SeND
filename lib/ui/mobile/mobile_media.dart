@@ -250,7 +250,7 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Saved to Downloads/Deltiecord/$savedName')),
+            SnackBar(content: Text('Saved to Downloads/SeND/$savedName')),
           );
         }
         return;

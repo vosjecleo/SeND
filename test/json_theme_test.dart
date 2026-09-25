@@ -48,19 +48,21 @@ void main() {
       await tester.pumpWidget(DeltiecordApp(backend: backend));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('space-marker-Unread server-unread')),
+        find.byKey(const ValueKey('space-marker-Unread server')),
         findsOneWidget,
       );
       expect(backend.pingCountForSpace('!space:example.org'), 0);
       await tester.tap(find.byTooltip('Unread server'));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('space-marker-Unread server-selected')),
+        find.byKey(const ValueKey('space-marker-Unread server')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('space-marker-Unread server-unread')),
-        findsNothing,
+        tester
+            .getSize(find.byKey(const ValueKey('space-marker-Unread server')))
+            .height,
+        24,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       backend.dispose();

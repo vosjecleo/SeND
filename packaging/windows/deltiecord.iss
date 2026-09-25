@@ -8,19 +8,20 @@
   #define OutputDir "."
 #endif
 #ifndef OutputBaseName
-  #define OutputBaseName "Deltiecord-" + MyAppVersion + "-windows-x64-setup"
+  #define OutputBaseName "SeND-" + MyAppVersion + "-windows-x64-setup"
 #endif
 
 [Setup]
 AppId={{2E5E8DB4-F62B-4E91-B4C4-2CA41EDCC91F}
-AppName=Deltiecord
+AppName=SeND
 AppVersion={#MyAppVersion}
-AppPublisher=Deltiecord contributors
-AppPublisherURL=https://deltie.net/cord
-AppSupportURL=https://github.com/vosjecleo/deltiecord/issues
-AppUpdatesURL=https://deltie.net/cord
-DefaultDirName={localappdata}\Programs\Deltiecord
-DefaultGroupName=Deltiecord
+AppPublisher=SeND contributors
+AppPublisherURL=https://deltie.net/SeND
+AppSupportURL=https://github.com/vosjecleo/SeND/issues
+AppUpdatesURL=https://deltie.net/SeND
+DefaultDirName={localappdata}\Programs\SeND
+UsePreviousAppDir=yes
+DefaultGroupName=SeND
 DisableProgramGroupPage=yes
 LicenseFile=..\..\LICENSE
 OutputDir={#OutputDir}
@@ -37,8 +38,8 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 VersionInfoVersion={#MyAppVersion}
-VersionInfoCompany=Deltiecord contributors
-VersionInfoDescription=Deltiecord Matrix client installer
+VersionInfoCompany=SeND contributors
+VersionInfoDescription=SeND Matrix client installer
 VersionInfoCopyright=AGPL-3.0-or-later
 
 [Languages]
@@ -51,11 +52,11 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Deltiecord"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"
-Name: "{userdesktop}\Deltiecord"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"
+Name: "{userdesktop}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\deltiecord.exe"; Description: "Launch Deltiecord"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\deltiecord.exe"; Description: "Launch SeND"; Flags: nowait postinstall skipifsilent
 
 ; User sessions and Matrix data live outside {app}. Deliberately do not add
 ; [UninstallDelete] entries for AppData so upgrades/uninstall preserve them.

@@ -5,10 +5,15 @@ part of 'chat_shell.dart';
 /// This deliberately consumes only [ChatBackend] models so Matrix SDK objects
 /// remain behind the application boundary.
 class _RecipientProfilePanel extends StatefulWidget {
-  const _RecipientProfilePanel({required this.backend, required this.member});
+  const _RecipientProfilePanel({
+    required this.backend,
+    required this.member,
+    required this.onClose,
+  });
 
   final ChatBackend backend;
   final RoomMemberSummary member;
+  final VoidCallback onClose;
 
   @override
   State<_RecipientProfilePanel> createState() => _RecipientProfilePanelState();
@@ -60,29 +65,50 @@ class _RecipientProfilePanelState extends State<_RecipientProfilePanel> {
     child: Padding(
       key: const Key('recipient-profile-panel'),
       padding: const EdgeInsets.fromLTRB(10, 8, 12, _bottomPanelVerticalInset),
-      child: FutureBuilder<UserProfileSummary>(
-        future: _profile,
-        builder: (context, snapshot) {
-          final profile = snapshot.data;
-          if (profile == null) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('Loading profile…'),
-                ],
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FutureBuilder<UserProfileSummary>(
+              future: _profile,
+              builder: (context, snapshot) {
+                final profile = snapshot.data;
+                if (profile == null) {
+                  return const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text('Loading profile…'),
+                      ],
+                    ),
+                  );
+                }
+                return _RecipientProfileContents(
+                  backend: widget.backend,
+                  member: widget.member,
+                  profile: profile,
+                  loading: false,
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton.filledTonal(
+              key: const Key('close-recipient-profile'),
+              tooltip: 'Back to members',
+              style: IconButton.styleFrom(
+                backgroundColor: context.deltiecord.panel.withValues(
+                  alpha: .92,
+                ),
               ),
-            );
-          }
-          return _RecipientProfileContents(
-            backend: widget.backend,
-            member: widget.member,
-            profile: profile,
-            loading: false,
-          );
-        },
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: widget.onClose,
+            ),
+          ),
+        ],
       ),
     ),
   );

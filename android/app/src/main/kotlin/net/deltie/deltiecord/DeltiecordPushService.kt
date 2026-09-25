@@ -262,7 +262,7 @@ class DeltiecordPushService : MessagingReceiver() {
 
         private fun parseMatrixMetadata(payload: ByteArray): MatrixMetadata = runCatching {
             if (payload.size > 256 * 1024) {
-                return@runCatching MatrixMetadata(null, null, "Deltiecord")
+                return@runCatching MatrixMetadata(null, null, "SeND")
             }
             val root = JSONObject(payload.toString(Charsets.UTF_8))
             val json = root.optJSONObject("notification") ?: root
@@ -275,9 +275,9 @@ class DeltiecordPushService : MessagingReceiver() {
                     "$senderName in $roomName"
                 senderName != null -> senderName
                 roomName != null -> roomName
-                else -> "Deltiecord"
+                else -> "SeND"
             }
             MatrixMetadata(roomId, eventId, title.take(128))
-        }.getOrDefault(MatrixMetadata(null, null, "Deltiecord"))
+        }.getOrDefault(MatrixMetadata(null, null, "SeND"))
     }
 }

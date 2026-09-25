@@ -185,7 +185,7 @@ extension _MatrixMessages on MatrixBackend {
       return 0;
     }
     // Once local history is consumed, paginate with the chunk token directly.
-    // Deltiecord's separate database cursor may have consumed local rows even
+    // SeND's separate database cursor may have consumed local rows even
     // when the SDK timeline still has a usable server continuation token.
     timeline.isFragmentedTimeline = true;
     final beforeIds = timeline.events.map((event) => event.eventId).toSet();
@@ -274,7 +274,7 @@ extension _MatrixMessages on MatrixBackend {
           txid: transactionId,
           inReplyTo: replyEvent,
           editEventId: editMessageId,
-          // Deltiecord does not expose the SDK's slash-command interface.
+          // SeND does not expose the SDK's slash-command interface.
           // Treat Unix paths and other leading-slash text literally.
           parseCommands: false,
           // Rich markup is serialized by the composer and uses the branch

@@ -62,6 +62,9 @@ extension _MatrixMedia on MatrixBackend {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
     try {
+      if (_preferences.optimizeVideos) {
+        attachment = await VideoPreparation.instance.prepare(attachment);
+      }
       await _validateUploadSize(attachment.bytes.length);
       await _prepareEncryptedSend(room);
       final replyEvent = replyToMessageId == null
@@ -70,7 +73,18 @@ extension _MatrixMedia on MatrixBackend {
       // MatrixFile still derives m.image from the GIF MIME type, while
       // deliberately avoiding MatrixImageFile's synchronous GIF decode and
       // thumbnail generation on Flutter's UI isolate.
-      final file = attachment.mimeType == 'image/gif'
+      final file =
+          attachment.mimeType.startsWith('video/') &&
+              attachment.videoWidth != null
+          ? MatrixVideoFile(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+              width: attachment.videoWidth,
+              height: attachment.videoHeight,
+              duration: attachment.durationMilliseconds,
+            )
+          : attachment.mimeType == 'image/gif'
           ? MatrixFile(
               bytes: attachment.bytes,
               name: attachment.name,
@@ -108,6 +122,13 @@ extension _MatrixMedia on MatrixBackend {
             )
           : room.sendFileEvent(
               file,
+              thumbnail: attachment.videoThumbnail == null
+                  ? null
+                  : MatrixImageFile(
+                      bytes: attachment.videoThumbnail!,
+                      name: 'thumbnail.jpg',
+                      mimeType: 'image/jpeg',
+                    ),
               threadRootEventId: threadRootEventId,
               threadLastEventId: threadRootEventId,
               txid: transactionId,

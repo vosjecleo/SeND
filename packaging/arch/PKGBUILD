@@ -1,13 +1,13 @@
 pkgname=deltiecord
-pkgver=0.9.34
-pkgrel=107
+pkgver=0.9.35
+pkgrel=108
 pkgdesc='Compact Matrix desktop client'
 arch=('x86_64')
-url='https://deltie.net/cord'
+url='https://deltie.net/SeND'
 license=('AGPL-3.0-or-later')
 options=('!debug' '!lto')
 depends=('gtk3' 'libsecret' 'libpulse' 'alsa-lib' 'libv4l' 'mpv' 'ffmpeg' 'pipewire' 'xdg-desktop-portal')
-makedepends=('flutter' 'cmake' 'clang' 'ninja')
+makedepends=('flutter' 'cmake' 'clang' 'ninja' 'python')
 source=()
 sha256sums=()
 
@@ -20,7 +20,7 @@ build() {
   # makepkg supplies its own RUSTFLAGS, so append rather than defaulting.
   export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-dead-code"
   flutter pub get --enforce-lockfile
-  flutter build linux --release
+  python3 packaging/flutter-with-credentials.py build linux --release
   packaging/linux/verify-release.sh
 }
 
@@ -29,8 +29,10 @@ package() {
   local bundle='build/linux/x64/release/bundle'
   install -d "$pkgdir/usr/lib/deltiecord" "$pkgdir/usr/bin"
   cp -a "$bundle/." "$pkgdir/usr/lib/deltiecord/"
+  printf 'arch\n' >"$pkgdir/usr/lib/deltiecord/data/send-package"
   install -Dm755 packaging/linux/deltiecord-launcher \
     "$pkgdir/usr/bin/deltiecord"
+  ln -s deltiecord "$pkgdir/usr/bin/SeND"
   install -Dm644 packaging/linux/net.deltie.deltiecord.desktop \
     "$pkgdir/usr/share/applications/net.deltie.deltiecord.desktop"
   install -Dm644 packaging/linux/net.deltie.deltiecord.png \

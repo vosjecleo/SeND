@@ -113,7 +113,7 @@ void main() {
     () async {
       final plaintext = Uint8List.fromList(
         utf8.encode(
-          List.filled(200, 'Deltiecord encrypted streaming range test ').join(),
+          List.filled(200, 'SeND encrypted streaming range test ').join(),
         ),
       );
       final key = Uint8List.fromList(List.generate(32, (index) => index));

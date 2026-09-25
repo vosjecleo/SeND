@@ -72,6 +72,9 @@ jobs:
           path: build/linux/x64/release/plugins/flutter_vodozemac/cargokit_build
           key: linux-debian-vodozemac-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('pubspec.lock') }}
       - name: Validate and build Debian/AppImage releases
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
           # pub.dev occasionally closes a fresh CI connection before dependency
           # resolution completes. Retry only this idempotent network boundary;
@@ -91,16 +94,16 @@ jobs:
           find packaging -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           flutter analyze
           flutter test --concurrency=1
-          flutter build linux --release
+          python3 packaging/flutter-with-credentials.py build linux --release
           packaging/linux/verify-release.sh
           packaging/linux/build-deb.sh
           packaging/linux/build-appimage.sh
           version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
           release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
-          mv "dist/deltiecord_${release_id}_amd64.deb" "dist/deltiecord-${release_id}-linux-debian-amd64.deb"
-          mv "dist/Deltiecord-${version}-x86_64.AppImage" "dist/deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
+          mv "dist/deltiecord_${release_id}_amd64.deb" "dist/SeND-${release_id}-linux-debian-amd64.deb"
+          mv "dist/SeND-${version}-x86_64.AppImage" "dist/SeND-${release_id}-linux-appimage-x86_64.AppImage"
           cp packaging/README.md dist/README.txt
-          printf 'Deltiecord %s\nGit commit: %s\n' "$release_id" "$GITHUB_SHA" >dist/BUILD-INFO.txt
+          printf 'SeND %s\nGit commit: %s\n' "$release_id" "$GITHUB_SHA" >dist/BUILD-INFO.txt
           (cd dist && sha256sum -- *.deb *.AppImage >SHA256SUMS)
       - name: Test Debian installation, launch, and removal
         run: |
@@ -116,7 +119,7 @@ jobs:
             cat debian-smoke.log
             message="$(tail -n 20 debian-smoke.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g; s/$/%0A/g')"
             printf '::error title=Debian smoke launch failed::status=%s %s\n' "$status" "$message"
-            printf 'Deltiecord exited unexpectedly with status %s\n' "$status" >&2
+            printf 'SeND exited unexpectedly with status %s\n' "$status" >&2
             exit 1
           fi
           apt-get remove -y deltiecord
@@ -124,7 +127,7 @@ jobs:
       - name: Upload Debian and AppImage artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Deltiecord-linux-debian12-x86_64
+          name: SeND-linux-debian12-x86_64
           path: dist/*
           if-no-files-found: error
 
@@ -136,7 +139,7 @@ jobs:
     steps:
       - name: Install Arch build dependencies
         run: |
-          pacman -Syu --noconfirm --needed ca-certificates curl xz git clang cmake ninja pkgconf gtk3 libsecret libpulse alsa-lib libv4l mpv pipewire rustup xdg-desktop-portal xorg-server-xvfb dbus
+          pacman -Syu --noconfirm --needed ca-certificates curl xz git clang cmake ninja pkgconf gtk3 libsecret libpulse alsa-lib libv4l mpv pipewire rustup xdg-desktop-portal xorg-server-xvfb dbus python
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Restore verified Flutter archive
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -179,11 +182,14 @@ jobs:
           install -d -o builder -g builder /home/builder/.pub-cache /home/builder/.cargo
           chown -R builder:builder "$GITHUB_WORKSPACE" /home/builder/.pub-cache /home/builder/.cargo
       - name: Build native Arch package
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
           runuser -u builder -- env PATH="/opt/flutter/bin:$PATH" HOME=/home/builder bash -lc "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory /opt/flutter && git config --global --add safe.directory '$GITHUB_WORKSPACE' && flutter pub get --enforce-lockfile && dart format --output=none --set-exit-if-changed lib test && flutter analyze && flutter test --concurrency=1 && packaging/arch/build-package.sh"
           release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
           package="$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
-          mv "$package" "dist/deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+          mv "$package" "dist/SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
           cd dist
           sha256sum -- *.pkg.tar.zst >SHA256SUMS
       - name: Test Arch installation, launch, and removal
@@ -198,7 +204,7 @@ jobs:
           set -e
           if [ "$status" -ne 124 ]; then
             cat arch-smoke.log
-            printf 'Deltiecord exited unexpectedly with status %s\n' "$status" >&2
+            printf 'SeND exited unexpectedly with status %s\n' "$status" >&2
             exit 1
           fi
           pacman -R --noconfirm deltiecord
@@ -206,6 +212,6 @@ jobs:
       - name: Upload Arch artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Deltiecord-linux-arch-x86_64
+          name: SeND-linux-arch-x86_64
           path: dist/*
           if-no-files-found: error

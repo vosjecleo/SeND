@@ -46,7 +46,7 @@ String opaquePersonalPackId(Uint8List entropy) {
 /// personal image-pack event.
 ///
 /// Matrix clients that do not understand this extension still see all images
-/// as one ordinary `im.ponies.user_emotes` pack. Deltiecord uses the opaque
+/// as one ordinary `im.ponies.user_emotes` pack. SeND uses the opaque
 /// per-item ID only to recover the original pack grouping; aliases remain
 /// display metadata and may therefore overlap between packs.
 List<({String id, Map<String, Object?> content})> splitPersonalImagePacks(

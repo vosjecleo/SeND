@@ -5,12 +5,22 @@ import '../models/space_administration.dart';
 import 'thread_session.dart';
 import '../models/forum_post.dart';
 import '../models/login_methods.dart';
+import '../models/user_activity.dart';
+import '../services/activity_candidate.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
 /// Keeping SDK objects behind this contract lets desktop and future Android
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
+  ActivitySettings get activitySettings => const ActivitySettings();
+  List<ActivityCandidate> get detectedApplications => const [];
+  String? get activityWarning => null;
+  bool get supportsActivityDetection => false;
+  UserActivity? activityFor(String userId) => null;
+  LastFmTrack? lastFmRecentFor(String userId) => null;
+  Future<Uint8List?> loadActivityIcon(Uri uri) async => null;
+  Future<void> updateActivitySettings(ActivitySettings value) async {}
   Future<void> enableWebNotifications() async {}
   SessionStatus get status;
   ConnectionStatus get connectionStatus;
@@ -129,7 +139,7 @@ abstract class ChatBackend extends ChangeNotifier {
   /// Publishes this desktop device's best-effort active/idle lease.
   ///
   /// Mobile push uses the expiring lease to avoid alerting while another
-  /// Deltiecord desktop is actively being used.
+  /// SeND desktop is actively being used.
   void setDesktopIdle(bool idle) {}
 
   /// Reports whether the selected conversation is actually visible.
@@ -293,7 +303,7 @@ abstract class ChatBackend extends ChangeNotifier {
     bool removeBanner,
   });
 
-  /// Updates Deltiecord's optional RTC tile presentation fields.
+  /// Updates SeND's optional RTC tile presentation fields.
   Future<void> updateOwnVoicePresentation({
     int? color,
     Uint8List? backgroundBytes,

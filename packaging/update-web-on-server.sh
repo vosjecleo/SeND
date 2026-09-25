@@ -32,7 +32,7 @@ build="$(jq -r '.build' <<<"$manifest")"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$build" =~ ^[0-9]+$ ]]
 release="$version+$build"
 name="$(jq -r '.asset.name' <<<"$manifest")"
-[[ "$name" == "deltiecord-${release}-web.tar.gz" ]]
+[[ "$name" == "SeND-${release}-web.tar.gz" || "$name" == "deltiecord-${release}-web.tar.gz" ]]
 digest="$(jq -r '.asset.sha256' <<<"$manifest")"
 [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
 archive="$downloads/$name"

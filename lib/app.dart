@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'ui/video_preparation_overlay.dart';
+import 'services/app_sounds.dart';
+import 'ui/activity_widgets.dart';
 import 'services/platform_io.dart';
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
@@ -74,6 +77,8 @@ class _DeltiecordAppState extends State<DeltiecordApp>
       listenable: backend,
       builder: (context, _) {
         final preferences = backend.preferences;
+        AppSounds.notificationVolume = preferences.notificationVolume;
+        AppSounds.callVolume = preferences.callVolume;
         // Sync, typing, receipts and voice levels must not regenerate the
         // Material color scheme/theme. The home subtree listens independently.
         final configuration = (
@@ -163,8 +168,10 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                 surfaceContainerHighest: palette.hover,
                 surfaceTint: Colors.transparent,
                 onSurface: palette.text,
-                primary: accent,
-                onPrimary: deltiecordContrastingForeground(accent),
+                primary: customTheme == null ? null : accent,
+                onPrimary: customTheme == null
+                    ? null
+                    : deltiecordContrastingForeground(accent),
                 secondary: customTheme?.secondary,
                 onSecondary: customTheme == null
                     ? null
@@ -386,7 +393,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           );
         }
         return MaterialApp(
-          title: 'Deltiecord',
+          title: 'SeND',
           debugShowCheckedModeBanner: false,
           // Apply appearance atomically on every platform, even while another
           // route is opening/closing or the application ticker is suspended.
@@ -411,9 +418,20 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                   disableAnimations: preferences.reducedMotion,
                   highContrast: preferences.highContrast,
                 );
+            final routeContent =
+                !mobile && backend.status == SessionStatus.signedIn
+                ? _DesktopActivityReporter(backend: backend, child: child!)
+                : child!;
             final content = MediaQuery(
               data: scaledMedia,
-              child: mobile ? _InAppNotificationOverlay(child: child!) : child!,
+              child: ActivityScope(
+                backend: backend,
+                child: VideoPreparationOverlay(
+                  child: mobile
+                      ? _InAppNotificationOverlay(child: child)
+                      : routeContent,
+                ),
+              ),
             );
             if (interfaceScale == 1) return content;
             return ClipRect(
@@ -433,7 +451,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
             builder: (context, _) => switch (backend.status) {
               SessionStatus.starting => const _StartupScreen(),
               SessionStatus.failed => _StartupFailure(
-                message: backend.error ?? 'Deltiecord could not start.',
+                message: backend.error ?? 'SeND could not start.',
                 onRetry: backend.initialize,
               ),
               SessionStatus.signedIn =>
@@ -457,10 +475,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                             backend: backend,
                             child: FirstRunTourGate(
                               backend: backend,
-                              child: _DesktopActivityReporter(
-                                backend: backend,
-                                child: ChatShell(backend: backend),
-                              ),
+                              child: ChatShell(backend: backend),
                             ),
                           ),
                         ),
@@ -496,7 +511,9 @@ class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_globalKeyActivity);
-    _activity();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _activity();
+    });
   }
 
   bool _globalKeyActivity(KeyEvent event) {
@@ -672,7 +689,7 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
 
   @override
   void didChangeMetrics() {
-    // Android can recreate its window while Deltiecord is backgrounded. A
+    // Android can recreate its window while SeND is backgrounded. A
     // post-frame rebuild makes MediaQuery consume the new inset instead of
     // retaining the keyboard height from the old surface.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -805,7 +822,7 @@ class _StartupScreen extends StatelessWidget {
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 16),
-          Text('Opening Deltiecord…'),
+          Text('Opening SeND…'),
         ],
       ),
     ),

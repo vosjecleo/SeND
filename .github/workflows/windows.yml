@@ -124,7 +124,10 @@ jobs:
           }
 
       - name: Build Windows release
-        run: flutter build windows --release
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+        run: python packaging/flutter-with-credentials.py build windows --release
 
       - name: Package portable release
         shell: pwsh
@@ -134,7 +137,7 @@ jobs:
           $release = (Resolve-Path 'build/windows/x64/runner/Release').Path
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item LICENSE, CREDITS.md, THIRD-PARTY-NOTICES.md -Destination $release
-          Compress-Archive -Path "$release/*" -DestinationPath "dist/deltiecord-$releaseId-windows-x64-portable.zip" -CompressionLevel Optimal
+          Compress-Archive -Path "$release/*" -DestinationPath "dist/SeND-$releaseId-windows-x64-portable.zip" -CompressionLevel Optimal
           "DELTIECORD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DELTIECORD_RELEASE_ID=$releaseId" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DELTIECORD_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -146,7 +149,7 @@ jobs:
           if (-not (Test-Path $iscc)) {
             throw 'The pinned Windows runner image does not contain Inno Setup 6.'
           }
-          & $iscc "/DMyAppVersion=$env:DELTIECORD_VERSION" "/DOutputBaseName=deltiecord-$env:DELTIECORD_RELEASE_ID-windows-x64-setup" "/DSourceDir=$env:DELTIECORD_RELEASE" "/DOutputDir=$pwd\dist" packaging/windows/deltiecord.iss
+          & $iscc "/DMyAppVersion=$env:DELTIECORD_VERSION" "/DOutputBaseName=SeND-$env:DELTIECORD_RELEASE_ID-windows-x64-setup" "/DSourceDir=$env:DELTIECORD_RELEASE" "/DOutputDir=$pwd\dist" packaging/windows/deltiecord.iss
 
       - name: Smoke-test installer desktop shortcut
         shell: pwsh
@@ -162,7 +165,7 @@ jobs:
             '/TASKS=desktopicon', "/DIR=$installDir"
           ) -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
-          $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Deltiecord.lnk'
+          $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'SeND.lnk'
           if (-not (Test-Path $shortcut)) { throw 'Desktop shortcut was not created.' }
           $target = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath
           if ($target -ne (Join-Path $installDir 'deltiecord.exe')) {
@@ -184,7 +187,7 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: deltiecord-${{ env.DELTIECORD_RELEASE_ID }}-windows-x64
+          name: SeND-${{ env.DELTIECORD_RELEASE_ID }}-windows-x64
           path: dist/*
           if-no-files-found: error
           retention-days: 30

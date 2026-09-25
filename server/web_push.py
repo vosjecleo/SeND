@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deltiecord Web Push gateway. Run behind HTTPS with ONE bounded WSGI worker.
+"""SeND Web Push gateway. Run behind HTTPS with ONE bounded WSGI worker.
 
 Matrix supplies event IDs only. Short-lived OpenID proofs authenticate signups;
 Matrix access tokens, room keys, and message plaintext never enter this service.
@@ -36,6 +36,8 @@ ISSUERS = {'deltie.net': 'https://matrix.deltie.net',
 PUSH_HOSTS = {'web.push.apple.com', 'fcm.googleapis.com',
               'updates.push.services.mozilla.com'}
 _lock = threading.Lock()
+_delivery_lock = threading.Lock()
+_wake = threading.Event()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -52,6 +54,10 @@ def database():
     db.execute('CREATE TABLE IF NOT EXISTS subscriptions '
                '(id TEXT PRIMARY KEY, owner TEXT NOT NULL, endpoint_hash TEXT UNIQUE NOT NULL, '
                'subscription TEXT NOT NULL, seen REAL NOT NULL, visible_until REAL NOT NULL DEFAULT 0)')
+    db.execute('CREATE TABLE IF NOT EXISTS pending '
+               '(id TEXT NOT NULL, room TEXT NOT NULL, event TEXT NOT NULL, '
+               'expires REAL NOT NULL, retry_at REAL NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, '
+               'PRIMARY KEY(id,room))')
     try:
         with db:
             yield db
@@ -166,6 +172,19 @@ def visibility():
     with _lock, database() as db:
         db.execute('UPDATE subscriptions SET visible_until=?, seen=? WHERE id=?',
                    (time.time() + 60 if body.get('visible') is True else 0, time.time(), key))
+    _wake.set()
+    return jsonify(ok=True)
+
+
+@app.post('/api/push/read')
+def read_room():
+    body = request.get_json()
+    key = body.get('pushkey') if isinstance(body, dict) else None
+    room = body.get('room_id') if isinstance(body, dict) else None
+    if not isinstance(key, str) or not 1 <= len(key) <= 256 or not isinstance(room, str) or not 1 <= len(room) <= 1024:
+        return jsonify(error='Invalid request'), 400
+    with _lock, database() as db:
+        db.execute('DELETE FROM pending WHERE id=? AND room=?', (key, room))
     return jsonify(ok=True)
 
 
@@ -179,6 +198,7 @@ def unsubscribe():
         return jsonify(error='Invalid capability'), 400
     with _lock, database() as db:
         db.execute('DELETE FROM subscriptions WHERE id=?', (key,))
+        db.execute('DELETE FROM pending WHERE id=?', (key,))
     return jsonify(ok=True)
 
 
@@ -200,7 +220,8 @@ def send(subscription, payload):
                        ttl=300, timeout=8, requests_session=session)
 
 
-@app.post('/api/push/_matrix/push/v1/notify')
+@app.post('/_matrix/push/v1/notify')
+@app.post('/api/push/_matrix/push/v1/notify')  # legacy reverse-proxy route
 def notify():
     body = request.get_json()
     if not isinstance(body, dict) or not isinstance(body.get('notification'), dict):
@@ -224,17 +245,102 @@ def notify():
         if not row:
             rejected.append(key)
             continue
-        if row[1] > time.time() or not room or not event:
-            continue
-        try:
-            send(validate_subscription(json.loads(row[0])), {'room_id': room, 'event_id': event})
-        except WebPushException as error:
-            if error.response is not None and error.response.status_code in (404, 410):
+        if not room or not event:
+            counts = notification.get('counts')
+            if isinstance(counts, dict) and counts.get('unread') == 0:
                 with _lock, database() as db:
-                    db.execute('DELETE FROM subscriptions WHERE id=?', (key,))
-                rejected.append(key)
-            else:
-                return jsonify(error='Push delivery temporarily unavailable'), 503
-        except Exception:
-            return jsonify(error='Push delivery temporarily unavailable'), 503
+                    db.execute('DELETE FROM pending WHERE id=?', (key,))
+            continue
+        with _lock, database() as db:
+            db.execute('DELETE FROM pending WHERE expires<? OR id NOT IN (SELECT id FROM subscriptions)', (time.time(),))
+            exists = db.execute('SELECT 1 FROM pending WHERE id=? AND room=?', (key, room)).fetchone()
+            if not exists and (db.execute('SELECT COUNT(*) FROM pending WHERE id=?', (key,)).fetchone()[0] >= 256
+                               or db.execute('SELECT COUNT(*) FROM pending').fetchone()[0] >= 20000):
+                return jsonify(error='Notification queue is full; retry later'), 503
+            # ACK only after durable storage. Coalesce to the latest event per
+            # room; never store plaintext or force Synapse into foreground backoff.
+            db.execute('INSERT INTO pending VALUES (?,?,?,?,0,0) ON CONFLICT(id,room) DO UPDATE SET '
+                       'event=excluded.event, expires=excluded.expires, retry_at=0, attempts=0',
+                       (key, room, event, time.time() + 3600))
+    _wake.set()
     return jsonify(rejected=rejected)
+
+
+def drain_pending():
+    if not _delivery_lock.acquire(blocking=False):
+        return
+    try:
+        with _lock, database() as db:
+            db.execute('DELETE FROM pending WHERE expires<? OR id NOT IN (SELECT id FROM subscriptions)', (time.time(),))
+            rows = db.execute('SELECT p.id,p.room,p.event,s.subscription,p.attempts FROM pending p '
+                              'JOIN subscriptions s ON s.id=p.id WHERE s.visible_until<=? AND p.retry_at<=? '
+                              'ORDER BY p.retry_at LIMIT 16', (time.time(), time.time())).fetchall()
+        for key, room, event, subscription, attempts in rows:
+            # Recheck after earlier network calls; the room may have been read
+            # or the PWA reopened while this batch was being delivered.
+            with _lock, database() as db:
+                current = db.execute('SELECT 1 FROM pending p JOIN subscriptions s ON p.id=s.id '
+                                     'WHERE p.id=? AND p.room=? AND p.event=? AND s.visible_until<=?',
+                                     (key, room, event, time.time())).fetchone()
+            if not current:
+                continue
+            gone = False
+            retry = False
+            try:
+                send(validate_subscription(json.loads(subscription)), {'room_id': room, 'event_id': event})
+            except WebPushException as error:
+                gone = error.response is not None and error.response.status_code in (404, 410)
+                retry = not gone
+            except Exception:
+                retry = True
+            with _lock, database() as db:
+                if gone:
+                    db.execute('DELETE FROM subscriptions WHERE id=?', (key,))
+                    db.execute('DELETE FROM pending WHERE id=?', (key,))
+                elif retry:
+                    db.execute('UPDATE pending SET attempts=attempts+1,retry_at=? WHERE id=? AND room=? AND event=?',
+                               (time.time() + min(300, 2 ** min(attempts + 1, 8)), key, room, event))
+                else:
+                    db.execute('DELETE FROM pending WHERE id=? AND room=? AND event=?', (key, room, event))
+    finally:
+        _delivery_lock.release()
+
+
+def delivery_loop():
+    while True:
+        _wake.wait(2)
+        _wake.clear()
+        try:
+            drain_pending()
+        except Exception:
+            # No capabilities/endpoint URLs in logs. Retry durable work later.
+            app.logger.error('Web Push queue unavailable; retrying')
+
+
+# The deployed unit runs one non-preloaded WSGI worker. Tests keep this disabled
+# and drive the same drain function deterministically, without background I/O.
+if os.environ.get('WEB_PUSH_QUEUE') == '1':
+    threading.Thread(target=delivery_loop, daemon=True, name='web-push-delivery').start()
+
+
+@app.post('/api/push/test')
+def test_push():
+    body = request.get_json()
+    key = body.get('pushkey') if isinstance(body, dict) else None
+    if not isinstance(key, str) or not 1 <= len(key) <= 256:
+        return jsonify(error='Enable browser notifications first'), 400
+    with _lock, database() as db:
+        row = db.execute('SELECT subscription FROM subscriptions WHERE id=?', (key,)).fetchone()
+    if row is None:
+        return jsonify(error='Registration expired; enable notifications again'), 404
+    if not _allowed(hashlib.sha256(key.encode()).hexdigest(), 2, 'webpush-test'):
+        return jsonify(error='Wait a minute before testing again'), 429
+    try:
+        send(validate_subscription(json.loads(row[0])), {'test': True, 'room_id': '', 'event_id': ''})
+    except WebPushException as error:
+        if error.response is not None and error.response.status_code in (404, 410):
+            return jsonify(error='Browser subscription expired; enable notifications again'), 410
+        return jsonify(error='Push provider refused delivery; try enabling notifications again'), 503
+    except Exception:
+        return jsonify(error='Push delivery failed; try again later'), 503
+    return jsonify(ok=True)

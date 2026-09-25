@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../activity_widgets.dart';
 import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
@@ -800,6 +801,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                 ),
                 actions: const [SizedBox.shrink()],
               ),
+            if (widget.room.isDirect)
+              ActivityBlock(userId: widget.room.directUserId, compact: true),
             EncryptionAttentionBanner(backend: backend, room: widget.room),
             Expanded(
               child: backend.timelineLoading && messages.isEmpty
@@ -1740,6 +1743,9 @@ class _MobileMessageRow extends StatelessWidget {
                             ],
                           ),
                         ),
+                      if (!grouped ||
+                          HeaderMessageMetadata.has(context, message.id))
+                        const SizedBox(height: 2),
                       if (!message.redacted &&
                           message.poll == null &&
                           albumMessages == null &&
@@ -1801,17 +1807,20 @@ class _MobileMessageRow extends StatelessWidget {
                             child: MediaAlbumGrid(
                               messages: album,
                               height: 250,
-                              itemBuilder: (context, albumMessage) => FittedBox(
-                                fit: BoxFit.cover,
-                                clipBehavior: Clip.hardEdge,
-                                child: SizedBox.square(
-                                  dimension: 250,
-                                  child: MobileAttachmentView(
+                              itemBuilder: (context, albumMessage) =>
+                                  MediaAlbumTile(
+                                    key: ValueKey(albumMessage.id),
                                     backend: backend,
                                     message: albumMessage,
+                                    onOpen: () => showDialog<void>(
+                                      context: context,
+                                      barrierColor: Colors.black,
+                                      builder: (_) => MobileMediaGallery(
+                                        backend: backend,
+                                        initialMessage: albumMessage,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
                             ),
                           ),
                         )

@@ -9,12 +9,12 @@ styles, adds desktop discussions/forums and shared profile editing, and provides
 external-browser SSO/OIDC. Check clipboard paste/send on both light and dark
 themes, browser callback return/cancellation, and session restoration on hardware.
 
-Deltiecord uses Flutter's standard Windows desktop runner. CI builds a complete
+SeND uses Flutter's standard Windows desktop runner. CI builds a complete
 portable directory and packages it both as a ZIP and a per-user Inno Setup
 installer. Extract the entire portable ZIP before running `deltiecord.exe`;
 the executable is not standalone.
 
-The installer defaults to `%LOCALAPPDATA%\Programs\Deltiecord`, creates a Start
+The installer defaults to `%LOCALAPPDATA%\Programs\SeND`, creates a Start
 Menu shortcut, and optionally creates a desktop shortcut. Upgrading or
 uninstalling does not delete Matrix sessions or other per-user application data.
 

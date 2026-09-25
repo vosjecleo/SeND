@@ -7,7 +7,7 @@ import 'package:path/path.dart' as path;
 ///
 /// Android/iOS application directories are sandboxed by the OS. Linux and
 /// macOS need an explicit owner-only mode because the process umask is outside
-/// Deltiecord's control.
+/// SeND's control.
 Future<void> ensurePrivateDirectory(Directory directory) async {
   await directory.create(recursive: true);
   if (Platform.isLinux || Platform.isMacOS) {

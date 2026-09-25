@@ -42,7 +42,7 @@ Future<Client> createMatrixClient() async {
     fileStorageLocation: dataDirectory.uri,
   );
   return Client(
-    'Deltiecord',
+    'Deltiecord', // Persistent SDK client ID; preserve existing sessions.
     database: sdkDatabase,
     customVideoThumbnailGenerator: AndroidVideoThumbnail.generate,
     // Room presentation controls whether a room exposes a timeline/composer or
@@ -55,7 +55,7 @@ Future<Client> createMatrixClient() async {
       deltiecordSpaceRolesEventType,
       'net.deltiecord.space.policy',
     },
-    // Deltiecord warns about verification separately. Excluding an unverified
+    // SeND warns about verification separately. Excluding an unverified
     // device here would create ciphertext its owner cannot decrypt.
     shareKeysWith: ShareKeysWith.all,
   );
@@ -70,6 +70,6 @@ Future<void> _restrictPermissions(String path, String mode) async {
   if (!Platform.isLinux && !Platform.isMacOS) return;
   final result = await Process.run('chmod', [mode, path]);
   if (result.exitCode != 0) {
-    throw FileSystemException('Could not secure Deltiecord data', path);
+    throw FileSystemException('Could not secure SeND data', path);
   }
 }

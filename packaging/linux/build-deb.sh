@@ -9,6 +9,7 @@ trap 'rm -rf "$work"' EXIT
 root="$work/root"
 
 "$repo_root/packaging/linux/build-appdir.sh" "$root"
+printf 'deb\n' >"$root/usr/lib/deltiecord/data/send-package"
 unlink "$root/usr/bin/deltiecord"
 install -m 0755 "$repo_root/packaging/linux/deltiecord-launcher" \
   "$root/usr/bin/deltiecord"
@@ -19,11 +20,11 @@ Version: $version
 Section: net
 Priority: optional
 Architecture: amd64
-Maintainer: Deltiecord contributors
+Maintainer: SeND contributors
 Depends: libc6, libgtk-3-0 | libgtk-3-0t64, libsecret-1-0, libpulse0, pulseaudio-utils, ffmpeg, libasound2, libv4l-0, libmpv2 | libmpv1, libpipewire-0.3-0, xdg-desktop-portal
 Recommends: xdg-desktop-portal-gtk | xdg-desktop-portal-kde | xdg-desktop-portal-gnome
 Description: Compact Matrix desktop client
- Deltiecord is a dense, old-school desktop client for Matrix.
+ SeND is a dense, old-school desktop client for Matrix.
 EOF
 install -d "$dist"
 output="$dist/deltiecord_${version}_amd64.deb"

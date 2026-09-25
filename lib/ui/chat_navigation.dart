@@ -251,7 +251,7 @@ class _SpaceBar extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Controls who may reorder rooms and manage '
-                        'Deltiecord categories. The permission is synced '
+                        'SeND categories. The permission is synced '
                         'through Matrix room power levels.',
                         style: TextStyle(color: context.deltiecord.muted),
                       ),
@@ -636,7 +636,7 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
       if (mounted) {
         setState(() {
           _searching = false;
-          _error = 'Deltiecord could not join that Space.';
+          _error = 'SeND could not join that Space.';
         });
       }
     }
@@ -787,26 +787,33 @@ class _SpaceButton extends StatelessWidget {
                   ),
                 ),
               ),
-              if (selected || unread)
-                Positioned(
-                  left: -8,
-                  top: selected ? 12 : 21,
-                  child: IgnorePointer(
-                    child: Container(
-                      key: ValueKey(
-                        'space-marker-$tooltip-${selected ? "selected" : "unread"}',
-                      ),
-                      width: 4,
-                      height: selected ? 24 : 6,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : const Color(0xff324452),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
+              AnimatedPositioned(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                left: -8,
+                top: selected ? 12 : 21,
+                child: IgnorePointer(
+                  child: AnimatedContainer(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 160),
+                    key: ValueKey('space-marker-$tooltip'),
+                    width: 4,
+                    height: selected
+                        ? 24
+                        : unread
+                        ? 6
+                        : 0,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : const Color(0xff324452),
+                      borderRadius: BorderRadius.circular(3),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -2091,42 +2098,60 @@ class _RoomListTile extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onSecondaryTapDown: (details) =>
-          _showContextMenu(context, details.globalPosition),
-      child: ListTile(
-        dense: true,
-        visualDensity: const VisualDensity(vertical: -4),
-        minTileHeight: 30,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        minVerticalPadding: 0,
-        minLeadingWidth: 0,
-        horizontalTitleGap: 8,
-        selected: backend.selectedRoom?.id == room.id,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (mayArrange) dragGrip(),
-            _RoomIcon(room: room, size: 21),
-          ],
+    return NavigationHover(
+      builder: (hovered) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: (details) =>
+            _showContextMenu(context, details.globalPosition),
+        child: ListTile(
+          dense: true,
+          visualDensity: const VisualDensity(vertical: -4),
+          minTileHeight: 30,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+          minVerticalPadding: 0,
+          minLeadingWidth: 0,
+          horizontalTitleGap: 8,
+          selected: backend.selectedRoom?.id == room.id,
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (mayArrange) dragGrip(),
+              _RoomIcon(room: room, size: 21),
+            ],
+          ),
+          title: Text(
+            room.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: hovered || backend.selectedRoom?.id == room.id
+                  ? Theme.of(context).colorScheme.onSurface
+                  : context.deltiecord.muted,
+              fontWeight:
+                  room.unreadCount > 0 ||
+                      room.markedUnread ||
+                      room.hasUnreadMessages
+                  ? FontWeight.w700
+                  : FontWeight.w400,
+            ),
+          ),
+          subtitle: room.isVoice
+              ? participantCount == 0
+                    ? null
+                    : Text('$participantCount connected')
+              : backend.selectedSpaceId == null
+              ? ActivityStatus(
+                  backend: backend,
+                  userId: room.directUserId,
+                  presence: room.presence,
+                  status: room.statusMessage,
+                )
+              : null,
+          trailing: backend.selectedSpaceId == null && room.unreadCount > 0
+              ? Badge(label: Text('${room.unreadCount}'))
+              : null,
+          onTap: () => backend.selectRoom(room.id),
         ),
-        title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: room.isVoice
-            ? participantCount == 0
-                  ? null
-                  : Text('$participantCount connected')
-            : backend.selectedSpaceId == null
-            ? Text(
-                room.lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : null,
-        trailing: backend.selectedSpaceId == null && room.unreadCount > 0
-            ? Badge(label: Text('${room.unreadCount}'))
-            : null,
-        onTap: () => backend.selectRoom(room.id),
       ),
     );
   }
@@ -2178,122 +2203,127 @@ class _HomeRoomListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = backend.selectedRoom?.id == room.id;
     final age = compactActivityAge(room.lastActivityAt);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onSecondaryTapDown: onSecondaryTapDown,
-      child: Material(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: selected
-                ? Theme.of(context).extension<ThemeChrome>()?.selectionBorder ??
-                      Colors.transparent
-                : Colors.transparent,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        color: selected
-            ? Theme.of(context).extension<ThemeChrome>()?.selection ??
-                  Theme.of(context).colorScheme.primary.withValues(alpha: .13)
-            : Colors.transparent,
-        child: InkWell(
-          onTap: () => backend.selectRoom(room.id),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: _densityBetween(
-                backend.preferences.compactness,
-                roomy: 62,
-                compact: 48,
-              ),
+    return NavigationHover(
+      builder: (hovered) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: onSecondaryTapDown,
+        child: Material(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: selected
+                  ? Theme.of(
+                          context,
+                        ).extension<ThemeChrome>()?.selectionBorder ??
+                        Colors.transparent
+                  : Colors.transparent,
             ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                8,
-                _densityBetween(
+          ),
+          clipBehavior: Clip.antiAlias,
+          color: selected
+              ? Theme.of(context).extension<ThemeChrome>()?.selection ??
+                    Theme.of(context).colorScheme.primary.withValues(alpha: .13)
+              : Colors.transparent,
+          child: InkWell(
+            onTap: () => backend.selectRoom(room.id),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: _densityBetween(
                   backend.preferences.compactness,
-                  roomy: 6,
-                  compact: 3,
-                ),
-                10,
-                _densityBetween(
-                  backend.preferences.compactness,
-                  roomy: 6,
-                  compact: 3,
+                  roomy: 56,
+                  compact: 44,
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _RoomIcon(room: room, size: 40, showPresence: room.isDirect),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          room.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: DeltiecordTypeScale.bigChat,
-                            fontWeight: FontWeight.w700,
-                            height: 1.1,
-                          ),
-                        ),
-                        SizedBox(
-                          height: _densityBetween(
-                            backend.preferences.compactness,
-                            roomy: 6,
-                            compact: 3,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text(
-                            room.lastMessage,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  8,
+                  _densityBetween(
+                    backend.preferences.compactness,
+                    roomy: 6,
+                    compact: 3,
+                  ),
+                  10,
+                  _densityBetween(
+                    backend.preferences.compactness,
+                    roomy: 6,
+                    compact: 3,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _RoomIcon(
+                      room: room,
+                      size: 34,
+                      showPresence: room.isDirect,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            room.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: context.deltiecord.muted,
-                              fontSize: DeltiecordTypeScale.normal,
-                              height: 1.16,
+                              fontSize: DeltiecordTypeScale.bigChat,
+                              color: hovered || selected
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : context.deltiecord.muted,
+                              fontWeight:
+                                  room.unreadCount > 0 ||
+                                      room.markedUnread ||
+                                      room.hasUnreadMessages
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              height: 1.1,
                             ),
                           ),
-                        ),
-                      ],
+                          if (room.isDirect)
+                            ActivityStatus(
+                              backend: backend,
+                              userId: room.directUserId,
+                              presence: room.presence,
+                              status: room.statusMessage,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (room.unreadCount > 0 || age.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (room.unreadCount > 0)
-                          Badge(
-                            largeSize: 16,
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            label: Text(
-                              '${room.unreadCount}',
-                              style: const TextStyle(fontSize: 9),
+                    if (room.unreadCount > 0 || age.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (room.unreadCount > 0)
+                            Badge(
+                              largeSize: 16,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              label: Text(
+                                '${room.unreadCount}',
+                                style: const TextStyle(fontSize: 9),
+                              ),
                             ),
-                          ),
-                        if (room.unreadCount > 0 && age.isNotEmpty)
-                          const SizedBox(height: 2),
-                        if (age.isNotEmpty)
-                          Text(
-                            age,
-                            style: TextStyle(
-                              color: context.deltiecord.muted,
-                              fontSize: DeltiecordTypeScale.small,
-                              height: 1.05,
+                          if (room.unreadCount > 0 && age.isNotEmpty)
+                            const SizedBox(height: 2),
+                          if (age.isNotEmpty)
+                            Text(
+                              age,
+                              style: TextStyle(
+                                color: context.deltiecord.muted,
+                                fontSize: DeltiecordTypeScale.small,
+                                height: 1.05,
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

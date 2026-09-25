@@ -38,7 +38,7 @@ void main() {
     });
   });
 
-  test('Deltiecord and Telegram share the 120-item pack ceiling', () {
+  test('SeND and Telegram share the 120-item pack ceiling', () {
     expect(maximumStickerPackItems, 120);
   });
 }

@@ -116,7 +116,7 @@ class _JsonThemeSettingsState extends State<JsonThemeSettings> {
           subtitle: Text(
             theme?.name ??
                 (preferences.themeJson.isEmpty
-                    ? 'Default Deltiecord appearance'
+                    ? 'Default SeND appearance'
                     : 'Unavailable theme — using built-in colours'),
           ),
           trailing: preferences.themeJson.isEmpty

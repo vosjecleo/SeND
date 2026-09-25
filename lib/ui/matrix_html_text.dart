@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'emoji_typography.dart';
+import 'lifecycle_memory_image.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:url_launcher/url_launcher.dart';
@@ -544,10 +545,13 @@ class _CustomEmojiImageState extends State<CustomEmojiImage> {
       if (bytes != null) {
         return SizedBox.square(
           dimension: widget.size,
-          child: Image.memory(
-            bytes,
+          child: LifecycleMemoryImage(
+            bytes: bytes,
+            animated: false,
+            autoplay:
+                widget.backend.preferences.autoplayGifs &&
+                !widget.backend.preferences.reducedMotion,
             fit: BoxFit.contain,
-            gaplessPlayback: true,
           ),
         );
       }

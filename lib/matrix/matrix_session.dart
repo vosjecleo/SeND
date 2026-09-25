@@ -8,6 +8,7 @@ part of 'matrix_backend.dart';
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
     try {
+      await _stopActivities(clear: true);
       _settingsSaveTimer?.cancel();
       _pendingPreferences = null;
       _settingsEchoGuard.clear();
@@ -40,6 +41,7 @@ extension _MatrixSession on MatrixBackend {
           _profileRevision++;
         }
         _applySyncedProfilePresence();
+        _activities?.visibilityChanged(refresh: false);
         _loadSettings();
         if (_stickerPackSourcesChanged()) unawaited(_refreshStickerPacks());
         unawaited(_enforceCallDeviceHandoff());
@@ -52,6 +54,7 @@ extension _MatrixSession on MatrixBackend {
         unawaited(_notifyNewMessages());
       });
       _loginSubscription = _matrix.onLoginStateChanged.stream.listen((_) {
+        if (!_matrix.isLogged()) unawaited(_stopActivities());
         // Authentication can report success before initial account data has
         // arrived. Do not expose editable defaults in that interval.
         if (_status == SessionStatus.signingIn ||
@@ -142,8 +145,8 @@ extension _MatrixSession on MatrixBackend {
         identifier: AuthenticationUserIdentifier(user: username),
         password: password,
         initialDeviceDisplayName: Platform.isAndroid
-            ? 'Deltiecord Android'
-            : 'Deltiecord Desktop',
+            ? 'SeND Android'
+            : 'SeND Desktop',
       );
       await _finishPasswordAuthentication();
     } catch (exception) {
@@ -164,9 +167,7 @@ extension _MatrixSession on MatrixBackend {
     _notifyBackendListeners();
     try {
       await _matrix.checkHomeserver(Uri.parse('https://matrix.deltie.net'));
-      final deviceName = Platform.isAndroid
-          ? 'Deltiecord Android'
-          : 'Deltiecord Desktop';
+      final deviceName = Platform.isAndroid ? 'SeND Android' : 'SeND Desktop';
       try {
         await _matrix.register(
           username: username,
@@ -236,6 +237,7 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _logoutSession() async {
     _error = null;
     try {
+      await _stopActivities(clear: true);
       _settingsSaveTimer?.cancel();
       _pendingPreferences = null;
       _settingsEchoGuard.clear();
@@ -701,6 +703,12 @@ extension _MatrixSession on MatrixBackend {
             },
           ),
         );
+        continue;
+      }
+      final desktop =
+          !kIsWeb &&
+          (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
+      if (desktop) {
         final cadence = _preferences.notificationAlertCadence;
         final now = DateTime.now();
         final previous = _lastForegroundAlertAt[room.id];
@@ -709,13 +717,12 @@ extension _MatrixSession on MatrixBackend {
             (cadence == NotificationAlertCadence.fiveMinuteCooldown &&
                 (previous == null ||
                     now.difference(previous) >= const Duration(minutes: 5)));
-        if (shouldAlert && !Platform.isAndroid) {
+        if (shouldAlert) {
           _lastForegroundAlertAt[room.id] = now;
           if (_preferences.notificationSound) {
             unawaited(AppSounds.notification());
           }
         }
-        continue;
       }
       await _notifications.show(
         title: '$sender in ${room.getLocalizedDisplayname()}',
@@ -729,7 +736,7 @@ extension _MatrixSession on MatrixBackend {
         image: notificationImage?.$1,
         imageMimeType: notificationImage?.$2,
         timestamp: event.originServerTs,
-        sound: _preferences.notificationSound,
+        sound: !desktop && _preferences.notificationSound,
         vibrate: _preferences.notificationVibration,
         alertCadence: _preferences.notificationAlertCadence,
         unreadCount: room.isDirectChat
@@ -876,6 +883,12 @@ extension _MatrixSession on MatrixBackend {
       notificationsEnabled:
           content?.tryGet<bool>('notifications_enabled') ?? true,
       notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
+      optimizeVideos: content?.tryGet<bool>('optimize_videos') ?? true,
+      notificationVolume:
+          (content?['notification_volume'] as num?)?.toDouble().clamp(0, 1) ??
+          1,
+      callVolume:
+          (content?['call_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
       notificationVibration:
           content?.tryGet<bool>('notification_vibration') ?? true,
       notificationAlertCadence:
@@ -996,6 +1009,8 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
+    final activityPrivacyChanged =
+        preferences.sharePresence != _preferences.sharePresence;
     if (_matrix.userID == null) return;
     if (!_settingsHydrated) {
       throw StateError(
@@ -1040,6 +1055,7 @@ extension _MatrixSession on MatrixBackend {
       );
     }
     _preferences = preferences;
+    if (activityPrivacyChanged) _activities?.refresh();
     if (preferences.syncAppearance) {
       if (_deviceAppearance != null) {
         _deviceAppearance = null;
@@ -1130,6 +1146,9 @@ extension _MatrixSession on MatrixBackend {
         'use_24_hour_time': preferences.use24HourTime,
         'notifications_enabled': preferences.notificationsEnabled,
         'notification_sound': preferences.notificationSound,
+        'optimize_videos': preferences.optimizeVideos,
+        'notification_volume': preferences.notificationVolume,
+        'call_volume': preferences.callVolume,
         'notification_vibration': preferences.notificationVibration,
         'notification_alert_cadence': preferences.notificationAlertCadence.name,
         'send_read_receipts': preferences.sendReadReceipts,
@@ -1187,12 +1206,41 @@ extension _MatrixSession on MatrixBackend {
   void _setDesktopIdle(bool idle) {
     if (Platform.isAndroid || _desktopIdle == idle) return;
     _desktopIdle = idle;
+    if (_ownProfileHydrated) {
+      _profilePresence =
+          !_preferences.sharePresence || _presenceMode == PresenceMode.invisible
+          ? UserPresence.offline
+          : _presenceMode == PresenceMode.idle ||
+                (_presenceMode == PresenceMode.online && idle)
+          ? UserPresence.away
+          : UserPresence.online;
+      _notifyBackendListeners();
+    }
     _desktopActivityLeaseTimer?.cancel();
     unawaited(_publishDesktopActivityLease(idle));
+    unawaited(_refreshDesktopPresence());
+    if (!idle) {
+      _desktopActivityLeaseTimer = Timer.periodic(const Duration(minutes: 1), (
+        _,
+      ) {
+        unawaited(_publishDesktopActivityLease(false));
+        // Renew real user activity, not just our notification-suppression
+        // lease. Otherwise Synapse can mark a reading user unavailable.
+        unawaited(_refreshDesktopPresence());
+      });
+    }
+  }
+
+  Future<void> _refreshDesktopPresence() async {
+    if (_desktopPresencePublishing || _client == null) return;
+    final client = _matrix;
     final userId = _matrix.userID;
     // The activity watcher can fire before the own profile has restored the
     // existing status. Publishing presence before then would erase it.
     if (userId != null && _ownProfileHydrated) {
+      final idle = _desktopIdle;
+      final mode = _presenceMode;
+      final share = _preferences.sharePresence;
       final presence = !_preferences.sharePresence
           ? PresenceType.offline
           : switch (_presenceMode) {
@@ -1202,15 +1250,22 @@ extension _MatrixSession on MatrixBackend {
               PresenceMode.doNotDisturb => PresenceType.online,
               PresenceMode.invisible => PresenceType.offline,
             };
-      unawaited(
-        _matrix.setPresence(userId, presence, statusMsg: _profileStatusMessage),
-      );
-    }
-    if (!idle) {
-      _desktopActivityLeaseTimer = Timer.periodic(
-        const Duration(minutes: 1),
-        (_) => unawaited(_publishDesktopActivityLease(false)),
-      );
+      _desktopPresencePublishing = true;
+      try {
+        await client
+            .setPresence(userId, presence, statusMsg: _profileStatusMessage)
+            .timeout(const Duration(seconds: 10));
+      } catch (_) {
+        // The next transition/heartbeat retries without interrupting input.
+      } finally {
+        _desktopPresencePublishing = false;
+        if (identical(client, _client) &&
+            (idle != _desktopIdle ||
+                mode != _presenceMode ||
+                share != _preferences.sharePresence)) {
+          unawaited(_refreshDesktopPresence());
+        }
+      }
     }
   }
 

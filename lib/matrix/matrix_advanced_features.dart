@@ -935,7 +935,30 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     if (!existing.canManage) {
       throw StateError('You cannot edit this emoji pack.');
     }
-    final content = await _uploadStickerPack(replacement);
+    Future<void> checkUnchanged() async {
+      final current = await _resolveStickerPack(packId: existing.id);
+      if (current == null ||
+          !current.canManage ||
+          current.name != existing.name ||
+          current.stickers.length != existing.stickers.length ||
+          !current.stickers.every(
+            (item) => existing.stickers.any(
+              (old) =>
+                  old.id == item.id &&
+                  old.name == item.name &&
+                  old.mxcUri == item.mxcUri &&
+                  old.assetType == item.assetType,
+            ),
+          )) {
+        throw StateError(
+          'This pack changed while you were editing. Reopen it to avoid overwriting newer changes.',
+        );
+      }
+    }
+
+    await checkUnchanged();
+    final content = await _uploadStickerPack(replacement, reuseFrom: existing);
+    await checkUnchanged();
     final userId = _matrix.userID;
     if (existing.sourceRoomId == null) {
       final type = existing.accountDataType;
@@ -1024,8 +1047,9 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
   }
 
   Future<Map<String, Object?>> _uploadStickerPack(
-    StickerPackDraft draft,
-  ) async {
+    StickerPackDraft draft, {
+    StickerPackSummary? reuseFrom,
+  }) async {
     final name = draft.name.trim();
     if (name.isEmpty ||
         draft.stickers.isEmpty ||
@@ -1049,12 +1073,26 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     var totalBytes = 0;
     var emojiBytes = 0;
     for (final item in draft.stickers) {
+      final reused = item.reuse;
+      final canReuse = reused != null && item.bytes.isEmpty;
+      if (canReuse &&
+          !(reuseFrom?.stickers.any(
+                (old) =>
+                    old.id == reused.id &&
+                    old.mxcUri == reused.mxcUri &&
+                    old.assetType == item.assetType &&
+                    old.mimeType == item.mimeType,
+              ) ??
+              false)) {
+        throw StateError('The original pack item is no longer available.');
+      }
       var width = item.width;
       var height = item.height;
-      if (item.bytes.isEmpty || item.bytes.length > 5 * 1024 * 1024) {
+      if (!canReuse &&
+          (item.bytes.isEmpty || item.bytes.length > 5 * 1024 * 1024)) {
         throw StateError('Each sticker must be at most 5 MiB.');
       }
-      if (item.assetType == StickerAssetType.emoji) {
+      if (!canReuse && item.assetType == StickerAssetType.emoji) {
         final dimensions = validateCustomEmojiAsset(item.bytes, item.mimeType);
         emojiBytes += item.bytes.length;
         if (emojiBytes > StickerPackDraft.maximumEmojiPackBytes) {
@@ -1071,16 +1109,24 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
           .trim()
           .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_')
           .replaceAll(RegExp(r'^_+|_+$'), '');
-      if (shortcode.isEmpty || shortcode.length > 100) continue;
-      final uri = await _matrix.uploadContent(
-        item.bytes,
-        filename: '$shortcode.${_stickerExtension(item.mimeType)}',
-        contentType: item.mimeType,
-      );
+      if (shortcode.isEmpty ||
+          shortcode.length > 100 ||
+          images.keys.any(
+            (key) => key.toLowerCase() == shortcode.toLowerCase(),
+          )) {
+        throw StateError('Each pack item needs a valid, unique alias.');
+      }
+      final uri = canReuse
+          ? reused.mxcUri
+          : await _matrix.uploadContent(
+              item.bytes,
+              filename: '$shortcode.${_stickerExtension(item.mimeType)}',
+              contentType: item.mimeType,
+            );
       // Newly uploaded pack media is already in memory. Seed the bounded
       // shared media cache so opening the picker does not immediately fetch
       // every item back from the homeserver.
-      _rememberStickerPreview(uri, item.bytes);
+      if (!canReuse) _rememberStickerPreview(uri, item.bytes);
       images[shortcode] = {
         'body': shortcode,
         'url': uri.toString(),
@@ -1090,7 +1136,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         'net.deltiecord.asset_type': item.assetType.name,
         'info': {
           'mimetype': item.mimeType,
-          'size': item.bytes.length,
+          if (!canReuse) 'size': item.bytes.length,
           'w': ?width,
           'h': ?height,
         },
@@ -1128,6 +1174,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final userId = _matrix.userID;
     if (userId == null) return;
     _presenceMode = mode;
+    _activities?.refresh();
     _profilePresence = switch (mode) {
       PresenceMode.online || PresenceMode.doNotDisturb => UserPresence.online,
       PresenceMode.idle => UserPresence.away,

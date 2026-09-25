@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>net.deltie.deltiecord</id>
-  <name>Deltiecord</name>
+  <name>SeND</name>
   <summary>A compact, old-school Matrix desktop client</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
   <developer id="net.deltie">
-    <name>Deltiecord contributors</name>
+    <name>SeND contributors</name>
   </developer>
   <description>
     <p>
-      Deltiecord is a dense desktop client for Matrix with encrypted messaging,
+      SeND is a dense desktop client for Matrix with encrypted messaging,
       media, Spaces, and interoperable MatrixRTC voice and video rooms.
     </p>
   </description>
@@ -47,7 +47,7 @@
     </release>
     <release version="0.9.23" date="2026-09-02" type="stable">
       <description>
-        <p>Repairs encrypted video playback and seeking, stabilizes timeline anchoring, refines notification ownership, and promotes Deltiecord's first stable-channel build.</p>
+        <p>Repairs encrypted video playback and seeking, stabilizes timeline anchoring, refines notification ownership, and promotes SeND's first stable-channel build.</p>
       </description>
     </release>
     <release version="0.9.21" date="2026-09-01" type="development">

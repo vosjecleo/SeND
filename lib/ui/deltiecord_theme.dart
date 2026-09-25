@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_models.dart';
 
-/// Deltiecord's deliberately small desktop type scale.
+/// SeND's deliberately small desktop type scale.
 ///
 /// Feature widgets should choose a semantic tier instead of inventing a new
 /// point size. Font scaling remains available through accessibility settings.
@@ -13,7 +13,7 @@ abstract final class DeltiecordTypeScale {
   static const double bigUi = 17;
 }
 
-/// The single corner radius used by Deltiecord's rectangular surfaces.
+/// The single corner radius used by SeND's rectangular surfaces.
 /// Circular avatars and deliberately pill-shaped status controls are exempt.
 abstract final class DeltiecordCorners {
   static const double radius = 12;

@@ -12,7 +12,7 @@ Future<void> showMobileChannelManager(
   ),
 );
 
-/// Touch-oriented editor for Deltiecord's interoperable Space ordering state.
+/// Touch-oriented editor for SeND's interoperable Space ordering state.
 ///
 /// The backend remains responsible for power-level enforcement and for writing
 /// both Matrix Space child order and the namespaced category assignment state.

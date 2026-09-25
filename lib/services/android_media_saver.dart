@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 /// Stores user-requested media through Android's scoped MediaStore API.
 ///
-/// The native side owns filename sanitization and the Downloads/Deltiecord
+/// The native side owns filename sanitization and the Downloads/SeND
 /// destination. Keeping that boundary native avoids broad storage permissions
 /// and the unreliable document-provider "save as" flow on Android.
 final class AndroidMediaSaver {

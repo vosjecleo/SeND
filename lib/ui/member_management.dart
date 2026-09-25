@@ -50,7 +50,7 @@ Future<void> showMemberManagement(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Timeout for 10 minutes'),
               subtitle: const Text(
-                'Restored by an online authorised Deltiecord client; may expire late if all are offline.',
+                'Restored by an online authorised SeND client; may expire late if all are offline.',
               ),
               onTap: () => Navigator.pop(context, 'timeout'),
             ),

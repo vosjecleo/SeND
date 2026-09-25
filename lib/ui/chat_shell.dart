@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'activity_widgets.dart';
+import 'navigation_polish.dart';
 import 'gif_favourite_button.dart';
 import 'voice_message_composer.dart';
 import '../services/platform_io.dart';
@@ -82,7 +84,7 @@ const double _composerEditorHeight = 36;
 const double _bottomPanelVerticalInset = 8;
 const double _composerIslandVerticalInset = 6;
 
-// Flutter Quill represents a clipboard image embed with U+FFFC. Deltiecord
+// Flutter Quill represents a clipboard image embed with U+FFFC. SeND
 // sends that image as a Matrix attachment, so the document marker must never
 // leak into the accompanying body as a visible "OBJ" replacement glyph.
 String _withoutAttachmentPlaceholders(String value) =>
@@ -167,7 +169,7 @@ class _ChatShellState extends State<ChatShell> {
             // Quill can offer an already-flattened bitmap. Check the original
             // clipboard formats before accepting that fallback.
             _queueClipboardImage(await readClipboardImage() ?? bytes);
-            // Deltiecord sends pasted images as Matrix attachments instead of
+            // SeND sends pasted images as Matrix attachments instead of
             // inserting a local-only image embed into the text document.
             return null;
           },
@@ -954,6 +956,7 @@ class _ChatShellState extends State<ChatShell> {
                                                 null
                                       ? _RecipientProfilePanel(
                                           backend: widget.backend,
+                                          onClose: _showMembersPanel,
                                           member:
                                               _sidePanelMember ??
                                               directRecipient!,

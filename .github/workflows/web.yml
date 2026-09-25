@@ -32,10 +32,14 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - name: Validate and build web
         shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
           set -euo pipefail
           node --check web/sw.js
           node --check web/browser_bridge.js
+          node --test tool/web_push_test.cjs
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub
           python3 -m venv /tmp/web-push-tests
@@ -68,5 +72,5 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: deltiecord-web
-          path: dist/deltiecord-*-web.tar.gz
+          path: dist/SeND-*-web.tar.gz
           if-no-files-found: error

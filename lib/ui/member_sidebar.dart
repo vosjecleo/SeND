@@ -243,8 +243,11 @@ class _MemberSidebarTile extends StatelessWidget {
       color: Colors.transparent,
       child: ListTile(
         dense: true,
-        visualDensity: const VisualDensity(vertical: -2),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        visualDensity: const VisualDensity(vertical: -3),
+        minTileHeight: 44,
+        minVerticalPadding: 3,
+        horizontalTitleGap: 10,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         leading: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -282,22 +285,36 @@ class _MemberSidebarTile extends StatelessWidget {
             ),
           ],
         ),
-        title: Text(
-          member.displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: member.nameColor == null ? null : Color(member.nameColor!),
-            fontSize: DeltiecordTypeScale.bigChat,
-            fontWeight: FontWeight.w600,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                member.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: member.nameColor == null
+                      ? null
+                      : Color(member.nameColor!),
+                  fontSize: DeltiecordTypeScale.bigChat,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+            if (member.powerLevel >= 50) ...[
+              const SizedBox(width: 6),
+              MemberRoleBadge(powerLevel: member.powerLevel),
+            ],
+          ],
         ),
-        subtitle: member.powerLevel >= 50
-            ? Text(
-                member.powerLevel >= 100 ? 'Administrator' : 'Moderator',
-                style: TextStyle(color: context.deltiecord.muted),
-              )
-            : null,
+        subtitle: member.presence == UserPresence.offline
+            ? null
+            : ActivityStatus(
+                backend: backend,
+                userId: member.userId,
+                presence: member.presence,
+                status: member.statusMessage,
+              ),
         onTap: () => onSelected(member),
         onLongPress: () => showMemberManagement(context, backend, member),
       ),

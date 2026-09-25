@@ -1,4 +1,4 @@
-# Deltiecord architecture
+# SeND architecture
 
 Current baseline: 0.9.34+106. See [release readiness](RELEASE_READINESS.md)
 for the distinction between implemented features and validated behaviour.
@@ -83,7 +83,7 @@ Link previews use the configured homeserver by default. A bounded URL-level
 cache avoids duplicate preview requests. The optional direct fallback is off by
 default and uses DNS/address validation plus pinned sockets so redirects and DNS
 rebinding cannot target local services. GIF search uses the documented
-Deltiecord KLIPY proxy. Picker previews and selected media use bounded shared
+SeND KLIPY proxy. Picker previews and selected media use bounded shared
 fetches/caches; older GIPHY favourites remain supported.
 
 ## Mobile UI boundary
@@ -104,8 +104,8 @@ and releases capture/playback resources on leave or dispose. Persistent voice
 channels remain ordinary Matrix rooms with MatrixRTC membership state; the UI
 simply suppresses their text timeline.
 
-Joining from another Deltiecord device updates a short-lived owner hint in
-account data. A previously connected Deltiecord client then leaves its local
+Joining from another SeND device updates a short-lived owner hint in
+account data. A previously connected SeND client then leaves its local
 call; MatrixRTC media state and credentials never enter that hint.
 
 ## Interoperable collaboration features
@@ -114,7 +114,7 @@ Polls, room pins, push rules, manual unread state, moderation, invitations,
 aliases, and power levels use Matrix protocol/MSC representations supported by
 matrix-dart-sdk. Sticker packs consume the established
 `im.ponies.*_emotes` formats and send standard `m.sticker` events.
-Deltiecord-only Space pages, personal bookmarks, profile overrides, presence
+SeND-only Space pages, personal bookmarks, profile overrides, presence
 UI state, and call handoff hints are isolated in documented `net.deltiecord.*`
 state or account data so other clients can ignore them safely.
 

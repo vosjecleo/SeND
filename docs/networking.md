@@ -1,6 +1,6 @@
 # Networking and privacy
 
-Deltiecord intentionally limits the network destinations it contacts.
+SeND intentionally limits the network destinations it contacts.
 
 Current baseline: 0.9.34+106. Security claims describe implemented boundaries,
 not an independent security certification; see [1.0 readiness](RELEASE_READINESS.md).
@@ -13,7 +13,7 @@ configured homeserver. Federation is performed by homeservers and is not a
 separate client connection.
 
 Message link previews use the Matrix homeserver preview endpoint by default. If
-the homeserver cannot produce a preview, Deltiecord normally shows the plain
+the homeserver cannot produce a preview, SeND normally shows the plain
 link and does not contact that site from the user's IP address.
 
 Privacy settings contain an optional `Fetch link previews directly on this
@@ -54,13 +54,13 @@ concurrent upstream requests per process.
 ## External links and files
 
 User-triggered only. Choosing Open externally passes an explicitly selected URL
-or a private temporary attachment file to the operating system. Deltiecord does
+or a private temporary attachment file to the operating system. SeND does
 not fetch the destination first. Temporary decrypted files use randomized names
 and private Unix permissions, then age out through cleanup.
 
 ## Local encrypted-media proxy
 
-Automatic only while encrypted media is being played. Deltiecord binds an HTTP
+Automatic only while encrypted media is being played. SeND binds an HTTP
 range server to `127.0.0.1` on a random port. Random capability paths refer to
 credentials and AES material held only in memory. URLs and logs never contain
 Matrix access tokens, keys, or IVs. Entries expire, are LRU bounded, and are
@@ -101,10 +101,10 @@ still requires the separate privacy opt-in.
 
 ## Android UnifiedPush
 
-Configured from Android notification settings. Deltiecord uses the standard
+Configured from Android notification settings. SeND uses the standard
 UnifiedPush distributor protocol and contains no shared ntfy credentials. The
 selected distributor supplies a
-private, high-entropy endpoint. Deltiecord registers that complete endpoint as
+private, high-entropy endpoint. SeND registers that complete endpoint as
 the Matrix pushkey through the Matrix gateway on the same ntfy origin and keeps
 it in private Android preferences. For example, a `push.deltie.net` capability
 uses `https://push.deltie.net/_matrix/push/v1/notify`, while an `ntfy.sh`
@@ -114,14 +114,14 @@ capability and is never displayed in the UI or written to logs.
 Distributor registration is requested only during setup, an explicit refresh,
 or a registration failure. The asynchronous endpoint callback is authoritative.
 On foreground resume, reconnect, endpoint rotation, and every 12 hours while a
-network is available, Deltiecord instead verifies that the homeserver retained
+network is available, SeND instead verifies that the homeserver retained
 the exact `event_id_only` Matrix pusher and repairs stale or missing same-device
 entries without asking the distributor to rotate its capability. Notification
 settings expose stage timestamps and a gateway-to-receiver test; the private
 endpoint itself never enters logs, visible diagnostics, or WorkManager input.
 
 Release builds use an installed external distributor such as ntfy. Embedded
-Firebase-compatible WebPush is disabled until Deltiecord has a dedicated,
+Firebase-compatible WebPush is disabled until SeND has a dedicated,
 VAPID-configured Matrix WebPush gateway; it cannot safely reuse the ntfy
 gateway contract.
 
@@ -138,5 +138,5 @@ content-free message alert behind.
 ## Release update checks
 
 The signed-in application performs one bounded advisory check per process
-against `https://deltie.net/cord/releases.json`; Settings also exposes an
+against `https://deltie.net/SeND/releases.json`; Settings also exposes an
 explicit retry. The checker does not download or install an update itself.

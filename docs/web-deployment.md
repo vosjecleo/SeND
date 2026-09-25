@@ -44,7 +44,7 @@ without remote renderer dependencies, and packages `dist/*-web.tar.gz`.
 
 ### Historical build 99 cutover — 2026-09-23
 
-The owner completed the approved cutover from Element to Deltiecord at
+The owner completed the approved cutover from Element to SeND at
 `chat.deltie.net`. Post-cutover checks confirm version 0.9.30 build 99, active
 nginx/contact-api/Web Push services, the required isolation headers and WASM
 MIME type, working public KLIPY search/trending routes, and a responding Web
@@ -82,7 +82,8 @@ A new host's deployment is **not complete** until it has all of these:
   Keep old GIPHY routes working for older native builds. KLIPY's credential
   remains in a mode-0600 service file, never an environment variable embedded
   in Flutter or browser assets.
-- `/api/push/*` routed only to the new loopback Web Push gateway. Do not expose
+- `/api/push/*` and the exact `/_matrix/push/v1/notify` path routed only to the
+  loopback Web Push gateway. Synapse rejects non-standard pusher URL paths. Do not expose
   a debug server or change unrelated Matrix/RTC/proxy routes.
 
 `packaging/deploy-web.py` validates archive paths, required assets and version,

@@ -105,9 +105,9 @@
       hiddenDuringSample,
       ...stats,
     }, (_key, value) => typeof value === 'number' ? Math.round(value) : value));
-    console.log('Deltiecord aggregate performance sample', JSON.stringify(result));
+    console.log('SeND aggregate performance sample', JSON.stringify(result));
     return result;
   }
   window[slot] = {stop};
-  console.log('Deltiecord performance sampling started (30 seconds; aggregates only).');
+  console.log('SeND performance sampling started (30 seconds; aggregates only).');
 })();

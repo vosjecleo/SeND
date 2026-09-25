@@ -101,17 +101,17 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
     final pages = <Widget>[
       const _TourPage(
         icon: Icons.waving_hand_outlined,
-        title: 'Welcome to Deltiecord!',
+        title: 'Welcome to SeND!',
         body:
-            'Deltiecord is a Matrix client with desktop and phone interfaces. '
+            'SeND is a Matrix client with desktop and phone interfaces. '
             'Your rooms and encryption remain Matrix-compatible, while a few '
-            'Deltiecord preferences can sync between your devices.',
+            'SeND preferences can sync between your devices.',
       ),
       _TourPage(
         icon: Icons.link_outlined,
         title: 'Choose how previews connect',
         body:
-            'Deltiecord asks your Matrix homeserver for link previews first. '
+            'SeND asks your Matrix homeserver for link previews first. '
             'A direct fallback can reveal your IP address and browsing metadata '
             'to linked websites.',
         child: DropdownButtonFormField<DirectLinkPreviewMode>(
@@ -147,17 +147,17 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
       if (kIsWeb)
         const _TourPage(
           icon: Icons.install_mobile,
-          title: 'Install Deltiecord on your Home Screen',
+          title: 'Install SeND on your Home Screen',
           body:
               'On iPhone or iPad, open this site in Safari, choose Share, '
-              'then Add to Home Screen. Open the installed Deltiecord app and '
+              'then Add to Home Screen. Open the installed SeND app and '
               'enable browser notifications in Settings > Notifications. '
               'Push requires iOS 16.4 or later and your permission. Android and '
               'desktop browsers can install it from their browser menu too.\n\n'
               'Your session and encryption keys are kept in this browser’s '
               'site storage. Keep your Matrix recovery key safe: clearing site '
               'data, private browsing, or storage eviction can remove the local '
-              'session. Only one Deltiecord tab may use this session at a time.',
+              'session. Only one SeND tab may use this session at a time.',
         ),
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _TourPage(
@@ -167,13 +167,13 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
               '1. Install ntfy and open it once.\n'
               '2. In ntfy, add https://push.deltiecord.net as a server and select '
               'it for UnifiedPush.\n'
-              '3. In Deltiecord, open Settings > Notifications, choose ntfy, '
+              '3. In SeND, open Settings > Notifications, choose ntfy, '
               'then refresh registration.\n\n'
               'Android may stop background network work, so allow ntfy to run '
               'in the background and exclude it from aggressive battery '
               'optimisation if delivery is delayed. The shared ntfy.sh service '
               'can rate-limit bursts or be affected by public traffic; '
-              'push.deltiecord.net is Deltiecord’s dedicated alternative. You can '
+              'push.deltiecord.net is SeND’s dedicated alternative. You can '
               'also use another compatible ntfy server you trust.',
           child: Align(
             alignment: Alignment.centerLeft,

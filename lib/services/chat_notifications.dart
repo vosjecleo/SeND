@@ -157,12 +157,10 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
     await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        linux: LinuxInitializationSettings(
-          defaultActionName: 'Open Deltiecord',
-        ),
+        linux: LinuxInitializationSettings(defaultActionName: 'Open SeND'),
         windows: WindowsInitializationSettings(
-          appName: 'Deltiecord',
-          appUserModelId: 'Deltie.Deltiecord.Desktop',
+          appName: 'SeND',
+          appUserModelId: 'Deltie.SeND.Desktop',
           guid: '2e5e8db4-f62b-4e91-b4c4-2ca41edcc91f',
         ),
       ),

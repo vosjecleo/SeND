@@ -93,7 +93,7 @@ class _SecurityDialogState extends State<_SecurityDialog> {
         content: const Text(
           'Your existing recovery key will stop working. Cross-signing and '
           'encrypted key backup will be kept, but you must save the new key '
-          'before closing Deltiecord.',
+          'before closing SeND.',
         ),
         actions: [
           TextButton(
@@ -202,7 +202,7 @@ class _SecurityDialogState extends State<_SecurityDialog> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'This credential is used only to unlock Matrix Secure Secret Storage. Deltiecord does not save the text you enter.',
+                          'This credential is used only to unlock Matrix Secure Secret Storage. SeND does not save the text you enter.',
                           style: TextStyle(
                             fontSize: DeltiecordTypeScale.normal,
                           ),
@@ -393,7 +393,7 @@ class _GeneratedKey extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       const Text(
-        'It is the only way to recover encrypted message history if all authorized devices are lost. Deltiecord will not show it again.',
+        'It is the only way to recover encrypted message history if all authorized devices are lost. SeND will not show it again.',
       ),
       const SizedBox(height: 14),
       Container(

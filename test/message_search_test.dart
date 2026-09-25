@@ -71,7 +71,7 @@ void main() {
   test('recognizes link and file filters without a text term', () {
     expect(
       matchesMessageSearch(
-        body: 'https://deltie.net/cord',
+        body: 'https://deltie.net/SeND',
         sender: 'Deltie',
         query: 'has:link',
       ),

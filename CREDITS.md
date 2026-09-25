@@ -4,10 +4,10 @@ Reviewed for the 0.9.34+106 feature-scope milestone. Credits describe dependency
 and reference provenance, not an endorsement or security certification. See the
 [documentation index](docs/README.md) for current implementation guides.
 
-Deltiecord is original application code built on open-source libraries and
+SeND is original application code built on open-source libraries and
 public services. No third-party client repository has been vendored into this
 repository. Where an upstream workflow has been adapted, it is called out
-below; where Deltiecord directly uses a package, that package stays an external
+below; where SeND directly uses a package, that package stays an external
 dependency under its own license.
 
 ## Matrix foundations and client references
@@ -22,19 +22,19 @@ dependency under its own license.
   [Element X](https://github.com/element-hq/element-x-android) were consulted
   as behavioral/interoperability references for Matrix rooms, recovery,
   replies, media, and calls. No Element code or assets are included.
-- Deltiecord's UnifiedPush lifecycle adapts the architecture demonstrated by
-  [Element X's UnifiedPush provider](https://github.com/element-hq/element-x-android/tree/develop/libraries/pushproviders/unifiedpush): correlate asynchronous distributor callbacks with a stable per-account instance, persist rotated endpoints, and reconcile the Matrix pusher only after a valid endpoint arrives. Element X is AGPL-3.0-only or covered by its commercial license; Deltiecord's implementation is independently written for Flutter's platform boundary.
-  Its direct Android broadcast-receiver lifecycle also informed Deltiecord's
+- SeND's UnifiedPush lifecycle adapts the architecture demonstrated by
+  [Element X's UnifiedPush provider](https://github.com/element-hq/element-x-android/tree/develop/libraries/pushproviders/unifiedpush): correlate asynchronous distributor callbacks with a stable per-account instance, persist rotated endpoints, and reconcile the Matrix pusher only after a valid endpoint arrives. Element X is AGPL-3.0-only or covered by its commercial license; SeND's implementation is independently written for Flutter's platform boundary.
+  Its direct Android broadcast-receiver lifecycle also informed SeND's
   process-independent delivery path for notifications received while Flutter
   is stopped.
-- [FluffyChat's background push implementation](https://github.com/krille-chan/fluffychat/blob/main/lib/utils/background_push.dart) informed Deltiecord's launch-time pusher reconciliation, custom Matrix-gateway discovery behavior, and privacy-preserving `event_id_only` pusher format. FluffyChat is AGPL-3.0-or-later.
+- [FluffyChat's background push implementation](https://github.com/krille-chan/fluffychat/blob/main/lib/utils/background_push.dart) informed SeND's launch-time pusher reconciliation, custom Matrix-gateway discovery behavior, and privacy-preserving `event_id_only` pusher format. FluffyChat is AGPL-3.0-or-later.
 - [FluffyChat's Matrix sticker-pack integration](https://github.com/krille-chan/fluffychat)
   was used as an interoperability reference for the widely deployed
   `im.ponies.user_emotes` and `im.ponies.room_emotes` account-data/state
-  formats. Deltiecord's picker and backend are independently implemented on
+  formats. SeND's picker and backend are independently implemented on
   matrix-dart-sdk and send standard `m.sticker` events; no FluffyChat source or
   assets are bundled.
-- The compact three-column layout was inspired by Discord UX. Deltiecord does
+- The compact three-column layout was inspired by Discord UX. SeND does
   not use Discord branding, artwork, source, or proprietary assets.
 
 ## Feature libraries and services
@@ -71,7 +71,7 @@ dependency under its own license.
 - [UnifiedPush Android connector](https://codeberg.org/UnifiedPush/android-connector)
   provides the standard distributor integration used for private Android push.
   The connector and its optional embedded FCM distributor are Apache-2.0
-  licensed. Deltiecord's configured Matrix gateway
+  licensed. SeND's configured Matrix gateway
   uses [ntfy](https://github.com/binwiederhier/ntfy), which is Apache-2.0 and
   GPL-2.0 licensed depending on the component; no ntfy server code is bundled.
 - [KLIPY](https://docs.klipy.com/) supplies GIF search and trending through its
@@ -82,15 +82,15 @@ dependency under its own license.
   Web Push encryption and VAPID delivery on the optional gateway (MPL-2.0).
 - [Telegram's Bot API](https://core.telegram.org/bots/api) supplies metadata
   and media for user-requested public sticker-pack imports. A bounded
-  Deltiecord proxy holds the bot credential; no Telegram code or assets are
-  bundled or republished by Deltiecord itself. The optional server-side
+  SeND proxy holds the bot credential; no Telegram code or assets are
+  bundled or republished by SeND itself. The optional server-side
   animation converter uses [python-lottie](https://gitlab.com/mattbas/python-lottie)
   (AGPL-3.0), [CairoSVG](https://github.com/Kozea/CairoSVG) (LGPL-3.0),
   [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU), and
   [FFmpeg](https://ffmpeg.org/) under the host build's applicable GPL terms.
 - [Jome](https://github.com/eepp/jome) supplies the local Unicode emoji name
   and keyword dataset used for offline emoji search and colon completion.
-  Deltiecord vendors only `emojis.json`; Jome is MIT licensed.
+  SeND vendors only `emojis.json`; Jome is MIT licensed.
 - Interface text and colour emoji use platform fonts; release packages no
   longer bundle font files that behaved inconsistently across renderers.
 - Notification and call sounds are original creations by VosjeCleo. The
@@ -110,7 +110,7 @@ their upstream copyright notices and licenses.
   runtime and final packaging tooling. Licensed under MIT.
 
 Thanks to the Matrix specification authors, SDK maintainers, client developers,
-package maintainers, and Deltiecord's hands-on testers:
+package maintainers, and SeND's hands-on testers:
 Yeen, Tecilis and Gabe.
 
 And lastly, thanks to the AI developers at Alibaba cloud for building an LLM capable of doing the work of building the base of this app.

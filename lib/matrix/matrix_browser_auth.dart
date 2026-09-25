@@ -18,7 +18,7 @@ extension _MatrixBrowserAuthentication on MatrixBackend {
     _requireSecureHomeserver(homeserver);
     // Discovery must not race with, or change the server of, the active client.
     final probe = Client(
-      'Deltiecord login discovery',
+      'SeND login discovery',
       database: _matrix.database,
       supportedLoginTypes: _browserLoginTypes,
     );
@@ -84,7 +84,7 @@ extension _MatrixBrowserAuthentication on MatrixBackend {
               ? OidcApplicationType.web
               : OidcApplicationType.native,
           clientInformation: OidcClientInformation(
-            clientName: 'Deltiecord',
+            clientName: 'SeND',
             clientUri: kIsWeb
                 ? Uri.parse(browser.redirect.origin)
                 : Uri.parse('https://deltie.net'),
@@ -142,8 +142,8 @@ extension _MatrixBrowserAuthentication on MatrixBackend {
           token: token,
           refreshToken: true,
           initialDeviceDisplayName: kIsWeb
-              ? 'Deltiecord Web'
-              : 'Deltiecord ${Platform.operatingSystem}',
+              ? 'SeND Web'
+              : 'SeND ${Platform.operatingSystem}',
         );
       }
       if (_browserAuthenticationCanceled) {

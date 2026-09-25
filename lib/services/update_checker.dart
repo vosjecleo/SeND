@@ -3,10 +3,10 @@ import 'platform_io.dart';
 
 import 'bounded_http.dart';
 
-const deltiecordReleasesPage = 'https://deltie.net/cord/';
-const _releaseManifestUrl = 'https://deltie.net/cord/releases.json';
+const deltiecordReleasesPage = 'https://deltie.net/SeND/';
+const _releaseManifestUrl = 'https://deltie.net/SeND/releases.json';
 
-/// A bounded check against Deltiecord's release manifest.
+/// A bounded check against SeND's release manifest.
 ///
 /// Startup invokes it only after the signed-in UI is usable, and Settings also
 /// exposes an explicit retry. In either case release-site failure is isolated
@@ -60,11 +60,30 @@ class ReleaseCheckResult {
     required this.version,
     required this.build,
     required this.updateAvailable,
+    this.artifacts = const [],
   });
 
   final String version;
   final int build;
   final bool updateAvailable;
+  final List<ReleaseArtifact> artifacts;
+
+  ReleaseArtifact? artifactFor(String? suffix) {
+    if (suffix == null) return null;
+    for (final artifact in artifacts) {
+      if (artifact.name.endsWith(suffix)) return artifact;
+    }
+    return null;
+  }
+}
+
+/// Artifact URLs are derived from trusted hosting, never supplied by metadata.
+class ReleaseArtifact {
+  const ReleaseArtifact(this.name, this.sha256, this.size);
+  final String name, sha256;
+  final int size;
+  Uri get url =>
+      Uri.parse(deltiecordReleasesPage).resolve(Uri.encodeComponent(name));
 }
 
 ReleaseCheckResult parseReleaseManifest(
@@ -99,9 +118,37 @@ ReleaseCheckResult parseReleaseManifest(
     throw const FormatException('Invalid release version metadata.');
   }
   final comparison = compareVersions(version, currentVersion);
+  final artifacts = <ReleaseArtifact>[];
+  final platforms = decoded['platforms'];
+  if (platforms is Map) {
+    for (final platform in platforms.values) {
+      final files = platform is Map
+          ? platform[stableOnly ? 'stable' : 'latest']
+          : null;
+      if (files is! List) continue;
+      for (final file in files) {
+        if (file is! Map) continue;
+        final name = file['name'], hash = file['sha256'], size = file['size'];
+        if (name is! String || hash is! String || size is! int) continue;
+        if (!RegExp(r'^[A-Za-z0-9+_.-]{1,180}$').hasMatch(name) ||
+            !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(hash) ||
+            size <= 0 ||
+            size > 1024 * 1024 * 1024) {
+          continue;
+        }
+        final match = _artifactVersionPattern.firstMatch(name);
+        if (match?.group(1) != version ||
+            int.tryParse(match?.group(2) ?? '') != build) {
+          continue;
+        }
+        artifacts.add(ReleaseArtifact(name, hash.toLowerCase(), size));
+      }
+    }
+  }
   return ReleaseCheckResult(
     version: version,
     build: build,
+    artifacts: List.unmodifiable(artifacts),
     updateAvailable:
         comparison > 0 || (comparison == 0 && build > currentBuild),
   );
@@ -135,7 +182,7 @@ ReleaseCheckResult parseReleaseManifest(
 
 final _versionPattern = RegExp(r'^\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?$');
 final _artifactVersionPattern = RegExp(
-  r'^deltiecord-(\d+(?:\.\d+){1,3})\+(\d+)-',
+  r'^(?:deltiecord|send)-(\d+(?:\.\d+){1,3})\+(\d+)-',
   caseSensitive: false,
 );
 

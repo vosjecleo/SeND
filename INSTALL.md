@@ -1,4 +1,4 @@
-# Installing Deltiecord
+# Installing SeND
 
 Voice-message recording (build 104 onward) needs a microphone and OS/browser
 permission. On Linux, install `ffmpeg` and the PulseAudio client tools `parecord`
@@ -6,11 +6,17 @@ and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire'
 PulseAudio compatibility service is supported. Packaged dependencies include
 these tools; standalone AppImage users must provide them on the host.
 
-Deltiecord 0.9.34 build 106 is the current latest release for Android,
+The current published release is 0.9.34 build 107 (originally Deltiecord) for Android,
 x86-64 Windows, Linux, and Web/PWA. It marks feature-scope completion, not a
 stable-release certification. See [1.0 readiness](docs/RELEASE_READINESS.md).
-Download official builds from the [Deltiecord releases page](https://deltie.net/cord)
-or the [published GitHub release](https://github.com/vosjecleo/deltiecord/releases/tag/v0.9.34-b106).
+Download official builds from the [SeND releases page](https://deltie.net/SeND)
+or the [published GitHub releases](https://github.com/vosjecleo/SeND/releases/latest).
+
+The filename examples below target the upcoming **SeND 0.9.35+108**. Until it is
+published, use the actual filenames offered by the downloads page. Existing
+accounts survive the rename; the internal `deltiecord` executable/package name
+is retained for compatibility; new Linux packages also provide a `SeND` launcher.
+See [rename and update notes](docs/build-108-send.md).
 
 Before installing a downloaded build, verify it against the included
 `SHA256SUMS` file:
@@ -22,10 +28,10 @@ sha256sum -c SHA256SUMS
 ## Android
 
 Download the APK matching the device architecture. Most current phones use
-`deltiecord-0.9.34+106-android-arm64-v8a.apk`; older 32-bit phones use
+`SeND-0.9.35+108-android-arm64-v8a.apk`; older 32-bit phones use
 `armeabi-v7a`, while `x86_64` is primarily for emulators. Verify
 its checksum, allow installation from the browser or file manager when Android
-asks, then open the APK. The APK uses Deltiecord's persistent release-signing
+asks, then open the APK. The APK uses SeND's persistent release-signing
 identity; v0.9.19 was the first build signed by this identity.
 The private keystore and passwords are stored outside the repository. APKs from
 builds 62 and 63 used ephemeral identities and require one uninstall before this
@@ -34,7 +40,7 @@ identity.
 
 Android may require microphone, camera, media, and notification permissions as
 the corresponding features are used. Notifications can use a separately
-installed UnifiedPush distributor. Deltiecord pairs the private endpoint with
+installed UnifiedPush distributor. SeND pairs the private endpoint with
 the Matrix gateway belonging to the same ntfy server.
 
 The AAB produced by CI is intended for future repository/store distribution and
@@ -46,7 +52,7 @@ still require broader real-device testing.
 
 ### Installer
 
-Download `deltiecord-0.9.34+106-windows-x64-setup.exe`, run it, and follow the
+Download `SeND-0.9.35+108-windows-x64-setup.exe`, run it, and follow the
 installer. A normal per-user installation does not require administrator
 privileges. The installer creates a Start Menu entry and can optionally create
 a desktop shortcut.
@@ -55,12 +61,12 @@ Windows may warn about an unrecognized application because this release is not y
 code-signed. Only continue if the filename and SHA-256 checksum match the
 official release.
 
-Upgrading or uninstalling Deltiecord does not delete Matrix sessions or other
+Upgrading or uninstalling SeND does not delete Matrix sessions or other
 per-user application data.
 
 ### Portable build
 
-Download `deltiecord-0.9.34+106-windows-x64-portable.zip`, extract the entire
+Download `SeND-0.9.35+108-windows-x64-portable.zip`, extract the entire
 archive, and run `deltiecord.exe` from the extracted directory. Do not move only
 the executable: its accompanying DLLs, plugins, data, and assets are required.
 
@@ -71,11 +77,11 @@ issues.
 
 ## Debian, Ubuntu, and Linux Mint
 
-Download `deltiecord-0.9.34+106-linux-debian-amd64.deb`, open a terminal in its directory, and
+Download `SeND-0.9.35+108-linux-debian-amd64.deb`, open a terminal in its directory, and
 install it with APT:
 
 ```sh
-sudo apt install ./deltiecord-0.9.34+106-linux-debian-amd64.deb
+sudo apt install ./SeND-0.9.35+108-linux-debian-amd64.deb
 ```
 
 APT installs the package and its declared runtime dependencies. Launch it from
@@ -96,23 +102,23 @@ data.
 
 ## Arch Linux
 
-Download `deltiecord-0.9.34+106-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
+Download `SeND-0.9.35+108-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
 
 ```sh
-sudo pacman -U ./deltiecord-0.9.34+106-linux-arch-x86_64.pkg.tar.zst
+sudo pacman -U ./SeND-0.9.35+108-linux-arch-x86_64.pkg.tar.zst
 ```
 
-Launch Deltiecord from the application menu or run `deltiecord`. Remove the
+Launch SeND from the application menu or run `deltiecord`. Remove the
 package with `sudo pacman -R deltiecord`; user data remains untouched.
 
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download
-`deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
+`SeND-0.9.35+108-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
 
 ```sh
-chmod +x deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage
-./deltiecord-0.9.34+106-linux-appimage-x86_64.AppImage
+chmod +x SeND-0.9.35+108-linux-appimage-x86_64.AppImage
+./SeND-0.9.35+108-linux-appimage-x86_64.AppImage
 ```
 
 The AppImage contains the Flutter application but deliberately relies on some
@@ -142,7 +148,7 @@ See [browser limitations](KNOWN_ISSUES.md) and [deployment](docs/web-deployment.
 
 ## Application data
 
-Deltiecord stores runtime data in the operating system's normal per-user
+SeND stores runtime data in the operating system's normal per-user
 application-data and secure-storage locations. Package upgrades and ordinary
 uninstallation do not remove that data. Never copy or publish those directories:
 they can contain Matrix session and encryption state.
@@ -160,8 +166,8 @@ reproducing an official build.
 Clone the repository and fetch Dart dependencies:
 
 ```sh
-git clone https://github.com/vosjecleo/deltiecord.git
-cd deltiecord
+git clone https://github.com/vosjecleo/SeND.git
+cd SeND
 flutter pub get
 ```
 
@@ -249,7 +255,7 @@ testing and must not be published as an upgradeable release.
 ## Getting help
 
 Check [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before reporting a problem. Useful bug
-reports include the operating system and desktop environment, Deltiecord build,
+reports include the operating system and desktop environment, SeND build,
 homeserver implementation, whether the room is encrypted, and clear steps that
 reproduce the issue. Do not include access tokens, recovery keys, decrypted
 messages, encryption keys, or private media URLs in a report.

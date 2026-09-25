@@ -130,7 +130,7 @@ void main() {
     },
   );
   testWidgets(
-    'Windows accent is exact and high-contrast hover remains neutral',
+    'Windows icons use the generated accent palette and hover remains neutral',
     (tester) async {
       final backend = FakeBackend()
         ..currentPreferences = const AppPreferences().copyWith(
@@ -145,11 +145,16 @@ void main() {
       );
       await tester.pump();
       final theme = tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!;
-      expect(theme.colorScheme.primary, const Color(0xff127e44));
-      expect(theme.iconTheme.color, const Color(0xff127e44));
+      final generated = ColorScheme.fromSeed(
+        seedColor: const Color(0xff127e44),
+        brightness: Brightness.dark,
+        contrastLevel: 1,
+      ).primary;
+      expect(theme.colorScheme.primary, generated);
+      expect(theme.iconTheme.color, generated);
       expect(
         theme.iconButtonTheme.style!.foregroundColor!.resolve({}),
-        const Color(0xff127e44),
+        generated,
       );
       expect(
         theme.extension<DeltiecordPalette>()!.hover,

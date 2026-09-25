@@ -1,15 +1,54 @@
 # Changelog
 
-Current latest: **0.9.34+107**. Following the build 106 feature-scope milestone,
+Release target: **0.9.35+108**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
-Historical entries preserve the scope and terminology of their own releases.
+Historical entries preserve the scope of their own releases.
 
-## Deltiecord 0.9.34 build 107 — 2026-09-25
+## SeND 0.9.35 build 108 — 2026-09-25
+
+- Rename visible application branding, notifications, installers, web metadata,
+  documentation and release assets to SeND: “SeND is Not Discord.” Update GitHub
+  references to `vosjecleo/SeND` and downloads to `deltie.net/SeND/`.
+- Preserve compatibility IDs, Matrix client identity, database/keychain paths,
+  installer identity and legacy update URLs so existing accounts survive upgrades.
+- Update prompts select the installed Android ABI or desktop package format.
+  Unknown/local builds retain a download chooser rather than guessing a package.
+- Windows installer builds offer an explicit download/verify/install action.
+  Verify size and SHA-256 before opening interactive Inno Setup; portable Windows
+  installations retain ZIP downloads. No silent elevation or forced termination.
+- Compact DM/member lists with online status/activity, quieter Admin/Mod badges,
+  muted navigation names, smaller DM avatars and refined message header spacing.
+- Optional native desktop process/game discovery and Linux music/Discord IPC
+  integration, with local allow/block/classification controls and no telemetry.
+- Dedicated Activity settings, online-only activity profile blocks, music artwork
+  and playback progress. Last.fm browser linking works in foreground on desktop,
+  Android and PWA; approved public sharing and optional last-listened profile footer.
+- Restore generated accent palettes; animate unread/selection indicators and add
+  desktop notification/call volume controls. Correct modal idle detection, square
+  music covers, media-album padding and duplicate local-time text.
+- Desktop video optimization preserves media metadata and encrypted uploads.
+  Android encoding, Windows Discord IPC and Steam library linking remain pending;
+  see `docs/activity-local-preview.md` for implementation limits and test status.
+- Replace pack re-import editing with a dedicated editor: add/remove items,
+  rename aliases, select individual or multiple items for crop/resize, preview,
+  and undo removal/crop operations. Unchanged items retain their MXC URLs.
+- Preserve animation and transparent padding during emoji/sticker resizing;
+  keep valid untouched GIF/WebP assets byte-identical. Reject oversized edits
+  explicitly rather than silently flattening them into still images.
+- Correct the web-push gateway URL to the standard path required by Synapse.
+  Fix foreground-lease delivery loss with a bounded, durable notification queue
+  instead of discarding alerts or forcing homeserver backoff. Cancel queued
+  alerts when reading the room. Release leases on page hide,
+  renew subscriptions after VAPID-key rotation, and add browser setup diagnostics
+  and a capability-protected test-push action. Physical iPhone delivery remains
+  a required device check, not a claimed automated test result.
+
+## SeND 0.9.34 build 107 — 2026-09-25
 
 - Expose channel access, history visibility, directory listing and Space defaults;
   discover accessible unjoined channels and join them when opened.
 - Add shared Space timeline-event defaults and room overrides, retaining
-  protected security/moderation events. These display policies apply in Deltiecord.
+  protected security/moderation events. These display policies apply in SeND.
 - Improve permission editor readability, live role refresh, stale-draft detection,
   member role assignment and banned-member management. Report inaccessible child
   rooms individually during administration operations.
@@ -25,7 +64,7 @@ Historical entries preserve the scope and terminology of their own releases.
 
 Validation and remaining device checks: `docs/build-107-plan.md`.
 
-## Deltiecord 0.9.34 build 106 — 2026-09-24
+## SeND 0.9.34 build 106 — 2026-09-24
 
 - Keep onboarding text scrollable with navigation outside the content viewport.
 - Share the profile layout across desktop/mobile cards and editors, use a
@@ -81,7 +120,7 @@ Hardware/cross-client authentication validation remains outstanding. Hosted
 browser SSO requires the narrowly scoped auth callback hosting rule.
 See `docs/build-106-plan.md` for details and implementation boundaries.
 
-## Deltiecord 0.9.33 build 105 — 2026-09-24
+## SeND 0.9.33 build 105 — 2026-09-24
 
 - Fix web attachment selection by reading browser File objects directly while
   preserving Safari's user activation for camera/photo/file pickers. Avoid
@@ -142,7 +181,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   borders, light/dark variants and configurable accents. Accessibility settings
   override decorative effects. No scripts or remote theme assets are executed.
 
-## Deltiecord 0.9.32 build 104 — 2026-09-24
+## SeND 0.9.32 build 104 — 2026-09-24
 
 - Add composer voice messages: microphone when empty, live waveform and timer,
   pause/resume, stop-to-review, local playback, delete and explicit send. Reuse
@@ -165,7 +204,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   recording, Linux emoji appearance and notification races need device checks
   across real hardware, particularly Safari/PWA microphone codecs.
 
-## Deltiecord 0.9.31 build 103 — 2026-09-24
+## SeND 0.9.31 build 103 — 2026-09-24
 
 - Move sent/read progress markers and edited labels after message content.
   Show receipt frontiers rather than repeating acknowledgement on every message;
@@ -201,7 +240,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   checks still need device validation. Packages are built by CI; this release is
   published to latest, not stable.
 
-## Deltiecord 0.9.30 build 102 — 2026-09-23
+## SeND 0.9.30 build 102 — 2026-09-23
 
 - PWA-only password autofill fix: use persistent, labelled browser-native
   username/password fields with standard autocomplete hints on login/signup.
@@ -212,7 +251,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Add browser regression tests and web-only release automation. Android,
   Linux and Windows remain on build 101; stable is unchanged.
 
-## Deltiecord 0.9.30 build 101 — 2026-09-23
+## SeND 0.9.30 build 101 — 2026-09-23
 
 - Keep build 100's complete Flutter application; do not ship the experimental
   HTML adapter or replace the Matrix SDK/cryptography implementation.
@@ -239,7 +278,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   physical-device push delivery. These changes are not a claim that every
   browser's performance problems are resolved.
 
-## Deltiecord 0.9.30 build 100 — 2026-09-23
+## SeND 0.9.30 build 100 — 2026-09-23
 
 - Reuse the application theme/navigation configuration for ordinary backend
   updates instead of regenerating it for every sync, typing, and receipt event.
@@ -261,7 +300,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   improvements do not establish that all interaction lag or the reported
   two-minute recovery delay is resolved; see the build-100 investigation report.
 
-## Deltiecord 0.9.30 build 99 — 2026-09-23
+## SeND 0.9.30 build 99 — 2026-09-23
 
 - Add a shared-code Web/PWA target with mobile and desktop layouts, SDK-owned
   IndexedDB session/crypto persistence, single-tab session ownership, and
@@ -289,7 +328,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   alias text, stable references, and editing offsets. Plain aliases stay text.
 - Left-align stickers with message content on desktop and mobile.
 
-## Deltiecord 0.9.29 build 98 — 2026-09-22
+## SeND 0.9.29 build 98 — 2026-09-22
 
 - Give animated images their own bounded, lifecycle-aware frame decoder so GIF
   playback is independent of paused UI tickers. Preserve autoplay/Reduce Motion
@@ -310,9 +349,9 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Request an Android IME draft-state reset after sending without hiding and
   showing the keyboard window. Physical keyboard Caps Lock remains OS-managed.
 
-## Deltiecord 0.9.29 build 97 — 2026-09-16
+## SeND 0.9.29 build 97 — 2026-09-16
 
-- Reset every Android per-conversation alert cadence when Deltiecord opens, so
+- Reset every Android per-conversation alert cadence when SeND opens, so
   the next message can vibrate immediately after the app is backgrounded.
 - Prevented in-flight UnifiedPush workers from restoring a cleared cooldown or
   posting after the app/room was opened, and suppressed already-read events.
@@ -320,7 +359,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   GIF/APNG/WebP MIME metadata and GIF signatures, and made GIF-provider video
   renditions loop continuously while preserving Reduce Motion behavior.
 
-## Deltiecord 0.9.29 build 96 — 2026-09-16
+## SeND 0.9.29 build 96 — 2026-09-16
 
 - Added first-party account registration for `matrix.deltie.net`, including
   password-manager autofill, password confirmation, Matrix UI-auth handling,
@@ -339,7 +378,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Renamed the user-facing Regular appearance option to Gray while preserving
   its stored setting and palette for compatibility.
 
-## Deltiecord 0.9.29 build 95 — 2026-09-16
+## SeND 0.9.29 build 95 — 2026-09-16
 
 - Unified own-user, room-list, timeline, and profile avatar caching; validate
   sender avatar metadata on newly sent/received messages and propagate changed
@@ -373,7 +412,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   Matrix homeserver caveats, password-manager-ready login/password fields, and
   detailed ntfy/UnifiedPush setup and public-rate-limit guidance.
 
-## Deltiecord 0.9.28 build 94 — 2026-09-15
+## SeND 0.9.28 build 94 — 2026-09-15
 
 - Fixed Android’s five-minute alert cadence so each conversation owns an
   independent alert identity and atomically committed cooldown timestamp.
@@ -400,12 +439,12 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   and standardised desktop presence badges at the avatar’s bottom-right.
 - Added password-manager autofill semantics to login and account-password
   prompts, refreshed the first-login presentation, and documented limitations
-  that custom homeservers may impose on optional Deltiecord services.
+  that custom homeservers may impose on optional SeND services.
 - Reworked the first-run tour’s Android notification guidance with ntfy setup,
   battery/rate-limit notes, and a dedicated-provider explanation. Desktop no
   longer sees the Android page and the tour now ends with Close.
 
-## Deltiecord 0.9.27 build 93 — 2026-09-04
+## SeND 0.9.27 build 93 — 2026-09-04
 
 - Made transparent-canvas trimming the default for imported and reprocessed
   static custom emoji while keeping it optional, with a stable live preview.
@@ -417,11 +456,11 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Raised the stock mobile text scale to 110% without changing the desktop
   default or overwriting deliberate existing accessibility sizes.
 - Replaced Android's unreliable save-as image flow with a single Save image
-  action that writes through scoped storage to Downloads/Deltiecord.
+  action that writes through scoped storage to Downloads/SeND.
 - Kept cached generated build tooling outside CI formatting checks and made
   verified Flutter archive cache guards portable across Linux containers.
 
-## Deltiecord 0.9.27 build 90 — 2026-09-04
+## SeND 0.9.27 build 90 — 2026-09-04
 
 - Fixed custom-emoji imports silently completing without becoming available
   in the emoji picker or `:alias:` autocomplete.
@@ -433,7 +472,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Preserved legacy personal packs during migration and made deletion remove
   only the selected pack from a merged personal collection.
 
-## Deltiecord 0.9.27 build 89 — 2026-09-04
+## SeND 0.9.27 build 89 — 2026-09-04
 
 - Fixed personal sticker and custom-emoji imports replacing the previously
   saved pack by assigning additional packs distinct synced account-data slots.
@@ -445,7 +484,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Added visible progress while uploading imported packs and increased inline
   custom-emoji rendering from 20 to 26 logical pixels.
 
-## Deltiecord 0.9.27 build 88 — 2026-09-04
+## SeND 0.9.27 build 88 — 2026-09-04
 
 - Added optional transparent-padding trimming when importing static custom
   emoji, fitting visible artwork into a centred 128×128 canvas without
@@ -456,7 +495,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   resolving older emoji by their immutable Matrix media ID and degrading
   gracefully when a pack is unavailable.
 
-## Deltiecord 0.9.27 build 87 — 2026-09-04
+## SeND 0.9.27 build 87 — 2026-09-04
 
 - Fixed sticker and custom-emoji previews permanently waiting on a
   self-referential completion future, including inline historical emoji.
@@ -470,7 +509,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   bounded retries, earlier upstream timeouts, and cached static and converted
   media that avoids redundant Telegram downloads.
 
-## Deltiecord 0.9.27 build 86 — 2026-09-04
+## SeND 0.9.27 build 86 — 2026-09-04
 
 - Added bounded server-side conversion of Telegram TGS and WebM animations to
   animated WebP, with separate 128px emoji and 256px sticker outputs.
@@ -492,7 +531,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   notification dismissal races when opening a room, desktop AFK detection
   during keyboard/pointer activity, and desktop bottom-island spacing.
 
-## Deltiecord 0.9.27 build 85 — 2026-09-04
+## SeND 0.9.27 build 85 — 2026-09-04
 
 - Fixed Telegram pack links copied from rich message text being rejected when
   they contain invisible direction/format characters, wrappers, harmless
@@ -500,7 +539,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Added an explicit release-publisher option for clearing an invalidated
   stable channel while preserving historical artifacts.
 
-## Deltiecord 0.9.27 build 84 — 2026-09-04
+## SeND 0.9.27 build 84 — 2026-09-04
 
 - Restyled sticker selection and pack management as bounded desktop dialogs
   while retaining draggable mobile sheets, and made every pack/import action
@@ -515,7 +554,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   platform CI, verifies the exact artifact set, and atomically publishes
   `latest`, `stable`, or both on deltie.net.
 
-## Deltiecord 0.9.27 build 83 — 2026-09-04
+## SeND 0.9.27 build 83 — 2026-09-04
 
 - Added custom/server emoji on top of Matrix image packs, including 120-item
   packs, strict 128×128 and 256 KiB per-emoji limits, animated inline
@@ -527,7 +566,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   after Android resumes, so Home and Space selection cannot remain frozen.
 
 - Added selective import of public static Telegram sticker packs through a
-  bounded, token-hiding Deltiecord proxy. Animated TGS and WebM stickers are
+  bounded, token-hiding SeND proxy. Animated TGS and WebM stickers are
   identified and skipped until cross-platform rendering is ready.
 - Raised personal image packs from 50 to 120 stickers, added aggregate media
   and metadata limits, and preserved each sticker's actual MIME type.
@@ -538,7 +577,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Reduced the timeline-to-composer gutter to the typing row's actual height
   and tightened all aligned desktop bottom panels accordingly.
 
-## Deltiecord 0.9.26 build 82 — 2026-09-03
+## SeND 0.9.26 build 82 — 2026-09-03
 
 - Fixed mobile attachment-only image and video events rendering an empty text
   row above their media.
@@ -553,7 +592,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Restyled category labels on desktop and mobile with preserved casing, a
   one-pixel-smaller bold font, leading-panel alignment, and trailing chevrons.
 
-## Deltiecord 0.9.26 build 81 — 2026-09-03
+## SeND 0.9.26 build 81 — 2026-09-03
 
 - Added per-installation first-run guidance for preview privacy, Matrix
   recovery, and private Android notification setup with ntfy/UnifiedPush.

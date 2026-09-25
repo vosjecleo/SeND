@@ -60,8 +60,8 @@ Future<MatrixPusherReconciliation> reconcileMatrixUnifiedPushPusher(
     Pusher(
       appId: _deltiecordPusherAppId,
       pushkey: normalized,
-      appDisplayName: 'Deltiecord',
-      deviceDisplayName: 'Deltiecord Android',
+      appDisplayName: 'SeND',
+      deviceDisplayName: 'SeND Android',
       kind: 'http',
       lang: 'en',
       profileTag: profileTag,

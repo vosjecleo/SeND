@@ -61,7 +61,7 @@ def upstream(url, kind, byte_range):
             raw.connect(address)
             connection.sock = ssl.create_default_context().wrap_socket(
                 raw, server_hostname=parsed.hostname)
-            headers = {'Accept-Encoding': 'identity', 'User-Agent': 'Deltiecord/preview',
+            headers = {'Accept-Encoding': 'identity', 'User-Agent': 'SeND/preview',
                        'Accept': {'document': 'text/html,application/xhtml+xml',
                                   'image': 'image/*', 'video': 'video/*'}[kind]}
             if byte_range:

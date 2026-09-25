@@ -67,7 +67,7 @@ object DeltiecordPushDiagnostics {
                     .put("room_id", "!deltiecord-push-diagnostic:localhost")
                     .put("type", "m.room.message")
                     .put("sender", "@deltiecord-push-test:localhost")
-                    .put("sender_display_name", "Deltiecord diagnostics")
+                    .put("sender_display_name", "SeND diagnostics")
                     .put("room_name", "Push diagnostics")
                     .put("devices", JSONArray().put(device))
                 val body = JSONObject().put("notification", notification)

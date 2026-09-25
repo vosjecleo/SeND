@@ -14,11 +14,15 @@ extension _MatrixRoomMetadata on MatrixBackend {
     avatarBytes: _avatarBytes[room.id],
     topic: room.topic,
     isDirect: room.isDirectChat,
+    directUserId: room.directChatMatrixID,
+    // ignore: deprecated_member_use
+    statusMessage: _matrix.presences[room.directChatMatrixID]?.statusMsg,
     encrypted: room.encrypted,
     presence: _roomPresence(room),
     notificationMode: _notificationModeFor(room),
     mutedUntil: _temporaryRoomMutes[room.id],
     markedUnread: room.markedUnread,
+    hasUnreadMessages: room.hasNewMessages,
   );
 
   UserPresence _roomPresence(Room room) {

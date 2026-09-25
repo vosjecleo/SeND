@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal rate-limited GIPHY search proxy for Deltiecord releases."""
+"""Minimal rate-limited GIPHY search proxy for SeND releases."""
 
 from collections import OrderedDict, defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -133,7 +133,7 @@ def _giphy_request(query=None):
     params = urlencode(parameters)
     request = urllib.request.Request(
         f"https://api.giphy.com/v1/gifs/{endpoint}?" + params,
-        headers={"User-Agent": f"Deltiecord-Giphy-Proxy/{VERSION}"},
+        headers={"User-Agent": f"SeND-Giphy-Proxy/{VERSION}"},
     )
     with urllib.request.urlopen(request, timeout=8) as response:
         if response.status != 200:
@@ -165,7 +165,7 @@ def _klipy_request(query=None, slug=None):
     request = urllib.request.Request(
         f"https://api.klipy.com/api/v1/{quote(key, safe='')}/gifs/{endpoint}?"
         + urlencode(parameters),
-        headers={"User-Agent": f"Deltiecord-GIF-Proxy/{VERSION}"},
+        headers={"User-Agent": f"SeND-GIF-Proxy/{VERSION}"},
     )
     with urllib.request.urlopen(request, timeout=8) as response:
         if response.status != 200 or response.headers.get_content_type() != "application/json":
@@ -183,7 +183,7 @@ def _telegram_request(method, parameters):
     token = _read_secret(TELEGRAM_TOKEN_FILE)
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/{method}?" + urlencode(parameters),
-        headers={"User-Agent": f"Deltiecord-Telegram-Proxy/{VERSION}"},
+        headers={"User-Agent": f"SeND-Telegram-Proxy/{VERSION}"},
     )
     # Telegram occasionally leaves individual Bot API connections idle for
     # close to ten seconds. Fail that attempt early enough for the client's
@@ -571,7 +571,7 @@ def _telegram_sticker(set_name, index, converted_size=256):
     token = _read_secret(TELEGRAM_TOKEN_FILE)
     request = urllib.request.Request(
         f"https://api.telegram.org/file/bot{token}/{quote(file_path, safe='/')}",
-        headers={"User-Agent": f"Deltiecord-Telegram-Proxy/{VERSION}"},
+        headers={"User-Agent": f"SeND-Telegram-Proxy/{VERSION}"},
     )
     with urllib.request.urlopen(request, timeout=8) as response:
         if response.status != 200:

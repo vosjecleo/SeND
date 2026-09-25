@@ -129,7 +129,7 @@ extension _MatrixCrypto on MatrixBackend {
         );
       }
       final recoveryKey = await _matrix.initCryptoIdentity(
-        keyName: 'Deltiecord recovery key',
+        keyName: 'SeND recovery key',
         wipeSecureStorage: false,
         wipeKeyBackup: false,
         wipeCrossSigning: false,
@@ -162,7 +162,7 @@ extension _MatrixCrypto on MatrixBackend {
       // Never run this from an unconnected device: the local identity secrets
       // are what make a non-destructive rotation possible.
       final recoveryKey = await _matrix.initCryptoIdentity(
-        keyName: 'Deltiecord recovery key',
+        keyName: 'SeND recovery key',
         wipeSecureStorage: true,
         wipeKeyBackup: false,
         wipeCrossSigning: false,

@@ -93,7 +93,7 @@ final class TelegramStickerPack {
   final int unsupportedCount;
 }
 
-/// Imports public Telegram sticker sets through Deltiecord's bounded proxy.
+/// Imports public Telegram sticker sets through SeND's bounded proxy.
 ///
 /// Telegram's Bot API requires a secret bot token. Keeping that token on the
 /// proxy avoids embedding a reusable credential in every distributed client.
@@ -121,7 +121,7 @@ final class TelegramStickerService {
     ..idleTimeout = const Duration(seconds: 20)
     // Safari may preflight an application-set User-Agent. Browsers own it;
     // our anonymous proxy intentionally accepts only simple GET requests.
-    ..userAgent = kIsWeb ? null : 'Deltiecord/$deltiecordVersion';
+    ..userAgent = kIsWeb ? null : 'SeND/$deltiecordVersion';
   final Map<String, Future<Uint8List>> _downloads = {};
   final Queue<Completer<void>> _downloadWaiters = Queue();
   int _activeDownloads = 0;

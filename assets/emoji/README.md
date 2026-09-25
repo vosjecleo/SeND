@@ -1,4 +1,4 @@
-# Deltiecord emoji names and aliases
+# SeND emoji names and aliases
 
 Applies to 0.9.34+106. This is the bundled Unicode catalogue; imported custom
 emoji names belong to their packs and can be edited through pack management.
@@ -23,4 +23,4 @@ after editing because the file is bundled into the application.
 iamcal/emoji-data revision `13ee711e222ea17fe537bfea953c687866f16411` (MIT;
 `SHORTCODES-LICENSE.txt`). These are not an official Discord registry. Primary
 shortcodes take precedence over broad search keywords; older catalogue keywords
-and aliases are retained. Deltiecord additionally accepts `sobbing` for `sob`.
+and aliases are retained. SeND additionally accepts `sobbing` for `sob`.

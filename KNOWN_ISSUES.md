@@ -100,19 +100,19 @@ the versions named below.
   The explicit About-page update check continues to report Latest builds.
 
 - Scheduled messages are stored privately on the originating device and use
-  the normal encrypted send path while Deltiecord is connected. Android does
+  the normal encrypted send path while SeND is connected. Android does
   not yet keep a permanent background scheduler alive; an overdue message is
   sent after the next connected launch.
 - Device verification can start a Matrix SAS verification request and exposes
-  current trust/cross-signing state, but Deltiecord's complete interactive SAS
+  current trust/cross-signing state, but SeND's complete interactive SAS
   comparison/confirmation surface is not finished. Use another established
-  Matrix client when a verification flow requires UI that Deltiecord does not
+  Matrix client when a verification flow requires UI that SeND does not
   yet show.
 - The unified inbox resolves room invitations, mentions, replies, and reactions
   from locally available history. Complete missed-call history needs a
   dedicated indexed activity store and is not claimed in this build.
 - Moderation timeouts use standard Matrix power levels plus a documented
-  Deltiecord restoration state because Matrix has no standard timeout event.
+  SeND restoration state because Matrix has no standard timeout event.
   If a room permits power-level changes but denies writes to the restoration
   state, the initiating client must remain online to restore the previous
   level automatically.
@@ -126,7 +126,7 @@ the versions named below.
 - Attached media now exposes the same safe copy/save/open/fullscreen actions on mobile, and close controls no longer depend on a missing icon glyph.
 - Embedded images and videos use the inline-media bounds; tapping embedded media opens the in-client viewer while the explicit link opens the website.
 - Copy text is available directly from desktop right-click and Android long-press message actions.
-- Deltiecord performs one bounded automatic update check after startup.
+- SeND performs one bounded automatic update check after startup.
 - UnifiedPush now follows the asynchronous distributor lifecycle used by established Matrix clients, reconciles endpoint rotation, and registers privacy-preserving `event_id_only` pushers.
 - Android notifications resolve cached sender avatars for DMs and Space avatars for Space-room notifications when available.
 

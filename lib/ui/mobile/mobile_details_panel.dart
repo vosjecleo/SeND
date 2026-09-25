@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../activity_widgets.dart';
+import '../navigation_polish.dart';
 
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
@@ -80,27 +82,45 @@ class MobileDetailsPanel extends StatelessWidget {
           const SizedBox(height: 6),
           for (final member in backend.selectedRoomMembers)
             ListTile(
+              dense: true,
+              minTileHeight: 48,
+              minVerticalPadding: 3,
+              horizontalTitleGap: 10,
               contentPadding: EdgeInsets.zero,
               leading: MobileAvatar(
+                size: 36,
                 bytes: member.avatarBytes,
                 fallback: member.displayName,
                 presence: member.presence,
               ),
-              title: Text(
-                member.displayName,
-                style: TextStyle(
-                  color: member.nameColor == null
-                      ? null
-                      : Color(member.nameColor!),
-                ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      member.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: member.nameColor == null
+                            ? null
+                            : Color(member.nameColor!),
+                      ),
+                    ),
+                  ),
+                  if (member.powerLevel >= 50) ...[
+                    const SizedBox(width: 6),
+                    MemberRoleBadge(powerLevel: member.powerLevel),
+                  ],
+                ],
               ),
-              subtitle: Text(
-                member.powerLevel >= 100
-                    ? 'Administrator'
-                    : member.powerLevel >= 50
-                    ? 'Moderator'
-                    : mobilePresenceLabel(member.presence),
-              ),
+              subtitle: member.presence == UserPresence.offline
+                  ? null
+                  : ActivityStatus(
+                      backend: backend,
+                      userId: member.userId,
+                      presence: member.presence,
+                      status: member.statusMessage,
+                    ),
               onTap: () =>
                   showMobileProfileSheet(context, backend, member.userId),
               onLongPress: () => showMemberManagement(context, backend, member),

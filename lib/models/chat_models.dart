@@ -68,6 +68,9 @@ class AppPreferences {
     this.autoplayGifs = true,
     this.notificationsEnabled = true,
     this.notificationSound = true,
+    this.notificationVolume = 1,
+    this.callVolume = 1,
+    this.optimizeVideos = true,
     this.notificationVibration = true,
     this.notificationAlertCadence = NotificationAlertCadence.fiveMinuteCooldown,
     this.sendReadReceipts = true,
@@ -120,6 +123,9 @@ class AppPreferences {
   final bool autoplayGifs;
   final bool notificationsEnabled;
   final bool notificationSound;
+  final double notificationVolume;
+  final double callVolume;
+  final bool optimizeVideos;
   final bool notificationVibration;
   final NotificationAlertCadence notificationAlertCadence;
   final bool sendReadReceipts;
@@ -181,6 +187,9 @@ class AppPreferences {
     bool? autoplayGifs,
     bool? notificationsEnabled,
     bool? notificationSound,
+    double? notificationVolume,
+    double? callVolume,
+    bool? optimizeVideos,
     bool? notificationVibration,
     NotificationAlertCadence? notificationAlertCadence,
     bool? sendReadReceipts,
@@ -235,6 +244,9 @@ class AppPreferences {
     autoplayGifs: autoplayGifs ?? this.autoplayGifs,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     notificationSound: notificationSound ?? this.notificationSound,
+    notificationVolume: notificationVolume ?? this.notificationVolume,
+    callVolume: callVolume ?? this.callVolume,
+    optimizeVideos: optimizeVideos ?? this.optimizeVideos,
     notificationVibration: notificationVibration ?? this.notificationVibration,
     notificationAlertCadence:
         notificationAlertCadence ?? this.notificationAlertCadence,
@@ -331,7 +343,7 @@ class SpaceSummary {
 
 enum RoomPresentation { text, voice, forum }
 
-/// Deltiecord channel grouping stored on a Matrix Space.
+/// SeND channel grouping stored on a Matrix Space.
 class ChannelCategorySummary {
   const ChannelCategorySummary({
     required this.id,
@@ -424,6 +436,7 @@ class RoomMemberSummary {
     this.canKick = false,
     this.canBan = false,
     this.nameColor,
+    this.statusMessage,
   });
 
   final String userId;
@@ -437,6 +450,7 @@ class RoomMemberSummary {
   final bool canKick;
   final bool canBan;
   final int? nameColor;
+  final String? statusMessage;
 }
 
 class UserProfileSummary {
@@ -470,13 +484,13 @@ class UserProfileSummary {
   final List<String> serverRoleNames;
   final String? statusMessage;
 
-  /// Top colour of Deltiecord's interoperable, client-namespaced gradient.
+  /// Top colour of SeND's interoperable, client-namespaced gradient.
   final int? profileColor;
 
-  /// Bottom colour of Deltiecord's interoperable, client-namespaced gradient.
+  /// Bottom colour of SeND's interoperable, client-namespaced gradient.
   final int? profileColorSecondary;
 
-  /// Optional Deltiecord voice-tile colour. When absent, clients derive a
+  /// Optional SeND voice-tile colour. When absent, clients derive a
   /// colour from the avatar rather than reusing the profile banner.
   final int? voiceColor;
 
@@ -539,11 +553,17 @@ class RoomSummary {
     this.mutedUntil,
     this.markedUnread = false,
     this.lastActivityAt,
+    this.directUserId,
+    this.statusMessage,
+    this.hasUnreadMessages = false,
   });
 
   final String id;
   final String name;
   final String lastMessage;
+  final String? directUserId;
+  final String? statusMessage;
+  final bool hasUnreadMessages;
   final int unreadCount;
   final int highlightCount;
   final bool usesChannelIcon;
@@ -809,6 +829,7 @@ class StickerDraftItem {
     this.width,
     this.height,
     this.assetType = StickerAssetType.sticker,
+    this.reuse,
   });
 
   final String shortcode;
@@ -817,6 +838,10 @@ class StickerDraftItem {
   final int? width;
   final int? height;
   final StickerAssetType assetType;
+
+  /// Existing media in the edited pack; empty bytes means keep it unchanged.
+  /// Import paths cannot use this. Edits verify membership before reuse.
+  final StickerSummary? reuse;
 }
 
 /// Stable Matrix media identity plus human-readable fallback metadata.
@@ -979,6 +1004,9 @@ class AttachmentDraft {
     this.durationMilliseconds,
     this.waveform,
     this.gifSource,
+    this.videoWidth,
+    this.videoHeight,
+    this.videoThumbnail,
   });
 
   final Uint8List bytes;
@@ -990,6 +1018,8 @@ class AttachmentDraft {
   final int? durationMilliseconds;
   final List<int>? waveform;
   final Uri? gifSource;
+  final int? videoWidth, videoHeight;
+  final Uint8List? videoThumbnail;
 }
 
 class MediaPlaybackSource {

@@ -1,4 +1,4 @@
-# Deltiecord service helpers
+# SeND service helpers
 
 Current client baseline: 0.9.34+106. See [web hosting](../docs/web-deployment.md)
 and [hardening gates](../docs/RELEASE_READINESS.md).

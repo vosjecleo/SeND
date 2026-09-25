@@ -31,11 +31,11 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals' \
   "$workspace/source/rust/target/wasm32-unknown-unknown/release/vodozemac_bindings_dart.wasm" \
   --target no-modules --no-typescript --out-dir "$PWD/web/pkg" --out-name vodozemac_bindings_dart
 flutter pub get --enforce-lockfile
-flutter build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
+python3 packaging/flutter-with-credentials.py build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
 test -s build/web/pkg/vodozemac_bindings_dart_bg.wasm
 test -s build/web/sw.js
 test -s build/web/browser_bridge.js
 release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
 [[ "$release_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
 mkdir -p dist
-tar -czf "dist/deltiecord-${release_id}-web.tar.gz" -C build/web .
+tar -czf "dist/SeND-${release_id}-web.tar.gz" -C build/web .

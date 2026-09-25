@@ -127,7 +127,7 @@ if ! $skip_preflight; then
 fi
 
 if [[ "${create_tag:-false}" == true ]]; then
-  git tag -a "$tag" -m "Deltiecord $release_id ($channel)"
+  git tag -a "$tag" -m "SeND $release_id ($channel)"
 fi
 git push github main
 git push deltie main
@@ -136,7 +136,7 @@ git push deltie "$tag"
 
 temporary="$(mktemp -d -t deltiecord-release.XXXXXXXX)"
 trap 'rm -rf -- "$temporary"' EXIT
-base_url="https://github.com/vosjecleo/deltiecord/releases/download/$tag"
+base_url="https://github.com/vosjecleo/SeND/releases/download/$tag"
 checksum_url="$base_url/SHA256SUMS"
 printf 'Waiting for GitHub Actions release %s' "$tag"
 for _ in $(seq 1 180); do
@@ -156,19 +156,19 @@ done
 }
 
 artifacts=(
-  "deltiecord-${release_id}-windows-x64-portable.zip"
-  "deltiecord-${release_id}-windows-x64-setup.exe"
-  "deltiecord-${release_id}-linux-appimage-x86_64.AppImage"
-  "deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
-  "deltiecord-${release_id}-linux-debian-amd64.deb"
-  "deltiecord-${release_id}-android-arm64-v8a.apk"
-  "deltiecord-${release_id}-android-armeabi-v7a.apk"
-  "deltiecord-${release_id}-android-x86_64.apk"
-  "deltiecord-${release_id}-android.aab"
-  "deltiecord-${release_id}-web.tar.gz"
+  "SeND-${release_id}-windows-x64-portable.zip"
+  "SeND-${release_id}-windows-x64-setup.exe"
+  "SeND-${release_id}-linux-appimage-x86_64.AppImage"
+  "SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+  "SeND-${release_id}-linux-debian-amd64.deb"
+  "SeND-${release_id}-android-arm64-v8a.apk"
+  "SeND-${release_id}-android-armeabi-v7a.apk"
+  "SeND-${release_id}-android-x86_64.apk"
+  "SeND-${release_id}-android.aab"
+  "SeND-${release_id}-web.tar.gz"
 )
 if $web_only; then
-  artifacts=("deltiecord-${release_id}-web.tar.gz")
+  artifacts=("SeND-${release_id}-web.tar.gz")
 fi
 [[ "$(wc -l <"$temporary/SHA256SUMS")" -eq "${#artifacts[@]}" ]] || {
   printf '%s\n' 'GitHub checksum manifest has an unexpected artifact count.' >&2
@@ -187,7 +187,7 @@ done
 
 current_manifest="$temporary/current-releases.json"
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-  https://deltie.net/cord/releases.json -o "$current_manifest"
+  https://deltie.net/SeND/releases.json -o "$current_manifest"
 jq -e '.platforms.android and .platforms.linux and .platforms.windows' \
   "$current_manifest" >/dev/null
 
@@ -209,11 +209,11 @@ asset_json() {
 
 android_assets='[]' linux_assets='[]' windows_assets='[]'
 if ! $web_only; then
-  android_assets="$(asset_json "deltiecord-${release_id}-android*")"
-  linux_assets="$(asset_json "deltiecord-${release_id}-linux-*")"
-  windows_assets="$(asset_json "deltiecord-${release_id}-windows-*")"
+  android_assets="$(asset_json "SeND-${release_id}-android*")"
+  linux_assets="$(asset_json "SeND-${release_id}-linux-*")"
+  windows_assets="$(asset_json "SeND-${release_id}-windows-*")"
 fi
-web_assets="$(asset_json "deltiecord-${release_id}-web.tar.gz")"
+web_assets="$(asset_json "SeND-${release_id}-web.tar.gz")"
 updated_at="$(date --utc +'%Y-%m-%dT%H:%M:%S+00:00')"
 
 jq --arg channel "$channel" \
@@ -273,7 +273,7 @@ version="$3"
 build="$4"
 shift 4
 python3 "$stage/deploy-web.py" \
-  "$stage/deltiecord-${version}+${build}-web.tar.gz" \
+  "$stage/SeND-${version}+${build}-web.tar.gz" \
   /srv/storage/www/deltiecord-web "${version}+${build}"
 archive="/srv/storage/releases-archive/deltiecord/${version}-b${build}"
 mkdir -p -- "$archive"
@@ -292,7 +292,7 @@ rm -rf -- "$stage"
 REMOTE
 
 published="$(curl --fail --silent --show-error --location \
-  "https://deltie.net/cord/releases.json?build=$build")"
+  "https://deltie.net/SeND/releases.json?build=$build")"
 if [[ "$channel" == latest || "$channel" == both ]]; then
   [[ "$(jq -r '.build' <<<"$published")" == "$build" ]]
 fi
@@ -311,14 +311,14 @@ if $install_host; then
   }
   if command -v apt >/dev/null; then
     pkexec apt install -y \
-      "$temporary/deltiecord-${release_id}-linux-debian-amd64.deb"
+      "$temporary/SeND-${release_id}-linux-debian-amd64.deb"
   elif command -v pacman >/dev/null; then
     pkexec pacman -U --noconfirm \
-      "$temporary/deltiecord-${release_id}-linux-arch-x86_64.pkg.tar.zst"
+      "$temporary/SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
   else
     printf '%s\n' 'Host installation supports apt and pacman systems.' >&2
     exit 1
   fi
 fi
 
-printf 'Published Deltiecord %s to %s.\n' "$release_id" "$channel"
+printf 'Published SeND %s to %s.\n' "$release_id" "$channel"

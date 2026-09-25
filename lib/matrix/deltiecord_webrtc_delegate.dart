@@ -55,7 +55,7 @@ class DeltiecordWebRtcDelegate implements WebRTCDelegate {
   Future<void> handleGroupCallEnded(GroupCallSession groupCall) async {}
 }
 
-/// Applies Deltiecord's explicit desktop-audio choice to MatrixRTC capture.
+/// Applies SeND's explicit desktop-audio choice to MatrixRTC capture.
 ///
 /// matrix-dart-sdk intentionally requests video-only display capture. Wrapping
 /// the platform media devices here keeps that SDK detail behind the RTC

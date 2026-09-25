@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/update_checker.dart';
+import 'update_dialog.dart';
 
 /// Performs a silent release check with bounded retries after sign-in.
 ///
@@ -54,31 +54,7 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
       if (!mounted) return;
       _checkedThisProcess = true;
       if (!mounted || !result.updateAvailable) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Deltiecord update available'),
-          content: Text(
-            'Version ${result.version} build ${result.build} is available.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Later'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                launchUrl(
-                  Uri.parse(deltiecordReleasesPage),
-                  mode: LaunchMode.externalApplication,
-                );
-              },
-              child: const Text('View release'),
-            ),
-          ],
-        ),
-      );
+      await showReleaseUpdate(context, result);
     } catch (_) {
       // Startup update checks are advisory and must not affect the session.
       if (mounted && _attempts < 3) {

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../deltiecord_theme.dart';
+import '../activity_widgets.dart';
 import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
 import '../relative_activity_time.dart';
@@ -190,6 +191,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                 Expanded(
                                   child: selectedSpace == null
                                       ? _RoomList(
+                                          backend: backend,
                                           rooms: rooms,
                                           onOpenRoom: widget.onOpenRoom,
                                         )
@@ -374,6 +376,7 @@ class _SpaceRail extends StatelessWidget {
           tooltip: 'Home',
           onTap: () => backend.selectSpace(null),
           attentionCount: backend.directUnreadCount,
+          unread: backend.directUnreadCount > 0,
           child: const Icon(Icons.home_rounded),
         ),
         const Divider(indent: 14, endIndent: 14),
@@ -388,6 +391,7 @@ class _SpaceRail extends StatelessWidget {
                   onTap: () => backend.selectSpace(space.id),
                   onLongPress: () => _showSpaceActions(context, space),
                   attentionCount: backend.pingCountForSpace(space.id),
+                  unread: backend.hasUnreadForSpace(space.id),
                   child: MobileAvatar(
                     bytes: space.avatarBytes,
                     fallback: space.name,
@@ -686,6 +690,7 @@ class _RailButton extends StatelessWidget {
     this.selected = false,
     this.onLongPress,
     this.attentionCount = 0,
+    this.unread = false,
     super.key,
   });
   final String tooltip;
@@ -694,40 +699,78 @@ class _RailButton extends StatelessWidget {
   final bool selected;
   final VoidCallback? onLongPress;
   final int attentionCount;
+  final bool unread;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
     child: Tooltip(
       message: tooltip,
-      child: Badge.count(
-        key: ValueKey('mobile-rail-badge-$tooltip'),
-        count: attentionCount.clamp(0, 999),
-        isLabelVisible: attentionCount > 0,
-        alignment: Alignment.topRight,
-        offset: const Offset(-2, 2),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        textColor: Theme.of(context).colorScheme.onPrimary,
-        child: Material(
-          key: ValueKey('mobile-rail-button-$tooltip'),
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : context.deltiecord.elevated,
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: SizedBox.square(dimension: 54, child: Center(child: child)),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedPositioned(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 160),
+            left: -7,
+            top: selected ? 15 : 24,
+            child: AnimatedContainer(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              width: 4,
+              height: selected
+                  ? 24
+                  : unread
+                  ? 6
+                  : 0,
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : const Color(0xff324452),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
           ),
-        ),
+          Badge.count(
+            key: ValueKey('mobile-rail-badge-$tooltip'),
+            count: attentionCount.clamp(0, 999),
+            isLabelVisible: attentionCount > 0,
+            alignment: Alignment.topRight,
+            offset: const Offset(-2, 2),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            textColor: Theme.of(context).colorScheme.onPrimary,
+            child: Material(
+              key: ValueKey('mobile-rail-button-$tooltip'),
+              color: selected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : context.deltiecord.elevated,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onTap,
+                onLongPress: onLongPress,
+                child: SizedBox.square(
+                  dimension: 54,
+                  child: Center(child: child),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );
 }
 
 class _RoomList extends StatelessWidget {
-  const _RoomList({required this.rooms, required this.onOpenRoom});
+  const _RoomList({
+    required this.backend,
+    required this.rooms,
+    required this.onOpenRoom,
+  });
+  final ChatBackend backend;
   final List<RoomSummary> rooms;
   final ValueChanged<RoomSummary> onOpenRoom;
 
@@ -740,7 +783,7 @@ class _RoomList extends StatelessWidget {
       final room = rooms[index];
       final age = compactActivityAge(room.lastActivityAt);
       return ListTile(
-        minTileHeight: 64,
+        minTileHeight: 56,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         selected: false,
         leading: MobileAvatar(
@@ -749,12 +792,14 @@ class _RoomList extends StatelessWidget {
           presence: room.isDirect ? room.presence : null,
         ),
         title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          room.lastMessage,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: context.deltiecord.muted),
-        ),
+        subtitle: room.isDirect && room.presence != UserPresence.offline
+            ? ActivityStatus(
+                backend: backend,
+                userId: room.directUserId,
+                presence: room.presence,
+                status: room.statusMessage,
+              )
+            : null,
         trailing: room.unreadCount == 0 && age.isEmpty
             ? null
             : Column(
@@ -909,7 +954,15 @@ class _SpaceRoomTile extends StatelessWidget {
       room.isVoice ? Icons.volume_up_outlined : Icons.tag,
       size: 20,
     ),
-    title: Text(room.name),
+    title: Text(
+      room.name,
+      style: TextStyle(
+        fontWeight:
+            room.unreadCount > 0 || room.markedUnread || room.hasUnreadMessages
+            ? FontWeight.w700
+            : FontWeight.w400,
+      ),
+    ),
     subtitle: room.isVoice && room.voiceParticipants.isNotEmpty
         ? Text(
             room.voiceParticipants.isEmpty
