@@ -618,7 +618,14 @@ class _ConversationState extends State<_Conversation> {
                                   ),
                                 ),
                                 if (room.isDirect)
-                                  _ConversationPresence(presence: room.presence)
+                                  TimelineActivityStatus(
+                                    backend: backend,
+                                    userId: room.directUserId,
+                                    presence: room.presence,
+                                    fallback: _ConversationPresence(
+                                      presence: room.presence,
+                                    ),
+                                  )
                                 else if (room.topic.isNotEmpty)
                                   Text(
                                     room.topic,
@@ -849,8 +856,6 @@ class _ConversationState extends State<_Conversation> {
                         ),
                       ],
                     ),
-                  if (room.isDirect)
-                    ActivityBlock(userId: room.directUserId, compact: true),
                   EncryptionAttentionBanner(backend: backend, room: room),
                   Expanded(
                     child: Stack(

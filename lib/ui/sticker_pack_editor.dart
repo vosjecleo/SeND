@@ -36,25 +36,146 @@ class StickerPackEditor extends StatefulWidget {
 class _StickerPackEditorState extends State<StickerPackEditor> {
   late final _name = TextEditingController(text: widget.pack.name);
   late List<_PackEditItem> _items = widget.pack.stickers
-      .map(
-        (item) => _PackEditItem(
-          StickerDraftItem(
-            shortcode: item.name,
-            bytes: Uint8List(0),
-            mimeType: item.mimeType,
-            width: item.width,
-            height: item.height,
-            assetType: item.assetType,
-            reuse: item,
-          ),
-        ),
-      )
+      .map((item) => _PackEditItem(packItemReference(item)))
       .toList();
   List<_PackEditItem>? _undo;
   bool _busy = false;
   String? _error;
   String _progress = '';
   void _checkpoint() => _undo = _items.map((item) => item.copy()).toList();
+
+  Future<void> _merge() async {
+    final candidates = widget.backend.stickerPacks
+        .where(
+          (pack) =>
+              pack.id != widget.pack.id ||
+              pack.sourceRoomId != widget.pack.sourceRoomId,
+        )
+        .toList();
+    final pack = await showModalBottomSheet<StickerPackSummary>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Merge another pack into this one'),
+              subtitle: Text(
+                'Original packs stay available. Duplicate aliases receive a numbered suffix. Save changes to finish.',
+              ),
+            ),
+            if (candidates.isEmpty)
+              const ListTile(title: Text('No other packs available')),
+            for (final pack in candidates)
+              ListTile(
+                title: Text(pack.name),
+                subtitle: Text('${pack.stickers.length} items'),
+                onTap: () => Navigator.pop(context, pack),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || pack == null) return;
+    try {
+      final combined = mergePackItems(
+        _items.map((item) => item.draft).toList(),
+        pack.stickers,
+      );
+      setState(() {
+        _checkpoint();
+        _items = combined.map(_PackEditItem.new).toList();
+        _error = null;
+      });
+    } catch (error) {
+      setState(() => _error = '$error');
+    }
+  }
+
+  Future<void> _split() async {
+    if (!_validate()) return;
+    final selected = _items.where((item) => item.selected).toList();
+    if (selected.isEmpty || selected.length == _items.length) {
+      setState(
+        () => _error =
+            'Select some items, leaving at least one in the original pack.',
+      );
+      return;
+    }
+    final baseName = _name.text.trim();
+    var name = '${baseName.substring(0, min(baseName.length, 72))} — split';
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Split selected into a new personal pack'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'The new pack is saved first, then these items are removed from the original. Other edits are saved too. If the second save fails, both copies are kept.',
+              ),
+              TextFormField(
+                initialValue: name,
+                maxLength: 80,
+                onChanged: (value) => name = value,
+                decoration: const InputDecoration(labelText: 'New pack name'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Split pack'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || accepted != true) return;
+    if (name.trim().isEmpty || name.trim().length > 80) {
+      setState(() => _error = 'The new pack needs a name of 1–80 characters.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _progress = 'Saving new pack…';
+    });
+    try {
+      await widget.backend.savePersonalStickerPack(
+        StickerPackDraft(
+          name: name.trim(),
+          stickers: selected.map((item) => item.draft).toList(),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _items.removeWhere(selected.contains);
+        _undo = null;
+      });
+      await _save();
+      if (mounted && _error != null) {
+        setState(
+          () => _error =
+              'New pack saved. The original is unchanged: $_error Retry Save changes to finish the split.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = '$error';
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -66,7 +187,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
       final picked = await _pickStickerImages();
       if (!mounted || picked == null) return;
       if (_items.length + picked.length > StickerPackDraft.maximumItems) {
-        throw StateError('A pack can contain at most 120 items.');
+        throw StateError('A pack can contain at most 150 items.');
       }
       final prepared = type == StickerAssetType.emoji
           ? await _prepareEmojiItems(context, picked)
@@ -166,7 +287,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
     }
   }
 
-  Future<void> _save() async {
+  bool _validate() {
     final name = _name.text.trim();
     final aliases = _items.map((item) => item.alias.trim()).toList();
     if (name.isEmpty ||
@@ -181,8 +302,14 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
         () => _error =
             'Use a pack name, keep at least one item and give each item a unique alias (letters, numbers, underscores or hyphens).',
       );
-      return;
+      return false;
     }
+    return true;
+  }
+
+  Future<void> _save() async {
+    if (!_validate()) return;
+    final name = _name.text.trim();
     setState(() {
       _busy = true;
       _error = null;
@@ -259,6 +386,16 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
                                 ),
                               ),
                               TextButton(
+                                onPressed: _busy ? null : _merge,
+                                child: const Text('Merge pack'),
+                              ),
+                              TextButton(
+                                onPressed: _busy || !hasSelected
+                                    ? null
+                                    : _split,
+                                child: const Text('Split selected'),
+                              ),
+                              TextButton(
                                 onPressed: _busy
                                     ? null
                                     : () => setState(() {
@@ -298,7 +435,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
                             ],
                           ),
                           Text(
-                            '${_items.length}/120 items · aliases and removals do not re-upload media',
+                            '${_items.length}/150 items · aliases and removals do not re-upload media',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           if (_busy) ...[

@@ -38,7 +38,7 @@ void main() {
     });
   });
 
-  test('SeND and Telegram share the 120-item pack ceiling', () {
-    expect(maximumStickerPackItems, 120);
+  test('SeND and Telegram share the 150-item pack ceiling', () {
+    expect(maximumStickerPackItems, 150);
   });
 }

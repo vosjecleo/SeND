@@ -17,6 +17,7 @@ class ActivityController extends ChangeNotifier {
     required this.read,
     required this.write,
     this.writeProfile,
+    this.writeHistory,
     required this.upload,
     required this.canShare,
     this.canView,
@@ -37,6 +38,7 @@ class ActivityController extends ChangeNotifier {
   final Future<Object?> Function(String) read;
   final Future<void> Function(UserActivity?) write;
   final Future<void> Function(Map<String, Object?>?)? writeProfile;
+  final Future<void> Function(Map<String, Object?>?)? writeHistory;
   final Future<Uri> Function(Uint8List) upload;
   final bool Function() canShare;
   final bool Function(String)? canView;
@@ -47,11 +49,18 @@ class ActivityController extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   final Duration pollInterval, heartbeat, readInterval;
   final _seen = <String, DateTime>{};
+  final _historyWatch = <String>{};
   final _fetched = <String, DateTime>{};
+  final _observedOnline = <String, bool>{};
   final _records = <String, Map<String, Object?>>{};
   final _icons = <String, Uri>{};
   Map<String, Object?>? _local;
   bool _localOwned = false;
+  Map<String, Object?>? _localHistory;
+  bool _historyOwned = false;
+  String? _historyFingerprint;
+  DateTime? _historyAfter;
+  String? _historyWarning;
   DateTime _readAfter;
   ActivitySettings settings = const ActivitySettings();
   List<ActivityCandidate> candidates = const [];
@@ -86,11 +95,16 @@ class ActivityController extends ChangeNotifier {
 
   UserActivities activitiesFor(String id) {
     if (!_visible(id)) {
-      _records.remove(id);
-      _seen.remove(id);
-      _fetched.remove(id);
-      return const UserActivities();
+      return _combined(id);
     }
+    _observe(id);
+    return _combined(id);
+  }
+
+  void _observe(String id) {
+    final online = _visible(id);
+    if (_observedOnline[id] != online) _fetched.remove(id);
+    _observedOnline[id] = online;
     _seen[id] = DateTime.now();
     if (_seen.length > 64) _seen.remove(_seen.keys.first);
     if (_foreground &&
@@ -107,18 +121,33 @@ class ActivityController extends ChangeNotifier {
         },
       );
     }
-    return _combined(id);
   }
 
   UserActivities _combined(String id) {
-    if (!_visible(id)) return const UserActivities();
     final records = {...?_records[id]};
     if (id == userId && _localOwned) records[_field] = _local;
+    if (id == userId && _historyOwned) {
+      records[lastFmHistoryField(deviceId)] = _localHistory;
+    }
+    if (id == userId &&
+        writeHistory != null &&
+        (!settings.share ||
+            !settings.showLastFmRecent ||
+            settings.lastFmUser.isEmpty)) {
+      records.remove(lastFmHistoryField(deviceId));
+    }
+    if (!_visible(id)) {
+      records.removeWhere((key, _) => !key.startsWith(lastFmHistoryPrefix));
+    }
     return UserActivities.fromRecords(records);
   }
 
   UserActivity? activityFor(String id) => activitiesFor(id).primary;
-  LastFmTrack? lastFmRecentFor(String id) => activitiesFor(id).recent;
+  LastFmTrack? lastFmRecentFor(String id) {
+    _historyWatch.add(id);
+    _observe(id);
+    return _combined(id).recent;
+  }
 
   Future<void> update(ActivitySettings value) async {
     // Revocations take effect even if secure storage fails, and during uploads.
@@ -145,9 +174,15 @@ class ActivityController extends ChangeNotifier {
 
   void refresh() => unawaited(_tick());
   void visibilityChanged({bool refresh = true}) {
-    _records.removeWhere((id, _) => !_visible(id));
-    _seen.removeWhere((id, _) => !_visible(id));
-    _fetched.removeWhere((id, _) => !_visible(id));
+    for (final entry in _records.entries) {
+      if (!_visible(entry.key)) {
+        if (_observedOnline[entry.key] != false) _fetched.remove(entry.key);
+        _observedOnline[entry.key] = false;
+        entry.value.removeWhere(
+          (key, _) => !key.startsWith(lastFmHistoryPrefix),
+        );
+      }
+    }
     if (!_foreground) _lastFm.suspend();
     if (refresh || !canShare()) this.refresh();
   }
@@ -243,7 +278,46 @@ class ActivityController extends ChangeNotifier {
         }
       }
       if (_dead) return;
-      warning = _publishWarning ?? _source.warning;
+      // Last-listened history is durable public metadata, not live presence.
+      // Close/background/offline must not clear it. Explicit opt-out clears
+      // only this device's contribution; other linked devices stay independent.
+      if (writeHistory != null &&
+          (_historyAfter == null || !DateTime.now().isBefore(_historyAfter!))) {
+        final enabled =
+            settings.share &&
+            settings.showLastFmRecent &&
+            settings.lastFmUser.isNotEmpty &&
+            publicLastFmApproved;
+        final nextHistory = enabled && recent != null
+            ? <String, Object?>{'version': 1, 'track': recent.toJson()}
+            : null;
+        final fingerprint = nextHistory == null
+            ? null
+            : jsonEncode(nextHistory);
+        if ((!enabled && (!_historyOwned || _localHistory != null)) ||
+            (nextHistory != null && fingerprint != _historyFingerprint)) {
+          try {
+            await writeHistory!(
+              nextHistory,
+            ).timeout(const Duration(seconds: 10));
+            _localHistory = nextHistory;
+            _historyOwned = true;
+            _historyFingerprint = fingerprint;
+            _historyAfter = null;
+            _historyWarning = null;
+          } catch (error) {
+            _historyAfter = DateTime.now().add(
+              error is ActivityServiceError
+                  ? error.retryAfter ?? const Duration(seconds: 30)
+                  : const Duration(seconds: 30),
+            );
+            _historyWarning =
+                'Last.fm history could not be ${enabled ? 'saved' : 'removed'}; retrying automatically.';
+            // A history outage must not block live publishing or viewing.
+          }
+        }
+      }
+      warning = _publishWarning ?? _historyWarning ?? _source.warning;
       final eligible = settings.share && canShare()
           ? candidates.where(_eligible).toList()
           : <ActivityCandidate>[];
@@ -355,11 +429,12 @@ class ActivityController extends ChangeNotifier {
       _seen.removeWhere(
         (_, at) => now.difference(at) > const Duration(minutes: 2),
       );
+      _historyWatch.removeWhere((id) => !_seen.containsKey(id));
       final users = _seen.keys
           .where(
             (id) =>
                 _foreground &&
-                _visible(id) &&
+                (_visible(id) || _historyWatch.contains(id)) &&
                 !now.isBefore(_readAfter) &&
                 (_fetched[id] == null ||
                     now.difference(_fetched[id]!) >= readInterval),
@@ -372,14 +447,21 @@ class ActivityController extends ChangeNotifier {
       );
       for (final id in users.take(8)) {
         if (_dead || !_foreground) break;
-        if (!_visible(id)) continue;
+        if (!_visible(id) && !_historyWatch.contains(id)) continue;
         _fetched[id] = DateTime.now();
         try {
           final response = await read(id).timeout(const Duration(seconds: 8));
-          if (!_dead && _foreground && _visible(id)) {
+          if (!_dead &&
+              _foreground &&
+              (_visible(id) || _historyWatch.contains(id))) {
             _records[id] = response is Map && response['devices'] is Map
                 ? Map<String, Object?>.from(response['devices'] as Map)
                 : {activityProfileField: response};
+            if (!_visible(id)) {
+              _records[id]!.removeWhere(
+                (key, _) => !key.startsWith(lastFmHistoryPrefix),
+              );
+            }
           }
         } on ActivityServiceError catch (error) {
           if (error.code == 'M_NOT_FOUND') {
@@ -398,6 +480,7 @@ class ActivityController extends ChangeNotifier {
       }
       _records.removeWhere((id, _) => !_seen.containsKey(id));
       _fetched.removeWhere((id, _) => !_seen.containsKey(id));
+      _observedOnline.removeWhere((id, _) => !_seen.containsKey(id));
     } catch (error) {
       final code = error is ActivityServiceError ? error.code : null;
       warning = switch (code) {

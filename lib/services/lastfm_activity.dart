@@ -138,6 +138,7 @@ LastFmTrack? lastFmRecentlyPlayed(Map data, String user) {
                   Uri.https('www.last.fm', '/user/$user'))
               .toString(),
       'played_at': seconds * 1000,
+      'artwork': lastFmArtworkFromImages(track['image'])?.toString(),
     });
     if (value != null) return value;
   }
@@ -161,9 +162,21 @@ ActivityCandidate? lastFmNowPlaying(Map data, String user) {
   }
 
   final artist = track['artist'];
+  final artwork = lastFmArtworkFromImages(track['image']);
+  return ActivityCandidate(
+    id: 'lastfm',
+    name: bounded(track['name'], 128),
+    kind: ActivityKind.music,
+    details: bounded(artist is Map ? artist['#text'] : null, 256),
+    lastFmArtwork: artwork,
+    lastFmUrl:
+        validLastFmUrl(track['url']) ?? Uri.https('www.last.fm', '/user/$user'),
+  );
+}
+
+Uri? lastFmArtworkFromImages(Object? images) {
   Uri? artwork;
   var artworkRank = -1;
-  final images = track['image'];
   if (images is List) {
     for (final image in images.take(12)) {
       if (image is! Map) continue;
@@ -181,15 +194,5 @@ ActivityCandidate? lastFmNowPlaying(Map data, String user) {
       }
     }
   }
-  return ActivityCandidate(
-    id: 'lastfm',
-    name: bounded(track['name'], 128),
-    kind: ActivityKind.music,
-    details: bounded(artist is Map ? artist['#text'] : null, 256),
-    // Written artwork-display permission confirmed by the owner. Reference the
-    // supplied CDN URL; do not mirror artwork or invent a larger rendition.
-    lastFmArtwork: artwork,
-    lastFmUrl:
-        validLastFmUrl(track['url']) ?? Uri.https('www.last.fm', '/user/$user'),
-  );
+  return artwork;
 }

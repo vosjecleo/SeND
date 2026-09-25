@@ -221,7 +221,7 @@ def _telegram_pack(set_name):
 
     result = _telegram_request("getStickerSet", {"name": set_name})
     stickers = result.get("stickers", [])
-    if not isinstance(stickers, list) or len(stickers) > 120:
+    if not isinstance(stickers, list) or len(stickers) > 150:
         raise RuntimeError("invalid Telegram pack size")
     supported = []
     unsupported = 0
@@ -677,7 +677,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 self._json({"error": "invalid sticker index"}, 400)
                 return
-            if index < 0 or index >= 120:
+            if index < 0 or index >= 150:
                 self._json({"error": "invalid sticker index"}, 400)
                 return
         if not _request_slots.acquire(blocking=False):

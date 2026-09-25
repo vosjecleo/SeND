@@ -298,12 +298,13 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
       return Material(
         key: const Key('compact-profile-popup'),
         color: Colors.transparent,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DeltiecordProfileCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: DeltiecordProfileCard(
+                scrollable: true,
                 profile: profile,
                 onEdit: widget.own ? () => _edit(profile) : null,
                 onMessage: widget.own
@@ -315,12 +316,12 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
                         );
                       },
               ),
-              TextButton(
-                onPressed: _openFullProfile,
-                child: const Text('View full profile'),
-              ),
-            ],
-          ),
+            ),
+            TextButton(
+              onPressed: _openFullProfile,
+              child: const Text('View full profile'),
+            ),
+          ],
         ),
       );
     },
@@ -417,51 +418,45 @@ class _ProfileDialogState extends State<_ProfileDialog> {
           if (profile == null) {
             return const _ProfileLoadingCard(compact: false);
           }
-          return SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DeltiecordProfileCard(
-                  profile: profile,
-                  onEdit: widget.own ? () => _edit(profile) : null,
-                  onClose: Navigator.of(context).pop,
-                  onMessage: widget.own
-                      ? null
-                      : () async {
-                          Navigator.of(context).pop();
-                          await widget.backend.startDirectChat(
-                            widget.member.userId,
-                          );
-                        },
-                  onBlock: widget.own ? null : _toggleBlock,
-                  blocked: widget.backend.blockedUserIds.contains(
-                    widget.member.userId,
-                  ),
-                ),
-                if (!widget.own || widget.member.canChangePowerLevel) ...[
-                  const SizedBox(height: 14),
-                  _RoomRolePanel(
-                    member: widget.member,
-                    saving: _saving,
-                    onChanged: widget.member.canChangePowerLevel
-                        ? (value) async {
-                            setState(() => _saving = true);
-                            try {
-                              await widget.backend.setMemberPowerLevel(
-                                widget.member.userId,
-                                value,
-                              );
-                            } finally {
-                              if (mounted) {
-                                setState(() => _saving = false);
+          return DeltiecordProfileCard(
+            scrollable: true,
+            profile: profile,
+            onEdit: widget.own ? () => _edit(profile) : null,
+            onClose: Navigator.of(context).pop,
+            onMessage: widget.own
+                ? null
+                : () async {
+                    Navigator.of(context).pop();
+                    await widget.backend.startDirectChat(widget.member.userId);
+                  },
+            onBlock: widget.own ? null : _toggleBlock,
+            blocked: widget.backend.blockedUserIds.contains(
+              widget.member.userId,
+            ),
+            footer: !widget.own || widget.member.canChangePowerLevel
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: _RoomRolePanel(
+                      member: widget.member,
+                      saving: _saving,
+                      onChanged: widget.member.canChangePowerLevel
+                          ? (value) async {
+                              setState(() => _saving = true);
+                              try {
+                                await widget.backend.setMemberPowerLevel(
+                                  widget.member.userId,
+                                  value,
+                                );
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _saving = false);
+                                }
                               }
                             }
-                          }
-                        : null,
-                  ),
-                ],
-              ],
-            ),
+                          : null,
+                    ),
+                  )
+                : null,
           );
         },
       ),

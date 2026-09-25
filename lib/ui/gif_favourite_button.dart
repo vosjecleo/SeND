@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/foundation.dart';
 import 'lifecycle_memory_image.dart';
+import 'image_zoom_viewer.dart';
 import '../services/gif_service.dart';
 
 Future<void> showGifFullscreen(
@@ -15,12 +17,18 @@ Future<void> showGifFullscreen(
     child: Stack(
       children: [
         Positioned.fill(
-          child: InteractiveViewer(
+          child: ImageZoomViewer(
+            enableDoubleTap:
+                defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS,
             child: Center(
-              child: LifecycleMemoryImage(
-                bytes: bytes,
-                animated: true,
-                autoplay: autoplay,
+              child: GifFavouriteGesture(
+                uri: source,
+                child: LifecycleMemoryImage(
+                  bytes: bytes,
+                  animated: true,
+                  autoplay: autoplay,
+                ),
               ),
             ),
           ),
@@ -31,8 +39,6 @@ Future<void> showGifFullscreen(
           child: SafeArea(
             child: Row(
               children: [
-                if (isFavouriteableGifUri(source))
-                  GifFavouriteButton(uri: source!),
                 IconButton.filledTonal(
                   tooltip: 'Close viewer',
                   onPressed: () => Navigator.of(context).pop(),
@@ -58,58 +64,78 @@ bool isFavouriteableGifUri(Uri? uri) =>
     uri.path.toLowerCase().endsWith('.gif');
 
 /// A favourite stores the public GIF rendition, not a thumbnail or room key.
-class GifFavouriteButton extends StatefulWidget {
-  const GifFavouriteButton({required this.uri, super.key});
-  final Uri uri;
+class GifFavouriteGesture extends StatefulWidget {
+  const GifFavouriteGesture({
+    required this.uri,
+    required this.child,
+    this.service,
+    super.key,
+  });
+  final Uri? uri;
+  final Widget child;
+
+  /// Optional borrowed service for testing. Otherwise owned by this widget.
+  final GifService? service;
   @override
-  State<GifFavouriteButton> createState() => _GifFavouriteButtonState();
+  State<GifFavouriteGesture> createState() => _GifFavouriteGestureState();
 }
 
-class _GifFavouriteButtonState extends State<GifFavouriteButton> {
-  final _service = GifService();
+class _GifFavouriteGestureState extends State<GifFavouriteGesture> {
+  late final _service = widget.service ?? GifService();
   bool _busy = false;
-  GifSearchResult get _gif => GifSearchResult(
-    title: 'GIF',
-    previewUrl: widget.uri,
-    shareUrl: widget.uri,
-  );
-  @override
-  void initState() {
-    super.initState();
-    _service.favorites().then((_) {
-      if (mounted) setState(() {});
-    });
-  }
 
   @override
   void dispose() {
-    _service.dispose();
+    if (widget.service == null) _service.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => IconButton.filledTonal(
-    tooltip: _service.isFavorite(_gif)
-        ? 'Remove favourite GIF'
-        : 'Favourite GIF',
-    icon: Icon(_service.isFavorite(_gif) ? Icons.star : Icons.star_border),
-    onPressed: _busy
-        ? null
-        : () async {
-            setState(() => _busy = true);
-            try {
-              await _service.toggleFavorite(_gif);
-            } catch (_) {
-              if (context.mounted) {
-                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Could not save this favourite.'),
-                  ),
-                );
-              }
-            } finally {
-              if (mounted) setState(() => _busy = false);
-            }
-          },
-  );
+  Widget build(BuildContext context) {
+    if (!isFavouriteableGifUri(widget.uri)) return widget.child;
+    return Semantics(
+      customSemanticsActions: {
+        const CustomSemanticsAction(label: 'Toggle favourite GIF'): _toggle,
+      },
+      child: Tooltip(
+        message: 'Hold to favourite or unfavourite this GIF',
+        triggerMode: TooltipTriggerMode.manual,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: _busy ? null : _toggle,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggle() async {
+    final uri = widget.uri;
+    if (_busy || !isFavouriteableGifUri(uri)) return;
+    final gif = GifSearchResult(title: 'GIF', previewUrl: uri!, shareUrl: uri);
+    setState(() => _busy = true);
+    try {
+      await _service.favorites();
+      await _service.toggleFavorite(gif);
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              _service.isFavorite(gif)
+                  ? 'GIF added to favourites.'
+                  : 'GIF removed from favourites.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('Could not save this favourite.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 }

@@ -3,6 +3,7 @@ import '../services/video_preparation.dart';
 import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
 import '../services/activity_controller.dart';
+import '../services/pack_reorganization.dart';
 import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
 import 'dart:collection';
@@ -180,7 +181,8 @@ class MatrixBackend extends ChatBackend {
             'devices': {
               for (final entry in fields.entries)
                 if (entry.key == activityProfileField ||
-                    entry.key.startsWith(activityDevicePrefix))
+                    entry.key.startsWith(activityDevicePrefix) ||
+                    entry.key.startsWith(lastFmHistoryPrefix))
                   entry.key: entry.value,
             },
           };
@@ -199,6 +201,24 @@ class MatrixBackend extends ChatBackend {
       },
       write: (activity) => writeRecord(activity?.toJson()),
       writeProfile: writeRecord,
+      writeHistory: (record) async {
+        final field = lastFmHistoryField(client.deviceID!);
+        try {
+          if (record == null) {
+            await client.deleteProfileField(ownId, field);
+          } else {
+            await client.setProfileField(ownId, field, {field: record});
+          }
+        } on MatrixException catch (error) {
+          if (record == null && error.errcode == 'M_NOT_FOUND') return;
+          throw ActivityServiceError(
+            error.errcode,
+            retryAfter: error.retryAfterMs == null
+                ? null
+                : Duration(milliseconds: error.retryAfterMs!),
+          );
+        }
+      },
       upload: (bytes) => client.uploadContent(
         bytes,
         filename: 'activity-icon.png',

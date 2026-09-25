@@ -20,6 +20,8 @@ class DeltiecordProfileCard extends StatelessWidget {
     this.bannerPreview,
     this.minimumHeight = 0,
     this.scrollController,
+    this.scrollable = false,
+    this.footer,
     super.key,
   });
 
@@ -39,6 +41,8 @@ class DeltiecordProfileCard extends StatelessWidget {
   /// When supplied by a bounded mobile sheet, only the contents scroll; the
   /// gradient, rounded mask and outline remain fixed in place.
   final ScrollController? scrollController;
+  final bool scrollable;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +84,7 @@ class DeltiecordProfileCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: _ProfileScrollBody(
         controller: scrollController,
+        enabled: scrollable || scrollController != null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -199,6 +204,7 @@ class DeltiecordProfileCard extends StatelessWidget {
                     ),
                   ],
                   if (!preview) LastFmRecentBar(userId: profile.userId),
+                  ?footer,
                 ],
               ),
             ),
@@ -210,14 +216,26 @@ class DeltiecordProfileCard extends StatelessWidget {
 }
 
 class _ProfileScrollBody extends StatelessWidget {
-  const _ProfileScrollBody({required this.controller, required this.child});
+  const _ProfileScrollBody({
+    required this.controller,
+    required this.child,
+    required this.enabled,
+  });
   final ScrollController? controller;
   final Widget child;
+  final bool enabled;
 
   @override
-  Widget build(BuildContext context) => controller == null
+  Widget build(BuildContext context) => !enabled
       ? child
-      : SingleChildScrollView(controller: controller, child: child);
+      : ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SingleChildScrollView(
+            controller: controller,
+            primary: false,
+            child: child,
+          ),
+        );
 }
 
 class ProfileStatusBubble extends StatelessWidget {

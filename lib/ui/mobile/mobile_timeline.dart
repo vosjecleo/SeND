@@ -650,16 +650,27 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      Text(
-                        widget.room.topic.isNotEmpty
-                            ? widget.room.topic
-                            : widget.room.isDirect
-                            ? mobilePresenceLabel(widget.room.presence)
-                            : '${backend.selectedRoomMembers.length} members',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      if (widget.room.isDirect)
+                        TimelineActivityStatus(
+                          backend: backend,
+                          userId: widget.room.directUserId,
+                          presence: widget.room.presence,
+                          fallback: Text(
+                            mobilePresenceLabel(widget.room.presence),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        )
+                      else
+                        Text(
+                          widget.room.topic.isNotEmpty
+                              ? widget.room.topic
+                              : '${backend.selectedRoomMembers.length} members',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                     ],
                   ),
                 ),
@@ -801,8 +812,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                 ),
                 actions: const [SizedBox.shrink()],
               ),
-            if (widget.room.isDirect)
-              ActivityBlock(userId: widget.room.directUserId, compact: true),
             EncryptionAttentionBanner(backend: backend, room: widget.room),
             Expanded(
               child: backend.timelineLoading && messages.isEmpty

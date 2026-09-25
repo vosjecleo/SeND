@@ -23,7 +23,17 @@ Uint8List animation({int width = 200, int height = 100}) {
 
 class PackBackend extends FakeBackend {
   StickerPackDraft? saved;
+  StickerPackDraft? created;
+  int creates = 0;
   bool fail = false;
+  bool failCreate = false;
+  @override
+  Future<void> savePersonalStickerPack(StickerPackDraft draft) async {
+    if (failCreate) throw StateError('New pack failed');
+    creates++;
+    created = draft;
+  }
+
   @override
   Future<void> replaceStickerPack(
     StickerPackSummary existing,
@@ -178,6 +188,34 @@ void main() {
       );
     },
   );
+  testWidgets('merge preserves original packs and safely resolves aliases', (
+    tester,
+  ) async {
+    final backend = PackBackend()
+      ..stickerPackList = [
+        pack,
+        StickerPackSummary(
+          id: 'other',
+          name: 'Other cats',
+          stickers: pack.stickers,
+        ),
+      ];
+    await open(tester, backend);
+    await tester.tap(find.text('Merge pack'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Other cats'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(backend.saved!.stickers.map((item) => item.shortcode), [
+      'cat',
+      'dog',
+      'cat_2',
+      'dog_2',
+    ]);
+    expect(backend.stickerPacks.length, 2);
+    expect(backend.saved!.stickers.every((item) => item.bytes.isEmpty), isTrue);
+  });
   testWidgets('bulk removal is undoable and duplicate aliases do not save', (
     tester,
   ) async {
@@ -196,6 +234,51 @@ void main() {
     await tester.pump();
     expect(backend.saved, isNull);
     expect(tester.takeException(), isNull);
+  });
+  for (final failSecondSave in [false, true]) {
+    testWidgets(
+      'split saves destination before source; source failure=$failSecondSave',
+      (tester) async {
+        final backend = PackBackend()..fail = failSecondSave;
+        await open(tester, backend);
+        await tester.tap(find.byType(Checkbox).last);
+        await tester.pump();
+        await tester.tap(find.text('Split selected'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Split pack'));
+        await tester.pumpAndSettle();
+        expect(backend.created!.stickers.single.shortcode, 'dog');
+        expect(
+          backend.created!.stickers.single.reuse,
+          same(pack.stickers.last),
+        );
+        if (failSecondSave) {
+          expect(backend.saved, isNull);
+          expect(find.textContaining('New pack saved.'), findsOneWidget);
+          backend.fail = false;
+          await tester.tap(find.text('Save changes'));
+          await tester.pumpAndSettle();
+        }
+        expect(backend.saved!.stickers.single.shortcode, 'cat');
+        expect(backend.creates, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets('failed split destination leaves source untouched', (
+    tester,
+  ) async {
+    final backend = PackBackend()..failCreate = true;
+    await open(tester, backend);
+    await tester.tap(find.byType(Checkbox).last);
+    await tester.pump();
+    await tester.tap(find.text('Split selected'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Split pack'));
+    await tester.pumpAndSettle();
+    expect(backend.saved, isNull);
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.textContaining('New pack failed'), findsOneWidget);
   });
   testWidgets('narrow editor survives save failure without losing draft', (
     tester,

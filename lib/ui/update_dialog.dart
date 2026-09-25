@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/update_checker.dart';
 import '../services/update_installation.dart';
+import '../services/browser_reload.dart';
 
 Future<void> showReleaseUpdate(
   BuildContext context,
@@ -33,6 +34,10 @@ Future<void> showReleaseUpdate(
               Text(
                 'Version ${result.version} build ${result.build} is available.',
               ),
+              if (kIsWeb)
+                const Text(
+                  'Reload to open the updated web app. Finish recordings and uploads first; unsent drafts may be lost.',
+                ),
               if (canInstall)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
@@ -57,6 +62,10 @@ Future<void> showReleaseUpdate(
               onPressed: busy
                   ? null
                   : () async {
+                      if (kIsWeb) {
+                        reloadBrowserApplication();
+                        return;
+                      }
                       var opened = false;
                       try {
                         opened = await launchUrl(
@@ -77,7 +86,9 @@ Future<void> showReleaseUpdate(
                       }
                     },
               child: Text(
-                artifact == null
+                kIsWeb
+                    ? 'Reload app'
+                    : artifact == null
                     ? 'Choose a download'
                     : 'Take me to the download!',
               ),

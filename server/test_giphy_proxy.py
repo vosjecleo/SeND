@@ -64,6 +64,20 @@ class GiphyProxySecurityTests(unittest.TestCase):
             PROXY._allowed("192.0.2.1", limit=1, namespace="telegram")
         )
 
+    def test_telegram_pack_limit_is_150(self):
+        sticker = {"file_id": "file", "file_unique_id": "id", "width": 128,
+                   "height": 128, "file_size": 100, "is_animated": False,
+                   "is_video": False}
+        with mock.patch.object(PROXY, "_telegram_request", return_value={
+            "name": "Large", "title": "Large", "stickers": [sticker] * 150,
+        }):
+            self.assertEqual(len(PROXY._telegram_pack("Large")["stickers"]), 150)
+        with mock.patch.object(PROXY, "_telegram_request", return_value={
+            "name": "TooLarge", "stickers": [sticker] * 151,
+        }):
+            with self.assertRaisesRegex(RuntimeError, "pack size"):
+                PROXY._telegram_pack("TooLarge")
+
     def test_telegram_pack_hides_file_ids_and_exposes_conversion(self):
         result = {
             "name": "Animals",

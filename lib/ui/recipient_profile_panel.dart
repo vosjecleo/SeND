@@ -135,12 +135,11 @@ class _RecipientProfileContents extends StatelessWidget {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              return SingleChildScrollView(
+              return DeltiecordProfileCard(
                 key: const Key('recipient-profile-gradient'),
-                child: DeltiecordProfileCard(
-                  profile: profile,
-                  minimumHeight: constraints.maxHeight,
-                ),
+                profile: profile,
+                scrollable: true,
+                minimumHeight: constraints.maxHeight,
               );
             },
           ),

@@ -22,6 +22,51 @@ IconData activityIcon(ActivityKind kind) => switch (kind) {
   ActivityKind.application => Icons.apps,
 };
 
+/// Compact activity in the timeline header only; other presence surfaces and
+/// full profile activity cards retain their own presentation.
+class TimelineActivityStatus extends StatelessWidget {
+  const TimelineActivityStatus({
+    required this.backend,
+    required this.userId,
+    required this.presence,
+    required this.fallback,
+    super.key,
+  });
+  final ChatBackend backend;
+  final String? userId;
+  final UserPresence presence;
+  final Widget fallback;
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: backend,
+    builder: (context, _) {
+      final activity = userId == null || presence == UserPresence.offline
+          ? null
+          : backend.activityFor(userId!);
+      if (activity == null) return fallback;
+      final color = context.deltiecord.muted;
+      return Row(
+        key: const ValueKey('timeline-activity-status'),
+        children: [
+          Icon(activityIcon(activity.kind), size: 14, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              activity.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: DeltiecordTypeScale.small,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 class ActivityStatus extends StatelessWidget {
   const ActivityStatus({
     required this.backend,
@@ -186,7 +231,7 @@ String activityClock(int milliseconds) {
 }
 
 /// Separate footer: a completed scrobble must never masquerade as live music
-/// or replace a game/activity above. The backend enforces presence and expiry.
+/// or replace a game/activity above. Opted-in history remains visible offline.
 class LastFmRecentBar extends StatelessWidget {
   const LastFmRecentBar({required this.userId, super.key});
   final String userId;
@@ -202,52 +247,88 @@ class LastFmRecentBar extends StatelessWidget {
         final palette = context.deltiecord;
         return Padding(
           padding: const EdgeInsets.only(top: 16),
-          child: Material(
-            color: palette.elevated.withValues(alpha: .55),
-            borderRadius: BorderRadius.circular(6),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () =>
-                  launchUrl(track.url, mode: LaunchMode.externalApplication),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Tooltip(
-                  message: '${track.name}\n${track.artist}\n${track.album}',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Last.fm · Last listened to',
-                        style: TextStyle(fontSize: 11, color: palette.muted),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        track.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+          child: SizedBox(
+            width: double.infinity,
+            child: Material(
+              color: palette.elevated.withValues(alpha: .55),
+              borderRadius: BorderRadius.circular(6),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () =>
+                    launchUrl(track.url, mode: LaunchMode.externalApplication),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Tooltip(
+                    message: '${track.name}\n${track.artist}\n${track.album}',
+                    child: Row(
+                      children: [
+                        if (track.artwork case final artwork?) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Image.network(
+                              artwork.toString(),
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
+                              webHtmlElementStrategy:
+                                  WebHtmlElementStrategy.prefer,
+                              errorBuilder: (_, _, _) => const SizedBox.square(
+                                dimension: 48,
+                                child: Icon(Icons.album_outlined),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Last.fm · Last listened to',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: palette.muted,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                track.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                [
+                                  track.artist,
+                                  track.album,
+                                ].where((s) => s.isNotEmpty).join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: palette.muted,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Powered by AudioScrobbler',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: palette.muted,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        [
-                          track.artist,
-                          track.album,
-                        ].where((s) => s.isNotEmpty).join(' · '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: palette.muted),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Powered by AudioScrobbler',
-                        style: TextStyle(fontSize: 10, color: palette.muted),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

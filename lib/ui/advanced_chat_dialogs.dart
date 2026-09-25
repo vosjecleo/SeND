@@ -10,6 +10,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
+import '../services/pack_reorganization.dart';
 import '../services/telegram_sticker_service.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
@@ -335,7 +336,9 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                             .toggleSticker(sticker.mxcUri),
                         borderRadius: DeltiecordCorners.borderRadius,
                         child: Tooltip(
-                          message: sticker.name,
+                          message:
+                              '${sticker.name}\nHold to ${favourite ? 'unfavourite' : 'favourite'}',
+                          triggerMode: TooltipTriggerMode.manual,
                           child: Stack(
                             children: [
                               Positioned.fill(
@@ -347,23 +350,14 @@ class StickerPickerContentsState extends State<StickerPickerContents> {
                                   ),
                                 ),
                               ),
-                              Positioned(
-                                right: 1,
-                                top: 1,
-                                child: IconButton(
-                                  tooltip: favourite
-                                      ? 'Remove from favourites'
-                                      : 'Add to favourites',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () => FavouriteReactionsStore
-                                      .instance
-                                      .toggleSticker(sticker.mxcUri),
-                                  icon: ThemeIcon(
-                                    favourite ? Icons.star : Icons.star_border,
-                                    size: 16,
+                              if (favourite)
+                                Positioned(
+                                  right: 1,
+                                  top: 1,
+                                  child: const IgnorePointer(
+                                    child: ThemeIcon(Icons.star, size: 16),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
@@ -746,7 +740,7 @@ Future<void> _manageStickerPacks(
           ListTile(
             leading: const ThemeIcon(Icons.folder_zip_outlined),
             title: const Text('Import ZIP'),
-            subtitle: const Text('Up to 120 PNG, JPEG, GIF or WebP files'),
+            subtitle: const Text('Up to 150 PNG, JPEG, GIF or WebP files'),
             onTap: () => Navigator.pop(context, 'import-sticker'),
           ),
           ListTile(
@@ -758,7 +752,7 @@ Future<void> _manageStickerPacks(
           ListTile(
             leading: const ThemeIcon(Icons.add_reaction_outlined),
             title: const Text('Create custom emoji pack'),
-            subtitle: const Text('Up to 120 images, 128×128 and 256 KiB each'),
+            subtitle: const Text('Up to 150 images, 128×128 and 256 KiB each'),
             onTap: () => Navigator.pop(context, 'create-emoji'),
           ),
           if (backend.stickerPacks.any(_isEditableEmojiPack))
@@ -873,7 +867,7 @@ Future<List<StickerDraftItem>?> _pickStickerImages() async {
   );
   if (result == null) return null;
   if (result.files.length > StickerPackDraft.maximumItems) {
-    throw StateError('Sticker packs are limited to 120 images.');
+    throw StateError('Sticker packs are limited to 150 images.');
   }
   if (result.files.any((file) => file.size > 5 * 1024 * 1024) ||
       result.files.fold<int>(0, (total, file) => total + file.size) >

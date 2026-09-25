@@ -669,7 +669,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
 
   Future<void> _savePersonalStickerPack(StickerPackDraft draft) async {
     final userId = _matrix.userID;
-    if (userId == null) return;
+    if (userId == null) throw StateError('Sign in before saving a pack.');
     final content = await _uploadStickerPack(draft);
     final legacy =
         _matrix.accountData[matrixPersonalImagePackAccountDataType]?.content;
@@ -1054,7 +1054,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     if (name.isEmpty ||
         draft.stickers.isEmpty ||
         draft.stickers.length > StickerPackDraft.maximumItems) {
-      throw StateError('A sticker pack needs a name and 1–120 images.');
+      throw StateError('A sticker pack needs a name and 1–150 images.');
     }
     final estimatedMetadataBytes =
         utf8.encode(name).length +
@@ -1076,14 +1076,10 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       final reused = item.reuse;
       final canReuse = reused != null && item.bytes.isEmpty;
       if (canReuse &&
-          !(reuseFrom?.stickers.any(
-                (old) =>
-                    old.id == reused.id &&
-                    old.mxcUri == reused.mxcUri &&
-                    old.assetType == item.assetType &&
-                    old.mimeType == item.mimeType,
-              ) ??
-              false)) {
+          !canReusePackItem(item, [
+            ...?reuseFrom?.stickers,
+            ..._stickerPacks.expand((pack) => pack.stickers),
+          ])) {
         throw StateError('The original pack item is no longer available.');
       }
       var width = item.width;

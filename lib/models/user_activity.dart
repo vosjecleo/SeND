@@ -5,6 +5,9 @@ enum ActivityKind { game, music, application }
 
 const activityProfileField = 'net.deltiecord.activity';
 const activityDevicePrefix = 'net.deltiecord.activity.device.';
+const lastFmHistoryPrefix = 'net.deltiecord.lastfm_recent.device.';
+String lastFmHistoryField(String deviceId) =>
+    '$lastFmHistoryPrefix${sha256.convert(utf8.encode(deviceId))}';
 String activityDeviceField(String deviceId) =>
     '$activityDevicePrefix${sha256.convert(utf8.encode(deviceId))}';
 
@@ -56,6 +59,19 @@ class UserActivities {
         recent = track;
       }
     }
+    for (final entry
+        in records.entries
+            .where((e) => e.key.startsWith(lastFmHistoryPrefix))
+            .take(64)) {
+      final record = entry.value;
+      final track = record is Map && record['version'] == 1
+          ? LastFmTrack.fromJson(record['track'])
+          : null;
+      if (track != null &&
+          (recent == null || !track.playedAt.isBefore(recent.playedAt))) {
+        recent = track;
+      }
+    }
     return UserActivities(program: program, music: music, recent: recent);
   }
 }
@@ -65,8 +81,8 @@ const lastFmPublicDisplayApproved = bool.fromEnvironment(
   defaultValue: true, // Written approval confirmed by the app owner.
 );
 
-/// A completed scrobble, not a live activity. Stored as an optional field in the
-/// same expiring activity record; legacy clients simply ignore this field.
+/// A completed scrobble, not live presence. Stored in durable device-owned
+/// history, and included in the expiring activity record for older clients.
 class LastFmTrack {
   const LastFmTrack({
     required this.name,
@@ -74,9 +90,11 @@ class LastFmTrack {
     required this.album,
     required this.url,
     required this.playedAt,
+    this.artwork,
   });
   final String name, artist, album;
   final Uri url;
+  final Uri? artwork;
   final DateTime playedAt;
   Map<String, Object> toJson() => {
     'name': name,
@@ -84,6 +102,7 @@ class LastFmTrack {
     'album': album,
     'url': url.toString(),
     'played_at': playedAt.millisecondsSinceEpoch,
+    if (artwork != null) 'artwork': artwork.toString(),
   };
   static LastFmTrack? fromJson(Object? value, {DateTime? now}) {
     if (value is! Map) return null;
@@ -113,6 +132,7 @@ class LastFmTrack {
       album: album,
       url: url,
       playedAt: DateTime.fromMillisecondsSinceEpoch(played),
+      artwork: validLastFmArtwork(value['artwork']),
     );
   }
 }
@@ -209,6 +229,7 @@ Uri? validLastFmArtwork(Object? value) {
           !uri.hasFragment &&
           uri.path.startsWith('/i/u/') &&
           (uri.host == 'lastfm.freetls.fastly.net' ||
+              uri.host == 'lastfm-img.freetls.fastly.net' ||
               uri.host == 'lastfm-img2.akamaized.net')
       ? uri
       : null;

@@ -1396,12 +1396,17 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                               minScale: 0.25,
                               maxScale: 8,
                               child: Center(
-                                child: LifecycleMemoryImage(
-                                  bytes: bytes,
-                                  animated:
-                                      _message.attachment?.animated ?? false,
-                                  autoplay:
-                                      !widget.backend.preferences.reducedMotion,
+                                child: GifFavouriteGesture(
+                                  uri: _message.attachment?.gifSource,
+                                  child: LifecycleMemoryImage(
+                                    bytes: bytes,
+                                    animated:
+                                        _message.attachment?.animated ?? false,
+                                    autoplay: !widget
+                                        .backend
+                                        .preferences
+                                        .reducedMotion,
+                                  ),
                                 ),
                               ),
                             );
@@ -1455,8 +1460,6 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                     style: const TextStyle(color: Colors.white70),
                   ),
                   const SizedBox(width: 8),
-                  if (isFavouriteableGifUri(_message.attachment?.gifSource))
-                    GifFavouriteButton(uri: _message.attachment!.gifSource!),
                   IconButton.filledTonal(
                     tooltip: 'Save attachment',
                     onPressed: _save,

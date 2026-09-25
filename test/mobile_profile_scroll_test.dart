@@ -21,6 +21,45 @@ class ProfileBackend extends MultiBackend {
 
 void main() {
   testWidgets(
+    'desktop profile scrolls inside a fixed frame without a scrollbar',
+    (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+          ),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 400,
+                height: 480,
+                child: DeltiecordProfileCard(
+                  profile: UserProfileSummary(
+                    userId: '@person:test',
+                    displayName: 'Person',
+                    bio: List.filled(40, 'Long biography').join('\n'),
+                  ),
+                  scrollable: true,
+                  scrollController: controller,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final card = find.byKey(const Key('profile-card'));
+      final frame = tester.getRect(card);
+      await tester.drag(card, const Offset(0, -250));
+      await tester.pumpAndSettle();
+      expect(controller.offset, greaterThan(100));
+      expect(tester.getRect(card), frame);
+      expect(find.byType(Scrollbar), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'mobile profile keeps frame fixed, inherits activities, scrolls without dismissing',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);

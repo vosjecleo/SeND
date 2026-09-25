@@ -1,69 +1,99 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-
+import '../services/application_visibility.dart';
 import '../services/update_checker.dart';
+import '../version.dart';
 import 'update_dialog.dart';
 
-/// Performs a silent release check with bounded retries after sign-in.
-///
-/// Update discovery must never delay Matrix startup. Network and parse errors
-/// are intentionally ignored here; the explicit checker in Settings remains
-/// available for diagnostics and retrying.
+/// Rechecks long-lived mobile sessions. Compiled constants identify the running
+/// PWA, unlike version.json which may already describe newly deployed code.
 class StartupUpdateGate extends StatefulWidget {
-  const StartupUpdateGate({required this.child, super.key});
-
+  const StartupUpdateGate({
+    required this.child,
+    this.check,
+    this.present,
+    this.now,
+    super.key,
+  });
   final Widget child;
-
+  final Future<ReleaseCheckResult> Function()? check;
+  final Future<void> Function(BuildContext, ReleaseCheckResult)? present;
+  final DateTime Function()? now;
   @override
   State<StartupUpdateGate> createState() => _StartupUpdateGateState();
 }
 
 class _StartupUpdateGateState extends State<StartupUpdateGate>
     with WidgetsBindingObserver {
-  static bool _checkedThisProcess = false;
+  static final _shown = <String>{};
   bool _checking = false;
-  int _attempts = 0;
-  Timer? _retry;
+  int _failures = 0;
+  DateTime? _nextCheck;
+  ReleaseCheckResult? _pending;
+  Timer? _poll;
+  DateTime get _now => widget.now?.call() ?? DateTime.now();
+  bool get _visible => applicationIsForeground(
+    WidgetsBinding.instance.lifecycleState,
+    viewFocused: true,
+  );
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (!_checkedThisProcess) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_check());
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_check()));
+    _poll = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_check()),
+    );
   }
 
   Future<void> _check() async {
-    if (!mounted || _checking || _checkedThisProcess || _attempts >= 3) return;
+    if (!mounted || _checking || !_visible) return;
     _checking = true;
-    _attempts++;
-    final checker = UpdateChecker();
     try {
-      final package = await PackageInfo.fromPlatform();
-      final currentBuild = int.tryParse(package.buildNumber) ?? 0;
-      final result = await checker.check(
-        currentVersion: package.version,
-        currentBuild: currentBuild,
-        stableOnly: false,
-      );
-      if (!mounted) return;
-      _checkedThisProcess = true;
-      if (!mounted || !result.updateAvailable) return;
-      await showReleaseUpdate(context, result);
-    } catch (_) {
-      // Startup update checks are advisory and must not affect the session.
-      if (mounted && _attempts < 3) {
-        _retry?.cancel();
-        _retry = Timer(const Duration(minutes: 1), () => unawaited(_check()));
+      if (_pending == null &&
+          (_nextCheck == null || !_now.isBefore(_nextCheck!))) {
+        final checker = UpdateChecker();
+        try {
+          final result =
+              await (widget.check?.call() ??
+                  checker.check(
+                    currentVersion: deltiecordVersion,
+                    currentBuild: int.parse(deltiecordBuildNumber),
+                    stableOnly: false,
+                  ));
+          _nextCheck = _now.add(const Duration(minutes: 5));
+          _failures = 0;
+          if (result.updateAvailable &&
+              !_shown.contains('${result.version}+${result.build}')) {
+            _pending = result;
+          }
+        } finally {
+          checker.close();
+        }
       }
+      if (!mounted ||
+          !_visible ||
+          _pending == null ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      final result = _pending!;
+      final key = '${result.version}+${result.build}';
+      _pending = null;
+      if (!_shown.add(key)) return;
+      try {
+        await (widget.present ?? showReleaseUpdate)(context, result);
+      } catch (_) {
+        _shown.remove(key);
+        rethrow;
+      }
+    } catch (_) {
+      _failures++;
+      _nextCheck = _now.add(Duration(minutes: _failures < 3 ? _failures : 5));
     } finally {
       _checking = false;
-      checker.close();
     }
   }
 
@@ -74,7 +104,7 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
 
   @override
   void dispose() {
-    _retry?.cancel();
+    _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

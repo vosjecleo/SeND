@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
 import '../gif_favourite_button.dart';
+import '../image_zoom_viewer.dart';
 import '../../services/platform_io.dart';
 import 'dart:math';
 
@@ -601,18 +602,21 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  return InteractiveViewer(
+                  return ImageZoomViewer(
                     transformationController: index == _index ? _zoom : null,
                     panEnabled: index == _index && _zoomed,
                     minScale: 1,
                     maxScale: 6,
                     child: Center(
-                      child: LifecycleMemoryImage(
-                        bytes: snapshot.data!,
-                        animated: m.attachment!.animated,
-                        autoplay:
-                            index == _index &&
-                            !widget.backend.preferences.reducedMotion,
+                      child: GifFavouriteGesture(
+                        uri: m.attachment!.gifSource,
+                        child: LifecycleMemoryImage(
+                          bytes: snapshot.data!,
+                          animated: m.attachment!.animated,
+                          autoplay:
+                              index == _index &&
+                              !widget.backend.preferences.reducedMotion,
+                        ),
                       ),
                     ),
                   );
@@ -623,16 +627,6 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
         ),
         _fullscreenCloseButton(context),
         if (!_saving) _fullscreenActionsButton(context, _actions),
-        if (isFavouriteableGifUri(_messages[_index].attachment!.gifSource))
-          Positioned(
-            left: 12,
-            top: 12,
-            child: SafeArea(
-              child: GifFavouriteButton(
-                uri: _messages[_index].attachment!.gifSource!,
-              ),
-            ),
-          ),
         Positioned(
           bottom: 12,
           left: 12,
@@ -683,25 +677,22 @@ void _showImageFullscreen(
       child: Stack(
         children: [
           Positioned.fill(
-            child: InteractiveViewer(
+            child: ImageZoomViewer(
               minScale: 0.5,
               maxScale: 6,
               child: Center(
-                child: LifecycleMemoryImage(
-                  bytes: bytes,
-                  animated: false,
-                  autoplay: autoplay,
+                child: GifFavouriteGesture(
+                  uri: gifSource,
+                  child: LifecycleMemoryImage(
+                    bytes: bytes,
+                    animated: gifSource != null,
+                    autoplay: autoplay,
+                  ),
                 ),
               ),
             ),
           ),
           _fullscreenCloseButton(context),
-          if (isFavouriteableGifUri(gifSource))
-            Positioned(
-              left: 12,
-              top: 12,
-              child: SafeArea(child: GifFavouriteButton(uri: gifSource!)),
-            ),
           if (onActions != null) _fullscreenActionsButton(context, onActions),
         ],
       ),

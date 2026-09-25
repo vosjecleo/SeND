@@ -28,7 +28,7 @@ The same process optionally exposes public Telegram sticker-set imports at
 `TELEGRAM_BOT_TOKEN_FILE` to another private file. Clients submit only a
 validated public sticker-set short name; the proxy resolves Bot API file IDs
 and never returns its bot token or Telegram file URLs. Static PNG/WebP media is
-bounded to 1 MiB per item, sets to 120 entries, upstream concurrency to the
+bounded to 1 MiB per item, sets to 150 entries, upstream concurrency to the
 shared request semaphore, and metadata caching to 64 sets for five minutes.
 Animated TGS and WebM items are converted to animated WebP when the optional
 conversion tools are installed. WebM uses FFmpeg; TGS uses the pinned packages
@@ -44,7 +44,7 @@ separate per-client/global rate limits. These defaults can be tightened with
 `TELEGRAM_GLOBAL_CONVERT_RATE_LIMIT`.
 
 `TELEGRAM_RATE_LIMIT` defaults to 240 requests per client per minute so four
-bounded client download workers can import a full 120-item set. Place a shared
+bounded client download workers can import a full 150-item set. Place a shared
 limiter in front when running multiple proxy processes; like the GIPHY limiter,
 this process-local limit is intentionally not distributed.
 ## Web preview bridge (introduced in 105)

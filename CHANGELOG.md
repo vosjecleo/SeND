@@ -1,8 +1,38 @@
 # Changelog
 
-Release target: **0.9.35+109**. Following the build 106 feature-scope milestone,
+Release target: **0.9.35+110**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.35 build 110 — 2026-09-26
+
+- Recheck updates in long-lived mobile sessions and on resume, and offer PWA
+  users an explicit reload action. Compare the running compiled PWA build,
+  not a version file that may already belong to the newly hosted app.
+- Keep opted-in Last.fm last-listened history in durable, device-owned public
+  profile fields. It survives closing the app and remains visible offline;
+  live games and music still respect online visibility. Turning history off
+  removes that device's contribution without deleting another device's data.
+- Fix the Last.fm artwork CDN allowlist for both currently playing and completed
+  tracks. Add square album artwork to a full-width last-listened footer.
+- Keep desktop profile outlines, gradients and rounded masks stationary while
+  the profile contents scroll; hide the internal scrollbar.
+- Merge another accessible sticker/emoji pack into an editable pack, resolving
+  duplicate aliases automatically. Originals remain available until separately
+  removed. Split selected items into a new personal pack, saving that pack before
+  removing them from the source; a failed second save preserves both copies.
+- Increase sticker/emoji pack capacity from 120 to 150, including Telegram
+  import/conversion bounds. Existing media references preserve animations and
+  avoid reuploads during reorganisation. Byte and rate limits remain in place.
+- Favourite/unfavourite stickers and fullscreen GIFs by long tap or mouse
+  click-and-hold. Remove easy-to-misclick star buttons; sticker stars are passive
+  indicators only. Normal taps and swipes do not change favourites.
+- Move the DM timeline's activity into its header status line: controller icon
+  and game name replace the generic presence text while playing. Remove the
+  separate timeline activity banner; profile cards and DM/member lists keep
+  their existing layouts. No activity restores the usual presence label.
+- Double-tap mobile fullscreen images to zoom toward the tapped point; repeat
+  to reset. Pinch/pan remain available, and gallery swiping resumes when reset.
 
 ## SeND 0.9.35 build 109 — 2026-09-25
 

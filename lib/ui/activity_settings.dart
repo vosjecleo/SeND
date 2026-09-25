@@ -160,7 +160,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Show Last.fm last listened track on my profile'),
           subtitle: const Text(
-            'Publish the last completed track, artist and album from this device. Requires a connected Last.fm account and activity sharing. Other devices can also contribute; hidden while offline.',
+            'Publish the last completed track, album and artwork from this device. It stays visible after closing SeND and while offline. Turn this off to remove this device’s contribution; other linked devices may still contribute.',
           ),
           value: settings.showLastFmRecent,
           onChanged: _saving

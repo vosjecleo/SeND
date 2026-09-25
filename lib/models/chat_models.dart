@@ -811,7 +811,7 @@ class StickerSummary {
 class StickerPackDraft {
   const StickerPackDraft({required this.name, required this.stickers});
 
-  static const maximumItems = 120;
+  static const maximumItems = 150;
   static const maximumBytes = 100 * 1024 * 1024;
   static const maximumEmojiBytes = 256 * 1024;
   static const maximumEmojiPackBytes = 12 * 1024 * 1024;
@@ -839,8 +839,8 @@ class StickerDraftItem {
   final int? height;
   final StickerAssetType assetType;
 
-  /// Existing media in the edited pack; empty bytes means keep it unchanged.
-  /// Import paths cannot use this. Edits verify membership before reuse.
+  /// Existing media in an accessible pack; empty bytes keeps it unchanged.
+  /// Editing and reorganisation verify membership and metadata before reuse.
   final StickerSummary? reuse;
 }
 
