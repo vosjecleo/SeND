@@ -81,3 +81,10 @@ Target all four CI platforms as Latest, update deltie.net and chat.deltie.net.
 No local installation requested. CI/deployment results are appended only after
 they actually complete. Device confirmation is still required for the friend's
 iOS activity visibility and GIF playback symptoms.
+
+Published 2026-09-25 from commit `09daa4a` as `v0.9.35-b109`. All CI targets
+passed: Linux (Arch and Debian/AppImage), Windows (including installer checks),
+Android, and Web (including browser regressions). All ten artifacts passed SHA-256
+verification before deployment. GitHub Latest and `deltie.net/SeND/releases.json`
+select build 109; `chat.deltie.net/version.json` reports 0.9.35 / 109.
+No local installation was performed; the host package remains 0.9.35-108.
