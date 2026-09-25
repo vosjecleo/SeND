@@ -74,6 +74,10 @@ The owner confirmed both rotated CI secrets are configured before this release.
 CI now reads `LASTFM_API_KEY` and `LASTFM_API_SECRET` repository secrets through
 `packaging/flutter-with-credentials.py`, with a private temporary define file.
 Main-branch builds fail rather than silently distributing an unconfigured login.
+Builds also reject duplicated key/secret values and verify the pair with a signed
+Last.fm request before compiling. The first unpublished build batch was withdrawn
+after incorrectly duplicated CI credentials were reported; all release artifacts
+are rebuilt from the corrected, guarded commit, not reused from that batch.
 The rotated local pair passes Last.fm's signed application-authentication check.
 Application credentials are necessarily present in a distributed Last.fm client;
 these files must never contain user tokens or passwords.
@@ -155,3 +159,5 @@ For the activity/media scope and outstanding platform limitations, see
   still the published 0.9.34+107, not an invented/unbuilt 108 release.
 - Packaging shell syntax checks and JavaScript syntax check pass. Windows
   installer handoff/replacement still requires Windows CI/manual validation.
+- Four credential-guard tests pass, including duplicate values, invalid signed
+  authentication and network failures without exposing secret response data.

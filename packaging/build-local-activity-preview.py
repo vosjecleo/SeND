@@ -33,6 +33,8 @@ def main() -> None:
     args = parser.parse_args()
     key = credential(args.credentials_directory / "lastfm-api.key")
     secret = credential(args.credentials_directory / "lastfm-shared.key")
+    if key.lower() == secret.lower():
+        raise SystemExit("Last.fm API key and shared secret are identical. Correct the credential files before building.")
     params = {"api_key": key, "method": "auth.getToken"}
     signed = "".join(k + params[k] for k in sorted(params)) + secret
     params.update(api_sig=hashlib.md5(signed.encode()).hexdigest(), format="json")
