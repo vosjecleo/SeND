@@ -15,14 +15,15 @@ class MediaRuntimeTest(unittest.TestCase):
                         'libsystemd.so.0', 'libdrm_amdgpu.so.1',
                         'libatk-1.0.so.0', 'libatk-bridge-2.0.so.0',
                         'libpango-1.0.so.0', 'libpangoft2-1.0.so.0',
-                        'libpangocairo-1.0.so.0'):
+                        'libpangocairo-1.0.so.0', 'libpipewire-0.3.so.0',
+                        'libspa-0.2.so.0'):
             with self.subTest(library=library):
                 self.assertIsNotNone(mpv.HOST.match(library))
 
     def test_media_dependencies_are_not_accidentally_excluded(self):
         for library in ('libmpv.so.2', 'libavcodec.so.59', 'libssl.so.3',
                         'libXss.so.1', 'libass.so.9', 'libxcb-shape.so.0',
-                        'libepoxy.so.0', 'libsecret-1.so.0'):
+                        'libepoxy.so.0', 'libsecret-1.so.0', 'libjack.so.0'):
             with self.subTest(library=library):
                 self.assertIsNone(mpv.HOST.match(library))
 

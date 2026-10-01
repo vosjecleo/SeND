@@ -6,6 +6,11 @@ Historical entries preserve the scope of their own releases.
 
 ## SeND 0.9.36 build 112 — 2026-10-01
 
+- Further AppImage-only correction: keep PipeWire/SPA client libraries host-owned
+  so newer PipeWire-JACK adapters do not resolve against a bundled older client.
+  Keep standalone JACK fallback for systems without JACK. Regression CI must
+  reproduce the previous `pw_log_topic_register` failure and verify both Nix
+  JACK configurations before replacing the same-version/build download.
 - AppImage packaging correction (same application binaries/version): audit
   Flutter and plugin dependencies as well as mpv, including libepoxy; move native
   dependency sources into a separate optional release download. Add a 160 MiB

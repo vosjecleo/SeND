@@ -40,10 +40,14 @@ ensure_tool() {
 
 ensure_tool "$plugin" "$plugin_url" "$plugin_sha256"
 ensure_tool "$runtime" "$runtime_url" "$runtime_sha256"
-if [[ $# == 1 ]]; then
+if [[ $# -ge 1 ]]; then
   # Repack already-built binaries; no Flutter compilation or version change.
   cp -a "$1" "$appdir"
-  mv "$appdir/usr/share/doc/deltiecord/mpv-runtime/sources" "$sources"
+  if [[ $# == 2 ]]; then
+    cp -a "$2" "$sources"
+  else
+    mv "$appdir/usr/share/doc/deltiecord/mpv-runtime/sources" "$sources"
+  fi
 else
   "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
   python3 "$repo_root/packaging/linux/bundle-mpv.py" "$appdir" "$sources"
@@ -52,8 +56,9 @@ python3 "$repo_root/packaging/linux/bundle-application.py" "$appdir" "$sources"
 source_asset="SeND-${release_id}-appimage-sources.tar.gz"
 cp "$repo_root/packaging/linux/APPIMAGE-SOURCES.txt" "$sources/README.txt"
 cp "$repo_root/packaging/linux/"bundle-*.py "$sources/"
-cp -a "$appdir/usr/share/doc/deltiecord/mpv-runtime" "$sources/mpv-notices"
-cp -a "$appdir/usr/share/doc/deltiecord/application-runtime" "$sources/application-notices"
+mkdir -p "$sources/mpv-notices" "$sources/application-notices"
+cp -a "$appdir/usr/share/doc/deltiecord/mpv-runtime/." "$sources/mpv-notices/"
+cp -a "$appdir/usr/share/doc/deltiecord/application-runtime/." "$sources/application-notices/"
 tar -C "$sources" -czf "$repo_root/dist/$source_asset" .
 printf 'Corresponding dependency sources: %s\nhttps://github.com/VosjeCleo/SeND/releases/download/v%s-b%s/%s\n' \
   "$source_asset" "$version" "${release_id##*+}" "$source_asset" \

@@ -33,6 +33,9 @@ cmp "$stage/old-rest" "$stage/new-rest"
 backup="/srv/storage/releases-archive/deltiecord/0.9.36-b112-appimage-before-$(date +%s)"
 mkdir -p "$backup"
 cp --reflink=auto "$root/$asset" "$root/SHA256SUMS" "$root/releases.json" "$backup/"
+if [[ -f "$root/$sources" ]]; then
+  cp --reflink=auto "$root/$sources" "$backup/"
+fi
 digest=$(sha256sum "$stage/$asset" | cut -d' ' -f1)
 size=$(stat -c %s "$stage/$asset")
 jq --arg name "$asset" --arg hash "$digest" --argjson size "$size" '

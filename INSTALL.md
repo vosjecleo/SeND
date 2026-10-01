@@ -133,6 +133,9 @@ licence notices remain included. It deliberately relies on some
 ABI-sensitive desktop libraries from the host. It requires a reasonably current
 GTK 3 Linux system, a working desktop Secret Service for session and E2EE-key
 storage, and PulseAudio or PipeWire-Pulse for audio.
+PipeWire/SPA client libraries must come from the host so they match its modules
+and PipeWire-JACK adapter. The AppImage retains a standalone JACK fallback, but
+does not bundle an older PipeWire client or a PipeWire-JACK adapter.
 
 On Wayland, screen sharing requires PipeWire, `xdg-desktop-portal`, and a portal
 backend for the desktop environment, such as `xdg-desktop-portal-gtk` or

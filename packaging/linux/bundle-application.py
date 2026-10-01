@@ -12,11 +12,28 @@ import shutil
 import subprocess
 import sys
 import hashlib
+import re
 
 spec = importlib.util.spec_from_file_location(
     'mpv', pathlib.Path(__file__).with_name('bundle-mpv.py'))
 mpv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mpv)
+
+HOST_PIPEWIRE = re.compile(r'lib(?:pipewire-0\.3|spa-0\.2)\.so(?:\..*)?')
+
+
+def remove_host_pipewire(appdir):
+    """Never let a bundled old client override host PipeWire-JACK/SPA modules."""
+    removed = set()
+    for path in (appdir / 'usr/lib/deltiecord/lib').rglob('*'):
+        if (path.is_file() or path.is_symlink()) and HOST_PIPEWIRE.fullmatch(path.name):
+            removed.add(path.name)
+            path.unlink()
+    for path in (appdir / 'usr/share/doc/deltiecord').glob('*/manifest.json'):
+        entries = json.loads(path.read_text())
+        entries = [entry for entry in entries if not HOST_PIPEWIRE.fullmatch(entry['library'])]
+        path.write_text(json.dumps(entries, indent=2) + '\n')
+    return removed
 
 
 def elf_files(root):
@@ -30,6 +47,9 @@ def elf_files(root):
 def bundle(appdir, sources):
     if sources.is_relative_to(appdir):
         raise RuntimeError('Source archives must be outside the AppImage')
+    removed = remove_host_pipewire(appdir)
+    if removed:
+        print('Removed host-owned PipeWire libraries: ' + ', '.join(sorted(removed)))
     lib = appdir / 'usr/lib/deltiecord/lib'
     env = dict(os.environ, LD_LIBRARY_PATH=f'{lib}:{lib}/mpv-runtime')
     roots = list(elf_files(appdir / 'usr/lib/deltiecord'))
@@ -62,7 +82,8 @@ def bundle(appdir, sources):
     docs = appdir / 'usr/share/doc/deltiecord/application-runtime'
     docs.mkdir(parents=True, exist_ok=True)
     sources.mkdir(parents=True, exist_ok=True)
-    manifest = []
+    manifest_path = docs / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else []
     source_packages = set()
     for soname, path in sorted(selected.items()):
         destination = lib / soname
@@ -104,6 +125,12 @@ def bundle(appdir, sources):
                 raise RuntimeError(f'{root}: {error}') from error
     if not (lib / 'libepoxy.so.0').is_file():
         raise RuntimeError('Flutter graphics loader libepoxy must be bundled')
+    for path in lib.rglob('libjack.so*'):
+        # A standalone JACK fallback is safe; a bundled PipeWire-JACK adapter
+        # would reintroduce coupling to a particular host PipeWire version.
+        needed = mpv.run('patchelf', '--print-needed', str(path)).splitlines()
+        if any(HOST_PIPEWIRE.fullmatch(name) for name in needed):
+            raise RuntimeError('Do not bundle a PipeWire-JACK adapter')
     print(f'Audited {len(roots)} ELF files; added {len(manifest)} application libraries')
 
 

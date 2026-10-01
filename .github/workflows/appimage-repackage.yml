@@ -32,12 +32,18 @@ jobs:
           mkdir -p original dist
           curl -fLsS --retry 3 --connect-timeout 15 --max-time 900 \
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o original/original.AppImage
-          echo '213245edec2349b5f344383d4d6644aee9c7f26f24da3dcd2daf46835a87d9fe  original/original.AppImage' | sha256sum -c
+          echo 'ae5cdfbda7bca8f1e086158e5b2d8771ce67a3a825d68dc4aefdee0490062640  original/original.AppImage' | sha256sum -c
+          curl -fLsS --retry 3 --connect-timeout 15 --max-time 900 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-appimage-sources.tar.gz" -o original/sources.tar.gz
+          echo '01b5bdfa3cd360c42bfe9d4be9bf57305018e143a55f78eeaee898ffc69b50d1  original/sources.tar.gz' | sha256sum -c
+          mkdir original/sources
+          tar -xzf original/sources.tar.gz -C original/sources
           chmod +x original/original.AppImage
           (cd original && ./original.AppImage --appimage-extract >/dev/null)
-          (cd original/squashfs-root && find usr/lib/deltiecord -type f -print0 | sort -z | xargs -0 sha256sum) > dist/original-binaries.sha256
+          # Only obsolete host-owned PipeWire libraries may be removed.
+          (cd original/squashfs-root && find usr/lib/deltiecord -type f ! -name 'libpipewire-0.3.so*' ! -name 'libspa-0.2.so*' -print0 | sort -z | xargs -0 sha256sum) > dist/original-binaries.sha256
           python3 -m unittest discover -s packaging/linux -p 'test_*.py'
-          bash packaging/linux/build-appimage.sh original/squashfs-root
+          bash packaging/linux/build-appimage.sh original/squashfs-root original/sources
           mv dist/SeND-0.9.36-x86_64.AppImage "dist/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage"
           (cd dist && sha256sum -- *.AppImage *-sources.tar.gz > REPACKAGE-SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -74,6 +80,8 @@ jobs:
           python3 - <<'PY'
           import ctypes, pathlib
           lib = pathlib.Path('squashfs-root/usr/lib/deltiecord/lib').resolve()
+          assert not list(lib.rglob('libpipewire-0.3.so*'))
+          assert not list(lib.rglob('libspa-0.2.so*'))
           ctypes.CDLL(str(lib / 'libepoxy.so.0'))
           mpv = ctypes.CDLL(str(lib / 'libmpv.so.2'))
           mpv.mpv_create.restype = ctypes.c_void_p
@@ -96,6 +104,10 @@ jobs:
           ! grep -Ei 'error while loading shared libraries|Cannot find libmpv|Unhandled exception|symbol lookup error' smoke.log
   nix-test:
     needs: repackage
+    strategy:
+      fail-fast: false
+      matrix:
+        audio: [standalone-jack, pipewire-jack]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -123,6 +135,22 @@ jobs:
           export __EGL_VENDOR_LIBRARY_DIRS="$mesa/share/glvnd/egl_vendor.d"
           export LIBGL_DRIVERS_PATH="$mesa/lib/dri"
           export LIBGL_ALWAYS_SOFTWARE=1
+          if [[ '${{ matrix.audio }}' = pipewire-jack ]]; then
+            jack=$(nix-build '<nixpkgs>' -A pipewire.jack --no-out-link)
+            export LD_LIBRARY_PATH="$jack/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            # Prove this test exercises the reported conflict: the currently
+            # published candidate must fail with the exact missing symbol.
+            curl -fLsS --retry 3 --connect-timeout 15 --max-time 300 \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o regression.AppImage
+            echo 'ae5cdfbda7bca8f1e086158e5b2d8771ce67a3a825d68dc4aefdee0490062640  regression.AppImage' | sha256sum -c
+            chmod +x regression.AppImage
+            set +e
+            timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run regression.AppImage > regression.log 2>&1
+            old_status=$?
+            set -e
+            test "$old_status" != 124
+            grep 'undefined symbol: pw_log_topic_register' regression.log
+          fi
           chmod +x dist/*.AppImage
           set +e
           timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run dist/*.AppImage > nix-smoke.log 2>&1
@@ -152,7 +180,7 @@ jobs:
           sha256sum -c REPACKAGE-SHA256SUMS
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
           cp SHA256SUMS SHA256SUMS.original
-          grep -v '  SeND-0.9.36+112-linux-appimage-x86_64.AppImage$' SHA256SUMS.original > SHA256SUMS
+          grep -vE '  SeND-0\.9\.36\+112-(linux-appimage-x86_64\.AppImage|appimage-sources\.tar\.gz)$' SHA256SUMS.original > SHA256SUMS
           test "$(wc -l < SHA256SUMS)" = 9
           cat REPACKAGE-SHA256SUMS >> SHA256SUMS
           sort -k2 -o SHA256SUMS SHA256SUMS
@@ -161,5 +189,5 @@ jobs:
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" ./*.AppImage --clobber
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" SHA256SUMS --clobber
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.txt
-          printf '\n### AppImage packaging correction\n\nApplication binaries remain build 112. The AppImage now includes Flutter/plugin dependencies (including libepoxy); native dependency sources are a separate optional download. Verified on clean Ubuntu and the standard Nix appimage-run environment. Other platform packages are unchanged. Packaging commit: %s.\n' "$GITHUB_SHA" >> notes.txt
+          printf '\n### AppImage PipeWire/JACK correction\n\nRemoved the bundled old PipeWire client so host PipeWire-JACK adapters use matching host libraries. Retained standalone JACK fallback for systems without JACK. CI reproduces the previous pw_log_topic_register failure, then verifies the corrected package under both Nix JACK configurations and clean Ubuntu. Version/build, application binaries and other platform packages remain unchanged. Packaging commit: %s.\n' "$GITHUB_SHA" >> notes.txt
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.txt
