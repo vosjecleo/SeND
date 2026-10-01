@@ -115,6 +115,15 @@ sudo pacman -U ./SeND-0.9.35+110-linux-arch-x86_64.pkg.tar.zst
 Launch SeND from the application menu or run `deltiecord`. Remove the
 package with `sudo pacman -R deltiecord`; user data remains untouched.
 
+## Flatpak (direct-download package)
+
+An x86-64 Flatpak package of build 112 is available alongside the native Linux
+downloads. Install it with `flatpak install --user ./SeND-0.9.36+112-linux-x86_64.flatpak`
+and launch with `flatpak run net.deltie.deltiecord`. It downloads a shared GNOME
+runtime separately. This is not yet a Flathub listing or an automatic SeND
+update repository. See [Flatpak installation and sandbox limitations](packaging/flatpak/README.md),
+particularly for desktop game detection and Discord IPC.
+
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download

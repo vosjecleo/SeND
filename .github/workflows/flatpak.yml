@@ -1,0 +1,78 @@
+name: Flatpak package
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flatpak-112
+  cancel-in-progress: false
+jobs:
+  flatpak:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[flatpak-only]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install builder and runtime
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder dbus-x11 xvfb xauth
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.gnome.Platform//50 org.gnome.Sdk//50
+      - name: Build with runtime-native media dependencies
+        run: |
+          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=flatpak-repo --bundle-sources flatpak-build packaging/flatpak/net.deltie.deltiecord.yml
+      - name: Install and smoke test inside the final sandbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          flatpak --user remote-add --no-gpg-verify send-test flatpak-repo
+          flatpak install --user --noninteractive send-test net.deltie.deltiecord
+          flatpak run --command=sh net.deltie.deltiecord -c '
+            export LD_LIBRARY_PATH=/app/lib/deltiecord/lib:/app/lib
+            for lib in /app/lib/deltiecord/deltiecord /app/lib/deltiecord/lib/*.so /app/lib/libmpv.so.2; do
+              ldd "$lib" > /tmp/ldd-check
+              if grep "not found" /tmp/ldd-check; then exit 1; fi
+            done
+            test ! -e /app/lib/deltiecord/lib/mpv-runtime
+            test -f /app/lib/libmpv.so.2
+            command -v ffmpeg ffprobe pactl
+          '
+          set +e
+          timeout 30s dbus-run-session -- xvfb-run -a flatpak run --socket=x11 --env=LIBGL_ALWAYS_SOFTWARE=1 net.deltie.deltiecord > flatpak-smoke.log 2>&1
+          status=$?
+          set -e
+          cat flatpak-smoke.log
+          test "$status" = 124
+          ! grep -Ei 'error while loading shared libraries|Cannot find libmpv|Unhandled exception|symbol lookup error|Gtk:ERROR' flatpak-smoke.log
+      - name: Bundle application and corresponding sources
+        run: |
+          mkdir -p dist
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo dist/SeND-0.9.36+112-linux-x86_64.flatpak net.deltie.deltiecord
+          flatpak build-bundle --runtime flatpak-repo dist/SeND-0.9.36+112-flatpak-sources.flatpak net.deltie.deltiecord.Sources
+          (cd dist && sha256sum *.flatpak > FLATPAK-SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flatpak-112
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    needs: flatpak
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: flatpak-112
+          path: dist
+      - name: Add Flatpak without replacing existing packages or checksum lists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum -c FLATPAK-SHA256SUMS
+          gh release upload v0.9.36-b112 --repo "$GITHUB_REPOSITORY" ./*.flatpak FLATPAK-SHA256SUMS --clobber

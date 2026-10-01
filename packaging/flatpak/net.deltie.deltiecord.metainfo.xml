@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>net.deltie.deltiecord</id>
+  <name>SeND</name>
+  <summary>A compact Matrix messenger</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <developer id="net.deltie"><name>SeND contributors</name></developer>
+  <description><p>SeND is Not Discord: a compact Matrix client with encrypted
+    messaging, media, Spaces, voice and video rooms.</p></description>
+  <launchable type="desktop-id">net.deltie.deltiecord.desktop</launchable>
+  <url type="homepage">https://deltie.net/SeND</url>
+  <url type="bugtracker">https://github.com/VosjeCleo/SeND/issues</url>
+  <releases><release version="0.9.36+112" date="2026-10-02" type="development">
+    <description><p>Flatpak packaging of the existing build 112 application.</p></description>
+  </release></releases>
+</component>

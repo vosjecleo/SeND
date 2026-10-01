@@ -1,0 +1,94 @@
+app-id: net.deltie.deltiecord
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: SeND
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  # Native WebRTC camera devices and GPU acceleration.
+  - --device=all
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.mpris.MediaPlayer2.*
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --env=GTK_USE_PORTAL=1
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+modules:
+  # Build against the Flatpak SDK, never copy the AppImage's Debian closure.
+  - name: libass
+    buildsystem: autotools
+    config-opts: [--disable-static]
+    sources:
+      - type: git
+        url: https://github.com/libass/libass.git
+        tag: 0.17.5
+        commit: 4a05d8127f525943ebf45fdc6497c9e665947f0d
+    post-install:
+      - install -Dm644 COPYING /app/share/licenses/libass/COPYING
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Dvulkan=disabled
+      - -Dshaderc=disabled
+      - -Dglslang=disabled
+      - -Dopengl=enabled
+      - -Ddemos=false
+    sources:
+      - type: git
+        url: https://github.com/haasn/libplacebo.git
+        tag: v7.349.0
+        commit: 1fd3c7bde7b943fe8985c893310b5269a09b46c5
+    post-install:
+      - install -Dm644 LICENSE /app/share/licenses/libplacebo/LICENSE
+  - name: mpv
+    buildsystem: meson
+    config-opts:
+      - -Dlibmpv=true
+      - -Dcplayer=false
+      - -Dbuild-date=false
+      - -Dmanpage-build=disabled
+      - -Dlibarchive=disabled
+      - -Dlua=disabled
+      - -Djavascript=disabled
+      - -Dvulkan=disabled
+      - -Dgl=enabled
+      - -Dpulse=enabled
+    sources:
+      - type: git
+        url: https://github.com/mpv-player/mpv.git
+        tag: v0.40.0
+        commit: e48ac7ce08462f5e33af6ef9deeac6fa87eef01e
+    post-install:
+      - install -Dm644 LICENSE.GPL /app/share/licenses/mpv/LICENSE.GPL
+      - install -Dm644 Copyright /app/share/licenses/mpv/Copyright
+  - name: send
+    buildsystem: simple
+    # The already released, checksum-pinned application binary is unchanged.
+    build-commands:
+      - ar x send.deb
+      - tar -xf data.tar.*
+      - mkdir -p /app/lib /app/share
+      - cp -a usr/lib/deltiecord /app/lib/
+      - cp -a usr/share/applications usr/share/icons usr/share/metainfo usr/share/doc /app/share/
+      - install -Dm755 send-flatpak /app/bin/SeND
+      - printf 'flatpak\n' > /app/lib/deltiecord/data/send-package
+      - install -Dm644 net.deltie.deltiecord.metainfo.xml /app/share/metainfo/net.deltie.deltiecord.appdata.xml
+    sources:
+      - type: file
+        url: https://github.com/VosjeCleo/SeND/releases/download/v0.9.36-b112/SeND-0.9.36+112-linux-debian-amd64.deb
+        sha256: 7338f404854f6a1ee5182aacf1e90e94a9418276c2a66d12c18a15e93de1551e
+        dest-filename: send.deb
+      - type: file
+        path: send-flatpak
+      - type: file
+        path: net.deltie.deltiecord.metainfo.xml

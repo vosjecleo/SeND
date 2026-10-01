@@ -6,6 +6,10 @@ Historical entries preserve the scope of their own releases.
 
 ## SeND 0.9.36 build 112 — 2026-10-01
 
+- Add an optional x86-64 Flatpak bundle of the same application build, using
+  GNOME's runtime and SDK-built media libraries. Include a separate sources
+  bundle, CI sandbox launch validation and an automated download-mirror update.
+  Host game detection/Discord IPC are not yet integrated through the sandbox.
 - AppImage-only SVG-loader correction: keep librsvg host-owned alongside GTK
   and its icon loaders, rather than loading an older bundled copy via FFmpeg.
   Regression CI reproduces the missing `rsvg_handle_get_pixbuf_and_error`
