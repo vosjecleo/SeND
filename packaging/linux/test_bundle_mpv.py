@@ -12,7 +12,10 @@ class MediaRuntimeTest(unittest.TestCase):
     def test_host_stack_stays_native(self):
         for library in ('libc.so.6', 'libm.so.6', 'libGL.so.1',
                         'libgtk-3.so.0', 'libstdc++.so.6',
-                        'libsystemd.so.0', 'libdrm_amdgpu.so.1'):
+                        'libsystemd.so.0', 'libdrm_amdgpu.so.1',
+                        'libatk-1.0.so.0', 'libatk-bridge-2.0.so.0',
+                        'libpango-1.0.so.0', 'libpangoft2-1.0.so.0',
+                        'libpangocairo-1.0.so.0'):
             with self.subTest(library=library):
                 self.assertIsNotNone(mpv.HOST.match(library))
 
