@@ -54,7 +54,7 @@ def bundle(appdir, sources):
                 raise RuntimeError(f'{path.name}: missing {soname}')
             if not dependency.resolve().is_relative_to(appdir):
                 selected[soname] = dependency
-            elif (path.parent == lib or path == appdir / 'usr/lib/deltiecord/deltiecord') and dependency.parent == lib / 'mpv-runtime':
+            elif ((path.parent == lib and path.name != 'libmpv.so.2') or path == appdir / 'usr/lib/deltiecord/deltiecord') and dependency.parent == lib / 'mpv-runtime':
                 # A Flutter/plugin direct dependency must be visible on the
                 # launcher's path, not only inside mpv's private RUNPATH.
                 public_links[soname] = dependency
@@ -82,16 +82,26 @@ def bundle(appdir, sources):
     for source, version in sorted(source_packages):
         subprocess.check_call(['apt-get', 'source', '--download-only', '--only-source',
                                f'{source}={version}'], cwd=sources)
-    (docs / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     for soname, path in public_links.items():
         destination = lib / soname
         if not destination.exists():
-            destination.symlink_to(path.relative_to(lib))
+            # A symlink changes the loader's $ORIGIN to the public directory;
+            # retain an independent copy with an explicit private search path.
+            shutil.copy2(path, destination)
+            subprocess.check_call(['patchelf', '--set-rpath',
+                                   '$ORIGIN/mpv-runtime:$ORIGIN', str(destination)])
+            manifest.append({'library': soname,
+                             'source_manifest': '../mpv-runtime/manifest.json',
+                             'sha256': hashlib.sha256(destination.read_bytes()).hexdigest()})
+    (docs / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Validate with the actual launcher's path, not the discovery-only path.
     env['LD_LIBRARY_PATH'] = str(lib)
     for root in roots:
         if mpv.run('patchelf', '--print-needed', str(root)):
-            mpv.dependencies(mpv.run('ldd', str(root), env=env))
+            try:
+                mpv.dependencies(mpv.run('ldd', str(root), env=env))
+            except RuntimeError as error:
+                raise RuntimeError(f'{root}: {error}') from error
     if not (lib / 'libepoxy.so.0').is_file():
         raise RuntimeError('Flutter graphics loader libepoxy must be bundled')
     print(f'Audited {len(roots)} ELF files; added {len(manifest)} application libraries')
