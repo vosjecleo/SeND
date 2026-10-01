@@ -38,6 +38,7 @@ modules:
   - name: libplacebo
     buildsystem: meson
     config-opts:
+      - --libdir=lib
       - -Dvulkan=disabled
       - -Dshaderc=disabled
       - -Dglslang=disabled
@@ -49,10 +50,11 @@ modules:
         tag: v7.349.0
         commit: 1fd3c7bde7b943fe8985c893310b5269a09b46c5
     post-install:
-      - install -Dm644 LICENSE /app/share/licenses/libplacebo/LICENSE
+      - install -Dm644 ../LICENSE /app/share/licenses/libplacebo/LICENSE
   - name: mpv
     buildsystem: meson
     config-opts:
+      - --libdir=lib
       - -Dlibmpv=true
       - -Dcplayer=false
       - -Dbuild-date=false
@@ -69,10 +71,13 @@ modules:
         tag: v0.40.0
         commit: e48ac7ce08462f5e33af6ef9deeac6fa87eef01e
     post-install:
-      - install -Dm644 LICENSE.GPL /app/share/licenses/mpv/LICENSE.GPL
-      - install -Dm644 Copyright /app/share/licenses/mpv/Copyright
+      - install -Dm644 ../LICENSE.GPL /app/share/licenses/mpv/LICENSE.GPL
+      - install -Dm644 ../Copyright /app/share/licenses/mpv/Copyright
   - name: send
     buildsystem: simple
+    build-options:
+      no-strip: true
+      no-debuginfo: true
     # The already released, checksum-pinned application binary is unchanged.
     build-commands:
       - ar x send.deb

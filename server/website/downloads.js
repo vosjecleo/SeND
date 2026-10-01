@@ -8,6 +8,7 @@ const formats = [
   ['-windows-x64-setup.exe', 'Windows installer (recommended)'],
   ['-windows-x64-portable.zip', 'Windows portable ZIP'],
   ['-linux-appimage-x86_64.AppImage', 'Linux AppImage'],
+  ['-linux-x86_64.flatpak', 'Linux Flatpak'],
   ['-linux-arch-x86_64.pkg.tar.zst', 'Arch Linux package'],
   ['-linux-debian-amd64.deb', 'Debian / Ubuntu package'],
   ['-android-arm64-v8a.apk', 'Android ARM64 (most phones)'],
