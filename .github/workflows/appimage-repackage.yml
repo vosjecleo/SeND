@@ -22,7 +22,7 @@ jobs:
         run: |
           sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git python3 patchelf file binutils libgtk-3-0 libsecret-1-0 libpulse0 libasound2 libv4l-0 libpipewire-0.3-0 libepoxy0 libegl1 libgles2 libgl1 libvulkan1
+          apt-get install -y --no-install-recommends ca-certificates curl git python3 patchelf file binutils libgtk-3-0 librsvg2-2 libsecret-1-0 libpulse0 libasound2 libv4l-0 libpipewire-0.3-0 libepoxy0 libegl1 libgles2 libgl1 libvulkan1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Download immutable original and repackage without compiling
         shell: bash
@@ -32,16 +32,16 @@ jobs:
           mkdir -p original dist
           curl -fLsS --retry 3 --connect-timeout 15 --max-time 900 \
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o original/original.AppImage
-          echo 'ae5cdfbda7bca8f1e086158e5b2d8771ce67a3a825d68dc4aefdee0490062640  original/original.AppImage' | sha256sum -c
+          echo 'a68bfefb697528353d2c89923e4494795ab61f58da1928056552ed06cecd012b  original/original.AppImage' | sha256sum -c
           curl -fLsS --retry 3 --connect-timeout 15 --max-time 900 \
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-appimage-sources.tar.gz" -o original/sources.tar.gz
-          echo '01b5bdfa3cd360c42bfe9d4be9bf57305018e143a55f78eeaee898ffc69b50d1  original/sources.tar.gz' | sha256sum -c
+          echo 'da172655f008fca85b467c4fbb7c458645ebdedac998bca0cb4467d2e48097e2  original/sources.tar.gz' | sha256sum -c
           mkdir original/sources
           tar -xzf original/sources.tar.gz -C original/sources
           chmod +x original/original.AppImage
           (cd original && ./original.AppImage --appimage-extract >/dev/null)
-          # Only obsolete host-owned PipeWire libraries may be removed.
-          (cd original/squashfs-root && find usr/lib/deltiecord -type f ! -name 'libpipewire-0.3.so*' ! -name 'libspa-0.2.so*' -print0 | sort -z | xargs -0 sha256sum) > dist/original-binaries.sha256
+          # Only obsolete host-owned module libraries may be removed.
+          (cd original/squashfs-root && find usr/lib/deltiecord -type f ! -name 'libpipewire-0.3.so*' ! -name 'libspa-0.2.so*' ! -name 'librsvg-2.so*' -print0 | sort -z | xargs -0 sha256sum) > dist/original-binaries.sha256
           python3 -m unittest discover -s packaging/linux -p 'test_*.py'
           bash packaging/linux/build-appimage.sh original/squashfs-root original/sources
           mv dist/SeND-0.9.36-x86_64.AppImage "dist/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage"
@@ -60,7 +60,7 @@ jobs:
       - name: Install desktop baseline, without mpv or FFmpeg
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libgles2 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
+          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 librsvg2-2 libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libgles2 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
           ! ldconfig -p | grep -q libmpv
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -82,6 +82,7 @@ jobs:
           lib = pathlib.Path('squashfs-root/usr/lib/deltiecord/lib').resolve()
           assert not list(lib.rglob('libpipewire-0.3.so*'))
           assert not list(lib.rglob('libspa-0.2.so*'))
+          assert not list(lib.rglob('librsvg-2.so*'))
           ctypes.CDLL(str(lib / 'libepoxy.so.0'))
           mpv = ctypes.CDLL(str(lib / 'libmpv.so.2'))
           mpv.mpv_create.restype = ctypes.c_void_p
@@ -111,13 +112,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: appimage-repackage
           path: dist
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
         with:
-          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/c59305bab2065cfecc4944690d9eedbb56f3a9fa.tar.gz
       - name: Test standard Nix appimage-run without extraPkgs overrides
         shell: bash
         run: |
@@ -138,19 +140,30 @@ jobs:
           if [[ '${{ matrix.audio }}' = pipewire-jack ]]; then
             jack=$(nix-build '<nixpkgs>' -A pipewire.jack --no-out-link)
             export LD_LIBRARY_PATH="$jack/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            # Prove this test exercises the reported conflict: the currently
-            # published candidate must fail with the exact missing symbol.
-            curl -fLsS --retry 3 --connect-timeout 15 --max-time 300 \
-              "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o regression.AppImage
-            echo 'ae5cdfbda7bca8f1e086158e5b2d8771ce67a3a825d68dc4aefdee0490062640  regression.AppImage' | sha256sum -c
-            chmod +x regression.AppImage
-            set +e
-            timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run regression.AppImage > regression.log 2>&1
-            old_status=$?
-            set -e
-            test "$old_status" != 124
-            grep 'undefined symbol: pw_log_topic_register' regression.log
           fi
+          # A real host SVG loader (2.62.3), loaded AFTER FFmpeg/mpv, must
+          # resolve to its matching host librsvg and actually decode an icon.
+          rsvg=$(nix-build '<nixpkgs>' -A librsvg --no-out-link)
+          pixbuf=$(nix-build '<nixpkgs>' -A gdk-pixbuf.dev --no-out-link)
+          python=$(nix-build '<nixpkgs>' -A python3 --no-out-link)
+          export SVG_TEST_LOADER="$rsvg/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.so"
+          test -f "$SVG_TEST_LOADER"
+          export GDK_PIXBUF_MODULE_FILE="$PWD/svg-loaders.cache"
+          "$pixbuf/bin/gdk-pixbuf-query-loaders" "$SVG_TEST_LOADER" > "$GDK_PIXBUF_MODULE_FILE"
+          export SVG_TEST_PYTHON="$python/bin/python3"
+          export SVG_TEST_SCRIPT="$PWD/packaging/linux/check-svg-loader.py"
+          chmod +x packaging/linux/test-svg-loader.sh
+          curl -fLsS --retry 3 --connect-timeout 15 --max-time 300 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o regression.AppImage
+          echo 'a68bfefb697528353d2c89923e4494795ab61f58da1928056552ed06cecd012b  regression.AppImage' | sha256sum -c
+          chmod +x regression.AppImage dist/*.AppImage
+          set +e
+          APPIMAGE_DEBUG_EXEC="$PWD/packaging/linux/test-svg-loader.sh" ./nix-appimage-run/bin/appimage-run regression.AppImage > regression.log 2>&1
+          old_status=$?
+          set -e
+          test "$old_status" != 0
+          grep 'undefined symbol: rsvg_handle_get_pixbuf_and_error' regression.log
+          APPIMAGE_DEBUG_EXEC="$PWD/packaging/linux/test-svg-loader.sh" ./nix-appimage-run/bin/appimage-run dist/*.AppImage
           chmod +x dist/*.AppImage
           set +e
           timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run dist/*.AppImage > nix-smoke.log 2>&1
@@ -189,5 +202,5 @@ jobs:
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" ./*.AppImage --clobber
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" SHA256SUMS --clobber
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.txt
-          printf '\n### AppImage PipeWire/JACK correction\n\nRemoved the bundled old PipeWire client so host PipeWire-JACK adapters use matching host libraries. Retained standalone JACK fallback for systems without JACK. CI reproduces the previous pw_log_topic_register failure, then verifies the corrected package under both Nix JACK configurations and clean Ubuntu. Version/build, application binaries and other platform packages remain unchanged. Packaging commit: %s.\n' "$GITHUB_SHA" >> notes.txt
+          printf '\n### AppImage SVG-loader correction\n\nKeep librsvg with the host GTK icon-loader stack instead of bundling an older copy through FFmpeg. CI reproduces the previous rsvg_handle_get_pixbuf_and_error failure, decodes an SVG after loading mpv with the corrected package, and tests both Nix JACK configurations and clean Ubuntu. Version/build, application binaries and other platform packages remain unchanged. Packaging commit: %s.\n' "$GITHUB_SHA" >> notes.txt
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.txt

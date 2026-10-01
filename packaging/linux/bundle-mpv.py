@@ -20,7 +20,7 @@ HOST = re.compile(
     r"drm[^.]*|gbm|wayland[^.]*|xkbcommon[^.]*|X11|Xau|Xdmcp|Xext|"
     r"Xrender|Xfixes|Xrandr|Xi|Xcursor|Xinerama|Xcomposite|Xdamage|xcb)\.so|"
     r"lib(glib-2.0|gobject-2.0|gio-2.0|gmodule-2.0|gthread-2.0|"
-    r"gtk-3|gdk-3|gdk_pixbuf-2.0|atk-1.0|atk-bridge-2.0|atspi|"
+    r"gtk-3|gdk-3|gdk_pixbuf-2.0|rsvg-2|atk-1.0|atk-bridge-2.0|atspi|"
     r"cairo[^.]*|pango[^/]*|fontconfig|"
     r"freetype|harfbuzz[^.]*|pulse[^.]*|pipewire-0\.3|spa-0\.2|"
     r"asound|dbus-1|systemd|udev)\.so)"

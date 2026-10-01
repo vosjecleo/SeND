@@ -136,6 +136,8 @@ storage, and PulseAudio or PipeWire-Pulse for audio.
 PipeWire/SPA client libraries must come from the host so they match its modules
 and PipeWire-JACK adapter. The AppImage retains a standalone JACK fallback, but
 does not bundle an older PipeWire client or a PipeWire-JACK adapter.
+Likewise, librsvg comes from the host GTK/SVG icon-loader stack; mixing an old
+bundled SVG renderer with newer desktop icon loaders can prevent startup.
 
 On Wayland, screen sharing requires PipeWire, `xdg-desktop-portal`, and a portal
 backend for the desktop environment, such as `xdg-desktop-portal-gtk` or

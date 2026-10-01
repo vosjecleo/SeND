@@ -20,18 +20,19 @@ mpv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mpv)
 
 HOST_PIPEWIRE = re.compile(r'lib(?:pipewire-0\.3|spa-0\.2)\.so(?:\..*)?')
+HOST_MODULE_LIBRARIES = re.compile(r'lib(?:pipewire-0\.3|spa-0\.2|rsvg-2)\.so(?:\..*)?')
 
 
-def remove_host_pipewire(appdir):
-    """Never let a bundled old client override host PipeWire-JACK/SPA modules."""
+def remove_host_module_libraries(appdir):
+    """Keep dynamically loaded host audio/icon modules with their own libraries."""
     removed = set()
     for path in (appdir / 'usr/lib/deltiecord/lib').rglob('*'):
-        if (path.is_file() or path.is_symlink()) and HOST_PIPEWIRE.fullmatch(path.name):
+        if (path.is_file() or path.is_symlink()) and HOST_MODULE_LIBRARIES.fullmatch(path.name):
             removed.add(path.name)
             path.unlink()
     for path in (appdir / 'usr/share/doc/deltiecord').glob('*/manifest.json'):
         entries = json.loads(path.read_text())
-        entries = [entry for entry in entries if not HOST_PIPEWIRE.fullmatch(entry['library'])]
+        entries = [entry for entry in entries if not HOST_MODULE_LIBRARIES.fullmatch(entry['library'])]
         path.write_text(json.dumps(entries, indent=2) + '\n')
     return removed
 
@@ -47,9 +48,9 @@ def elf_files(root):
 def bundle(appdir, sources):
     if sources.is_relative_to(appdir):
         raise RuntimeError('Source archives must be outside the AppImage')
-    removed = remove_host_pipewire(appdir)
+    removed = remove_host_module_libraries(appdir)
     if removed:
-        print('Removed host-owned PipeWire libraries: ' + ', '.join(sorted(removed)))
+        print('Removed host-owned module libraries: ' + ', '.join(sorted(removed)))
     lib = appdir / 'usr/lib/deltiecord/lib'
     env = dict(os.environ, LD_LIBRARY_PATH=f'{lib}:{lib}/mpv-runtime')
     roots = list(elf_files(appdir / 'usr/lib/deltiecord'))

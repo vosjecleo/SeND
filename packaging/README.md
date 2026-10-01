@@ -68,8 +68,9 @@ tests standard Nix appimage-run without extraPkgs overrides before replacing
 only that release asset and checksums. Then run
 `bash packaging/publish-appimage-repackage.sh` to mirror only the corrected
 AppImage, optional sources and metadata to Deltie, preserving a rollback copy.
-The Nix test covers standalone JACK and host PipeWire-JACK; the latter first
-reproduces the broken package's missing-symbol error. PipeWire/SPA libraries
+The Nix test covers standalone JACK and host PipeWire-JACK. It also loads the
+host SVG icon loader after mpv/FFmpeg, reproduces the previous librsvg symbol
+failure, and decodes an SVG with the corrected package. PipeWire/SPA and librsvg
 remain host-owned, while standalone JACK may be bundled as a fallback. The
 original-binary checksum comparison excludes only those removed host libraries.
 Official x86_64 artifacts are built inside Debian 12 so native

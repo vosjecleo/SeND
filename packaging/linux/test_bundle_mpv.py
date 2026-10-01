@@ -16,7 +16,7 @@ class MediaRuntimeTest(unittest.TestCase):
                         'libatk-1.0.so.0', 'libatk-bridge-2.0.so.0',
                         'libpango-1.0.so.0', 'libpangoft2-1.0.so.0',
                         'libpangocairo-1.0.so.0', 'libpipewire-0.3.so.0',
-                        'libspa-0.2.so.0'):
+                        'libspa-0.2.so.0', 'librsvg-2.so.2'):
             with self.subTest(library=library):
                 self.assertIsNotNone(mpv.HOST.match(library))
 

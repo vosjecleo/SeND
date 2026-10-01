@@ -6,6 +6,11 @@ Historical entries preserve the scope of their own releases.
 
 ## SeND 0.9.36 build 112 — 2026-10-01
 
+- AppImage-only SVG-loader correction: keep librsvg host-owned alongside GTK
+  and its icon loaders, rather than loading an older bundled copy via FFmpeg.
+  Regression CI reproduces the missing `rsvg_handle_get_pixbuf_and_error`
+  symbol with the previous package and decodes a real SVG after loading mpv
+  with the replacement. No application version/build change.
 - Further AppImage-only correction: keep PipeWire/SPA client libraries host-owned
   so newer PipeWire-JACK adapters do not resolve against a bundled older client.
   Keep standalone JACK fallback for systems without JACK. Regression CI must
