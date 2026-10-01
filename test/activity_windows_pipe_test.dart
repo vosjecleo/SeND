@@ -16,9 +16,13 @@ void main() {
         await pipe.start((connection) {
           connection.input.listen(connection.add);
         });
-        await expectLater(other.start((_) {}), throwsStateError);
-        final result = await Isolate.run(_roundTrip);
-        expect(result, [1, 2, 3, 4]);
+        // Exercise both initial ownership and the gap after a client closes.
+        for (var attempt = 0; attempt < 3; attempt++) {
+          await expectLater(other.start((_) {}), throwsStateError);
+          final result = await Isolate.run(_roundTrip);
+          expect(result, [1, 2, 3, 4]);
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
       } finally {
         await other.close();
         await pipe.close();
@@ -28,7 +32,7 @@ void main() {
       await pipe.close();
     },
     skip: !Platform.isWindows,
-    timeout: const Timeout(Duration(seconds: 20)),
+    timeout: const Timeout(Duration(seconds: 30)),
   );
 }
 

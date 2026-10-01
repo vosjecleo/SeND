@@ -6,6 +6,12 @@ Historical entries preserve the scope of their own releases.
 
 ## SeND 0.9.36 build 113 — 2026-10-02
 
+- Retain Windows Discord-IPC pipe ownership continuously when clients disconnect
+  or a transient pipe error occurs, rather than allowing another listener to
+  bind between polling iterations. Exercise repeated disconnects in Windows CI.
+- Fix fresh AppImage packaging's missing media-licence directory; preserve the
+  dependency/source audit and runtime size limit.
+
 - Refresh TURN relay credentials before their server-advertised expiry instead
   of reusing them for the entire login session. Coalesce concurrent requests
   and never fall back to expired credentials after a failed refresh.

@@ -122,14 +122,6 @@ Future<void> _runPipes(SendPort events) async {
   final security = calloc<SECURITY_ATTRIBUTES>();
   final name = r'\\.\pipe\discord-ipc-0'.toNativeUtf16();
   final sddl = 'D:P(A;;GA;;;SY)(A;;GA;;;OW)'.toNativeUtf16();
-  void close(int id) {
-    final handle = handles.remove(id);
-    if (handle == null) return;
-    DisconnectNamedPipe(handle);
-    CloseHandle(handle);
-    if (connected.remove(id)) events.send(['close', id]);
-  }
-
   int open({bool first = false}) {
     final handle = CreateNamedPipe(
       name,
@@ -148,6 +140,21 @@ Future<void> _runPipes(SendPort events) async {
     final id = nextId++;
     handles[id] = handle;
     return id;
+  }
+
+  void close(int id) {
+    final handle = handles[id];
+    if (handle == null) return;
+    // Never drop the final instance between polling iterations. Otherwise a
+    // short-lived client / transient pipe error opens a window in which another
+    // process can acquire FILE_FLAG_FIRST_PIPE_INSTANCE and steal ownership.
+    if (!stopped && handles.length == 1 && open() < 0) {
+      throw StateError('Windows IPC could not retain its listening pipe.');
+    }
+    handles.remove(id);
+    DisconnectNamedPipe(handle);
+    CloseHandle(handle);
+    if (connected.remove(id)) events.send(['close', id]);
   }
 
   try {
@@ -249,6 +256,7 @@ Future<void> _runPipes(SendPort events) async {
           : 'Windows IPC could not start.',
     );
   } finally {
+    stopped = true;
     for (final id in handles.keys.toList()) {
       close(id);
     }
