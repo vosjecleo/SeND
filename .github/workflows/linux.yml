@@ -142,7 +142,7 @@ jobs:
       - name: Install desktop baseline without mpv or FFmpeg
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libgles2 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
+          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 librsvg2-2 librsvg2-common libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libgles2 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
           ! ldconfig -p | grep -q libmpv
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
