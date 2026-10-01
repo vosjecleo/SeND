@@ -80,6 +80,7 @@ def bundle(appdir, sources_dir):
     private = library_dir / 'mpv-runtime'
     private.mkdir()
     docs = appdir / 'usr/share/doc/deltiecord/mpv-runtime'
+    docs.mkdir(parents=True, exist_ok=True)
     sources_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
     sources = set()

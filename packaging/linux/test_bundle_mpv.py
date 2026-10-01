@@ -1,6 +1,8 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
+import tempfile
 
 spec = importlib.util.spec_from_file_location(
     'bundle_mpv', pathlib.Path(__file__).with_name('bundle-mpv.py'))
@@ -9,6 +11,39 @@ spec.loader.exec_module(mpv)
 
 
 class MediaRuntimeTest(unittest.TestCase):
+    def test_fresh_appdir_creates_runtime_notice_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            appdir = root / 'appdir'
+            lib = appdir / 'usr/lib/deltiecord/lib'
+            lib.mkdir(parents=True)
+            binary = root / 'libmpv.so.2'
+            binary.write_bytes(b'test-library')
+            copyright_file = root / 'copyright'
+            copyright_file.write_text('test licence')
+            real_copy = mpv.shutil.copy2
+
+            def fake_run(*args, **kwargs):
+                if args[0] == 'ldconfig':
+                    return f'libmpv.so.2 (libc6,x86-64) => {binary}'
+                if args[0] == 'dpkg-query':
+                    return 'test-source\t1.0'
+                return ''
+
+            def copy(source, destination):
+                if str(source).startswith('/usr/share/doc/'):
+                    source = copyright_file
+                return real_copy(source, destination)
+
+            with patch.object(mpv, 'run', side_effect=fake_run), \
+                 patch.object(mpv, 'package_for', return_value='test-mpv:amd64'), \
+                 patch.object(mpv.subprocess, 'check_call'), \
+                 patch.object(mpv.shutil, 'copy2', side_effect=copy):
+                mpv.bundle(appdir, root / 'sources')
+            docs = appdir / 'usr/share/doc/deltiecord/mpv-runtime'
+            self.assertEqual((docs / 'test-mpv_amd64.copyright').read_text(), 'test licence')
+            self.assertTrue((docs / 'manifest.json').is_file())
+
     def test_host_stack_stays_native(self):
         for library in ('libc.so.6', 'libm.so.6', 'libGL.so.1',
                         'libgtk-3.so.0', 'libstdc++.so.6',
