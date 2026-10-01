@@ -116,6 +116,13 @@ jobs:
           sudo apt-get install -y xvfb xauth dbus-x11
           (cd dist && sha256sum -c REPACKAGE-SHA256SUMS)
           nix-build '<nixpkgs>' -A appimage-run -o nix-appimage-run
+          # The Ubuntu VM lacks NixOS's /run/opengl-driver setup. Provide the
+          # same Mesa driver explicitly for its virtual/software display;
+          # do not add any application libraries to appimage-run's extraPkgs.
+          mesa=$(nix-build '<nixpkgs>' -A mesa --no-out-link)
+          export __EGL_VENDOR_LIBRARY_DIRS="$mesa/share/glvnd/egl_vendor.d"
+          export LIBGL_DRIVERS_PATH="$mesa/lib/dri"
+          export LIBGL_ALWAYS_SOFTWARE=1
           chmod +x dist/*.AppImage
           set +e
           timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run dist/*.AppImage > nix-smoke.log 2>&1
