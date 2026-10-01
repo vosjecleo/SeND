@@ -39,6 +39,7 @@ ensure_tool() {
 ensure_tool "$plugin" "$plugin_url" "$plugin_sha256"
 ensure_tool "$runtime" "$runtime_url" "$runtime_sha256"
 "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
+python3 "$repo_root/packaging/linux/bundle-mpv.py" "$appdir"
 printf 'appimage\n' >"$appdir/usr/lib/deltiecord/data/send-package"
 
 export ARCH=x86_64
@@ -48,11 +49,8 @@ export LDAI_OUTPUT="$OUTPUT"
 export LDAI_RUNTIME_FILE="$runtime"
 export PATH="$tools_dir:$PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
-# Package the Flutter bundle without copying a rolling distribution's GTK,
-# multimedia, and TLS dependency graph. Those libraries are ABI-sensitive and
-# made an Arch-built AppImage crash in the dynamic loader. The pinned plugin
-# still creates a self-contained Flutter/application bundle; GTK and native
-# media/portal dependencies remain normal host runtime requirements.
+# mpv and its media dependencies are now bundled with private RUNPATHs. The host
+# GTK, graphics drivers, libc and session stack deliberately remain untouched.
 "$plugin" --appimage-extract-and-run --appdir "$appdir"
 test -x "$OUTPUT"
 echo "$OUTPUT"

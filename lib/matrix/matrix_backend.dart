@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/attachment_text.dart';
 import '../services/video_preparation.dart';
 import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';

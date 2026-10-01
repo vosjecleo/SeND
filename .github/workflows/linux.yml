@@ -27,6 +27,7 @@ jobs:
     steps:
       - name: Install Debian build dependencies
         run: |
+          sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl xz-utils git clang cmake make ninja-build pkg-config fakeroot binutils file patchelf libgtk-3-dev libsecret-1-dev libpulse-dev libasound2-dev libv4l-dev libmpv-dev libpipewire-0.3-dev appstream dbus-x11 xvfb xauth
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -91,6 +92,7 @@ jobs:
           dart format --output=none --set-exit-if-changed lib test
           python3 -m py_compile server/giphy_proxy.py server/test_giphy_proxy.py
           python3 -m unittest server/test_giphy_proxy.py
+          python3 -m unittest discover -s packaging/linux -p 'test_*.py'
           find packaging -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           flutter analyze
           flutter test --concurrency=1
@@ -130,6 +132,52 @@ jobs:
           name: SeND-linux-debian12-x86_64
           path: dist/*
           if-no-files-found: error
+
+  appimage-smoke:
+    needs: debian
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    timeout-minutes: 15
+    steps:
+      - name: Install desktop baseline without mpv or FFmpeg
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
+          ! ldconfig -p | grep -q libmpv
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: SeND-linux-debian12-x86_64
+          path: dist
+      - name: Verify bundled mpv loads and AppImage starts
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=(dist/*.AppImage)
+          chmod +x "${image[0]}"
+          "${image[0]}" --appimage-extract >/dev/null
+          python3 - <<'PY'
+          import ctypes, pathlib
+          library = pathlib.Path('squashfs-root/usr/lib/deltiecord/lib/libmpv.so.2').resolve()
+          mpv = ctypes.CDLL(str(library))
+          mpv.mpv_create.restype = ctypes.c_void_p
+          handle = mpv.mpv_create()
+          assert handle, 'mpv_create failed'
+          mpv.mpv_set_option_string.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+          for option in (b'vo', b'ao'):
+              assert mpv.mpv_set_option_string(handle, option, b'null') >= 0
+          mpv.mpv_initialize.argtypes = [ctypes.c_void_p]
+          assert mpv.mpv_initialize(handle) >= 0, 'mpv_initialize failed'
+          mpv.mpv_terminate_destroy.argtypes = [ctypes.c_void_p]
+          mpv.mpv_terminate_destroy(handle)
+          PY
+          set +e
+          timeout 15s dbus-run-session -- xvfb-run -a squashfs-root/AppRun >appimage-smoke.log 2>&1
+          status=$?
+          set -e
+          if [[ "$status" != 124 ]] || grep -Ei 'Cannot find libmpv|error while loading shared libraries|Unhandled exception' appimage-smoke.log; then
+            cat appimage-smoke.log
+            exit 1
+          fi
 
   arch:
     if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[web-only]')

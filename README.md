@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.36 build 111 — desktop, media and notification reliability**
+> **Latest release: SeND 0.9.36 build 112 — AppImage and attachment hotfix**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -22,6 +22,8 @@
 > Build 111 adds Windows IPC, improves Steam/Proton detection, camera-video
 > preparation, GIF lifecycle handling, clipboard image paste and notification
 > recovery. See [build 111 validation notes](docs/build-111-reliability.md).
+> Build 112 bundles the AppImage media runtime, fixes attachment reply captions,
+> and hardens automated release/deployment checks.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

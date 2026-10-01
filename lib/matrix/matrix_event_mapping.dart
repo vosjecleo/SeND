@@ -407,14 +407,10 @@ extension _MatrixEventMapping on MatrixBackend {
       MessageTypes.Audio => AttachmentKind.audio,
       _ => AttachmentKind.file,
     };
-    final name = event.content.tryGet<String>('filename') ?? event.body;
-    final caption =
-        event.body.trim().isNotEmpty && event.body.trim() != name.trim()
-        ? event.body.trim()
-        : null;
+    final text = attachmentText(event);
     return ChatAttachment(
       kind: kind,
-      name: name,
+      name: text.name,
       mimeType: event.attachmentMimetype,
       size: event.infoMap.tryGet<int>('size'),
       encrypted: event.isAttachmentEncrypted,
@@ -424,7 +420,7 @@ extension _MatrixEventMapping on MatrixBackend {
               ) ==
               true ||
           event.content.tryGet<bool>('m.spoiler') == true,
-      caption: caption,
+      caption: text.caption,
       gifSource: Uri.tryParse(
         event.content.tryGet<String>('net.deltiecord.gif_source') ?? '',
       ),

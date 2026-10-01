@@ -121,16 +121,47 @@ if ! $skip_preflight; then
   flutter analyze
   flutter test
   python3 -m unittest discover -s server -p 'test_*.py'
+  python3 -m unittest discover -s packaging/linux -p 'test_*.py'
   while IFS= read -r script; do bash -n "$script"; done < <(
     find packaging -type f -name '*.sh' -print | sort
   )
 fi
 
+git push github main
+git push deltie main
+# Gate the tag on the same commit's CI results, so a failed build can be fixed
+# normally without moving a release tag. Public API, no repository token needed.
+commit="$(git rev-parse HEAD)"
+ci_ready=false
+last_ci_status=''
+for _ in $(seq 1 90); do
+  if runs="$(curl --fail --silent --show-error --connect-timeout 15 --max-time 45 \
+      "https://api.github.com/repos/VosjeCleo/SeND/actions/runs?head_sha=$commit&per_page=30")"; then
+    required='["Windows release","Linux packages","Android release","Web PWA"]'
+    if $web_only; then required='["Web PWA"]'; fi
+    summary="$(jq -c --argjson required "$required" '
+      [.workflow_runs[] | select(.event == "push") | select(.name as $name | $required | index($name))] |
+      group_by(.name) | map(max_by(.id)) |
+      map({name,status,conclusion})' <<<"$runs")"
+    if [[ "$summary" != "$last_ci_status" ]]; then
+      printf 'CI: %s\n' "$summary"
+      last_ci_status="$summary"
+    fi
+    if jq -e 'any(.[]; .status == "completed" and .conclusion != "success")' <<<"$summary" >/dev/null; then
+      printf '%s\n' 'CI failed; release tag and deployment were not changed.' >&2
+      exit 1
+    fi
+    if jq -e --argjson required "$required" 'length == ($required|length) and all(.[]; .conclusion == "success")' <<<"$summary" >/dev/null; then
+      ci_ready=true
+      break
+    fi
+  fi
+  sleep 60
+done
+$ci_ready || { printf '%s\n' 'Timed out awaiting CI; not publishing.' >&2; exit 1; }
 if [[ "${create_tag:-false}" == true ]]; then
   git tag -a "$tag" -m "SeND $release_id ($channel)"
 fi
-git push github main
-git push deltie main
 git push github "$tag"
 git push deltie "$tag"
 
@@ -142,7 +173,7 @@ printf 'Waiting for GitHub Actions release %s' "$tag"
 for _ in $(seq 1 180); do
   # Missing-release responses can remain cached after CI publishes the assets.
   # Poll a distinct URL so a stale 404 cannot delay a completed release.
-  if curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+  if curl --fail --silent --show-error --location --connect-timeout 15 --max-time 60 --proto '=https' --tlsv1.2 \
       "$checksum_url?poll=$(date +%s)" -o "$temporary/SHA256SUMS"; then
     printf '%s\n' ' ready.'
     break
@@ -180,13 +211,13 @@ for artifact in "${artifacts[@]}"; do
       printf 'Missing checksum for %s\n' "$artifact" >&2
       exit 1
     }
-  curl --fail --show-error --location --retry 4 --proto '=https' --tlsv1.2 \
+  curl --fail --silent --show-error --location --retry 4 --connect-timeout 15 --max-time 1800 --speed-limit 1024 --speed-time 60 --proto '=https' --tlsv1.2 \
     "$base_url/$artifact" -o "$temporary/$artifact"
 done
 (cd "$temporary" && sha256sum --check --strict SHA256SUMS)
 
 current_manifest="$temporary/current-releases.json"
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+curl --fail --silent --show-error --location --connect-timeout 15 --max-time 60 --retry 3 --proto '=https' --tlsv1.2 \
   https://deltie.net/SeND/releases.json -o "$current_manifest"
 jq -e '.platforms.android and .platforms.linux and .platforms.windows' \
   "$current_manifest" >/dev/null
@@ -291,7 +322,7 @@ install -m 0644 -- "$stage/releases.json" "$remote_root/releases.json"
 rm -rf -- "$stage"
 REMOTE
 
-published="$(curl --fail --silent --show-error --location \
+published="$(curl --fail --silent --show-error --location --connect-timeout 15 --max-time 60 --retry 3 \
   "https://deltie.net/SeND/releases.json?build=$build")"
 if [[ "$channel" == latest || "$channel" == both ]]; then
   [[ "$(jq -r '.build' <<<"$published")" == "$build" ]]

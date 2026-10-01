@@ -118,14 +118,16 @@ package with `sudo pacman -R deltiecord`; user data remains untouched.
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download
-`SeND-0.9.35+110-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
+`SeND-0.9.36+112-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
 
 ```sh
-chmod +x SeND-0.9.35+110-linux-appimage-x86_64.AppImage
-./SeND-0.9.35+110-linux-appimage-x86_64.AppImage
+chmod +x SeND-0.9.36+112-linux-appimage-x86_64.AppImage
+./SeND-0.9.36+112-linux-appimage-x86_64.AppImage
 ```
 
-The AppImage contains the Flutter application but deliberately relies on some
+The AppImage includes libmpv and its media dependencies starting with build 112;
+installing host libmpv is no longer required. Matching source archives and
+licence notices are included, increasing the download size. It deliberately relies on some
 ABI-sensitive desktop libraries from the host. It requires a reasonably current
 GTK 3 Linux system, a working desktop Secret Service for session and E2EE-key
 storage, and PulseAudio or PipeWire-Pulse for audio.

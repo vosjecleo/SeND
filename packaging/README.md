@@ -1,12 +1,11 @@
 # Release packaging and publication
 
-Current published baseline: 0.9.34+107. Linux, Windows, Android and Web/PWA CI
-passed; the project remains on Latest while [1.0 hardening](../docs/RELEASE_READINESS.md)
+Current release target: 0.9.36+112. The project remains on Latest while
+[1.0 hardening](../docs/RELEASE_READINESS.md)
 continues. Documentation-only commits use `[skip ci]` and do not move release
 tags or deployed binaries.
 
-The next source version is **SeND 0.9.35+108** (not yet released). Filename examples
-below use the new SeND naming. Internal package/executable IDs remain compatible.
+Filename examples below use the SeND naming. Internal package/executable IDs remain compatible.
 See [rename, website and updater notes](../docs/build-108-send.md).
 
 ## Automated publication
@@ -21,12 +20,14 @@ Use `stable` or `both` to select the deltie.net channel. `--clear-stable`
 removes all stable-channel entries without deleting historical artifacts;
 `--install-host` installs a verified Debian or Arch package locally through
 `pkexec`. The script runs
-the full preflight, pushes `main` and the
-version tag to GitHub and the Deltie mirror, waits for the existing GitHub
-Actions platform builds, verifies the exact ten-artifact checksum set, then
+the full preflight, pushes `main` to GitHub and the Deltie mirror, and waits for
+all required platform CI workflows on that exact commit to succeed before
+creating/pushing the version tag. It then waits for release publication,
+verifies the exact ten-artifact checksum set, then
 stages and atomically publishes it to deltie.net. This removes the repeated
 manual download/upload work; the platform compilation time still belongs to
-CI. `--skip-preflight` exists for a retry only after the same commit has already
+CI. Network downloads have timeouts, stall detection and bounded retries.
+`--skip-preflight` exists for a retry only after the same commit has already
 passed the complete local preflight.
 
 For a PWA-only patch, include `[web-only]` in the release commit message and run
@@ -57,7 +58,10 @@ required for persisted login and E2EE keys. Audio requires a reachable PulseAudi
 or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
 `xdg-desktop-portal-gtk` or `xdg-desktop-portal-kde`. The AppImage is assembled
-with linuxdeploy. Official x86_64 artifacts are built inside Debian 12 so native
+with linuxdeploy. Build 112 bundles mpv/media libraries in a private runtime,
+with corresponding source archives and licence notices; GTK, libc and graphics
+drivers remain host-owned. CI also launches it on clean Ubuntu without host mpv.
+Official x86_64 artifacts are built inside Debian 12 so native
 plugins retain a glibc 2.36 baseline; building them directly on a newer rolling
 distribution produces packages that may not start on Debian.
 

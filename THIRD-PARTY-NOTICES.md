@@ -20,6 +20,12 @@ The bundled Aero theme uses a public-domain Tango icon subset; see
 [asset provenance](assets/icons/tango/SOURCE.md) and its `COPYING` file.
 No Microsoft Windows icon assets are bundled.
 
+From build 112, AppImages also bundle Debian 12 libmpv and its media dependencies.
+Their copyright/licence notices, exact package/version manifest and corresponding
+source archives are inside `usr/share/doc/deltiecord/mpv-runtime/` in the extracted
+AppImage (`--appimage-extract`). These native dependencies retain their respective
+upstream licences; they are not relicensed as application code.
+
 Packaging tools such as linuxdeploy and the AppImage runtime are build-time
 tools and are not incorporated as application source. Their upstream projects
 and licences are listed in `CREDITS.md`.

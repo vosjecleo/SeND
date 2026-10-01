@@ -1,8 +1,21 @@
 # Changelog
 
-Release target: **0.9.36+111**. Following the build 106 feature-scope milestone,
+Release target: **0.9.36+112**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.36 build 112 — 2026-10-01
+
+- Bundle libmpv and its media dependency closure in the Linux AppImage, with
+  private library paths, licence notices and corresponding Debian sources.
+  Keep the host desktop and graphics-driver stack native. Add a clean Ubuntu
+  launch test without host mpv or FFmpeg installed.
+- Strip Matrix reply fallback text before determining attachment captions.
+  Captionless images, videos, audio and files no longer gain filename captions
+  when sent as replies; deliberately written captions remain intact.
+- Gate automated publication on all platform CI results before creating a
+  release tag. Bound network requests and retry artifact downloads, then verify
+  checksums and deploy the downloads/PWA through the existing release script.
 
 ## SeND 0.9.36 build 111 — 2026-10-01
 
