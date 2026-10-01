@@ -52,8 +52,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"
-Name: "{userdesktop}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"; AppUserModelID: "Deltie.SeND.Desktop"
+Name: "{userdesktop}\SeND"; Filename: "{app}\deltiecord.exe"; WorkingDir: "{app}"; Tasks: desktopicon; AppUserModelID: "Deltie.SeND.Desktop"
 
 [Run]
 Filename: "{app}\deltiecord.exe"; Description: "Launch SeND"; Flags: nowait postinstall skipifsilent

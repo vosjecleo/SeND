@@ -38,9 +38,12 @@ class MainActivity : FlutterActivity() {
     private var backgroundPushChannel: MethodChannel? = null
     private var configuredEngine: FlutterEngine? = null
     private var sharedContentChannel: MethodChannel? = null
+    private var videoPreparation: VideoPreparationBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        videoPreparation?.dispose()
+        videoPreparation = VideoPreparationBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "net.deltie.deltiecord/composer").setMethodCallHandler { call, result ->
             if (call.method == "newDraft") {
@@ -492,6 +495,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        videoPreparation?.dispose()
+        videoPreparation = null
         DeltiecordEngineRegistry.appInForeground = false
         if (DeltiecordPushService.stateChangedListener != null) {
             DeltiecordPushService.stateChangedListener = null

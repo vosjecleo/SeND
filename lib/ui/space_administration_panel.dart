@@ -468,6 +468,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
           'Encrypted messages use the encrypted-event permission: the server cannot inspect their inner message type. '
           'Alias registration, media uploads and account creation also follow homeserver policy.',
         ),
+        const SizedBox(height: 20),
         DropdownButtonFormField<String>(
           initialValue: target.id,
           isExpanded: true,

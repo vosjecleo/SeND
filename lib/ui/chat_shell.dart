@@ -25,6 +25,7 @@ import '../backend/chat_backend.dart';
 import '../backend/thread_session.dart';
 import '../models/forum_post.dart';
 import '../services/browser_file_picker.dart';
+import '../services/browser_image_paste.dart';
 import '../models/chat_models.dart';
 import '../services/gif_service.dart';
 import '../services/clipboard_image.dart';
@@ -128,6 +129,7 @@ class ChatShell extends StatefulWidget {
 
 class _ChatShellState extends State<ChatShell> {
   late final QuillController _message;
+  void Function()? _removeBrowserPaste;
   final _composerFocus = FocusNode(debugLabel: 'message composer');
   bool _sending = false;
   final List<AttachmentDraft> _pendingAttachments = [];
@@ -160,11 +162,29 @@ class _ChatShellState extends State<ChatShell> {
   @override
   void initState() {
     super.initState();
+    _removeBrowserPaste = listenBrowserImagePaste(
+      enabled: () => mounted && _composerFocus.hasFocus,
+      contextKey: () => widget.backend.selectedRoom?.id,
+      onImages: _queueAttachments,
+      onError: (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error)));
+        }
+      },
+    );
     _message = QuillController.basic(
       config: QuillControllerConfig(
         // Flutter Quill exposes native clipboard images through this API.
         // ignore: experimental_member_use
         clipboardConfig: QuillClipboardConfig(
+          // Consume image clipboard data BEFORE Quill's HTML importer. Windows
+          // supplies both a bitmap and an HTML document with a white background.
+          // A key handler racing the importer can attach the bitmap AND import
+          // that document's styles into the composer.
+          // ignore: experimental_member_use
+          onClipboardPaste: _pasteClipboardImage,
           onImagePaste: (bytes) async {
             // Quill can offer an already-flattened bitmap. Check the original
             // clipboard formats before accepting that fallback.
@@ -714,10 +734,18 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<bool> _pasteClipboardImage() async {
-    final bytes = await readClipboardImage();
-    if (!mounted || bytes == null) return false;
-    _queueClipboardImage(bytes);
-    return true;
+    final roomId = widget.backend.selectedRoom?.id;
+    try {
+      final bytes = await readClipboardImage();
+      if (!mounted || bytes == null) return false;
+      if (widget.backend.selectedRoom?.id == roomId) {
+        _queueClipboardImage(bytes);
+      }
+      return true;
+    } catch (_) {
+      // Clipboard permission/format failure must not consume ordinary text.
+      return false;
+    }
   }
 
   void _removePendingAttachment(int index) {
@@ -738,6 +766,7 @@ class _ChatShellState extends State<ChatShell> {
 
   @override
   void dispose() {
+    _removeBrowserPaste?.call();
     widget.backend.setConversationVisible(false);
     _storeCurrentDraft();
     widget.backend.removeListener(_handleBackendRoomChange);

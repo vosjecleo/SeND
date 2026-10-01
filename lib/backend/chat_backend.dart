@@ -23,6 +23,8 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<Uint8List?> loadActivityIcon(Uri uri) async => null;
   Future<void> updateActivitySettings(ActivitySettings value) async {}
   Future<void> enableWebNotifications() async {}
+  Future<void> testSystemNotification() async {}
+  String? get notificationError => null;
   SessionStatus get status;
   ConnectionStatus get connectionStatus;
   String? get error;
@@ -209,6 +211,9 @@ abstract class ChatBackend extends ChangeNotifier {
     String? beforeRoomId,
   });
   int spaceChannelLayoutPowerLevel(String spaceId) => 100;
+  bool isRoomDirect(String roomId) => false;
+  Future<void> setRoomDirect(String roomId, bool direct) =>
+      throw UnsupportedError('Room classification unavailable');
   Future<RoomAccessSettings> getRoomAccessSettings(String roomId) =>
       throw UnsupportedError('Access settings unavailable');
   Future<void> setRoomAccess(

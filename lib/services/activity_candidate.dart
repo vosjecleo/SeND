@@ -12,6 +12,8 @@ class ActivityCandidate {
     this.playback,
     this.lastFmUrl,
     this.lastFmArtwork,
+    this.steamAppId,
+    this.priority = 0,
   });
   final String id, name, details;
   final ActivityKind? kind;
@@ -20,4 +22,6 @@ class ActivityCandidate {
   final ActivityPlayback? playback;
   final Uri? lastFmUrl;
   final Uri? lastFmArtwork;
+  final String? steamAppId;
+  final int priority;
 }

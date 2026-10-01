@@ -154,7 +154,7 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
   @override
   Future<void> initialize() async {
     if (_initialized) return;
-    await _plugin.initialize(
+    final initialized = await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         linux: LinuxInitializationSettings(defaultActionName: 'Open SeND'),
@@ -167,6 +167,11 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
       onDidReceiveNotificationResponse: (response) =>
           _activatePayload(response.payload),
     );
+    if (initialized != true) {
+      throw StateError(
+        'Windows or system notification registration failed. Check notification permissions and retry.',
+      );
+    }
     _initialized = true;
     await _plugin
         .resolvePlatformSpecificImplementation<
@@ -203,6 +208,7 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
         NotificationAlertCadence.fiveMinuteCooldown,
     int unreadCount = 1,
   }) async {
+    await initialize();
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       try {
         await _nativeAssets.invokeMethod<void>('showRichNotification', {

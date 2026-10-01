@@ -2,9 +2,23 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import '../models/chat_models.dart';
+import 'video_preparation_android.dart';
 
 bool get videoOptimizationSupported =>
-    Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+    Platform.isAndroid ||
+    Platform.isLinux ||
+    Platform.isWindows ||
+    Platform.isMacOS;
+
+Future<AttachmentDraft> probeVideo(AttachmentDraft draft) async =>
+    Platform.isAndroid && draft.mimeType.startsWith('video/')
+    ? prepareAndroidVideo(
+        draft,
+        optimize: false,
+        progress: (_) {},
+        canceled: () => false,
+      )
+    : draft;
 const _maximumBytes = 24 * 1024 * 1024;
 
 /// First-preview desktop adapter. FFmpeg/ffprobe are resolved from PATH; neither
@@ -16,6 +30,14 @@ Future<AttachmentDraft> optimizeVideo(
 }) async {
   if (!videoOptimizationSupported || !draft.mimeType.startsWith('video/')) {
     return draft;
+  }
+  if (Platform.isAndroid) {
+    return prepareAndroidVideo(
+      draft,
+      optimize: true,
+      progress: progress,
+      canceled: canceled,
+    );
   }
   final directory = await Directory.systemTemp.createTemp('deltiecord-video-');
   Process? process;

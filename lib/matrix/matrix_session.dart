@@ -107,8 +107,13 @@ extension _MatrixSession on MatrixBackend {
       try {
         await _notifications.initialize();
       } catch (_) {
+        _notificationError =
+            'System notifications could not be initialized. Open Notifications settings to test and retry.';
         // A missing desktop notification service must not prevent Matrix from
         // restoring the session. Messaging remains usable without alerts.
+      }
+      if (kIsWeb && _matrix.isLogged()) {
+        unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
       }
       _status = _matrix.isLogged()
           ? SessionStatus.signedIn
@@ -643,7 +648,9 @@ extension _MatrixSession on MatrixBackend {
       }
       _lastNotificationEventIds[room.id] = event.eventId;
       if (activeDesktopOwnsExternalNotifications ||
-          (room.id == _selectedRoomId && _conversationVisible) ||
+          (_applicationForeground &&
+              room.id == _selectedRoomId &&
+              _conversationVisible) ||
           event.senderId == _matrix.userID ||
           room.pushRuleState == PushRuleState.dontNotify ||
           (room.pushRuleState == PushRuleState.mentionsOnly &&
@@ -675,7 +682,9 @@ extension _MatrixSession on MatrixBackend {
       // while those bytes are loading; re-check immediately before posting so
       // a stale task cannot resurrect a notification that room-open cleared.
       if (activeDesktopOwnsExternalNotifications ||
-          (room.id == _selectedRoomId && _conversationVisible) ||
+          (_applicationForeground &&
+              room.id == _selectedRoomId &&
+              _conversationVisible) ||
           event.senderId == _matrix.userID) {
         InAppNotificationCenter.dismissRoom(room.id);
         unawaited(_notifications.clearRoom(room.id));
@@ -724,25 +733,32 @@ extension _MatrixSession on MatrixBackend {
           }
         }
       }
-      await _notifications.show(
-        title: '$sender in ${room.getLocalizedDisplayname()}',
-        body: notificationBody,
-        roomId: room.id,
-        eventId: event.eventId,
-        senderName: sender,
-        roomName: room.getLocalizedDisplayname(),
-        groupConversation: !room.isDirectChat,
-        senderAvatar: notificationAvatar,
-        image: notificationImage?.$1,
-        imageMimeType: notificationImage?.$2,
-        timestamp: event.originServerTs,
-        sound: !desktop && _preferences.notificationSound,
-        vibrate: _preferences.notificationVibration,
-        alertCadence: _preferences.notificationAlertCadence,
-        unreadCount: room.isDirectChat
-            ? room.notificationCount
-            : room.highlightCount,
-      );
+      try {
+        await _notifications.show(
+          title: '$sender in ${room.getLocalizedDisplayname()}',
+          body: notificationBody,
+          roomId: room.id,
+          eventId: event.eventId,
+          senderName: sender,
+          roomName: room.getLocalizedDisplayname(),
+          groupConversation: !room.isDirectChat,
+          senderAvatar: notificationAvatar,
+          image: notificationImage?.$1,
+          imageMimeType: notificationImage?.$2,
+          timestamp: event.originServerTs,
+          sound: !desktop && _preferences.notificationSound,
+          vibrate: _preferences.notificationVibration,
+          alertCadence: _preferences.notificationAlertCadence,
+          unreadCount: room.isDirectChat
+              ? room.notificationCount
+              : room.highlightCount,
+        );
+        _notificationError = null;
+      } catch (_) {
+        _notificationError =
+            'System notification delivery failed. Open Notifications settings to test and retry.';
+        _notifyBackendListeners();
+      }
     }
   }
 

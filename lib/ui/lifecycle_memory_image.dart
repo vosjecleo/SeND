@@ -8,7 +8,9 @@ import 'browser_animated_image.dart';
 bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
     state == null ||
     state == AppLifecycleState.resumed ||
-    (browser && state == AppLifecycleState.inactive);
+    // Desktop loses input focus while remaining visible (also when popups or
+    // the Windows clipboard own focus). Only hidden/paused stops playback.
+    state == AppLifecycleState.inactive;
 
 bool hasAnimatedImageHeader(Uint8List bytes) {
   bool at(int offset, String value) =>

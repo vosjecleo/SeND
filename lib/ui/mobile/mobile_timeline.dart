@@ -26,6 +26,7 @@ import '../expression_picker.dart';
 import '../voice_message_composer.dart';
 import 'mobile_attachment_picker.dart';
 import '../../services/clipboard_image.dart';
+import '../../services/browser_image_paste.dart';
 import '../advanced_chat_dialogs.dart';
 import '../member_management.dart';
 import '../advanced_chat_views.dart';
@@ -113,12 +114,27 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   List<MentionSuggestion> _mentionMatches = const [];
   int? _mentionStart;
   StreamSubscription<void>? _sharedContentSubscription;
+  void Function()? _removeBrowserPaste;
 
   ChatBackend get backend => widget.backend;
 
   @override
   void initState() {
     super.initState();
+    _removeBrowserPaste = listenBrowserImagePaste(
+      enabled: () => mounted && _focus.hasFocus,
+      contextKey: () => backend.selectedRoom?.id,
+      onImages: (images) {
+        if (mounted) setState(() => _attachments.addAll(images));
+      },
+      onError: (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error)));
+        }
+      },
+    );
     _customEmojiSpans = List.of(widget.initialCustomEmojis);
     _composer = _CustomEmojiEditingController(
       backend: backend,
@@ -565,6 +581,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
 
   @override
   void dispose() {
+    _removeBrowserPaste?.call();
     _highlightTimer?.cancel();
     _sharedContentSubscription?.cancel();
     final waiter = _highlightWaiter;

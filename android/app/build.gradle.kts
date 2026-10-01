@@ -83,6 +83,8 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.media3:media3-transformer:1.11.1")
+    implementation("androidx.media3:media3-effect:1.11.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.unifiedpush.android:connector:3.3.5") {

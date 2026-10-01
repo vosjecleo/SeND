@@ -8,6 +8,34 @@ import 'chat_notifications.dart';
 import 'platform_io.dart';
 
 const _appId = 'net.deltie.deltiecord.web';
+Future<void>? _repair;
+DateTime? _lastRepair;
+
+/// Reconcile all three registrations, not merely the saved gateway ID. Never
+/// prompt during startup/resume; a new grant still requires the user's button.
+Future<void> reconcileBrowserPush(Client client) async {
+  if (_repair != null) return _repair!;
+  if (_lastRepair != null &&
+      DateTime.now().difference(_lastRepair!) < const Duration(minutes: 5)) {
+    return;
+  }
+  final operation = () async {
+    if (await BrowserPrivateStore.read('pushkey') == null ||
+        !client.isLogged()) {
+      return;
+    }
+    final status = jsonDecode(await browserPushDiagnostics()) as Map;
+    if (status['permission'] != 'granted') return;
+    await enableBrowserPush(client);
+    _lastRepair = DateTime.now();
+  }();
+  _repair = operation;
+  try {
+    await operation;
+  } finally {
+    _repair = null;
+  }
+}
 
 Future<void> disableRegisteredBrowserPush(Client client) async {
   final key = await BrowserPrivateStore.read('pushkey');

@@ -362,6 +362,30 @@ class MatrixBackend extends ChatBackend {
            deviceAppearanceStore ?? DeviceAppearanceStore();
 
   final ChatNotificationSink _notifications;
+  String? _notificationError;
+  @override
+  String? get notificationError => _notificationError;
+  @override
+  Future<void> testSystemNotification() async {
+    try {
+      await _notifications.initialize();
+      await _notifications.show(
+        title: 'SeND notification test',
+        body: 'System notifications are working.',
+        roomId: _selectedRoomId ?? '',
+        eventId: '',
+        sound: _preferences.notificationSound,
+      );
+      _notificationError = null;
+    } catch (_) {
+      _notificationError =
+          'System notification registration or delivery failed. Check SeND in system notification settings and retry.';
+      rethrow;
+    } finally {
+      _notifyBackendListeners();
+    }
+  }
+
   final DirectLinkPreviewFetcher _directPreviewFetcher;
   final AvatarMediaPool _avatarMediaPool;
   final DeviceAppearanceStore _deviceAppearanceStore;
@@ -409,6 +433,7 @@ class MatrixBackend extends ChatBackend {
   bool _timelineHydrationRequested = false;
   bool _resumeTimelineRefreshRunning = false;
   bool _resumeTimelineRefreshRequested = false;
+  DateTime? _lastResumeTimelineRefresh;
   final Map<String, Uint8List> _avatarBytes = {};
   final Map<String, Uri?> _avatarUris = {};
   final Map<String, Uint8List> _notificationAvatarBytes = {};
@@ -940,6 +965,9 @@ class MatrixBackend extends ChatBackend {
     if (Platform.isAndroid) {
       unawaited(_restoreUnifiedPushPusher());
     }
+    if (kIsWeb && _client?.isLogged() == true) {
+      unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
+    }
     if (_applicationForeground) unawaited(_refreshTimelineAfterResume());
     _notifyBackendListeners();
   }
@@ -1148,6 +1176,41 @@ class MatrixBackend extends ChatBackend {
   @override
   Future<RoomAccessSettings> getRoomAccessSettings(String roomId) =>
       _getRoomAccessSettings(roomId);
+
+  @override
+  bool isRoomDirect(String roomId) =>
+      _matrix.getRoomById(roomId)?.isDirectChat ?? false;
+
+  @override
+  Future<void> setRoomDirect(String roomId, bool direct) async {
+    final room = _matrix.getRoomById(roomId);
+    if (room == null || room.isSpace) {
+      throw StateError('Choose a joined conversation.');
+    }
+    final members = direct ? await room.requestParticipants() : <User>[];
+    final mapping = <String, List<String>>{
+      for (final entry in _matrix.directChats.entries)
+        entry.key: entry.value.where((id) => id != roomId).toList(),
+    }..removeWhere((_, ids) => ids.isEmpty);
+    if (direct) {
+      final peers = members
+          .where(
+            (m) =>
+                m.id != _matrix.userID &&
+                (m.membership == Membership.join ||
+                    m.membership == Membership.invite),
+          )
+          .toList();
+      final ids = peers.isEmpty ? [_matrix.userID!] : peers.map((m) => m.id);
+      for (final id in ids) {
+        mapping.putIfAbsent(id, () => []).add(roomId);
+      }
+    }
+    // Account annotation only: never modify membership, access or encryption.
+    await _matrix.setAccountData(_matrix.userID!, 'm.direct', mapping);
+    _notifyBackendListeners();
+  }
+
   @override
   Future<void> setRoomAccess(
     String roomId,

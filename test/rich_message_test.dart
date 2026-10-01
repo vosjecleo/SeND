@@ -7,6 +7,50 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('pretty-printed HTML does not add a source-whitespace row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: MatrixHtmlText(
+              html: '<p><em>italic\n</em></p>\n<p>next</p>\n',
+              fallback: 'italic\nnext',
+            ),
+          ),
+        ),
+      ),
+    );
+    final text = tester.widget<SelectableText>(find.byType(SelectableText));
+    expect(text.textSpan!.toPlainText().split('\n').length, 2);
+  });
+  for (final markup in ['*italic*', '**bold**', '*italic*\nnext']) {
+    testWidgets('desktop markdown has no extra row: $markup', (tester) async {
+      final document = Document()..insert(0, markup);
+      final message = serializeRichMessage(document);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: MatrixHtmlText(
+                html: message.html!,
+                fallback: message.plainText,
+              ),
+            ),
+          ),
+        ),
+      );
+      final text = tester.widget<SelectableText>(find.byType(SelectableText));
+      expect(text.textSpan!.toPlainText().endsWith('\n'), isFalse);
+      expect(
+        tester.getSize(find.byType(SelectableText)).height,
+        lessThan(markup.contains('\n') ? 55 : 30),
+      );
+    });
+  }
   test('fresh composer drops pasted background and pending formatting', () {
     final controller = QuillController.basic();
     addTearDown(controller.dispose);

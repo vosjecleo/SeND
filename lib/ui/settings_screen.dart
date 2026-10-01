@@ -631,7 +631,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Optimize videos before sending'),
           subtitle: const Text(
-            'Desktop preview: local FFmpeg, H.264/AAC, up to 1080p / 30 fps and 24 MiB. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.',
+            'Local H.264/AAC compression: desktop up to 1080p, Android up to 1280 px, 30 fps and 24 MiB. Desktop requires FFmpeg. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.',
           ),
           value: backend.preferences.optimizeVideos,
           onChanged: (value) => backend.updatePreferences(
@@ -646,6 +646,27 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ],
     ]),
     _SettingsPage.notifications => _section('Notifications', [
+      if (backend.notificationError case final error?) Text(error),
+      if (!kIsWeb)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.notifications_outlined),
+          label: const Text('Send test system notification'),
+          onPressed: () async {
+            try {
+              await backend.testSystemNotification();
+            } catch (_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Notification test failed. Check system permissions and retry.',
+                    ),
+                  ),
+                );
+              }
+            }
+          },
+        ),
       if (kIsWeb) ...[
         const Text(
           'On iPhone/iPad, add SeND to your Home Screen from Safari, '

@@ -13,6 +13,49 @@ import 'package:deltiecord/services/activity_source_native.dart';
 import 'package:deltiecord/services/lastfm_auth.dart';
 
 void main() {
+  test('Windows installation matching is separator and case insensitive', () {
+    const catalogue = [
+      ActivityCandidate(
+        id: 'C:/Steam/steamapps/common/BeamNG.drive/',
+        name: 'BeamNG.drive',
+        kind: ActivityKind.game,
+      ),
+    ];
+    expect(
+      matchRunningActivity(
+        r'c:\steam\steamapps\common\beamng.drive\Bin64\BeamNG.drive.x64.exe',
+        catalogue,
+      )?.name,
+      'BeamNG.drive',
+    );
+    expect(
+      matchRunningActivity(r'C:\Other\BeamNG.drive.exe', catalogue),
+      isNull,
+    );
+  });
+  test(
+    'real game window outranks sibling processes; helper names excluded',
+    () {
+      final ranked = rankActivities(const [
+        ActivityCandidate(
+          id: 'helper',
+          name: 'BeamNG.drive',
+          steamAppId: '284160',
+          priority: 20,
+        ),
+        ActivityCandidate(
+          id: 'game',
+          name: 'BeamNG.drive',
+          steamAppId: '284160',
+          priority: 160,
+        ),
+      ]);
+      expect(ranked.single.id, 'game');
+      expect(isActivityHelper(r'C:\Game\crashpad_handler.exe'), isTrue);
+      expect(isActivityHelper(r'C:\Game\BeamNG.drive.x64.exe'), isFalse);
+      expect(isActivityHelper('/usr/bin/wineserver'), isTrue);
+    },
+  );
   test(
     'repeated worker scans work while this source owns a live IPC socket',
     () async {

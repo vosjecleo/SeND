@@ -13,7 +13,7 @@ void main() {
     );
     expect(
       imageLifecycleVisible(AppLifecycleState.inactive, browser: false),
-      isFalse,
+      isTrue,
     );
     for (final state in [
       AppLifecycleState.hidden,
@@ -79,6 +79,9 @@ void main() {
         ),
       ),
     );
+    expect((await observeFrames(tester)).length, greaterThan(1));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
     expect((await observeFrames(tester)).length, greaterThan(1));
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();

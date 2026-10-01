@@ -9,6 +9,7 @@ import 'activity_candidate.dart';
 import 'activity_artwork_native.dart';
 import 'activity_discovery.dart';
 import 'activity_ipc_native.dart';
+import 'activity_pipe_windows.dart';
 
 /// Local-only discovery. Never executes desktop entries or launcher commands.
 class DesktopActivitySource {
@@ -23,6 +24,8 @@ class DesktopActivitySource {
   String? _socketIdentity;
   final Set<Socket> _clients = {};
   final Map<Socket, ActivityCandidate> _rpc = {};
+  final WindowsActivityPipe _windowsPipe = WindowsActivityPipe();
+  final Map<Object, ActivityCandidate> _pipeRpc = {};
   List<ActivityCandidate> _catalogue = [];
   DateTime? _catalogueAt;
   bool _disposed = false;
@@ -35,11 +38,26 @@ class DesktopActivitySource {
     }
     if (settings.rpc && Platform.isLinux) {
       await _listenRpc();
+    } else if (settings.rpc && Platform.isWindows) {
+      try {
+        await _windowsPipe.start(
+          (connection) => _acceptConnection(
+            connection,
+            connection.input,
+            connection.add,
+            connection.destroy,
+            executable: connection.executable,
+          ),
+        );
+        warning = null;
+      } catch (error) {
+        warning = error is StateError
+            ? error.message.toString()
+            : 'Windows IPC could not start.';
+      }
     } else {
       await _closeRpc();
-      warning = settings.rpc && Platform.isWindows
-          ? 'Discord IPC capture is not available on Windows in this preview. Local program detection still works.'
-          : null;
+      warning = null;
     }
     if (_catalogueAt == null ||
         DateTime.now().difference(_catalogueAt!) > const Duration(minutes: 5)) {
@@ -57,9 +75,10 @@ class DesktopActivitySource {
     return [
       // Prefer the player's richer music record (artwork, pause and position)
       // over music-only RPC. Game RPC retains priority over background music.
-      for (final activity in _rpc.values.where(
-        (rpc) => !preferPlayerMusic(rpc, music),
-      ))
+      for (final activity in [
+        ..._rpc.values,
+        ..._pipeRpc.values,
+      ].where((rpc) => !preferPlayerMusic(rpc, music)))
         ActivityCandidate(
           id: activity.id,
           name:
@@ -73,7 +92,10 @@ class DesktopActivitySource {
               ?.iconBytes,
         ),
       ?music,
-      ...detected.where((e) => !_rpc.values.any((rpc) => rpc.id == e.id)),
+      ...detected.where(
+        (e) =>
+            ![..._rpc.values, ..._pipeRpc.values].any((rpc) => rpc.id == e.id),
+      ),
     ];
   }
 
@@ -112,6 +134,16 @@ class DesktopActivitySource {
       return;
     }
     _clients.add(socket);
+    _acceptConnection(socket, socket, socket.add, socket.destroy);
+  }
+
+  void _acceptConnection(
+    Object socket,
+    Stream<List<int>> input,
+    void Function(List<int>) write,
+    void Function() destroy, {
+    String? executable,
+  }) {
     var buffer = <int>[];
     String? clientId;
     Timer? timeout;
@@ -119,7 +151,8 @@ class DesktopActivitySource {
       timeout?.cancel();
       _clients.remove(socket);
       _rpc.remove(socket);
-      socket.destroy();
+      _pipeRpc.remove(socket);
+      destroy();
     }
 
     void send(int opcode, Object data) {
@@ -127,11 +160,11 @@ class DesktopActivitySource {
       final header = ByteData(8)
         ..setUint32(0, opcode, Endian.little)
         ..setUint32(4, payload.length, Endian.little);
-      socket.add([...header.buffer.asUint8List(), ...payload]);
+      write([...header.buffer.asUint8List(), ...payload]);
     }
 
     timeout = Timer(const Duration(seconds: 10), finish);
-    socket.listen(
+    input.listen(
       (bytes) {
         if (buffer.length + bytes.length > 128 * 1024) {
           finish();
@@ -192,17 +225,20 @@ class DesktopActivitySource {
                 final activity = args['activity'];
                 if (activity == null) {
                   _rpc.remove(socket);
+                  _pipeRpc.remove(socket);
                 } else if (activity is Map) {
                   final pid = args['pid'];
-                  String? exe;
-                  if (pid is int && pid > 0) {
+                  String? exe = executable;
+                  if (Platform.isLinux && pid is int && pid > 0) {
                     try {
                       exe = Link('/proc/$pid/exe').resolveSymbolicLinksSync();
                     } catch (_) {}
                   }
-                  _rpc[socket] = ActivityCandidate(
+                  final candidate = ActivityCandidate(
                     id: exe ?? 'rpc:$clientId',
-                    name: exe?.split('/').last ?? 'Application $clientId',
+                    name: exe == null
+                        ? 'Application $clientId'
+                        : normalizeActivityPath(exe).split('/').last,
                     kind: activity['type'] == 2
                         ? ActivityKind.music
                         : ActivityKind.game,
@@ -214,6 +250,11 @@ class DesktopActivitySource {
                       256,
                     ),
                   );
+                  if (socket is Socket) {
+                    _rpc[socket] = candidate;
+                  } else {
+                    _pipeRpc[socket] = candidate;
+                  }
                 }
                 // No join secrets, arbitrary URLs, Discord tokens or RPC controls.
                 send(1, {
@@ -244,6 +285,8 @@ class DesktopActivitySource {
   }
 
   Future<void> _closeRpc() async {
+    await _windowsPipe.close();
+    _pipeRpc.clear();
     for (final socket in _clients.toList()) {
       socket.destroy();
     }
@@ -276,18 +319,17 @@ String _boundedText(String value, int maximum) => value
 
 Uint8List? _icon(String? path) {
   if (path == null ||
-      !path.startsWith('/') ||
-      !path.toLowerCase().endsWith('.png')) {
+      !(path.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(path))) {
     return null;
   }
   try {
     final file = File(path);
     if (file.lengthSync() > 1024 * 1024) return null;
     final bytes = file.readAsBytesSync();
-    if (bytes.length < 24) return null;
-    final header = ByteData.sublistView(bytes);
-    if (header.getUint32(16) > 2048 || header.getUint32(20) > 2048) return null;
-    final decoded = img.decodePng(bytes);
+    final decoder = img.findDecoderForData(bytes);
+    final info = decoder?.startDecode(bytes);
+    if (info == null || info.width > 2048 || info.height > 2048) return null;
+    final decoded = decoder?.decodeFrame(0);
     if (decoded == null || decoded.width > 2048 || decoded.height > 2048) {
       return null;
     }
@@ -302,7 +344,6 @@ Uint8List? _icon(String? path) {
 }
 
 List<ActivityCandidate> loadLocalActivityCatalogue() {
-  if (!Platform.isLinux) return [];
   final homeDir = Platform.environment['HOME'] ?? '';
   final data = Platform.environment['XDG_DATA_HOME'] ?? '$homeDir/.local/share';
   final roots = [
@@ -312,7 +353,7 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
   ];
   final entries = <ActivityCandidate>[];
   final steamShortcuts = <String, ActivityCandidate>{};
-  for (final root in roots) {
+  for (final root in Platform.isLinux ? roots : <String>[]) {
     final directory = Directory('$root/applications');
     if (!directory.existsSync()) continue;
     for (final file
@@ -373,17 +414,24 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
   // Join categorized shortcuts to the actual installation, never to Steam's
   // launcher process. Installed software is not proof of running activity.
   for (final steam in [
-    '$homeDir/.local/share/Steam',
-    '$homeDir/.steam/steam',
+    if (Platform.isLinux) ...[
+      '$homeDir/.local/share/Steam',
+      '$homeDir/.steam/steam',
+      '$homeDir/.var/app/com.valvesoftware.Steam/.local/share/Steam',
+    ],
+    if (Platform.isWindows) ..._windowsSteamRoots(),
   ]) {
     final libraries = <String>{steam};
     try {
       final vdf = File('$steam/steamapps/libraryfolders.vdf');
       if (vdf.lengthSync() < 1024 * 1024) {
         libraries.addAll(
-          RegExp(
-            r'"path"\s+"([^"]+)"',
-          ).allMatches(vdf.readAsStringSync()).map((m) => m.group(1)!),
+          RegExp(r'"path"\s+"([^"]+)"')
+              .allMatches(vdf.readAsStringSync())
+              .map(
+                (m) =>
+                    normalizeActivityPath(m.group(1)!.replaceAll(r'\\', r'\')),
+              ),
         );
       }
     } catch (_) {}
@@ -412,10 +460,11 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
           if (name != null && install != null && install != '..') {
             entries.add(
               ActivityCandidate(
-                id: '${Directory('$library/steamapps/common/$install').resolveSymbolicLinksSync()}/',
+                id: '${normalizeActivityPath(Directory('$library/steamapps/common/$install').resolveSymbolicLinksSync())}/',
                 name: name,
-                kind: shortcut?.kind,
-                iconBytes: shortcut?.iconBytes,
+                kind: ActivityKind.game,
+                steamAppId: appId,
+                iconBytes: shortcut?.iconBytes ?? _steamIcon(steam, appId),
               ),
             );
           }
@@ -424,6 +473,64 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
     }
   }
   return entries;
+}
+
+List<String> _windowsSteamRoots() {
+  final roots = <String>{
+    '${Platform.environment['ProgramFiles(x86)'] ?? 'C:/Program Files (x86)'}/Steam',
+    '${Platform.environment['ProgramFiles'] ?? 'C:/Program Files'}/Steam',
+  };
+  try {
+    final query = Process.runSync('reg.exe', [
+      'query',
+      r'HKCU\Software\Valve\Steam',
+      '/v',
+      'SteamPath',
+    ]);
+    final path = RegExp(
+      r'SteamPath\s+REG_SZ\s+(.+)',
+    ).firstMatch('${query.stdout}')?.group(1)?.trim();
+    if (path != null) roots.add(path);
+  } catch (_) {}
+  return roots.map(normalizeActivityPath).toList();
+}
+
+Uint8List? _steamIcon(String steam, String? id) {
+  if (id == null) return null;
+  final cache = Directory('$steam/appcache/librarycache');
+  if (!cache.existsSync()) return null;
+  final paths = <String>[
+    '$steam/appcache/librarycache/$id/icon.png',
+    '$steam/appcache/librarycache/$id/${id}_icon.jpg',
+    if (Directory('${cache.path}/$id').existsSync())
+      ...Directory('${cache.path}/$id')
+          .listSync(followLinks: false)
+          .whereType<File>()
+          .map((f) => f.path)
+          .take(80),
+    ...cache
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where(
+          (f) => f.path.split(Platform.pathSeparator).last.startsWith('${id}_'),
+        )
+        .map((f) => f.path)
+        .take(30),
+  ];
+  int score(String path) {
+    final name = normalizeActivityPath(path).split('/').last;
+    if (name.contains('icon') || RegExp(r'^[a-f0-9]{40}\.').hasMatch(name)) {
+      return 0;
+    }
+    return name == 'header.jpg' ? 1 : 2;
+  }
+
+  paths.sort((a, b) => score(a).compareTo(score(b)));
+  for (final path in paths) {
+    final bytes = _icon(path);
+    if (bytes != null) return bytes;
+  }
+  return null;
 }
 
 class ActivityProcessScan {
@@ -438,18 +545,68 @@ Future<List<ActivityCandidate>> _runningApplications(
   List<ActivityCandidate> catalogue,
   Map<String, ActivityRule> rules,
 ) async {
-  if (Platform.isWindows) return _windowsApplications();
+  if (Platform.isWindows) return _windowsApplications(catalogue, rules);
   final result = <String, ActivityCandidate>{};
   for (final entry in Directory('/proc').listSync(followLinks: false)) {
     if (!RegExp(r'/\d+$').hasMatch(entry.path)) continue;
     try {
-      final executable = Link('${entry.path}/exe').resolveSymbolicLinksSync();
-      final match = matchRunningActivity(executable, catalogue);
+      var executable = Link('${entry.path}/exe').resolveSymbolicLinksSync();
+      var match = matchRunningActivity(executable, catalogue);
+      // Read only this user's process metadata, locally. Steam's identity also
+      // distinguishes GoldSrc games sharing hl.exe (e.g. Opposing Force).
+      String? steamId;
+      try {
+        final env = File('${entry.path}/environ').openSync();
+        String contents;
+        try {
+          contents = utf8.decode(env.readSync(65536), allowMalformed: true);
+        } finally {
+          env.closeSync();
+        }
+        steamId = RegExp(
+          r'(?:^|\x00)SteamAppId=(\d+)(?:\x00|$)',
+        ).firstMatch(contents)?.group(1);
+      } catch (_) {}
+      if (steamId != null && steamId != '0') {
+        final app = catalogue.where((c) => c.steamAppId == steamId).firstOrNull;
+        final command = File('${entry.path}/cmdline').openSync();
+        List<String> args;
+        try {
+          args = utf8
+              .decode(command.readSync(65536), allowMalformed: true)
+              .split('\u0000');
+        } finally {
+          command.closeSync();
+        }
+        final gameExe = args
+            .where((arg) => arg.toLowerCase().endsWith('.exe'))
+            .firstOrNull;
+        final runtimeName = executable.split('/').last.toLowerCase();
+        final wineProcess =
+            runtimeName.startsWith('wine') || runtimeName.endsWith('.exe');
+        if (app != null &&
+            wineProcess &&
+            gameExe != null &&
+            !isActivityHelper(gameExe)) {
+          // Wine maps Z: to the host root. Relative executables belong to the
+          // identified Steam installation; never classify wineserver itself.
+          final normalized = normalizeActivityPath(gameExe);
+          executable =
+              normalized.startsWith('Z:/') || normalized.startsWith('z:/')
+              ? normalized.substring(2)
+              : normalized.contains('/')
+              ? normalized
+              : '${app.id}$normalized';
+          match = app;
+        } else if (app != null && match != null) {
+          match = app;
+        }
+      }
       if (match == null && !rules.containsKey(executable)) continue;
       final base = executable.split('/').last.toLowerCase();
       // Old preview rules may have mistaken Steam for a game's shortcut.
       // A launcher alone is never proof that one of its games is running.
-      if (base == 'steam') continue;
+      if (isActivityHelper(executable)) continue;
       if ([
         'crash',
         'update',
@@ -465,13 +622,18 @@ Future<List<ActivityCandidate>> _runningApplications(
         name: match?.name ?? base,
         kind: match?.kind,
         iconBytes: match?.iconBytes,
+        steamAppId: match?.steamAppId,
+        priority: match?.steamAppId == null ? 0 : 20,
       );
     } catch (_) {}
   }
-  return result.values.toList();
+  return rankActivities(result.values);
 }
 
-Future<List<ActivityCandidate>> _windowsApplications() async {
+Future<List<ActivityCandidate>> _windowsApplications(
+  List<ActivityCandidate> catalogue,
+  Map<String, ActivityRule> rules,
+) async {
   // One bounded snapshot; no window titles, command lines or process injection.
   final process = await Process.start('powershell.exe', [
     '-NoProfile',
@@ -479,14 +641,17 @@ Future<List<ActivityCandidate>> _windowsApplications() async {
     '-Command',
     r'''
 Add-Type -AssemblyName System.Drawing
-$items = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 100 | ForEach-Object {
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class SendWindows { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }'
+[uint32]$foreground = 0
+[void][SendWindows]::GetWindowThreadProcessId([SendWindows]::GetForegroundWindow(), [ref]$foreground)
+$items = @(Get-Process | Select-Object -First 2048 | ForEach-Object {
   try {
     $p = $_.Path
     if ($p) {
-      $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+      $icon = if ($_.MainWindowHandle -ne 0) { [System.Drawing.Icon]::ExtractAssociatedIcon($p) } else { $null }
       $stream = New-Object System.IO.MemoryStream
       if ($icon) { $bitmap = $icon.ToBitmap(); $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png); $bitmap.Dispose(); $icon.Dispose() }
-      @{id=$p; name=$_.ProcessName; icon=[Convert]::ToBase64String($stream.ToArray())}
+      @{id=$p; name=$_.ProcessName; window=($_.MainWindowHandle -ne 0); foreground=($_.Id -eq $foreground); title=$_.FileVersionInfo.ProductName; icon=[Convert]::ToBase64String($stream.ToArray())}
       $stream.Dispose()
     }
   } catch {}
@@ -501,22 +666,40 @@ ConvertTo-Json -InputObject $items -Compress
     await errors;
     if (await process.exitCode != 0 || out.length > 2 * 1024 * 1024) return [];
     final rows = jsonDecode(out);
-    return rows is List
-        ? rows
-              .whereType<Map>()
-              .map(
-                (row) => ActivityCandidate(
-                  id: row['id'],
-                  name: row['name'],
-                  iconBytes:
-                      row['icon'] is String &&
-                          (row['icon'] as String).length < 128 * 1024
-                      ? base64Decode(row['icon'])
-                      : null,
-                ),
-              )
-              .toList()
-        : [];
+    if (rows is! List) return [];
+    final candidates = <ActivityCandidate>[];
+    for (final row in rows.whereType<Map>()) {
+      final path = row['id'];
+      if (path is! String || isActivityHelper(path)) continue;
+      final match = matchRunningActivity(path, catalogue);
+      if (row['window'] != true && match == null && !rules.containsKey(path)) {
+        continue;
+      }
+      candidates.add(
+        ActivityCandidate(
+          id: path,
+          name:
+              match?.name ??
+              (row['title'] is String &&
+                      (row['title'] as String).trim().isNotEmpty
+                  ? row['title']
+                  : row['name']),
+          kind: match?.kind,
+          steamAppId: match?.steamAppId,
+          priority:
+              (row['foreground'] == true ? 100 : 0) +
+              (row['window'] == true ? 40 : 0) +
+              (match != null ? 20 : 0),
+          iconBytes:
+              row['icon'] is String &&
+                  (row['icon'] as String).isNotEmpty &&
+                  (row['icon'] as String).length < 128 * 1024
+              ? base64Decode(row['icon'])
+              : match?.iconBytes,
+        ),
+      );
+    }
+    return rankActivities(candidates);
   } catch (_) {
     return [];
   } finally {

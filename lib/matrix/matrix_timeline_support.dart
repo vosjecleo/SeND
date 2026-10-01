@@ -251,6 +251,12 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _refreshTimelineAfterResume() async {
+    _notifyBackendListeners();
+    if (_lastResumeTimelineRefresh != null &&
+        DateTime.now().difference(_lastResumeTimelineRefresh!) <
+            const Duration(seconds: 2)) {
+      return;
+    }
     _resumeTimelineRefreshRequested = true;
     if (_resumeTimelineRefreshRunning || !_matrix.isLogged()) return;
     _resumeTimelineRefreshRunning = true;
@@ -259,26 +265,30 @@ extension _MatrixTimelineSupport on MatrixBackend {
         _resumeTimelineRefreshRequested = false;
         final timeline = _timeline;
         final generation = _timelineGeneration;
-        if (timeline == null || !_isCurrentTimeline(timeline, generation)) {
-          continue;
-        }
         try {
           // oneShotSync joins an outstanding long poll, even with timeout=0.
           // Invalidate that suspended request through the SDK before restarting;
           // abortSync waits for its database transaction and rejects stale data.
           // Keep the same Timeline, listeners, and scroll anchor throughout.
           final client = _matrix;
+          // Focus can change several times while opening a desktop popup.
+          // An actively processing sync must finish its transaction; don't
+          // repeatedly abort and restart it for each focus event.
           await client.abortSync();
           if (!identical(client, _client) || !client.isLogged()) return;
           final refresh = client.oneShotSync(timeout: Duration.zero);
           client.backgroundSync = true;
           await refresh;
+          _lastResumeTimelineRefresh = DateTime.now();
         } catch (_) {
           // The normal sync loop owns reconnect/backoff. A resume refresh is a
           // best-effort nudge and must never replace its connection state.
         }
-        if (_isCurrentTimeline(timeline, generation)) {
+        if (timeline != null && _isCurrentTimeline(timeline, generation)) {
           _onTimelineUpdate(generation);
+        }
+        if (timeline == null || _isCurrentTimeline(timeline, generation)) {
+          _resumeTimelineRefreshRequested = false;
         }
       }
     } finally {

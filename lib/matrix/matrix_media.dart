@@ -64,6 +64,8 @@ extension _MatrixMedia on MatrixBackend {
     try {
       if (_preferences.optimizeVideos) {
         attachment = await VideoPreparation.instance.prepare(attachment);
+      } else {
+        attachment = await VideoPreparation.probe(attachment);
       }
       await _validateUploadSize(attachment.bytes.length);
       await _prepareEncryptedSend(room);
@@ -279,9 +281,9 @@ extension _MatrixMedia on MatrixBackend {
       // Browser video elements cannot attach Authorization headers or use the
       // native loopback range proxy. Keep this fallback explicitly bounded.
       final size = event.infoMap.tryGet<int>('size');
-      if (size == null || size <= 0 || size > 25 * 1024 * 1024) {
+      if (size == null || size <= 0 || size > 64 * 1024 * 1024) {
         throw StateError(
-          'Browser playback requires a known video size up to 25 MiB.',
+          'Browser playback supports videos up to 64 MiB with known size. Download this video or send an optimized copy from the native app.',
         );
       }
       final file = await event.downloadAndDecryptAttachment(
@@ -295,12 +297,12 @@ extension _MatrixMedia on MatrixBackend {
           return downloadBrowserMedia(
             uri,
             _matrix.accessToken ?? '',
-            25 * 1024 * 1024,
+            64 * 1024 * 1024,
           );
         },
       );
       final bytes = file.bytes;
-      if (bytes.length > 25 * 1024 * 1024) {
+      if (bytes.length > 64 * 1024 * 1024) {
         throw StateError('Video exceeds the browser playback limit.');
       }
       final source = MediaPlaybackSource(

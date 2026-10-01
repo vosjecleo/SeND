@@ -1801,6 +1801,12 @@ class _RoomListTile extends StatelessWidget {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () =>
+                      showRoomAccessDialog(context, backend, room.id),
+                  child: const Text('DM classification, access and timeline'),
+                ),
+                const SizedBox(height: 12),
                 SegmentedButton<RoomPresentation>(
                   segments: const [
                     ButtonSegment(

@@ -1,8 +1,43 @@
 # Changelog
 
-Release target: **0.9.35+110**. Following the build 106 feature-scope milestone,
+Release target: **0.9.36+111**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.36 build 111 — 2026-10-01
+
+- Keep GIF decoding active in visible, unfocused desktop windows, covering the
+  shared picker, timeline and fullscreen playback path. Hidden windows still
+  pause decoding; autoplay and reduced-motion preferences remain respected.
+- Consume clipboard images before desktop rich-HTML paste can import a white
+  background into the composer. Capture browser paste image files during the
+  paste gesture for iOS, without interfering with ordinary text paste.
+- Collapse HTML source whitespace outside preformatted blocks so desktop rich
+  messages do not gain extra blank lines from formatting markup.
+- Add Windows Discord-compatible local named-pipe IPC with bounded clients and
+  packets, owner-restricted access and clean shutdown. Never steal a live pipe.
+- Match Proton processes using local Steam identity and executable arguments;
+  improve Windows Steam matching and prefer the foreground game window over
+  sibling/helper processes. Search newer per-game Steam artwork caches too.
+- Prepare Android camera videos locally as bounded H.264/AAC MP4, with a
+  1280-pixel longest side, 30 fps, rotated dimensions and a thumbnail. Preserve
+  captions/spoilers; original-quality uploads still probe camera metadata.
+  Native desktop FFmpeg preparation remains available; PWA uploads stay original.
+- Use decoded video dimensions during desktop playback. Raise bounded PWA video
+  playback from 25 to 64 MiB without removing encrypted-media integrity checks.
+- Register the Windows notification app identity consistently with installer
+  shortcuts, retry initialization, expose delivery failures and add a system
+  notification test button. A backgrounded selected room no longer suppresses alerts.
+- Reconcile existing authorized Web Push subscriptions and Matrix pushers on
+  startup/resume. iOS requires the Home Screen PWA and notification permission,
+  not ntfy; physical-device delivery still needs acceptance testing.
+- Coalesce rapid resume/focus refreshes and restart sync even without an open
+  timeline, while retaining existing timeline objects and scroll positions.
+- Add a per-account DM/general-room override in room access settings using
+  Matrix `m.direct`; it does not change membership, permissions or encryption.
+- Add spacing between the administration Rules description and channel selector.
+
+See [build 111 validation and limitations](docs/build-111-reliability.md).
 
 ## SeND 0.9.35 build 110 — 2026-09-26
 

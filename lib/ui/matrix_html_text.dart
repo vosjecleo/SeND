@@ -306,7 +306,25 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     required double customEmojiSize,
   }) {
     if (node is dom.Text) {
-      return _emojiAwareTextSpans(context, node.data, style);
+      var parent = node.parent;
+      var preformatted = false;
+      while (parent != null) {
+        if (parent.localName == 'pre') {
+          preformatted = true;
+          break;
+        }
+        parent = parent.parent;
+      }
+      // HTML source whitespace isn't a hard line break. In particular pretty
+      // printed <p>/<em> output was creating additional SelectableText rows on
+      // desktop. Only <br>, block boundaries and <pre> introduce hard breaks.
+      return _emojiAwareTextSpans(
+        context,
+        preformatted
+            ? node.data
+            : node.data.replaceAll(RegExp(r'[\t\r\n]+'), ' '),
+        style,
+      );
     }
     if (node is! dom.Element) return const [];
     final tag = node.localName;

@@ -44,6 +44,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
   bool _busy = false;
   String _access = 'invite', _history = 'shared', _default = 'invite';
   bool _directory = false;
+  late bool _direct = widget.backend.isRoomDirect(widget.roomId);
   Map<String, bool> _events = {};
   @override
   void initState() {
@@ -215,6 +216,39 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_error != null) Text(_error!),
+              if (!widget.isSpace)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Treat as direct message'),
+                  subtitle: const Text(
+                    'Off: general room. This classification follows your account across devices; other members keep their own choice.',
+                  ),
+                  value: _direct,
+                  onChanged: _busy
+                      ? null
+                      : (value) async {
+                          setState(() {
+                            _busy = true;
+                            _error = null;
+                          });
+                          try {
+                            await widget.backend.setRoomDirect(
+                              widget.roomId,
+                              value,
+                            );
+                            if (mounted) setState(() => _direct = value);
+                          } catch (_) {
+                            if (mounted) {
+                              setState(
+                                () => _error =
+                                    'Could not change room classification. Please retry.',
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _busy = false);
+                          }
+                        },
+                ),
               if (data == null)
                 TextButton(onPressed: _load, child: const Text('Load settings'))
               else ...[

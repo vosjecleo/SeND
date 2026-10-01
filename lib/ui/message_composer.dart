@@ -704,20 +704,6 @@ class _RichComposerState extends State<_RichComposer> {
                                                 }
                                               }
                                               if (event is KeyDownEvent &&
-                                                  event.logicalKey ==
-                                                      LogicalKeyboardKey.keyV &&
-                                                  (HardwareKeyboard
-                                                          .instance
-                                                          .isControlPressed ||
-                                                      HardwareKeyboard
-                                                          .instance
-                                                          .isMetaPressed)) {
-                                                unawaited(
-                                                  widget.onPasteImage(),
-                                                );
-                                                return KeyEventResult.ignored;
-                                              }
-                                              if (event is KeyDownEvent &&
                                                   widget
                                                       .mentionSuggestions
                                                       .isNotEmpty) {

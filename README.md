@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.35 build 110 — persistent history, pack tools and interaction polish**
+> **Latest release: SeND 0.9.36 build 111 — desktop, media and notification reliability**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -19,6 +19,9 @@
 > adds 150-item pack merge/split tools, hold-to-favourite, mobile double-tap zoom,
 > compact timeline activity status, fixed desktop profile frames and mobile/PWA
 > update prompts. See [build 110 details](docs/build-110-polish.md).
+> Build 111 adds Windows IPC, improves Steam/Proton detection, camera-video
+> preparation, GIF lifecycle handling, clipboard image paste and notification
+> recovery. See [build 111 validation notes](docs/build-111-reliability.md).
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

@@ -3,6 +3,8 @@ import '../models/chat_models.dart';
 import 'video_optimizer.dart';
 
 class VideoPreparation extends ChangeNotifier {
+  static Future<AttachmentDraft> probe(AttachmentDraft draft) =>
+      probeVideo(draft);
   static final instance = VideoPreparation();
   bool active = false;
   bool _canceled = false;

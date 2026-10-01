@@ -1118,6 +1118,9 @@ class _InlineVideo extends StatefulWidget {
 }
 
 class _InlineVideoState extends State<_InlineVideo> {
+  StreamSubscription<int?>? _widthSubscription;
+  StreamSubscription<int?>? _heightSubscription;
+  int? _naturalWidth, _naturalHeight;
   Player? _player;
   VideoController? _controller;
   bool _opening = false;
@@ -1144,6 +1147,16 @@ class _InlineVideoState extends State<_InlineVideo> {
         );
     _player = player;
     _controller ??= VideoController(player);
+    _widthSubscription ??= player.stream.width.listen((value) {
+      if (mounted && value != null && value > 0) {
+        setState(() => _naturalWidth = value);
+      }
+    });
+    _heightSubscription ??= player.stream.height.listen((value) {
+      if (mounted && value != null && value > 0) {
+        setState(() => _naturalHeight = value);
+      }
+    });
     setState(() {
       _opening = true;
       _error = null;
@@ -1174,6 +1187,8 @@ class _InlineVideoState extends State<_InlineVideo> {
 
   @override
   void dispose() {
+    _widthSubscription?.cancel();
+    _heightSubscription?.cancel();
     if (_sourceRetained) {
       unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
     }
@@ -1186,8 +1201,10 @@ class _InlineVideoState extends State<_InlineVideo> {
     final screen = MediaQuery.sizeOf(context);
     final maxWidth = screen.width * 0.5;
     final maxHeight = screen.height * 0.5;
-    final sourceWidth = widget.attachment.width?.toDouble() ?? 16;
-    final sourceHeight = widget.attachment.height?.toDouble() ?? 9;
+    final sourceWidth =
+        (_naturalWidth ?? widget.attachment.width)?.toDouble() ?? 16;
+    final sourceHeight =
+        (_naturalHeight ?? widget.attachment.height)?.toDouble() ?? 9;
     final aspectRatio = sourceWidth > 0 && sourceHeight > 0
         ? sourceWidth / sourceHeight
         : 16 / 9;
