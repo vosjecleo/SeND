@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
@@ -7,6 +8,8 @@ import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../../services/avatar_color.dart';
 import 'mobile_widgets.dart';
+import '../member_management.dart';
+import '../voice_control_island.dart';
 
 Color _voiceAvatarBorder(BuildContext context) {
   final background = Theme.of(context).scaffoldBackgroundColor;
@@ -74,31 +77,13 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
           ),
         ),
         actions: [
-          Tooltip(
-            message: switch (backend.voiceConnectionStatus) {
-              VoiceConnectionStatus.connected => 'Network quality: connected',
-              VoiceConnectionStatus.reconnecting =>
-                'Network quality: reconnecting',
-              VoiceConnectionStatus.error => 'Network quality: poor',
-              _ => 'Call is not connected',
-            },
-            child: Icon(
-              backend.voiceConnectionStatus == VoiceConnectionStatus.connected
-                  ? Icons.signal_cellular_alt
-                  : backend.voiceConnectionStatus ==
-                        VoiceConnectionStatus.reconnecting
-                  ? Icons.signal_cellular_alt_2_bar
-                  : Icons.signal_cellular_alt_1_bar,
-              color:
-                  backend.voiceConnectionStatus == VoiceConnectionStatus.error
-                  ? Theme.of(context).colorScheme.error
-                  : null,
-            ),
-          ),
+          RtcConnectivityIcon(backend: backend),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz),
             onSelected: (action) {
               switch (action) {
+                case 'invite':
+                  showInviteMember(context, backend, roomId: room.id);
                 case 'mute':
                   backend.setVoiceMuted(!backend.voiceMuted);
                 case 'deafen':
@@ -112,6 +97,10 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'invite',
+                child: Text('Invite to channel'),
+              ),
               PopupMenuItem(
                 value: 'mute',
                 child: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
@@ -508,6 +497,7 @@ class _RtcVideoState extends State<_RtcVideo> {
   Future<void> _initialize() async {
     await _renderer.initialize();
     _renderer.srcObject = widget.stream.stream;
+    if (kIsWeb) _renderer.muted = true; // Controller owns browser audio.
     if (mounted) setState(() {});
   }
 
@@ -516,6 +506,7 @@ class _RtcVideoState extends State<_RtcVideo> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stream.id != widget.stream.id) {
       _renderer.srcObject = widget.stream.stream;
+      if (kIsWeb) _renderer.muted = true;
     }
   }
 
@@ -556,18 +547,26 @@ class MobileCallIsland extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.headset, size: 19),
+            RtcConnectivityIcon(backend: backend),
             const SizedBox(width: 8),
             Text(
               backend.voiceConnectionStatus ==
                       VoiceConnectionStatus.reconnecting
                   ? 'Reconnecting…'
-                  : 'Voice connected',
+                  : 'Voice chat',
             ),
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
               icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
+            ),
+            IconButton(
+              tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => backend.setVoiceDeafened(!backend.voiceDeafened),
+              icon: Icon(
+                backend.voiceDeafened ? Icons.headset_off : Icons.headset,
+              ),
             ),
             IconButton(
               visualDensity: VisualDensity.compact,

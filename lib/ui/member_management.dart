@@ -253,7 +253,12 @@ Future<void> showBannedMembers(
   }
 }
 
-Future<void> showInviteMember(BuildContext context, ChatBackend backend) async {
+Future<void> showInviteMember(
+  BuildContext context,
+  ChatBackend backend, {
+  String? roomId,
+}) async {
+  final targetRoomId = roomId ?? backend.selectedRoom?.id;
   final controller = TextEditingController();
   final userId = await showDialog<String>(
     context: context,
@@ -277,7 +282,21 @@ Future<void> showInviteMember(BuildContext context, ChatBackend backend) async {
     ),
   );
   controller.dispose();
-  if (userId?.startsWith('@') == true) await backend.inviteMember(userId!);
+  if (userId?.startsWith('@') == true) {
+    try {
+      await backend.inviteMember(userId!, roomId: targetRoomId);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not invite this user. Check their ID and your room invitation permissions.',
+            ),
+          ),
+        );
+      }
+    }
+  }
 }
 
 Future<void> showRoomAliasEditor(

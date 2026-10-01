@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
 import 'package:matrix/matrix.dart';
 import 'package:webrtc_interface/webrtc_interface.dart';
@@ -10,6 +11,7 @@ class DeltiecordWebRtcDelegate implements WebRTCDelegate {
   DeltiecordWebRtcDelegate({
     required this.isCallActive,
     required this.shareDesktopAudio,
+    this.onPeerConnection,
   }) : _mediaDevices = _DeltiecordMediaDevices(
          flutter_webrtc.navigator.mediaDevices,
          shareDesktopAudio,
@@ -17,6 +19,7 @@ class DeltiecordWebRtcDelegate implements WebRTCDelegate {
 
   final bool Function() isCallActive;
   final bool Function() shareDesktopAudio;
+  final void Function(RTCPeerConnection)? onPeerConnection;
   final MediaDevices _mediaDevices;
 
   @override
@@ -26,10 +29,17 @@ class DeltiecordWebRtcDelegate implements WebRTCDelegate {
   Future<RTCPeerConnection> createPeerConnection(
     Map<String, dynamic> configuration, [
     Map<String, dynamic> constraints = const {},
-  ]) => flutter_webrtc.createPeerConnection(configuration, constraints);
+  ]) async {
+    final peer = await flutter_webrtc.createPeerConnection(
+      configuration,
+      constraints,
+    );
+    onPeerConnection?.call(peer);
+    return peer;
+  }
 
   @override
-  bool get isWeb => false;
+  bool get isWeb => kIsWeb;
 
   @override
   bool get canHandleNewCall => !isCallActive();

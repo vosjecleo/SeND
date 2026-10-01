@@ -1405,19 +1405,14 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           backend.preferences.copyWith(sharePresence: value),
         ),
       ),
-      if (defaultTargetPlatform != TargetPlatform.android) ...[
-        Text('Desktop idle after ${preferences.desktopIdleMinutes} minutes'),
-        Slider(
-          value: preferences.desktopIdleMinutes.toDouble(),
-          min: 1,
-          max: 60,
-          divisions: 59,
-          label: '${preferences.desktopIdleMinutes} min',
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(desktopIdleMinutes: value.round()),
+      if (defaultTargetPlatform != TargetPlatform.android)
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text('Desktop away status'),
+          subtitle: Text(
+            'Away after 10 minutes without keyboard or mouse activity anywhere on your PC. Browsers and unsupported desktop sessions use activity in SeND instead.',
           ),
         ),
-      ],
       SwitchListTile(
         key: const ValueKey('improve-twitter-links-toggle'),
         contentPadding: EdgeInsets.zero,

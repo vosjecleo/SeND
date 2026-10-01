@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.36 build 112 — AppImage and attachment hotfix**
+> **Latest release: SeND 0.9.36 build 113 — Voice connectivity and desktop presence**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -24,6 +24,9 @@
 > recovery. See [build 111 validation notes](docs/build-111-reliability.md).
 > Build 112 bundles the AppImage media runtime, fixes attachment reply captions,
 > and hardens automated release/deployment checks.
+> Build 113 refreshes expiring TURN credentials, fixes early RTC invite handling,
+> adds floating voice controls with real connection/ping diagnostics and channel
+> invitations, and uses system-wide desktop activity for the ten-minute away timer.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

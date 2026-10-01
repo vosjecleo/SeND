@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.36+113" date="2026-10-02" type="development">
+      <description><p>Voice connectivity fixes, live RTC diagnostics, channel invitations and system-wide desktop idle detection.</p></description>
+    </release>
     <release version="0.9.29" date="2026-09-16" type="development">
       <description>
         <p>Improves profile freshness, media geometry and playback, Android sharing, appearance choices, encryption guidance, accessibility, and Windows installation.</p>

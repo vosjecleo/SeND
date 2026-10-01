@@ -1305,8 +1305,12 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     }
   }
 
-  Future<void> _inviteMember(String userId, {String? reason}) async {
-    final room = _matrix.getRoomById(_selectedRoomId ?? '');
+  Future<void> _inviteMember(
+    String userId, {
+    String? reason,
+    String? roomId,
+  }) async {
+    final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('No room is selected.');
     await room.invite(userId, reason: reason);
   }

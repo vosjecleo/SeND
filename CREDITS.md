@@ -51,6 +51,9 @@ dependency under its own license.
 - [flutter-webrtc](https://github.com/flutter-webrtc/flutter-webrtc) provides
   native WebRTC bindings used with matrix-dart-sdk's MatrixRTC implementation.
   Licensed under MIT.
+- Wayland's `ext-idle-notify-v1` protocol (Martin Gräßlin and Simon Ser)
+  supplies session-wide desktop idle notifications. Its MIT-style copyright
+  and permission notice are retained in `linux/runner/ext-idle-notify-v1.xml`.
 - [media_kit](https://github.com/media-kit/media-kit) provides inline and
   full-window audio/video playback. Licensed under MIT.
 - [youtube_explode_dart](https://github.com/Hexer10/youtube_explode_dart)

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Add a verified Flatpak to the existing build, without touching other packages.
 set -euo pipefail
-release_id='0.9.36+112'
-tag='v0.9.36-b112'
+release_id=$(sed -n 's/^version: //p' pubspec.yaml)
+[[ "$release_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
+tag="v${release_id/+/-b}"
 asset="SeND-$release_id-linux-x86_64.flatpak"
 sources="SeND-$release_id-flatpak-sources.flatpak"
 work=$(mktemp -d)
@@ -15,16 +16,16 @@ test "$(wc -l < "$work/FLATPAK-SHA256SUMS")" = 2
 expected=$(printf '%s\n' "$asset" "$sources" | sort)
 test "$(awk '{print $2}' "$work/FLATPAK-SHA256SUMS" | sort)" = "$expected"
 (cd "$work" && sha256sum -c FLATPAK-SHA256SUMS)
-stage="/srv/storage/www/deltie/cord/.flatpak-112-$(date +%s)"
+stage="/srv/storage/www/deltie/cord/.flatpak-${release_id##*+}-$(date +%s)"
 ssh deltie "mkdir -m 0755 '$stage'"
 scp -q "$work/$asset" "$work/$sources" "$work/FLATPAK-SHA256SUMS" "deltie:$stage/"
-ssh deltie bash -s -- "$stage" "$asset" "$sources" <<'REMOTE'
+ssh deltie bash -s -- "$stage" "$asset" "$sources" "$release_id" <<'REMOTE'
 set -euo pipefail
-stage="$1"; asset="$2"; sources="$3"
+stage="$1"; asset="$2"; sources="$3"; release_id="$4"
 root='/srv/storage/www/deltie/cord'
-test "$(jq -r '.version + "+" + (.build|tostring)' "$root/releases.json")" = '0.9.36+112'
+test "$(jq -r '.version + "+" + (.build|tostring)' "$root/releases.json")" = "$release_id"
 (cd "$stage" && sha256sum -c FLATPAK-SHA256SUMS)
-backup="/srv/storage/releases-archive/deltiecord/0.9.36-b112-flatpak-before-$(date +%s)"
+backup="/srv/storage/releases-archive/deltiecord/${release_id/+/-b}-flatpak-before-$(date +%s)"
 mkdir -p "$backup"
 cp "$root/releases.json" "$backup/"
 for name in "$asset" "$sources" FLATPAK-SHA256SUMS; do

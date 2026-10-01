@@ -79,7 +79,8 @@ distribution produces packages that may not start on Debian.
 
 The Debian 12 build environment needs Flutter plus `clang`, `cmake`, `make`, `ninja`,
 `pkg-config`, `fakeroot`, `patchelf`, and the development packages for GTK 3,
-libsecret, PulseAudio, ALSA, libv4l, libmpv, and PipeWire. `appstreamcli validate
+libsecret, PulseAudio, ALSA, libv4l, libmpv, PipeWire, Wayland (`libwayland-dev`,
+including `wayland-scanner`) and XScreenSaver (`libxss-dev`). `appstreamcli validate
 packaging/linux/net.deltie.deltiecord.metainfo.xml` validates the desktop
 metadata before packaging.
 

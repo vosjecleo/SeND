@@ -16,6 +16,7 @@ finish-args:
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.mpris.MediaPlayer2.*
   - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.gnome.Mutter.IdleMonitor
   - --env=GTK_USE_PORTAL=1
 cleanup:
   - /include

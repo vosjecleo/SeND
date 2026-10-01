@@ -3,18 +3,25 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: [Publish release]
+    types: [completed]
 permissions:
   contents: read
 concurrency:
-  group: flatpak-112
+  group: flatpak-release
   cancel-in-progress: false
 jobs:
   flatpak:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[flatpak-only]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[flatpak-only]') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Select the published build and verify its Debian package checksum
+        run: python3 packaging/prepare-flatpak-release.py
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: .flatpak-builder
@@ -56,12 +63,12 @@ jobs:
       - name: Bundle application and corresponding sources
         run: |
           mkdir -p dist
-          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo dist/SeND-0.9.36+112-linux-x86_64.flatpak net.deltie.deltiecord
-          flatpak build-bundle --runtime flatpak-repo dist/SeND-0.9.36+112-flatpak-sources.flatpak net.deltie.deltiecord.Sources
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo flatpak-repo "dist/SeND-${SEND_RELEASE}-linux-x86_64.flatpak" net.deltie.deltiecord
+          flatpak build-bundle --runtime flatpak-repo "dist/SeND-${SEND_RELEASE}-flatpak-sources.flatpak" net.deltie.deltiecord.Sources
           (cd dist && sha256sum *.flatpak > FLATPAK-SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: flatpak-112
+          name: flatpak-release
           path: dist/*
           if-no-files-found: error
   publish:
@@ -70,14 +77,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: flatpak-112
+          name: flatpak-release
           path: dist
       - name: Add Flatpak without replacing existing packages or checksum lists
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release=$(sed -n 's/^version: //p' pubspec.yaml)
+          tag="v${release/+/-b}"
           cd dist
           sha256sum -c FLATPAK-SHA256SUMS
-          gh release upload v0.9.36-b112 --repo "$GITHUB_REPOSITORY" ./*.flatpak FLATPAK-SHA256SUMS --clobber
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" ./*.flatpak FLATPAK-SHA256SUMS --clobber

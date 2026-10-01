@@ -6,8 +6,10 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
 import 'package:matrix/matrix.dart';
 
 import '../models/chat_models.dart';
+import '../models/rtc_connectivity.dart';
 import '../services/app_sounds.dart';
 import 'deltiecord_webrtc_delegate.dart';
+import 'refreshing_voip.dart';
 
 /// Platform boundary for WebRTC's process-wide audio output selection.
 abstract interface class RtcAudioOutputSelector {
@@ -36,7 +38,7 @@ class MatrixVoiceController extends ChangeNotifier {
   final Client _client;
   final String Function(Object error) friendlyError;
   final RtcAudioOutputSelector _audioOutputSelector;
-  VoIP? _voip;
+  RefreshingVoIP? _voip;
   GroupCallSession? _activeCall;
   StreamSubscription<MatrixRTCCallEvent>? _callSubscription;
   VoiceConnectionStatus _status = VoiceConnectionStatus.disconnected;
@@ -66,6 +68,19 @@ class MatrixVoiceController extends ChangeNotifier {
   double _outputVolume = 1;
   bool _callSound = true;
   bool _shareDesktopAudio = false;
+  final Set<flutter_webrtc.RTCPeerConnection> _peers = {};
+  final Map<String, flutter_webrtc.RTCVideoRenderer> _webAudio = {};
+  bool _updatingWebAudio = false;
+  bool _webAudioDirty = false;
+  Timer? _connectivityTimer;
+  bool _samplingConnectivity = false;
+  RtcConnectivity _connectivity = const RtcConnectivity();
+  RtcConnectivity get connectivity => _status == VoiceConnectionStatus.error
+      ? RtcConnectivity(
+          state: RtcConnectivityState.unavailable,
+          detail: _error ?? 'Unable to connect',
+        )
+      : _connectivity;
 
   VoiceConnectionStatus get status => _status;
   String? get activeRoomId => _activeCall?.room.id;
@@ -168,7 +183,7 @@ class MatrixVoiceController extends ChangeNotifier {
 
   void initialize() {
     if (!_client.isLogged() || _voip != null || _disposed) return;
-    _voip = VoIP(
+    _voip = RefreshingVoIP(
       _client,
       DeltiecordWebRtcDelegate(
         isCallActive: () =>
@@ -176,6 +191,9 @@ class MatrixVoiceController extends ChangeNotifier {
             _status == VoiceConnectionStatus.reconnecting ||
             _status == VoiceConnectionStatus.connected,
         shareDesktopAudio: () => _shareDesktopAudio,
+        onPeerConnection: (peer) {
+          if (!_disposed && _activeCall != null) _peers.add(peer);
+        },
       ),
     );
     unawaited(refreshAudioInputs());
@@ -250,6 +268,7 @@ class MatrixVoiceController extends ChangeNotifier {
     try {
       await _audioOutputSelector.select(deviceId ?? 'default');
       _selectedAudioOutputId = deviceId;
+      if (kIsWeb) await _syncWebAudio();
       _error = null;
     } catch (exception) {
       _error = friendlyError(exception);
@@ -305,6 +324,18 @@ class MatrixVoiceController extends ChangeNotifier {
       );
       if (_disposed) return;
       _activeCall = call;
+      voip.beginJoining(call);
+      // Reserve this group before publishing membership. The SDK normally
+      // does so only AFTER entering, rejecting early peer invites as "busy".
+      voip.currentGroupCID = voip.groupCalls.keys.firstWhere(
+        (id) => identical(voip.groupCalls[id], call),
+      );
+      _connectivity = const RtcConnectivity();
+      _connectivityTimer?.cancel();
+      _connectivityTimer = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => unawaited(_sampleConnectivity()),
+      );
       await _callSubscription?.cancel();
       _callSubscription = call.matrixRTCEventStream.stream.listen(
         _handleCallEvent,
@@ -358,6 +389,8 @@ class MatrixVoiceController extends ChangeNotifier {
           voip: voip,
         ),
       );
+      voip.finishJoining();
+      if (_disposed || !identical(call, _activeCall)) return;
       _status = VoiceConnectionStatus.connected;
       if (_muted) {
         await call.backend.setDeviceMuted(
@@ -383,6 +416,11 @@ class MatrixVoiceController extends ChangeNotifier {
       _status = VoiceConnectionStatus.error;
       _error = friendlyError(exception);
       _activeCall = null;
+      voip.currentGroupCID = null;
+      voip.finishJoining();
+      _connectivityTimer?.cancel();
+      _peers.clear();
+      if (kIsWeb) await _syncWebAudio();
     }
     if (!_disposed) notifyListeners();
   }
@@ -393,6 +431,82 @@ class MatrixVoiceController extends ChangeNotifier {
       const Duration(milliseconds: 180),
       (_) => unawaited(_sampleInputLevel()),
     );
+  }
+
+  Future<void> _sampleConnectivity() async {
+    final call = _activeCall;
+    if (_disposed || call == null || _samplingConnectivity) return;
+    _samplingConnectivity = true;
+    var connected = 0;
+    var failed = 0;
+    var total = 0;
+    int? ping;
+    try {
+      for (final peer in _peers.toList()) {
+        try {
+          final state = await peer.getConnectionState().timeout(
+            const Duration(seconds: 2),
+          );
+          if (state ==
+              flutter_webrtc
+                  .RTCPeerConnectionState
+                  .RTCPeerConnectionStateClosed) {
+            _peers.remove(peer);
+            continue;
+          }
+          total++;
+          if (state ==
+              flutter_webrtc
+                  .RTCPeerConnectionState
+                  .RTCPeerConnectionStateFailed) {
+            failed++;
+          }
+          if (state !=
+              flutter_webrtc
+                  .RTCPeerConnectionState
+                  .RTCPeerConnectionStateConnected) {
+            continue;
+          }
+          connected++;
+          final stats = await peer.getStats().timeout(
+            const Duration(seconds: 2),
+          );
+          final measured = rtcPingMilliseconds(
+            stats
+                .where((report) => report.type == 'candidate-pair')
+                .map((report) => Map<String, dynamic>.from(report.values)),
+          );
+          if (measured != null) ping = max(ping ?? 0, measured);
+        } catch (_) {
+          // A peer may close between polling and reading statistics.
+        }
+      }
+      if (_disposed || !identical(call, _activeCall)) return;
+      total = max(
+        total,
+        call.participants.where((participant) => !participant.isLocal).length,
+      );
+      _connectivity = RtcConnectivity(
+        state: connected > 0 && connected == total
+            ? RtcConnectivityState.connected
+            : failed > 0 && connected == 0
+            ? RtcConnectivityState.unavailable
+            : RtcConnectivityState.waiting,
+        connectedPeers: connected,
+        totalPeers: total,
+        pingMilliseconds: ping,
+        detail: connected > 0 && connected == total
+            ? 'RTC connected ($connected peer${connected == 1 ? '' : 's'})'
+            : failed > 0 && connected == 0
+            ? 'RTC connection failed. Check network/TURN, then rejoin.'
+            : total == 0
+            ? 'Room joined; waiting for another participant / RTC'
+            : 'Room joined; RTC connected to $connected of $total peers',
+      );
+      notifyListeners();
+    } finally {
+      _samplingConnectivity = false;
+    }
   }
 
   Future<void> _sampleInputLevel() async {
@@ -407,9 +521,7 @@ class MatrixVoiceController extends ChangeNotifier {
     _samplingInput = true;
     var sampled = 0.0;
     try {
-      for (final wrapped in call.backend.userMediaStreams) {
-        final peerConnection = wrapped.pc;
-        if (peerConnection == null) continue;
+      for (final peerConnection in _peers.toList()) {
         final reports = await peerConnection.getStats();
         for (final report in reports) {
           if (report.type != 'media-source' ||
@@ -496,6 +608,10 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> _applyRemoteAudioSettings({String? userId}) async {
+    if (kIsWeb) {
+      await _syncWebAudio();
+      return;
+    }
     final call = _activeCall;
     if (call == null) return;
     for (final wrapped in call.backend.userMediaStreams) {
@@ -515,6 +631,68 @@ class MatrixVoiceController extends ChangeNotifier {
           // Some Linux audio backends do not expose per-track volume.
         }
       }
+    }
+  }
+
+  Future<void> _syncWebAudio() async {
+    _webAudioDirty = true;
+    if (_updatingWebAudio) return;
+    _updatingWebAudio = true;
+    try {
+      while (_webAudioDirty) {
+        _webAudioDirty = false;
+        final call = _activeCall;
+        final streams = call == null
+            ? <WrappedMediaStream>[]
+            : [
+                    ...call.backend.userMediaStreams,
+                    ...call.backend.screenShareStreams,
+                  ]
+                  .where(
+                    (wrapped) =>
+                        !wrapped.isLocal() &&
+                        (wrapped.stream?.getAudioTracks().isNotEmpty ?? false),
+                  )
+                  .toList();
+        final ids = streams.map((wrapped) => wrapped.id).toSet();
+        for (final id
+            in _webAudio.keys.where((id) => !ids.contains(id)).toList()) {
+          final renderer = _webAudio.remove(id)!;
+          renderer.srcObject = null;
+          await renderer.dispose();
+        }
+        for (final wrapped in streams) {
+          var renderer = _webAudio[wrapped.id];
+          if (renderer == null) {
+            renderer = flutter_webrtc.RTCVideoRenderer();
+            await renderer.initialize();
+            if (_disposed || !identical(call, _activeCall)) {
+              await renderer.dispose();
+              break;
+            }
+            _webAudio[wrapped.id] = renderer;
+          }
+          // Browsers need an audio element even for audio-only streams.
+          // Its lifetime belongs to the call, not to a visible video tile.
+          if (renderer.srcObject != wrapped.stream) {
+            renderer.srcObject = wrapped.stream;
+          }
+          final userId = wrapped.participant.userId;
+          final muted = _deafened || _locallyMutedParticipants.contains(userId);
+          renderer.muted = muted;
+          await renderer.setVolume(
+            muted ? 0 : participantVolume(userId) * _outputVolume,
+          );
+          if (_selectedAudioOutputId case final output?) {
+            await renderer.audioOutput(output);
+          }
+        }
+      }
+    } catch (_) {
+      // Output selection/autoplay support varies; keep RTC transport health
+      // separate from browser playback policy.
+    } finally {
+      _updatingWebAudio = false;
     }
   }
 
@@ -618,8 +796,18 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> leave() async {
+    _voip?.currentGroupCID = null;
+    _voip?.finishJoining();
+    _connectivityTimer?.cancel();
+    _peers.clear();
+    _connectivity = const RtcConnectivity();
     final call = _activeCall;
-    if (call == null) return;
+    if (call == null) {
+      _status = VoiceConnectionStatus.disconnected;
+      _error = null;
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _status = _rejoining
         ? VoiceConnectionStatus.reconnecting
         : VoiceConnectionStatus.disconnecting;
@@ -635,6 +823,7 @@ class MatrixVoiceController extends ChangeNotifier {
       _callSubscription = null;
       _activeCall = null;
       _activeSpeakerUserId = null;
+      if (kIsWeb) await _syncWebAudio();
       _screenSharing = false;
       _status = _rejoining
           ? VoiceConnectionStatus.reconnecting
@@ -648,6 +837,7 @@ class MatrixVoiceController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _inputMeterTimer?.cancel();
+    _connectivityTimer?.cancel();
     unawaited(leave());
     super.dispose();
   }

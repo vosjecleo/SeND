@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'services/desktop_idle_service.dart';
 import 'ui/video_preparation_overlay.dart';
 import 'services/app_sounds.dart';
 import 'services/application_visibility.dart';
@@ -505,13 +506,18 @@ class _DesktopActivityReporter extends StatefulWidget {
 class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
     with WidgetsBindingObserver {
   Timer? _idleTimer;
-  bool _foreground = true;
+  final Stopwatch _sinceInput = Stopwatch()..start();
+  bool _samplingIdle = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_globalKeyActivity);
+    _idleTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _sampleIdle(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _activity();
     });
@@ -523,24 +529,29 @@ class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
   }
 
   void _activity() {
-    if (!_foreground) return;
+    _sinceInput.reset();
     widget.backend.setDesktopIdle(false);
-    _idleTimer?.cancel();
-    _idleTimer = Timer(
-      Duration(minutes: widget.backend.preferences.desktopIdleMinutes),
-      () => widget.backend.setDesktopIdle(true),
-    );
+  }
+
+  Future<void> _sampleIdle() async {
+    if (_samplingIdle) return;
+    _samplingIdle = true;
+    try {
+      final global = await DesktopIdleService.elapsed();
+      if (mounted) {
+        widget.backend.setDesktopIdle(
+          (global ?? _sinceInput.elapsed) >= DesktopIdleService.timeout,
+        );
+      }
+    } finally {
+      _samplingIdle = false;
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
-    if (_foreground) {
-      _activity();
-    } else {
-      _idleTimer?.cancel();
-      widget.backend.setDesktopIdle(true);
-    }
+    // Window focus is not system input: switching to a game is not being AFK.
+    if (state == AppLifecycleState.resumed) unawaited(_sampleIdle());
   }
 
   @override

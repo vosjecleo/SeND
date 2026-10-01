@@ -1184,7 +1184,15 @@ class _RoomPanelState extends State<_RoomPanel> {
                             ],
                           ),
                   ),
-                  SizedBox(height: _bottomPanelHeightFor(context)),
+                  SizedBox(
+                    height:
+                        _bottomPanelHeightFor(context) +
+                        (backend.activeVoiceRoomId != null ||
+                                backend.voiceConnectionStatus ==
+                                    VoiceConnectionStatus.error
+                            ? 64
+                            : 0),
+                  ),
                 ],
               ),
             ],

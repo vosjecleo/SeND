@@ -36,6 +36,17 @@ bool FlutterWindow::OnCreate() {
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
+        if (call.method_name() == "idleMilliseconds") {
+          LASTINPUTINFO input{sizeof(LASTINPUTINFO), 0};
+          if (::GetLastInputInfo(&input)) {
+            // Unsigned subtraction also handles the 49-day DWORD rollover.
+            const DWORD elapsed = ::GetTickCount() - input.dwTime;
+            result->Success(flutter::EncodableValue(static_cast<int64_t>(elapsed)));
+          } else {
+            result->Success();
+          }
+          return;
+        }
         if (call.method_name() == "present") {
           HWND handle = GetHandle();
           if (::IsIconic(handle)) ::ShowWindow(handle, SW_RESTORE);

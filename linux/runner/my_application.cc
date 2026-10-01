@@ -1,4 +1,5 @@
 #include "my_application.h"
+#include "desktop_idle.h"
 
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
@@ -91,6 +92,13 @@ static gboolean window_state_cb(GtkWidget*, GdkEventWindowState* event,
 static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
                              gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
+  if (strcmp(fl_method_call_get_name(call), "idleMilliseconds") == 0) {
+    const gint64 idle = desktop_idle_milliseconds();
+    g_autoptr(FlValue) value = idle >= 0 ? fl_value_new_int(idle) : fl_value_new_null();
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
   if (strcmp(fl_method_call_get_name(call), "present") == 0) {
     if (self->window != nullptr) {
       gtk_widget_show(GTK_WIDGET(self->window));

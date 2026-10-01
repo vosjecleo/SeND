@@ -49,6 +49,7 @@ import 'message_metadata.dart';
 import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
+import 'voice_control_island.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
 import '../services/spoiler_reveals.dart';
@@ -1037,6 +1038,15 @@ class _ChatShellState extends State<ChatShell> {
                           width: navigationWidth,
                           child: _CurrentUserPanel(backend: widget.backend),
                         ),
+                        if (widget.backend.activeVoiceRoomId != null ||
+                            widget.backend.voiceConnectionStatus ==
+                                VoiceConnectionStatus.error)
+                          Positioned(
+                            left: 12,
+                            bottom: _bottomPanelHeightFor(context) + 4,
+                            width: navigationWidth - 24,
+                            child: VoiceControlIsland(backend: widget.backend),
+                          ),
                       ],
                     );
                   },

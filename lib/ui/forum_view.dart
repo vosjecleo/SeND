@@ -114,6 +114,15 @@ class _ForumViewState extends State<ForumView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
+                    tooltip: 'Invite to channel',
+                    onPressed: () => showInviteMember(
+                      context,
+                      widget.backend,
+                      roomId: widget.room.id,
+                    ),
+                    icon: const Icon(Icons.person_add_alt_1),
+                  ),
+                  IconButton(
                     tooltip: 'Refresh posts',
                     onPressed: _indexLoading
                         ? null

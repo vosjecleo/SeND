@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,8 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/avatar_color.dart';
 import 'deltiecord_theme.dart';
+import 'member_management.dart';
+import 'voice_control_island.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({required this.backend, required this.room, super.key});
@@ -188,13 +191,12 @@ class _VoiceHeader extends StatelessWidget {
         else if (backend.voiceConnectionStatus == VoiceConnectionStatus.error)
           const Text('Connection error'),
         const SizedBox(width: 8),
-        if (backend.activeVoiceRoomId != null)
-          IconButton(
-            tooltip: 'Disconnect',
-            onPressed: backend.leaveVoiceRoom,
-            color: Theme.of(context).colorScheme.error,
-            icon: const Icon(Icons.call_end),
-          ),
+        RtcConnectivityIcon(backend: backend),
+        IconButton(
+          tooltip: 'Invite to channel',
+          onPressed: () => showInviteMember(context, backend, roomId: room.id),
+          icon: const Icon(Icons.person_add_alt_1),
+        ),
         PopupMenuButton<_VoiceMenuAction>(
           tooltip: 'Voice options',
           icon: const Icon(Icons.more_horiz),
@@ -931,6 +933,7 @@ class _RtcVideoTileState extends State<_RtcVideoTile> {
   Future<void> _attach() async {
     await _renderer.initialize();
     _renderer.srcObject = widget.stream.stream;
+    if (kIsWeb) _renderer.muted = true; // Controller owns browser audio.
     if (mounted) setState(() => _ready = true);
   }
 
@@ -939,6 +942,7 @@ class _RtcVideoTileState extends State<_RtcVideoTile> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stream.stream != widget.stream.stream) {
       _renderer.srcObject = widget.stream.stream;
+      if (kIsWeb) _renderer.muted = true;
     }
   }
 
@@ -1037,6 +1041,7 @@ class _FullscreenRtcViewState extends State<_FullscreenRtcView> {
   Future<void> _attach() async {
     await _renderer.initialize();
     _renderer.srcObject = widget.stream.stream;
+    if (kIsWeb) _renderer.muted = true; // Controller owns browser audio.
     if (mounted) setState(() => _ready = true);
   }
 

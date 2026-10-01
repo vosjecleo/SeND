@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../models/rtc_connectivity.dart';
 import '../services/attachment_text.dart';
 import '../services/video_preparation.dart';
 import '../models/user_activity.dart';
@@ -631,6 +632,9 @@ class MatrixBackend extends ChatBackend {
   @override
   VoiceConnectionStatus get voiceConnectionStatus =>
       _voice?.status ?? VoiceConnectionStatus.disconnected;
+  @override
+  RtcConnectivity get rtcConnectivity =>
+      _voice?.connectivity ?? const RtcConnectivity();
   @override
   String? get activeVoiceRoomId => _voice?.activeRoomId;
   @override
@@ -1436,8 +1440,8 @@ class MatrixBackend extends ChatBackend {
       _moderateMember(userId, _MemberModerationAction.unban);
 
   @override
-  Future<void> inviteMember(String userId, {String? reason}) =>
-      _inviteMember(userId, reason: reason);
+  Future<void> inviteMember(String userId, {String? reason, String? roomId}) =>
+      _inviteMember(userId, reason: reason, roomId: roomId);
   @override
   Future<void> acceptRoomInvite(String roomId) => _acceptRoomInvite(roomId);
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_models.dart';
+import '../models/rtc_connectivity.dart';
 import '../models/space_administration.dart';
 import 'thread_session.dart';
 import '../models/forum_post.dart';
@@ -109,6 +110,7 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get atTimelinePresent;
   String? get firstUnreadMessageId;
   VoiceConnectionStatus get voiceConnectionStatus;
+  RtcConnectivity get rtcConnectivity => const RtcConnectivity();
   String? get activeVoiceRoomId;
   bool get voiceMuted;
   bool get voiceDeafened;
@@ -271,8 +273,11 @@ abstract class ChatBackend extends ChangeNotifier {
       throw UnsupportedError('Member timeouts are unavailable');
   Future<void> unbanMember(String userId) async =>
       throw UnsupportedError('Unbanning members is unavailable');
-  Future<void> inviteMember(String userId, {String? reason}) async =>
-      throw UnsupportedError('Inviting members is unavailable');
+  Future<void> inviteMember(
+    String userId, {
+    String? reason,
+    String? roomId,
+  }) async => throw UnsupportedError('Inviting members is unavailable');
   Future<void> acceptRoomInvite(String roomId) async =>
       throw UnsupportedError('Joining invited rooms is unavailable');
   Future<void> rejectRoomInvite(String roomId) async =>

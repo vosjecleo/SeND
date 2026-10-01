@@ -1,8 +1,34 @@
 # Changelog
 
-Release target: **0.9.36+112**. Following the build 106 feature-scope milestone,
+Release target: **0.9.36+113**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.36 build 113 — 2026-10-02
+
+- Refresh TURN relay credentials before their server-advertised expiry instead
+  of reusing them for the entire login session. Coalesce concurrent requests
+  and never fall back to expired credentials after a failed refresh.
+- Fix a MatrixRTC join race: reserve the joining group before announcing
+  membership and defer early matching peer invites until its media listeners
+  are installed. Report the web platform correctly to the WebRTC delegate.
+- Keep browser remote-audio playback attached to the call, including audio-only
+  streams and while navigating away from its video tiles. Video/fullscreen
+  renderers no longer create duplicate browser audio; deafen and participant
+  volume apply to the call-owned playback elements.
+- Add a floating desktop mute/deafen/disconnect island. Connection diagnostics
+  distinguish failed RTC (red), room joined but incomplete/no RTC (orange),
+  and connected peers (green), with measured media-path round-trip latency.
+  Hover for details, or click/tap for a live diagnostic panel. Mobile uses
+  the same diagnostics rather than equating room membership with connectivity.
+- Add explicit room-targeted invitations to voice channels and forums; changing
+  the selected room while an invite dialog is open no longer changes its target.
+- Desktop automatic away status now uses session-wide keyboard/mouse inactivity
+  with a ten-minute timeout on Windows, X11, supported Wayland compositors and
+  GNOME. Switching focus to another application no longer means away. Browsers
+  and unsupported sessions retain an app-input-only fallback; manual presence
+  and presence-sharing preferences still take precedence. No input contents
+  are captured or published.
 
 ## SeND 0.9.36 build 112 — 2026-10-01
 
