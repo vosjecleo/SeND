@@ -6,8 +6,14 @@ Historical entries preserve the scope of their own releases.
 
 ## SeND 0.9.36 build 112 — 2026-10-01
 
+- AppImage packaging correction (same application binaries/version): audit
+  Flutter and plugin dependencies as well as mpv, including libepoxy; move native
+  dependency sources into a separate optional release download. Add a 160 MiB
+  runtime size budget and standard Nix appimage-run validation. Other platform
+  packages and the build-112 release tag remain unchanged.
 - Bundle libmpv and its media dependency closure in the Linux AppImage, with
-  private library paths, licence notices and corresponding Debian sources.
+  private library paths and licence notices, with corresponding Debian sources
+  provided separately.
   Keep the host desktop and graphics-driver stack native. Add a clean Ubuntu
   launch test without host mpv or FFmpeg installed.
 - Strip Matrix reply fallback text before determining attachment captions.

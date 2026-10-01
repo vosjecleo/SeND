@@ -1,0 +1,158 @@
+name: Repackage AppImage
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: appimage-repackage-112
+  cancel-in-progress: false
+env:
+  RELEASE_ID: 0.9.36+112
+  RELEASE_TAG: v0.9.36-b112
+jobs:
+  repackage:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[appimage-only]')
+    runs-on: ubuntu-24.04
+    container: debian:12
+    timeout-minutes: 30
+    steps:
+      - name: Install packaging tools and application build-host dependencies
+        run: |
+          sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git python3 patchelf file binutils libgtk-3-0 libsecret-1-0 libpulse0 libasound2 libv4l-0 libpipewire-0.3-0 libepoxy0 libegl1 libgles2 libgl1 libvulkan1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Download immutable original and repackage without compiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^version: //p' pubspec.yaml)" = "$RELEASE_ID"
+          mkdir -p original dist
+          curl -fLsS --retry 3 --connect-timeout 15 --max-time 900 \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage" -o original/original.AppImage
+          echo '213245edec2349b5f344383d4d6644aee9c7f26f24da3dcd2daf46835a87d9fe  original/original.AppImage' | sha256sum -c
+          chmod +x original/original.AppImage
+          (cd original && ./original.AppImage --appimage-extract >/dev/null)
+          (cd original/squashfs-root && find usr/lib/deltiecord -type f -print0 | sort -z | xargs -0 sha256sum) > dist/original-binaries.sha256
+          python3 -m unittest discover -s packaging/linux -p 'test_*.py'
+          bash packaging/linux/build-appimage.sh original/squashfs-root
+          mv dist/SeND-0.9.36-x86_64.AppImage "dist/SeND-$RELEASE_ID-linux-appimage-x86_64.AppImage"
+          (cd dist && sha256sum -- *.AppImage *-sources.tar.gz > REPACKAGE-SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: appimage-repackage
+          path: dist/*
+          if-no-files-found: error
+  ubuntu-test:
+    needs: repackage
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    timeout-minutes: 15
+    steps:
+      - name: Install desktop baseline, without mpv or FFmpeg
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates libgtk-3-0t64 libsecret-1-0 libpulse0 libasound2t64 libv4l-0 libpipewire-0.3-0 libegl1 libgl1 libgles2 libdrm2 libgbm1 libvulkan1 dbus-x11 xvfb xauth python3
+          ! ldconfig -p | grep -q libmpv
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: appimage-repackage
+          path: dist
+      - name: Check unchanged application binaries, size and native loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c REPACKAGE-SHA256SUMS
+          chmod +x ./*.AppImage
+          ./*.AppImage --appimage-extract >/dev/null
+          (cd squashfs-root && sha256sum -c ../original-binaries.sha256 >/dev/null)
+          test ! -d squashfs-root/usr/share/doc/deltiecord/mpv-runtime/sources
+          test "$(stat -c %s ./*.AppImage)" -le $((160*1024*1024))
+          python3 - <<'PY'
+          import ctypes, pathlib
+          lib = pathlib.Path('squashfs-root/usr/lib/deltiecord/lib').resolve()
+          ctypes.CDLL(str(lib / 'libepoxy.so.0'))
+          mpv = ctypes.CDLL(str(lib / 'libmpv.so.2'))
+          mpv.mpv_create.restype = ctypes.c_void_p
+          handle = mpv.mpv_create()
+          assert handle
+          mpv.mpv_set_option_string.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+          for option in (b'vo', b'ao'):
+              assert mpv.mpv_set_option_string(handle, option, b'null') >= 0
+          mpv.mpv_initialize.argtypes = [ctypes.c_void_p]
+          assert mpv.mpv_initialize(handle) >= 0
+          mpv.mpv_terminate_destroy.argtypes = [ctypes.c_void_p]
+          mpv.mpv_terminate_destroy(handle)
+          PY
+          set +e
+          timeout 20s dbus-run-session -- xvfb-run -a squashfs-root/AppRun > smoke.log 2>&1
+          status=$?
+          set -e
+          cat smoke.log
+          test "$status" = 124
+          ! grep -Ei 'error while loading shared libraries|Cannot find libmpv|Unhandled exception|symbol lookup error' smoke.log
+  nix-test:
+    needs: repackage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: appimage-repackage
+          path: dist
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/b6018f87da91d19d0ab4cf979885689b469cdd41.tar.gz
+      - name: Test standard Nix appimage-run without extraPkgs overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ubuntu runner restriction, not a modification to the user's system.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth dbus-x11
+          (cd dist && sha256sum -c REPACKAGE-SHA256SUMS)
+          nix-build '<nixpkgs>' -A appimage-run -o nix-appimage-run
+          chmod +x dist/*.AppImage
+          set +e
+          timeout 30s dbus-run-session -- xvfb-run -a ./nix-appimage-run/bin/appimage-run dist/*.AppImage > nix-smoke.log 2>&1
+          status=$?
+          set -e
+          cat nix-smoke.log
+          test "$status" = 124
+          ! grep -Ei 'error while loading shared libraries|Cannot find libmpv|Unhandled exception|symbol lookup error' nix-smoke.log
+  publish:
+    needs: [ubuntu-test, nix-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: appimage-repackage
+          path: dist
+      - name: Replace only AppImage and publish separate corresponding sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c REPACKAGE-SHA256SUMS
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          cp SHA256SUMS SHA256SUMS.original
+          grep -v '  SeND-0.9.36+112-linux-appimage-x86_64.AppImage$' SHA256SUMS.original > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" = 9
+          cat REPACKAGE-SHA256SUMS >> SHA256SUMS
+          sort -k2 -o SHA256SUMS SHA256SUMS
+          # Sources first; unchanged platform assets and the release tag stay put.
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" ./*-sources.tar.gz --clobber
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" ./*.AppImage --clobber
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" SHA256SUMS --clobber
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.txt
+          printf '\n### AppImage packaging correction\n\nApplication binaries remain build 112. The AppImage now includes Flutter/plugin dependencies (including libepoxy); native dependency sources are a separate optional download. Verified on clean Ubuntu and the standard Nix appimage-run environment. Other platform packages are unchanged. Packaging commit: %s.\n' "$GITHUB_SHA" >> notes.txt
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.txt

@@ -3,10 +3,12 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="$(sed -n 's/^version: \([^+]*\).*/\1/p' "$repo_root/pubspec.yaml")"
+release_id="$(sed -n 's/^version: //p' "$repo_root/pubspec.yaml")"
 tools_dir="$repo_root/packaging/.tools"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 appdir="$work/SeND.AppDir"
+sources="$work/sources"
 plugin="$tools_dir/linuxdeploy-plugin-appimage-x86_64.AppImage"
 runtime="$tools_dir/appimage-runtime-x86_64"
 mkdir -p "$tools_dir" "$repo_root/dist"
@@ -38,8 +40,24 @@ ensure_tool() {
 
 ensure_tool "$plugin" "$plugin_url" "$plugin_sha256"
 ensure_tool "$runtime" "$runtime_url" "$runtime_sha256"
-"$repo_root/packaging/linux/build-appdir.sh" "$appdir"
-python3 "$repo_root/packaging/linux/bundle-mpv.py" "$appdir"
+if [[ $# == 1 ]]; then
+  # Repack already-built binaries; no Flutter compilation or version change.
+  cp -a "$1" "$appdir"
+  mv "$appdir/usr/share/doc/deltiecord/mpv-runtime/sources" "$sources"
+else
+  "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
+  python3 "$repo_root/packaging/linux/bundle-mpv.py" "$appdir" "$sources"
+fi
+python3 "$repo_root/packaging/linux/bundle-application.py" "$appdir" "$sources"
+source_asset="SeND-${release_id}-appimage-sources.tar.gz"
+cp "$repo_root/packaging/linux/APPIMAGE-SOURCES.txt" "$sources/README.txt"
+cp "$repo_root/packaging/linux/"bundle-*.py "$sources/"
+cp -a "$appdir/usr/share/doc/deltiecord/mpv-runtime" "$sources/mpv-notices"
+cp -a "$appdir/usr/share/doc/deltiecord/application-runtime" "$sources/application-notices"
+tar -C "$sources" -czf "$repo_root/dist/$source_asset" .
+printf 'Corresponding dependency sources: %s\nhttps://github.com/VosjeCleo/SeND/releases/download/v%s-b%s/%s\n' \
+  "$source_asset" "$version" "${release_id##*+}" "$source_asset" \
+  >"$appdir/usr/share/doc/deltiecord/DEPENDENCY-SOURCES.txt"
 printf 'appimage\n' >"$appdir/usr/lib/deltiecord/data/send-package"
 
 export ARCH=x86_64
@@ -53,4 +71,9 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 # GTK, graphics drivers, libc and session stack deliberately remain untouched.
 "$plugin" --appimage-extract-and-run --appdir "$appdir"
 test -x "$OUTPUT"
+# Source archives previously inflated this to 660 MiB. Fail before publication.
+[[ "$(stat -c '%s' "$OUTPUT")" -le $((160 * 1024 * 1024)) ]] || {
+  echo 'AppImage exceeds the 160 MiB runtime size budget' >&2
+  exit 1
+}
 echo "$OUTPUT"

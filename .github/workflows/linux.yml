@@ -20,7 +20,7 @@ env:
 
 jobs:
   debian:
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[web-only]')
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[web-only]') && !contains(github.event.head_commit.message, '[appimage-only]'))
     runs-on: ubuntu-24.04
     container: debian:12
     timeout-minutes: 75
@@ -106,7 +106,7 @@ jobs:
           mv "dist/SeND-${version}-x86_64.AppImage" "dist/SeND-${release_id}-linux-appimage-x86_64.AppImage"
           cp packaging/README.md dist/README.txt
           printf 'SeND %s\nGit commit: %s\n' "$release_id" "$GITHUB_SHA" >dist/BUILD-INFO.txt
-          (cd dist && sha256sum -- *.deb *.AppImage >SHA256SUMS)
+          (cd dist && sha256sum -- *.deb *.AppImage *-sources.tar.gz >SHA256SUMS)
       - name: Test Debian installation, launch, and removal
         run: |
           install -d -m 0700 "$HOME/.local/share/deltiecord"
@@ -180,7 +180,7 @@ jobs:
           fi
 
   arch:
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[web-only]')
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[web-only]') && !contains(github.event.head_commit.message, '[appimage-only]'))
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     timeout-minutes: 75

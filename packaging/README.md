@@ -23,7 +23,7 @@ removes all stable-channel entries without deleting historical artifacts;
 the full preflight, pushes `main` to GitHub and the Deltie mirror, and waits for
 all required platform CI workflows on that exact commit to succeed before
 creating/pushing the version tag. It then waits for release publication,
-verifies the exact ten-artifact checksum set, then
+verifies the package/source checksum set, then
 stages and atomically publishes it to deltie.net. This removes the repeated
 manual download/upload work; the platform compilation time still belongs to
 CI. Network downloads have timeouts, stall detection and bounded retries.
@@ -59,8 +59,15 @@ or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
 `xdg-desktop-portal-gtk` or `xdg-desktop-portal-kde`. The AppImage is assembled
 with linuxdeploy. Build 112 bundles mpv/media libraries in a private runtime,
-with corresponding source archives and licence notices; GTK, libc and graphics
+with licence notices and separate corresponding source archives; GTK, libc and graphics
 drivers remain host-owned. CI also launches it on clean Ubuntu without host mpv.
+The application/Flutter/plugin ELF dependencies are audited too. AppImage-only
+corrections use `[appimage-only]` commits and the dedicated repackage workflow,
+which keeps the build-112 binaries/tag, enforces a 160 MiB runtime budget, and
+tests standard Nix appimage-run without extraPkgs overrides before replacing
+only that release asset and checksums. Then run
+`bash packaging/publish-appimage-repackage.sh` to mirror only the corrected
+AppImage, optional sources and metadata to Deltie, preserving a rollback copy.
 Official x86_64 artifacts are built inside Debian 12 so native
 plugins retain a glibc 2.36 baseline; building them directly on a newer rolling
 distribution produces packages that may not start on Debian.

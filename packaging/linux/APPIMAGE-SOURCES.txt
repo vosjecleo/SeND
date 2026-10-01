@@ -1,0 +1,17 @@
+SeND AppImage native dependency sources
+
+This optional archive is not needed to run SeND. It contains exact Debian source
+packages for the bundled native libraries: original upstream archives, Debian
+patches/build rules, source control files, copyright notices and binary/source
+version manifests. The bundling scripts are included alongside them.
+
+To rebuild a dependency on Debian 12 with deb-src repositories enabled:
+  dpkg-source -x PACKAGE_VERSION.dsc
+  cd PACKAGE-VERSION
+  apt-get build-dep SOURCE-PACKAGE
+  dpkg-buildpackage -b -uc -us
+
+Use the bundled .dsc/version rather than a newer upstream source. Individual
+packages retain their own licences. For application sources and packaging see:
+  https://github.com/VosjeCleo/SeND
+The application version and release tag are not changed by an AppImage repackage.

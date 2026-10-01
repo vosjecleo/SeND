@@ -190,6 +190,7 @@ artifacts=(
   "SeND-${release_id}-windows-x64-portable.zip"
   "SeND-${release_id}-windows-x64-setup.exe"
   "SeND-${release_id}-linux-appimage-x86_64.AppImage"
+  "SeND-${release_id}-appimage-sources.tar.gz"
   "SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
   "SeND-${release_id}-linux-debian-amd64.deb"
   "SeND-${release_id}-android-arm64-v8a.apk"

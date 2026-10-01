@@ -126,8 +126,10 @@ chmod +x SeND-0.9.36+112-linux-appimage-x86_64.AppImage
 ```
 
 The AppImage includes libmpv and its media dependencies starting with build 112;
-installing host libmpv is no longer required. Matching source archives and
-licence notices are included, increasing the download size. It deliberately relies on some
+installing host libmpv is no longer required. The corrected build-112 AppImage
+also bundles Flutter/plugin dependencies including libepoxy. Matching sources
+are a separate optional `SeND-0.9.36+112-appimage-sources.tar.gz` release download;
+licence notices remain included. It deliberately relies on some
 ABI-sensitive desktop libraries from the host. It requires a reasonably current
 GTK 3 Linux system, a working desktop Secret Service for session and E2EE-key
 storage, and PulseAudio or PipeWire-Pulse for audio.

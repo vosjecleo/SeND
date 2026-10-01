@@ -3,7 +3,7 @@
 
 Private RUNPATHs keep media/TLS libraries out of the launcher's global library
 path. The loader, libc, GPU drivers and host GTK/session libraries stay native.
-Debian copyright files and matching source archives travel inside the AppImage.
+Debian copyright files stay inside; matching sources are a separate download.
 """
 import hashlib
 import json
@@ -52,7 +52,7 @@ def package_for(path):
     raise RuntimeError(f'No Debian source provenance for {path}')
 
 
-def bundle(appdir):
+def bundle(appdir, sources_dir):
     library_dir = appdir / 'usr/lib/deltiecord/lib'
     if not library_dir.is_dir():
         raise RuntimeError('Build the AppDir first')
@@ -78,8 +78,7 @@ def bundle(appdir):
     private = library_dir / 'mpv-runtime'
     private.mkdir()
     docs = appdir / 'usr/share/doc/deltiecord/mpv-runtime'
-    sources_dir = docs / 'sources'
-    sources_dir.mkdir(parents=True)
+    sources_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
     sources = set()
     for soname, path in sorted(selected.items()):
@@ -108,4 +107,4 @@ def bundle(appdir):
 
 
 if __name__ == '__main__':
-    bundle(pathlib.Path(sys.argv[1]).resolve())
+    bundle(pathlib.Path(sys.argv[1]).resolve(), pathlib.Path(sys.argv[2]).resolve())
