@@ -31,12 +31,106 @@ class MatrixVoiceController extends ChangeNotifier {
   MatrixVoiceController(
     this._client, {
     required this.friendlyError,
+    this.canRingRoom,
     RtcAudioOutputSelector? audioOutputSelector,
   }) : _audioOutputSelector =
            audioOutputSelector ?? const WebRtcAudioOutputSelector();
 
   final Client _client;
   final String Function(Object error) friendlyError;
+  final bool Function(Room room)? canRingRoom;
+  StreamSubscription<Event>? _ringEvents;
+  // SDK 10 emits delayed decryptions only through this legacy update stream.
+  // ignore: deprecated_member_use
+  StreamSubscription<EventUpdate>? _lateRingEvents;
+  StreamSubscription<SyncUpdate>? _ringSync;
+  Timer? _incomingTimer;
+  ({String roomId, String callerName, String callerId})? _incomingCall;
+  ({String roomId, String callerName, String callerId})? get incomingCall =>
+      _incomingCall;
+  final Set<String> _ringEventIds = {};
+  Set<String> _remoteUsers = {};
+  bool _participantSoundsReady = false;
+
+  bool _mayRing(Room room) => canRingRoom?.call(room) ?? room.isDirectChat;
+
+  void dismissIncomingCall() {
+    _incomingTimer?.cancel();
+    _incomingCall = null;
+    unawaited(AppSounds.stopRingtone());
+    if (!_disposed) notifyListeners();
+  }
+
+  void handleCallNotification(Event event) {
+    if (!event.isRtcNotificationEvent ||
+        _disposed ||
+        _activeCall != null ||
+        event.senderId == _client.userID ||
+        !_mayRing(event.room) ||
+        _client.ignoredUsers.contains(event.senderId)) {
+      return;
+    }
+    final notification = event.tryParseRtcNotificationContent();
+    if (notification == null ||
+        notification.notificationType != RtcNotificationType.ring ||
+        _client.userID == null ||
+        !notification.shouldNotifyUser(
+          event: event,
+          currentUserId: _client.userID!,
+          isAlreadyRinging: _incomingCall != null,
+        ) ||
+        _ringEventIds.contains(event.eventId)) {
+      return;
+    }
+    final remaining = notification
+        .getEffectiveTimestamp(event.originServerTs)
+        .add(
+          notification.cappedLifetime > const Duration(seconds: 30)
+              ? const Duration(seconds: 30)
+              : notification.cappedLifetime,
+        )
+        .difference(DateTime.now());
+    if (remaining <= Duration.zero) return;
+    _ringEventIds.add(event.eventId);
+    if (_ringEventIds.length > 128) _ringEventIds.remove(_ringEventIds.first);
+    _incomingCall = (
+      roomId: event.room.id,
+      callerName:
+          event.senderFromMemoryOrFallback.displayName ?? event.senderId,
+      callerId: event.senderId,
+    );
+    _incomingTimer = Timer(remaining, dismissIncomingCall);
+    if (_callSound) unawaited(AppSounds.startRingtone(duration: remaining));
+    notifyListeners();
+  }
+
+  void _checkIncomingCall() {
+    final incoming = _incomingCall;
+    if (incoming == null) return;
+    final room = _client.getRoomById(incoming.roomId);
+    if (room == null || !_mayRing(room)) {
+      dismissIncomingCall();
+      return;
+    }
+    bool present(String userId) =>
+        (room.states[EventTypes.GroupCallMember]?.values ?? <Event>[])
+            .where((event) => event.senderId == userId)
+            .any(
+              (event) => (event.content['memberships'] as List? ?? const [])
+                  .whereType<Map>()
+                  .any(
+                    (entry) =>
+                        entry['expires_ts'] is num &&
+                        (entry['expires_ts'] as num) >
+                            DateTime.now().millisecondsSinceEpoch,
+                  ),
+            );
+    // Stop on caller hangup, or when another device on this account picks up.
+    if (!present(incoming.callerId) || present(_client.userID!)) {
+      dismissIncomingCall();
+    }
+  }
+
   final RtcAudioOutputSelector _audioOutputSelector;
   RefreshingVoIP? _voip;
   GroupCallSession? _activeCall;
@@ -141,6 +235,9 @@ class MatrixVoiceController extends ChangeNotifier {
     _microphoneVolume = preferences.microphoneVolume.clamp(0, 1);
     _outputVolume = preferences.outputVolume.clamp(0, 1);
     _callSound = preferences.callSound;
+    if (!_callSound || preferences.callVolume <= 0) {
+      unawaited(AppSounds.stopRingtone());
+    }
     _shareDesktopAudio = preferences.shareDesktopAudio;
     final inputId = preferences.preferredAudioInputId;
     final outputId = preferences.preferredAudioOutputId;
@@ -183,6 +280,16 @@ class MatrixVoiceController extends ChangeNotifier {
 
   void initialize() {
     if (!_client.isLogged() || _voip != null || _disposed) return;
+    _ringEvents = _client.onTimelineEvent.stream.listen(handleCallNotification);
+    // ignore: deprecated_member_use
+    _lateRingEvents = _client.onEvent.stream.listen((update) {
+      if (update.type != EventUpdateType.decryptedTimelineQueue) return;
+      final room = _client.getRoomById(update.roomID);
+      if (room != null) {
+        handleCallNotification(Event.fromJson(update.content, room));
+      }
+    });
+    _ringSync = _client.onSync.stream.listen((_) => _checkIncomingCall());
     _voip = RefreshingVoIP(
       _client,
       DeltiecordWebRtcDelegate(
@@ -303,11 +410,15 @@ class MatrixVoiceController extends ChangeNotifier {
       return;
     }
     if (_activeCall != null) await leave();
+    dismissIncomingCall();
     final room = _client.getRoomById(roomId);
     if (room == null) return;
     initialize();
     final voip = _voip;
     if (voip == null) return;
+    final startingCall = _mayRing(room) && !room.hasActiveGroupCall(voip);
+    _remoteUsers = {};
+    _participantSoundsReady = false;
     _status = _rejoining
         ? VoiceConnectionStatus.reconnecting
         : VoiceConnectionStatus.connecting;
@@ -403,6 +514,37 @@ class MatrixVoiceController extends ChangeNotifier {
       await _applyLocalInputVolume();
       await _applyRemoteAudioSettings();
       if (_callSound && !_rejoining) unawaited(AppSounds.callConnected());
+      _remoteUsers = call.participants
+          .where((p) => !p.isLocal)
+          .map((p) => p.userId)
+          .toSet();
+      _participantSoundsReady = true;
+      if (startingCall && !_rejoining && _remoteUsers.isEmpty) {
+        try {
+          final members = await room.requestParticipants();
+          if (!identical(call, _activeCall) || _disposed) return;
+          await room.sendRtcNotification(
+            type: RtcNotificationType.ring,
+            userIds: members
+                .where(
+                  (user) =>
+                      user.id != _client.userID &&
+                      user.membership == Membership.join,
+                )
+                .map((user) => user.id)
+                .toList(),
+            lifetime: const Duration(seconds: 30),
+          );
+          if (_callSound &&
+              identical(call, _activeCall) &&
+              call.participants.every((p) => p.isLocal)) {
+            unawaited(AppSounds.startRingtone());
+          }
+        } catch (exception) {
+          _error =
+              'Joined the call, but could not notify the other members: ${friendlyError(exception)}';
+        }
+      }
     } catch (exception) {
       try {
         await joiningCall?.leave();
@@ -435,6 +577,21 @@ class MatrixVoiceController extends ChangeNotifier {
 
   Future<void> _sampleConnectivity() async {
     final call = _activeCall;
+    if (call != null && _participantSoundsReady) {
+      final users = call.participants
+          .where((p) => !p.isLocal)
+          .map((p) => p.userId)
+          .toSet();
+      if (users.isNotEmpty) unawaited(AppSounds.stopRingtone());
+      if (_callSound && !_rejoining) {
+        if (users.difference(_remoteUsers).isNotEmpty) {
+          unawaited(AppSounds.callConnected());
+        } else if (_remoteUsers.difference(users).isNotEmpty) {
+          unawaited(AppSounds.participantLeft());
+        }
+      }
+      _remoteUsers = users;
+    }
     if (_disposed || call == null || _samplingConnectivity) return;
     _samplingConnectivity = true;
     var connected = 0;
@@ -588,6 +745,7 @@ class MatrixVoiceController extends ChangeNotifier {
     if (_deafened == deafened || _disposed) return;
     _deafened = deafened;
     await _applyRemoteAudioSettings();
+    if (_callSound && !_rejoining) unawaited(AppSounds.deafenChanged(deafened));
     notifyListeners();
   }
 
@@ -781,9 +939,10 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> setMuted(bool muted) async {
-    if (_disposed) return;
+    if (_disposed || _muted == muted) return;
     _muted = muted;
     notifyListeners();
+    if (_callSound && !_rejoining) unawaited(AppSounds.muteChanged(muted));
     final call = _activeCall;
     if (call == null) return;
     try {
@@ -796,6 +955,9 @@ class MatrixVoiceController extends ChangeNotifier {
   }
 
   Future<void> leave() async {
+    dismissIncomingCall();
+    _participantSoundsReady = false;
+    _remoteUsers = {};
     _voip?.currentGroupCID = null;
     _voip?.finishJoining();
     _connectivityTimer?.cancel();
@@ -836,6 +998,10 @@ class MatrixVoiceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_ringEvents?.cancel());
+    unawaited(_lateRingEvents?.cancel());
+    unawaited(_ringSync?.cancel());
+    _incomingTimer?.cancel();
     _inputMeterTimer?.cancel();
     _connectivityTimer?.cancel();
     unawaited(leave());

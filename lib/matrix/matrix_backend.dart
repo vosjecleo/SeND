@@ -638,6 +638,14 @@ class MatrixBackend extends ChatBackend {
   @override
   String? get activeVoiceRoomId => _voice?.activeRoomId;
   @override
+  ({String roomId, String callerName, String callerId})? get incomingCall =>
+      _voice?.incomingCall;
+  @override
+  void dismissIncomingCall() => _voice?.dismissIncomingCall();
+  @override
+  bool canChangeRoomState(String roomId, String eventType) =>
+      _matrix.getRoomById(roomId)?.canChangeStateEvent(eventType) ?? false;
+  @override
   bool get voiceMuted => _voice?.muted ?? false;
   @override
   bool get voiceDeafened => _voice?.deafened ?? false;

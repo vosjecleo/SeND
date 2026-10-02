@@ -7,6 +7,8 @@ import '../../models/chat_models.dart';
 import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
 import '../settings_screen.dart';
+import '../call_and_chat_layout.dart';
+import '../incoming_call_banner.dart';
 import '../chat_shell.dart' show ForumView, openDiscussionById;
 import '../advanced_chat_views.dart';
 import 'mobile_details_panel.dart';
@@ -33,6 +35,7 @@ class _MobileChatShellState extends State<MobileChatShell>
   bool _navigationVisible = true;
   int _threadRevision = 0;
   bool _detailsVisible = false;
+  bool _voiceChatVisible = false;
   final Map<String, ({String text, List<CustomEmojiTextSpan> emojis})> _drafts =
       {};
   final DraftStore _draftStore = DraftStore();
@@ -114,6 +117,7 @@ class _MobileChatShellState extends State<MobileChatShell>
       if (roomChanged && roomId != null) {
         _navigationVisible = false;
         _detailsVisible = false;
+        _voiceChatVisible = false;
       }
     });
   }
@@ -157,6 +161,7 @@ class _MobileChatShellState extends State<MobileChatShell>
       _lastRoomId = room.id;
       _navigationVisible = false;
       _detailsVisible = false;
+      _voiceChatVisible = false;
     });
   }
 
@@ -167,8 +172,8 @@ class _MobileChatShellState extends State<MobileChatShell>
     final room = backend.selectedRoom;
     _reportConversationVisibility(
       room != null &&
-          !room.isVoice &&
-          !_detailsVisible &&
+          ((!room.isVoice && !_detailsVisible) ||
+              (_detailsVisible && _voiceChatVisible)) &&
           _navigationProgress <= 0.001,
     );
     final canSystemPop = _navigationVisible && !_detailsVisible;
@@ -270,8 +275,14 @@ class _MobileChatShellState extends State<MobileChatShell>
                           room: room,
                           onOpenNavigation: () =>
                               setState(() => _navigationVisible = true),
-                          onOpenDetails: () =>
-                              setState(() => _detailsVisible = true),
+                          onOpenDetails: () => setState(() {
+                            _voiceChatVisible = false;
+                            _detailsVisible = true;
+                          }),
+                          onOpenChat: () => setState(() {
+                            _voiceChatVisible = true;
+                            _detailsVisible = true;
+                          }),
                         )
                       : room.presentation == RoomPresentation.forum
                       ? SafeArea(
@@ -282,33 +293,48 @@ class _MobileChatShellState extends State<MobileChatShell>
                                 setState(() => _navigationVisible = true),
                           ),
                         )
-                      : MobileTimelineView(
-                          key: ValueKey('mobile-room-${room.id}'),
-                          backend: backend,
-                          room: room,
-                          onOpenNavigation: () =>
-                              setState(() => _navigationVisible = true),
-                          onOpenDetails: () =>
-                              setState(() => _detailsVisible = true),
-                          onOpenSettings: _showSettings,
-                          navigationGestureActive:
-                              _navigationDragProgress != null ||
-                              _suppressTimelineGestures,
-                          initialDraft: _drafts[room.id]?.text ?? '',
-                          initialCustomEmojis:
-                              _drafts[room.id]?.emojis ?? const [],
-                          onDraftChanged: (value) {
-                            if (value.text.isEmpty) {
-                              _drafts.remove(room.id);
-                              _draftStore.remove(room.id);
-                            } else {
-                              _drafts[room.id] = value;
-                              _draftStore.write(
-                                room.id,
-                                customEmojiDraftDelta(value.text, value.emojis),
-                              );
-                            }
-                          },
+                      : CallAndChatLayout(
+                          call: backend.activeVoiceRoomId == room.id
+                              ? MobileVoiceView(
+                                  backend: backend,
+                                  room: room,
+                                  onOpenNavigation: () =>
+                                      setState(() => _navigationVisible = true),
+                                  onOpenDetails: () =>
+                                      setState(() => _detailsVisible = true),
+                                )
+                              : null,
+                          chat: MobileTimelineView(
+                            key: ValueKey('mobile-room-${room.id}'),
+                            backend: backend,
+                            room: room,
+                            onOpenNavigation: () =>
+                                setState(() => _navigationVisible = true),
+                            onOpenDetails: () =>
+                                setState(() => _detailsVisible = true),
+                            onOpenSettings: _showSettings,
+                            navigationGestureActive:
+                                _navigationDragProgress != null ||
+                                _suppressTimelineGestures,
+                            initialDraft: _drafts[room.id]?.text ?? '',
+                            initialCustomEmojis:
+                                _drafts[room.id]?.emojis ?? const [],
+                            onDraftChanged: (value) {
+                              if (value.text.isEmpty) {
+                                _drafts.remove(room.id);
+                                _draftStore.remove(room.id);
+                              } else {
+                                _drafts[room.id] = value;
+                                _draftStore.write(
+                                  room.id,
+                                  customEmojiDraftDelta(
+                                    value.text,
+                                    value.emojis,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         ),
                 ),
               ),
@@ -355,12 +381,37 @@ class _MobileChatShellState extends State<MobileChatShell>
                       ignoring: !_detailsVisible,
                       child: Material(
                         elevation: 14,
-                        child: MobileDetailsPanel(
-                          backend: backend,
-                          room: room,
-                          onDismiss: () =>
-                              setState(() => _detailsVisible = false),
-                        ),
+                        child: _voiceChatVisible
+                            ? MobileTimelineView(
+                                key: ValueKey('voice-chat-${room.id}'),
+                                backend: backend,
+                                room: room,
+                                onOpenNavigation: () =>
+                                    setState(() => _detailsVisible = false),
+                                onOpenDetails: () =>
+                                    setState(() => _voiceChatVisible = false),
+                                onOpenSettings: _showSettings,
+                                navigationGestureActive: false,
+                                initialDraft: _drafts[room.id]?.text ?? '',
+                                initialCustomEmojis:
+                                    _drafts[room.id]?.emojis ?? const [],
+                                onDraftChanged: (draft) {
+                                  _drafts[room.id] = draft;
+                                  _draftStore.write(
+                                    room.id,
+                                    customEmojiDraftDelta(
+                                      draft.text,
+                                      draft.emojis,
+                                    ),
+                                  );
+                                },
+                              )
+                            : MobileDetailsPanel(
+                                backend: backend,
+                                room: room,
+                                onDismiss: () =>
+                                    setState(() => _detailsVisible = false),
+                              ),
                       ),
                     ),
                   ),
@@ -381,6 +432,8 @@ class _MobileChatShellState extends State<MobileChatShell>
                     },
                   ),
                 ),
+              if (backend.incomingCall != null)
+                Positioned.fill(child: IncomingCallBanner(backend: backend)),
             ],
           ),
         ),

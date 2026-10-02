@@ -601,11 +601,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           backend.preferences.copyWith(autoGainControl: value),
         ),
       ),
-      if (defaultTargetPlatform != TargetPlatform.android) ...[
+      ...[
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Call sounds'),
-          subtitle: const Text('Play a cue when connecting or disconnecting.'),
+          subtitle: const Text(
+            'Ringing, voice joins/leaves, and mute/deafen controls.',
+          ),
           value: backend.preferences.callSound,
           onChanged: (value) => backend.updatePreferences(
             backend.preferences.copyWith(callSound: value),

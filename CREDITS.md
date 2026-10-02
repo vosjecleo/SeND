@@ -96,9 +96,8 @@ dependency under its own license.
   SeND vendors only `emojis.json`; Jome is MIT licensed.
 - Interface text and colour emoji use platform fonts; release packages no
   longer bundle font files that behaved inconsistently across renderers.
-- Notification and call sounds are original creations by VosjeCleo. The
-  notification, call-connected and call-disconnected asset slots remain
-  independently replaceable.
+- Notification, ringtone, voice join/leave/disconnect and mute/deafen sounds
+  use VosjeCleo's original SeND sound pack v3 (48 kHz stereo PCM WAV).
 - [sqflite_sqlcipher](https://github.com/davidmartos96/sqflite_sqlcipher)
   provides SQLCipher-backed Android local database storage (MIT).
 

@@ -19,6 +19,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Icon
 import android.net.Uri
+import android.media.AudioAttributes
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -36,7 +37,8 @@ import java.security.MessageDigest
  * while Android's MessagingStyle expansion reveals recent messages/media.
  */
 object DeltiecordNotificationPublisher {
-    private const val CHANNEL_ID = "deltiecord_messages_stable"
+    private const val CHANNEL_ID = "send_messages_soundpack_v3"
+    private const val LEGACY_CHANNEL_ID = "deltiecord_messages_stable"
     private const val BACKGROUND_CHANNEL_ID = "deltiecord_background_sync"
     private const val PREFS = "deltiecord_notification_alerts"
     private const val HISTORY_DIRECTORY = "notification-history"
@@ -203,6 +205,8 @@ object DeltiecordNotificationPublisher {
         } else if (!shouldAlert) {
             @Suppress("DEPRECATION")
             notificationBuilder.setSound(null).setVibrate(longArrayOf())
+        } else if (data.sound) {
+            notificationBuilder.setSound(notificationSound(context))
         }
         val notification = notificationBuilder.build()
         // Some Android/OEM builds apply onlyAlertOnce state by numeric ID even
@@ -546,6 +550,9 @@ object DeltiecordNotificationPublisher {
         )
     }
 
+    private fun notificationSound(context: Context): Uri =
+        Uri.parse("android.resource://${context.packageName}/raw/send_notification_v3")
+
     private fun ensureChannel(
         context: Context,
         channelId: String,
@@ -553,17 +560,39 @@ object DeltiecordNotificationPublisher {
         vibrate: Boolean,
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        // Android channel sound is immutable. Migrate the default to v3 while
+        // retaining the user's importance, vibration and custom/silent sound.
+        val previous = manager(context).getNotificationChannel(
+            channelId.replace(CHANNEL_ID, LEGACY_CHANNEL_ID),
+        )
         manager(context).createNotificationChannel(
             NotificationChannel(
                 channelId,
                 "Messages",
-                if (sound || vibrate) NotificationManager.IMPORTANCE_HIGH
+                previous?.importance ?: if (sound || vibrate) NotificationManager.IMPORTANCE_HIGH
                 else NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Encrypted Matrix message notifications"
-                enableVibration(vibrate)
+                enableVibration(previous?.shouldVibrate() ?: vibrate)
+                previous?.vibrationPattern?.let { vibrationPattern = it }
+                previous?.let {
+                    setShowBadge(it.canShowBadge())
+                    lockscreenVisibility = it.lockscreenVisibility
+                }
                 if (!sound) setSound(null, null)
-                else setSound(Settings.System.DEFAULT_NOTIFICATION_URI, null)
+                else {
+                    val userSound = previous != null && (
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && previous.hasUserSetSound()) ||
+                        previous.sound != Settings.System.DEFAULT_NOTIFICATION_URI
+                    )
+                    setSound(
+                        if (userSound) previous?.sound else notificationSound(context),
+                        previous?.audioAttributes ?: AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    )
+                }
             },
         )
     }

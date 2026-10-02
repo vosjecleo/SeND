@@ -625,6 +625,8 @@ extension _MatrixRoomOperations on MatrixBackend {
       await room.setName(name.trim());
     } catch (exception) {
       _error = _friendlyError(exception);
+      _notifyBackendListeners();
+      rethrow;
     }
     _notifyBackendListeners();
   }

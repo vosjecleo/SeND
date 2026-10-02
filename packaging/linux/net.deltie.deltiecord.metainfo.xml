@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+114" date="2026-10-02" type="development">
+      <description><p>Sound pack v3, bounded DM/group-chat ringing, calls alongside chat, voice-channel text panels and permission-aware mobile channel editing.</p></description>
+    </release>
     <release version="0.9.36+113" date="2026-10-02" type="development">
       <description><p>Voice connectivity fixes, live RTC diagnostics, channel invitations and system-wide desktop idle detection.</p></description>
     </release>

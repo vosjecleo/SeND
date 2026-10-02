@@ -112,6 +112,10 @@ abstract class ChatBackend extends ChangeNotifier {
   VoiceConnectionStatus get voiceConnectionStatus;
   RtcConnectivity get rtcConnectivity => const RtcConnectivity();
   String? get activeVoiceRoomId;
+  ({String roomId, String callerName, String callerId})? get incomingCall =>
+      null;
+  void dismissIncomingCall() {}
+  bool canChangeRoomState(String roomId, String eventType) => false;
   bool get voiceMuted;
   bool get voiceDeafened;
   bool get voiceCameraEnabled;

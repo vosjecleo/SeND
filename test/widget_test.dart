@@ -2842,6 +2842,7 @@ void main() {
     tester,
   ) async {
     final backend = FakeBackend()
+      ..editableRoomIds.add('!direct:example.org')
       ..currentStatus = SessionStatus.signedIn
       ..roomList = const [
         RoomSummary(
@@ -3877,6 +3878,10 @@ Future<void> _revealMessageActions(WidgetTester tester, Finder message) async {
 }
 
 class FakeBackend extends ChatBackend {
+  final editableRoomIds = <String>{};
+  @override
+  bool canChangeRoomState(String roomId, String eventType) =>
+      editableRoomIds.contains(roomId);
   @override
   List<ChannelCategorySummary> get selectedSpaceCategories => categoryList;
 

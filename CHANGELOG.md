@@ -1,8 +1,32 @@
 # Changelog
 
-Release target: **0.9.36+113**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+114**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.37 build 114 — 2026-10-02
+
+- Replace the original sound assets with all nine sound pack v3 cues:
+  notification, ringtone, voice join/leave/disconnect, mute/unmute and
+  deafen/undeafen. Android notification channels adopt the new default while
+  retaining previous custom/silent sounds and importance/vibration settings.
+- Ring DM/group-chat call invitations for at most 30 seconds, with Answer and
+  Decline controls. Stop on answer, hangup, timeout or another account device
+  answering. Voice channels and server-room membership never trigger ringing.
+  Ringing requires a running client; browsers/OS background restrictions still
+  apply and this does not introduce native background CallKit integration.
+- Play voice join/disconnect cues for direct calls as well as voice channels,
+  plus cues when remote participants join/leave. Reconnecting does not replay
+  join/control sounds.
+- Keep the conversation below a bounded call area instead of replacing the
+  desktop DM. Use the same split on mobile, preserving drafts and reserving
+  full-screen display for explicitly opened video/streams. Prioritize chat
+  when the keyboard leaves insufficient vertical room for the call stage.
+- Add Open chat to voice channels: text appears in the desktop members/profile
+  panel or the mobile details panel, with the call kept connected.
+- Long-press mobile channels to open the same channel menu as desktop
+  secondary-click. Editing uses per-field room power levels, and layout actions
+  remain gated by Space permissions. The editor scrolls on small screens.
 
 ## SeND 0.9.36 build 113 — 2026-10-02
 

@@ -354,3 +354,20 @@ if $install_host; then
 fi
 
 printf 'Published SeND %s to %s.\n' "$release_id" "$channel"
+
+# The release workflow triggers Flatpak packaging from the verified Debian
+# asset. Finish mirroring it here too, without an ad-hoc background watcher.
+if ! $web_only && [[ "$channel" == latest || "$channel" == both ]]; then
+  flatpak_ready=false
+  printf 'Waiting for Flatpak %s\n' "$release_id"
+  for _ in $(seq 1 90); do
+    if curl --fail --silent --location --head --connect-timeout 15 --max-time 45 \
+      "$base_url/FLATPAK-SHA256SUMS?poll=$(date +%s)" >/dev/null; then
+      flatpak_ready=true
+      break
+    fi
+    sleep 60
+  done
+  $flatpak_ready || { printf '%s\n' 'Main release deployed, but Flatpak timed out; inspect its CI run.' >&2; exit 1; }
+  bash packaging/publish-flatpak.sh
+fi

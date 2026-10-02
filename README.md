@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.36 build 113 — Voice connectivity and desktop presence**
+> **Latest release: SeND 0.9.37 build 114 — Call sounds and chat alongside voice**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -27,6 +27,9 @@
 > Build 113 refreshes expiring TURN credentials, fixes early RTC invite handling,
 > adds floating voice controls with real connection/ping diagnostics and channel
 > invitations, and uses system-wide desktop activity for the ten-minute away timer.
+> Build 114 adds sound pack v3, up-to-30-second DM/group-chat ringing (never
+> voice-channel ringing), chat below calls, voice-channel text in the details
+> panel, and permission-aware channel editing by long-press on mobile.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

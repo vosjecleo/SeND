@@ -49,6 +49,9 @@ import 'message_metadata.dart';
 import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
 import 'voice_room_view.dart';
+import 'call_and_chat_layout.dart';
+import 'incoming_call_banner.dart';
+import 'mobile/mobile_timeline.dart';
 import 'voice_control_island.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
@@ -149,6 +152,9 @@ class _ChatShellState extends State<ChatShell> {
   bool _restoringDraft = false;
   bool _sidePanelVisible = true;
   String? _threadRootId;
+  bool _voiceChatVisible = false;
+  final Map<String, ({String text, List<CustomEmojiTextSpan> emojis})>
+  _voiceChatDrafts = {};
 
   void _openDiscussion(String rootId) => setState(() {
     _threadRootId = rootId;
@@ -307,6 +313,7 @@ class _ChatShellState extends State<ChatShell> {
     _storeCurrentDraft();
     _restoreDraft(roomId);
     _threadRootId = null;
+    _voiceChatVisible = false;
     _sidePanelMember = null;
     _sidePanelView = widget.backend.selectedRoom?.isDirect == true
         ? _SidePanelView.profile
@@ -315,6 +322,7 @@ class _ChatShellState extends State<ChatShell> {
 
   void _showMembersPanel() {
     setState(() {
+      _voiceChatVisible = false;
       _sidePanelMember = null;
       _sidePanelView = _SidePanelView.members;
       _sidePanelVisible = true;
@@ -818,7 +826,9 @@ class _ChatShellState extends State<ChatShell> {
                     final showSpaceRail = constraints.maxWidth >= 760;
                     final selectedRoom = widget.backend.selectedRoom;
                     _reportConversationVisibility(
-                      selectedRoom != null && !selectedRoom.isVoice,
+                      selectedRoom != null &&
+                          (!selectedRoom.isVoice ||
+                              (_voiceChatVisible && _sidePanelVisible)),
                     );
                     final roomMembers = widget.backend.selectedRoomMembers;
                     final otherRoomMembers = roomMembers
@@ -836,10 +846,11 @@ class _ChatShellState extends State<ChatShell> {
                         (widget.backend.selectedSpaceId != null ||
                             otherRoomMembers.length > 1);
                     final hasSidePanel =
-                        constraints.maxWidth >= 1100 &&
+                        (constraints.maxWidth >= 1100 || _voiceChatVisible) &&
                         (directRecipient != null ||
                             showMemberSidebar ||
-                            _threadRootId != null);
+                            _threadRootId != null ||
+                            _voiceChatVisible);
                     _sidePanelAvailable = hasSidePanel;
                     final preferredPanel =
                         widget.backend.preferences.roomPanelWidth;
@@ -884,12 +895,14 @@ class _ChatShellState extends State<ChatShell> {
                               Expanded(
                                 child: selectedRoom == null
                                     ? const _EmptyConversation()
-                                    : selectedRoom.isVoice ||
-                                          widget.backend.activeVoiceRoomId ==
-                                              selectedRoom.id
+                                    : selectedRoom.isVoice
                                     ? VoiceRoomView(
                                         backend: widget.backend,
                                         room: selectedRoom,
+                                        onOpenChat: () => setState(() {
+                                          _voiceChatVisible = true;
+                                          _sidePanelVisible = true;
+                                        }),
                                       )
                                     : selectedRoom.presentation ==
                                           RoomPresentation.forum
@@ -897,47 +910,59 @@ class _ChatShellState extends State<ChatShell> {
                                         backend: widget.backend,
                                         room: selectedRoom,
                                       )
-                                    : _Conversation(
-                                        key: _conversationKey,
-                                        composerKey: _composerKey,
-                                        backend: widget.backend,
-                                        controller: _message,
-                                        composerFocus: _composerFocus,
-                                        sending: _sending,
-                                        replyingTo: _replyingTo,
-                                        editingMessage: _editingMessage,
-                                        onSend: _send,
-                                        onSchedule: _scheduleCurrentMessage,
-                                        onPoll: _createPoll,
-                                        onSticker: _sendSticker,
-                                        onReply: _replyTo,
-                                        onEdit: _edit,
-                                        onCancelComposerAction:
-                                            _cancelComposerAction,
-                                        onAttach: _attachFile,
-                                        onGif: _showGifPicker,
-                                        onPasteImage: _pasteClipboardImage,
-                                        onDropAttachments: _queueAttachments,
-                                        pendingAttachments: _pendingAttachments,
-                                        onRemoveAttachment:
-                                            _removePendingAttachment,
-                                        onToggleAttachmentSpoiler:
-                                            _togglePendingSpoiler,
-                                        mentionSuggestions: _mentionSuggestions,
-                                        mentionSelectionIndex:
-                                            _mentionSelectionIndex,
-                                        onMentionSelected: _insertMention,
-                                        onMentionSelectionChanged: (index) =>
-                                            setState(
-                                              () => _mentionSelectionIndex =
-                                                  index,
-                                            ),
-                                        onShowMembers: _showMembersPanel,
-                                        onShowProfile: (request) =>
-                                            _showProfilePopover(
-                                              request.$1,
-                                              request.$2,
-                                            ),
+                                    : CallAndChatLayout(
+                                        call:
+                                            widget.backend.activeVoiceRoomId ==
+                                                selectedRoom.id
+                                            ? VoiceRoomView(
+                                                backend: widget.backend,
+                                                room: selectedRoom,
+                                              )
+                                            : null,
+                                        chat: _Conversation(
+                                          key: _conversationKey,
+                                          composerKey: _composerKey,
+                                          backend: widget.backend,
+                                          controller: _message,
+                                          composerFocus: _composerFocus,
+                                          sending: _sending,
+                                          replyingTo: _replyingTo,
+                                          editingMessage: _editingMessage,
+                                          onSend: _send,
+                                          onSchedule: _scheduleCurrentMessage,
+                                          onPoll: _createPoll,
+                                          onSticker: _sendSticker,
+                                          onReply: _replyTo,
+                                          onEdit: _edit,
+                                          onCancelComposerAction:
+                                              _cancelComposerAction,
+                                          onAttach: _attachFile,
+                                          onGif: _showGifPicker,
+                                          onPasteImage: _pasteClipboardImage,
+                                          onDropAttachments: _queueAttachments,
+                                          pendingAttachments:
+                                              _pendingAttachments,
+                                          onRemoveAttachment:
+                                              _removePendingAttachment,
+                                          onToggleAttachmentSpoiler:
+                                              _togglePendingSpoiler,
+                                          mentionSuggestions:
+                                              _mentionSuggestions,
+                                          mentionSelectionIndex:
+                                              _mentionSelectionIndex,
+                                          onMentionSelected: _insertMention,
+                                          onMentionSelectionChanged: (index) =>
+                                              setState(
+                                                () => _mentionSelectionIndex =
+                                                    index,
+                                              ),
+                                          onShowMembers: _showMembersPanel,
+                                          onShowProfile: (request) =>
+                                              _showProfilePopover(
+                                                request.$1,
+                                                request.$2,
+                                              ),
+                                        ),
                                       ),
                               ),
                               if (hasSidePanel)
@@ -969,7 +994,36 @@ class _ChatShellState extends State<ChatShell> {
                                       ),
                                     );
                                   },
-                                  child: _threadRootId != null
+                                  child:
+                                      _voiceChatVisible && selectedRoom != null
+                                      ? MobileTimelineView(
+                                          key: ValueKey(
+                                            'voice-chat-${selectedRoom.id}',
+                                          ),
+                                          backend: widget.backend,
+                                          room: selectedRoom,
+                                          onOpenNavigation: _showMembersPanel,
+                                          onOpenDetails: _showMembersPanel,
+                                          onOpenSettings: () =>
+                                              showDeltiecordSettings(
+                                                context,
+                                                widget.backend,
+                                              ),
+                                          navigationGestureActive: false,
+                                          initialDraft:
+                                              _voiceChatDrafts[selectedRoom.id]
+                                                  ?.text ??
+                                              '',
+                                          initialCustomEmojis:
+                                              _voiceChatDrafts[selectedRoom.id]
+                                                  ?.emojis ??
+                                              const [],
+                                          onDraftChanged: (draft) =>
+                                              _voiceChatDrafts[selectedRoom
+                                                      .id] =
+                                                  draft,
+                                        )
+                                      : _threadRootId != null
                                       ? ThreadView(
                                           key: ValueKey(_threadRootId),
                                           backend: widget.backend,
@@ -1046,6 +1100,10 @@ class _ChatShellState extends State<ChatShell> {
                             bottom: _bottomPanelHeightFor(context) + 4,
                             width: navigationWidth - 24,
                             child: VoiceControlIsland(backend: widget.backend),
+                          ),
+                        if (widget.backend.incomingCall != null)
+                          Positioned.fill(
+                            child: IncomingCallBanner(backend: widget.backend),
                           ),
                       ],
                     );

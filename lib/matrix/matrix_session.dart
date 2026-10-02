@@ -340,9 +340,18 @@ extension _MatrixSession on MatrixBackend {
 
   void _initializeVoice() {
     if (!_matrix.isLogged() || _voice != null) return;
-    _voice = MatrixVoiceController(_matrix, friendlyError: _friendlyError)
-      ..addListener(_notifyBackendListeners)
-      ..initialize();
+    _voice =
+        MatrixVoiceController(
+            _matrix,
+            friendlyError: _friendlyError,
+            canRingRoom: (room) =>
+                !room.isSpace &&
+                _presentationFor(room) != RoomPresentation.voice &&
+                (room.isDirectChat || !_allSpaceChildIds.contains(room.id)),
+          )
+          ..addListener(_notifyBackendListeners)
+          ..applyPreferences(_preferences)
+          ..initialize();
   }
 
   Future<void> _disposeVoice() async {

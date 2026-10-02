@@ -1770,6 +1770,18 @@ class _ChannelCategorySection extends StatelessWidget {
   }
 }
 
+/// Shared touch/secondary-click channel menu. Permissions are evaluated for
+/// the target room, not whichever conversation happens to be selected.
+Future<void> showChannelActions(
+  BuildContext context,
+  ChatBackend backend,
+  RoomSummary room,
+  Offset position,
+) => _RoomListTile(
+  backend: backend,
+  room: room,
+)._showContextMenu(context, position);
+
 class _RoomListTile extends StatelessWidget {
   const _RoomListTile({
     required this.backend,
@@ -1781,7 +1793,16 @@ class _RoomListTile extends StatelessWidget {
   final RoomSummary room;
   final bool? canArrange;
 
+  bool _canEdit(String type) => backend.canChangeRoomState(room.id, type);
+  bool get _canEditAny => [
+    'm.room.name',
+    'm.room.topic',
+    'm.room.avatar',
+    'net.deltiecord.room.presentation',
+  ].any(_canEdit);
+
   Future<void> _edit(BuildContext context) async {
+    if (!_canEditAny) return;
     final controller = TextEditingController(text: room.name);
     final topic = TextEditingController(text: room.topic);
     var presentation = room.presentation;
@@ -1792,6 +1813,7 @@ class _RoomListTile extends StatelessWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Room settings'),
+          scrollable: true,
           content: SizedBox(
             width: 430,
             child: Column(
@@ -1799,12 +1821,14 @@ class _RoomListTile extends StatelessWidget {
               children: [
                 TextField(
                   controller: controller,
+                  enabled: _canEdit('m.room.name'),
                   autofocus: true,
                   decoration: const InputDecoration(labelText: 'Name'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: topic,
+                  enabled: _canEdit('m.room.topic'),
                   decoration: const InputDecoration(labelText: 'Topic'),
                   maxLines: 2,
                 ),
@@ -1815,27 +1839,26 @@ class _RoomListTile extends StatelessWidget {
                   child: const Text('DM classification, access and timeline'),
                 ),
                 const SizedBox(height: 12),
-                SegmentedButton<RoomPresentation>(
-                  segments: const [
-                    ButtonSegment(
+                DropdownButtonFormField<RoomPresentation>(
+                  initialValue: presentation,
+                  decoration: const InputDecoration(labelText: 'Channel type'),
+                  items: const [
+                    DropdownMenuItem(
                       value: RoomPresentation.forum,
-                      icon: ThemeIcon(Icons.forum_outlined),
-                      label: Text('Forum'),
+                      child: Text('Forum'),
                     ),
-                    ButtonSegment(
+                    DropdownMenuItem(
                       value: RoomPresentation.text,
-                      icon: ThemeIcon(Icons.tag),
-                      label: Text('Text'),
+                      child: Text('Text'),
                     ),
-                    ButtonSegment(
+                    DropdownMenuItem(
                       value: RoomPresentation.voice,
-                      icon: ThemeIcon(Icons.volume_up_outlined),
-                      label: Text('Voice'),
+                      child: Text('Voice'),
                     ),
                   ],
-                  selected: {presentation},
-                  onSelectionChanged: (value) =>
-                      setDialogState(() => presentation = value.first),
+                  onChanged: !_canEdit('net.deltiecord.room.presentation')
+                      ? null
+                      : (value) => setDialogState(() => presentation = value!),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -1844,21 +1867,24 @@ class _RoomListTile extends StatelessWidget {
                     OutlinedButton.icon(
                       icon: const ThemeIcon(Icons.image_outlined),
                       label: const Text('Choose picture'),
-                      onPressed: () async {
-                        final result = await FilePicker.pickFiles(
-                          type: FileType.image,
-                          withData: true,
-                        );
-                        final bytes = result?.files.single.bytes;
-                        if (bytes != null) {
-                          setDialogState(() {
-                            avatar = bytes;
-                            removeAvatar = false;
-                          });
-                        }
-                      },
+                      onPressed: !_canEdit('m.room.avatar')
+                          ? null
+                          : () async {
+                              final result = await FilePicker.pickFiles(
+                                type: FileType.image,
+                                withData: true,
+                              );
+                              final bytes = result?.files.single.bytes;
+                              if (bytes != null) {
+                                setDialogState(() {
+                                  avatar = bytes;
+                                  removeAvatar = false;
+                                });
+                              }
+                            },
                     ),
-                    if (room.avatarBytes != null || avatar != null)
+                    if (_canEdit('m.room.avatar') &&
+                        (room.avatarBytes != null || avatar != null))
                       TextButton(
                         onPressed: () => setDialogState(() {
                           avatar = null;
@@ -1889,16 +1915,17 @@ class _RoomListTile extends StatelessWidget {
     controller.dispose();
     topic.dispose();
     if (save != true) return;
-    if (name.isNotEmpty && name != room.name) {
+    if (_canEdit('m.room.name') && name.isNotEmpty && name != room.name) {
       await backend.renameRoom(room.id, name);
     }
-    if (roomTopic != room.topic) {
+    if (_canEdit('m.room.topic') && roomTopic != room.topic) {
       await backend.setRoomTopic(room.id, roomTopic);
     }
-    if (presentation != room.presentation) {
+    if (_canEdit('net.deltiecord.room.presentation') &&
+        presentation != room.presentation) {
       await backend.setRoomPresentation(room.id, presentation);
     }
-    if (avatar != null || removeAvatar) {
+    if (_canEdit('m.room.avatar') && (avatar != null || removeAvatar)) {
       await backend.setRoomAvatar(room.id, avatar);
     }
   }
@@ -1949,13 +1976,14 @@ class _RoomListTile extends StatelessWidget {
         Offset.zero & screen,
       ),
       items: [
-        PopupMenuItem(
-          value: 'settings',
-          child: _RoomContextMenuEntry(
-            icon: Icons.edit_outlined,
-            label: room.isDirect ? 'Edit DM name' : 'Room settings',
+        if (_canEditAny)
+          PopupMenuItem(
+            value: 'settings',
+            child: _RoomContextMenuEntry(
+              icon: Icons.edit_outlined,
+              label: room.isDirect ? 'Edit DM name' : 'Room settings',
+            ),
           ),
-        ),
         if (backend.selectedRoom?.id == room.id)
           PopupMenuItem(
             value: 'mute',
@@ -2019,44 +2047,52 @@ class _RoomListTile extends StatelessWidget {
       ],
     );
     if (!context.mounted || action == null) return;
-    switch (action) {
-      case 'settings':
-        await _edit(context);
-      case 'mute':
-        await backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
-      case 'copy-link':
-        await Clipboard.setData(
-          ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+    try {
+      switch (action) {
+        case 'settings':
+          await _edit(context);
+        case 'mute':
+          await backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
+        case 'copy-link':
+          await Clipboard.setData(
+            ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+          );
+        case 'leave':
+          await _confirmLeave(context);
+        case 'move-up':
+          if (roomIndex > 0) {
+            await backend.moveRoomInSpace(
+              room.id,
+              categoryId: currentCategoryId,
+              beforeRoomId: spaceRooms[roomIndex - 1].id,
+            );
+          }
+        case 'move-down':
+          if (roomIndex >= 0 && roomIndex < spaceRooms.length - 1) {
+            await backend.moveRoomInSpace(
+              room.id,
+              categoryId: currentCategoryId,
+              beforeRoomId: roomIndex + 2 < spaceRooms.length
+                  ? spaceRooms[roomIndex + 2].id
+                  : null,
+            );
+          }
+        case 'uncategorized':
+          await backend.moveRoomInSpace(room.id);
+        default:
+          if (action.startsWith('category:')) {
+            await backend.moveRoomInSpace(
+              room.id,
+              categoryId: action.substring('category:'.length),
+            );
+          }
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update channel: $error')),
         );
-      case 'leave':
-        await _confirmLeave(context);
-      case 'move-up':
-        if (roomIndex > 0) {
-          await backend.moveRoomInSpace(
-            room.id,
-            categoryId: currentCategoryId,
-            beforeRoomId: spaceRooms[roomIndex - 1].id,
-          );
-        }
-      case 'move-down':
-        if (roomIndex >= 0 && roomIndex < spaceRooms.length - 1) {
-          await backend.moveRoomInSpace(
-            room.id,
-            categoryId: currentCategoryId,
-            beforeRoomId: roomIndex + 2 < spaceRooms.length
-                ? spaceRooms[roomIndex + 2].id
-                : null,
-          );
-        }
-      case 'uncategorized':
-        await backend.moveRoomInSpace(room.id);
-      default:
-        if (action.startsWith('category:')) {
-          await backend.moveRoomInSpace(
-            room.id,
-            categoryId: action.substring('category:'.length),
-          );
-        }
+      }
     }
   }
 

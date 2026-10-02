@@ -701,9 +701,17 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
               icon: const Icon(Icons.search),
             ),
             IconButton(
-              tooltip: 'Start call',
-              onPressed: () => backend.joinVoiceRoom(widget.room.id),
-              icon: const Icon(Icons.call_outlined),
+              tooltip: backend.activeVoiceRoomId == widget.room.id
+                  ? 'Disconnect'
+                  : 'Start call',
+              onPressed: () => backend.activeVoiceRoomId == widget.room.id
+                  ? backend.leaveVoiceRoom()
+                  : backend.joinVoiceRoom(widget.room.id),
+              icon: Icon(
+                backend.activeVoiceRoomId == widget.room.id
+                    ? Icons.call_end
+                    : Icons.call_outlined,
+              ),
             ),
             PopupMenuButton<String>(
               tooltip: 'More',

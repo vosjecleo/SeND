@@ -13,10 +13,16 @@ import 'member_management.dart';
 import 'voice_control_island.dart';
 
 class VoiceRoomView extends StatefulWidget {
-  const VoiceRoomView({required this.backend, required this.room, super.key});
+  const VoiceRoomView({
+    required this.backend,
+    required this.room,
+    this.onOpenChat,
+    super.key,
+  });
 
   final ChatBackend backend;
   final RoomSummary room;
+  final VoidCallback? onOpenChat;
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -100,6 +106,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     return Column(
       children: [
         _VoiceHeader(
+          onOpenChat: widget.onOpenChat,
           room: room,
           backend: backend,
           showOwnPreview: _showOwnPreview,
@@ -157,6 +164,7 @@ class _VoiceHeader extends StatelessWidget {
     required this.showOwnPreview,
     required this.onToggleOwnPreview,
     required this.onOpenDevices,
+    this.onOpenChat,
   });
 
   final RoomSummary room;
@@ -164,6 +172,7 @@ class _VoiceHeader extends StatelessWidget {
   final bool showOwnPreview;
   final VoidCallback onToggleOwnPreview;
   final VoidCallback onOpenDevices;
+  final VoidCallback? onOpenChat;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -192,6 +201,12 @@ class _VoiceHeader extends StatelessWidget {
           const Text('Connection error'),
         const SizedBox(width: 8),
         RtcConnectivityIcon(backend: backend),
+        if (onOpenChat != null)
+          IconButton(
+            tooltip: 'Open chat',
+            onPressed: onOpenChat,
+            icon: const Icon(Icons.chat_bubble_outline),
+          ),
         IconButton(
           tooltip: 'Invite to channel',
           onPressed: () => showInviteMember(context, backend, roomId: room.id),

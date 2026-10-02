@@ -25,12 +25,14 @@ class MobileVoiceView extends StatefulWidget {
     required this.room,
     required this.onOpenNavigation,
     required this.onOpenDetails,
+    this.onOpenChat,
     super.key,
   });
   final ChatBackend backend;
   final RoomSummary room;
   final VoidCallback onOpenNavigation;
   final VoidCallback onOpenDetails;
+  final VoidCallback? onOpenChat;
 
   @override
   State<MobileVoiceView> createState() => _MobileVoiceViewState();
@@ -77,6 +79,12 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
           ),
         ),
         actions: [
+          if (widget.onOpenChat != null)
+            IconButton(
+              tooltip: 'Open chat',
+              onPressed: widget.onOpenChat,
+              icon: const Icon(Icons.chat_bubble_outline),
+            ),
           RtcConnectivityIcon(backend: backend),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz),

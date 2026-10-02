@@ -10,6 +10,7 @@ import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
 import '../relative_activity_time.dart';
 import '../space_settings_screen.dart';
+import '../chat_shell.dart' show showChannelActions;
 import 'mobile_widgets.dart';
 import 'mobile_channel_manager.dart';
 
@@ -892,14 +893,24 @@ class _SpaceRoomList extends StatelessWidget {
           final room = byId[id];
           if (room != null) {
             children.add(
-              _SpaceRoomTile(room: room, onTap: () => onOpenRoom(room)),
+              _SpaceRoomTile(
+                backend: backend,
+                room: room,
+                onTap: () => onOpenRoom(room),
+              ),
             );
           }
         }
       }
     }
     for (final room in rooms.where((room) => !categorized.contains(room.id))) {
-      children.add(_SpaceRoomTile(room: room, onTap: () => onOpenRoom(room)));
+      children.add(
+        _SpaceRoomTile(
+          backend: backend,
+          room: room,
+          onTap: () => onOpenRoom(room),
+        ),
+      );
     }
     return ListView(
       key: const ValueKey('mobile-space-room-list'),
@@ -937,7 +948,12 @@ class _NavigationCardEdgePainter extends CustomPainter {
 }
 
 class _SpaceRoomTile extends StatelessWidget {
-  const _SpaceRoomTile({required this.room, required this.onTap});
+  const _SpaceRoomTile({
+    required this.backend,
+    required this.room,
+    required this.onTap,
+  });
+  final ChatBackend backend;
   final RoomSummary room;
   final VoidCallback onTap;
 
@@ -974,6 +990,11 @@ class _SpaceRoomTile extends StatelessWidget {
         ? null
         : Badge(label: Text('${room.unreadCount}')),
     onTap: onTap,
+    onLongPress: () {
+      final box = context.findRenderObject() as RenderBox?;
+      final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+      showChannelActions(context, backend, room, position);
+    },
   );
 }
 
