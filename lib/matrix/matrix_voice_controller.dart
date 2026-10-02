@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart';
 import '../models/chat_models.dart';
 import '../models/rtc_connectivity.dart';
 import '../services/app_sounds.dart';
+import '../services/rtc_audio_controls.dart';
 import 'deltiecord_webrtc_delegate.dart';
 import 'refreshing_voip.dart';
 
@@ -487,6 +488,8 @@ class MatrixVoiceController extends ChangeNotifier {
         }
         return;
       }
+      // A pre-muted join must not transmit while Matrix finishes entering.
+      setRtcAudioMuted(stream.getAudioTracks(), _muted);
       await call.enter(
         stream: WrappedMediaStream(
           stream: stream,
@@ -510,6 +513,7 @@ class MatrixVoiceController extends ChangeNotifier {
           MediaInputKind.audioinput,
         );
       }
+      _applyLocalMuteGate();
       _startInputMeter();
       await _applyLocalInputVolume();
       await _applyRemoteAudioSettings();
@@ -725,7 +729,8 @@ class MatrixVoiceController extends ChangeNotifier {
             : VoiceConnectionStatus.error;
         _error = msg;
       case GroupCallLocalMutedChanged(:final muted, :final kind):
-        if (kind == MediaInputKind.audioinput) _muted = muted;
+        // Ignore old acknowledgements after a newer local toggle.
+        if (kind == MediaInputKind.audioinput) _applyLocalMuteGate();
         if (kind == MediaInputKind.videoinput) _cameraEnabled = !muted;
       case GroupCallActiveSpeakerChanged(:final participant):
         _activeSpeakerUserId = participant.userId;
@@ -734,6 +739,7 @@ class MatrixVoiceController extends ChangeNotifier {
       case GroupCallStreamAdded() ||
           GroupCallStreamRemoved() ||
           GroupCallStreamReplaced():
+        _applyLocalMuteGate();
         unawaited(_applyRemoteAudioSettings());
       default:
         break;
@@ -772,23 +778,23 @@ class MatrixVoiceController extends ChangeNotifier {
     }
     final call = _activeCall;
     if (call == null) return;
-    for (final wrapped in call.backend.userMediaStreams) {
+    for (final wrapped in [
+      ...call.backend.userMediaStreams,
+      ...call.backend.screenShareStreams,
+    ]) {
       if (wrapped.isLocal() ||
           (userId != null && wrapped.participant.userId != userId)) {
         continue;
       }
-      final volume =
+      final muted =
           _deafened ||
-              _locallyMutedParticipants.contains(wrapped.participant.userId)
-          ? 0.0
-          : participantVolume(wrapped.participant.userId) * _outputVolume;
-      for (final track in wrapped.stream?.getAudioTracks() ?? const []) {
-        try {
-          await flutter_webrtc.Helper.setVolume(volume, track);
-        } catch (_) {
-          // Some Linux audio backends do not expose per-track volume.
-        }
-      }
+          _locallyMutedParticipants.contains(wrapped.participant.userId);
+      await applyRtcRemoteAudio(
+        tracks: wrapped.stream?.getAudioTracks() ?? const [],
+        muted: muted,
+        volume: participantVolume(wrapped.participant.userId) * _outputVolume,
+        setVolume: flutter_webrtc.Helper.setVolume,
+      );
     }
   }
 
@@ -837,6 +843,10 @@ class MatrixVoiceController extends ChangeNotifier {
           }
           final userId = wrapped.participant.userId;
           final muted = _deafened || _locallyMutedParticipants.contains(userId);
+          setRtcAudioMuted(
+            wrapped.stream!.getAudioTracks(),
+            muted || participantVolume(userId) * _outputVolume == 0,
+          );
           renderer.muted = muted;
           await renderer.setVolume(
             muted ? 0 : participantVolume(userId) * _outputVolume,
@@ -938,9 +948,43 @@ class MatrixVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _applyLocalMuteGate() {
+    final call = _activeCall;
+    if (call == null) return;
+    final local = call.backend.localUserMediaStream;
+    if (local != null) {
+      if (local.isAudioMuted() != _muted) local.setAudioMuted(_muted);
+      setRtcAudioMuted(local.stream?.getAudioTracks() ?? const [], _muted);
+    }
+    for (final wrapped in call.backend.userMediaStreams) {
+      if (wrapped.isLocal()) {
+        if (wrapped.isAudioMuted() != _muted) wrapped.setAudioMuted(_muted);
+        setRtcAudioMuted(wrapped.stream?.getAudioTracks() ?? const [], _muted);
+      }
+    }
+    // Mesh calls clone the microphone stream for each peer. Muting only the
+    // original capture stream is insufficient if SDK device enumeration fails.
+    for (final peer in _voip?.calls.values ?? const <CallSession>[]) {
+      if (peer.room.id != call.room.id ||
+          peer.groupCallId != call.groupCallId) {
+        continue;
+      }
+      final microphone = peer.localUserMediaStream;
+      if (microphone == null) continue;
+      if (microphone.isAudioMuted() != _muted) microphone.setAudioMuted(_muted);
+      setRtcAudioMuted(microphone.stream?.getAudioTracks() ?? const [], _muted);
+    }
+    if (_muted) {
+      _inputLevel = 0;
+      if (_activeSpeakerUserId == _client.userID) _activeSpeakerUserId = null;
+    }
+  }
+
   Future<void> setMuted(bool muted) async {
     if (_disposed || _muted == muted) return;
     _muted = muted;
+    // Do not depend on device enumeration/signalling to disable capture.
+    _applyLocalMuteGate();
     notifyListeners();
     if (_callSound && !_rejoining) unawaited(AppSounds.muteChanged(muted));
     final call = _activeCall;
@@ -951,6 +995,8 @@ class MatrixVoiceController extends ChangeNotifier {
       _error = friendlyError(exception);
       notifyListeners();
       rethrow;
+    } finally {
+      _applyLocalMuteGate();
     }
   }
 

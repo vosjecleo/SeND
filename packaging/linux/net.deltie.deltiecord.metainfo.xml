@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+115" date="2026-10-02" type="development">
+      <description><p>Correct muted speaking indicators, enforce voice and screen-share audio deafen, and restore Last.fm artwork in the PWA.</p></description>
+    </release>
     <release version="0.9.37+114" date="2026-10-02" type="development">
       <description><p>Sound pack v3, bounded DM/group-chat ringing, calls alongside chat, voice-channel text panels and permission-aware mobile channel editing.</p></description>
     </release>

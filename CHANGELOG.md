@@ -1,8 +1,26 @@
 # Changelog
 
-Release target: **0.9.37+114**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+115**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.37 build 115 — 2026-10-02
+
+- Fix the local green speaking outline remaining active while muted or silent:
+  cached SDK active-speaker state no longer overrides the live microphone meter.
+- Apply microphone mute directly to audio tracks before asynchronous Matrix
+  signalling, including pre-muted joins and replacement streams; keep the latest
+  requested state when older SDK acknowledgements arrive. App sound cues and
+  outgoing screen-share audio remain separate from microphone mute.
+- Enforce deafen/local participant mute using audio-track enablement as well as
+  volume. Cover incoming screen-share audio too, including native backends that
+  do not implement per-track volume. Undeafen restores configured volume.
+- Load current/recent Last.fm cover art through CORS-enabled image decoding on
+  web instead of HTML images blocked by the PWA's cross-origin isolation policy.
+  Preserve existing security headers and native artwork behaviour.
+- Add regression tests for mute/deafen track gates, unsupported native volume,
+  stale speaking state, and both Last.fm artwork widgets. Physical two-client
+  audio verification remains a separate device test.
 
 ## SeND 0.9.37 build 114 — 2026-10-02
 

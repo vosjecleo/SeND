@@ -1,6 +1,6 @@
 # SeND
 
-> **Latest release: SeND 0.9.37 build 114 — Call sounds and chat alongside voice**
+> **Latest release: SeND 0.9.37 build 115 — Voice controls and web artwork fixes**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 >
 > SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
@@ -30,6 +30,8 @@
 > Build 114 adds sound pack v3, up-to-30-second DM/group-chat ringing (never
 > voice-channel ringing), chat below calls, voice-channel text in the details
 > panel, and permission-aware channel editing by long-press on mobile.
+> Build 115 fixes stale speaking outlines while muted, hardens microphone mute
+> and deafen (including screen-share audio), and restores Last.fm artwork on web.
 > See [the changelog](CHANGELOG.md) and
 > [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 

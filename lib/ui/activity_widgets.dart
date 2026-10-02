@@ -144,7 +144,9 @@ class ActivityBlock extends StatelessWidget {
                           width: compact ? 32 : 64,
                           height: compact ? 32 : 64,
                           fit: BoxFit.cover,
-                          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                          // CORS fetch works with the PWA's COEP headers;
+                          // the no-CORS HTML image path does not.
+                          webHtmlElementStrategy: WebHtmlElementStrategy.never,
                           errorBuilder: (_, _, _) => SizedBox.square(
                             dimension: compact ? 32 : 64,
                             child: Icon(activityIcon(activity.kind)),
@@ -274,7 +276,7 @@ class LastFmRecentBar extends StatelessWidget {
                               height: 48,
                               fit: BoxFit.cover,
                               webHtmlElementStrategy:
-                                  WebHtmlElementStrategy.prefer,
+                                  WebHtmlElementStrategy.never,
                               errorBuilder: (_, _, _) => const SizedBox.square(
                                 dimension: 48,
                                 child: Icon(Icons.album_outlined),

@@ -77,11 +77,12 @@ extension _MatrixRoomMetadata on MatrixBackend {
         avatarBytes:
             _senderAvatarBytes['${room.id}|$userId'] ??
             _senderAvatarBytes[userId],
-        speaking:
-            userId == _voice?.activeSpeakerUserId ||
-            (userId == _matrix.userID &&
-                !(_voice?.muted ?? true) &&
-                (_voice?.inputLevel ?? 0) >= 0.04),
+        speaking: rtcParticipantSpeaking(
+          local: userId == _matrix.userID,
+          muted: _voice?.muted ?? true,
+          inputLevel: _voice?.inputLevel ?? 0,
+          activeSpeaker: userId == _voice?.activeSpeakerUserId,
+        ),
         localVolume: _voice?.participantVolume(userId) ?? 1,
         locallyMuted: _voice?.participantLocallyMuted(userId) ?? false,
       );
