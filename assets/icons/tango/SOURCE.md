@@ -1,6 +1,6 @@
 # Tango icon subset
 
-Bundled by the Aero example theme in the 0.9.34+106 baseline. See
+Bundled by the Aero example theme; provenance reviewed for 0.9.37+116. See
 [JSON theme and icon-pack constraints](../../../docs/themes.md).
 
 Original: Tango Desktop Project, tango-icon-theme 0.8.90 (2009).

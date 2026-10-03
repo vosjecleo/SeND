@@ -2,7 +2,7 @@
 
 SeND intentionally limits the network destinations it contacts.
 
-Current baseline: 0.9.34+106. Security claims describe implemented boundaries,
+Documentation baseline: 0.9.37+116. Security claims describe implemented boundaries,
 not an independent security certification; see [1.0 readiness](RELEASE_READINESS.md).
 
 ## Configured Matrix homeserver
@@ -139,4 +139,22 @@ content-free message alert behind.
 
 The signed-in application performs one bounded advisory check per process
 against `https://deltie.net/SeND/releases.json`; Settings also exposes an
-explicit retry. The checker does not download or install an update itself.
+explicit retry. Checking alone never installs an update. The user's download
+action selects the matching installed package when known; unknown/Flatpak builds
+use the download page. A Windows installer installation also offers a deliberate
+download-and-run flow that checks manifest size and SHA-256 before launching
+the interactive installer. It does not silently elevate or force an exit.
+
+## Current activity and media boundaries
+
+Opt-in activity is published as public, device-owned Matrix profile fields;
+live program/music data expires, while separately enabled recent Last.fm history
+may remain visible offline. Do not treat public profile fields as E2EE. Artwork
+loads from validated CDN URLs; PWA Last.fm images use CORS decoding to preserve
+the site's cross-origin isolation. No process inventory is sent as analytics.
+
+Video preparation is local: Android Media3 or desktop FFmpeg. A failed encode
+cannot silently upload the original; the user must choose it. Web uploads retain
+original quality. Telegram sticker conversion is a separate bounded server
+helper, not an unrestricted video conversion endpoint. Build 116 changes only
+client staging/recovery and needs no helper configuration update.

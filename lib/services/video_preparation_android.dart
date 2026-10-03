@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/chat_models.dart';
 
 const _channel = MethodChannel('net.deltie.deltiecord/video_prepare');
@@ -10,8 +11,13 @@ Future<AttachmentDraft> prepareAndroidVideo(
   required bool optimize,
   required void Function(double) progress,
   required bool Function() canceled,
+  Future<Directory> Function() cacheDirectory = getTemporaryDirectory,
 }) async {
-  final directory = await Directory.systemTemp.createTemp('send-video-');
+  // Flutter's Android systemTemp is code_cache, while our native bridge
+  // deliberately accepts only Context.cacheDir. path_provider resolves that
+  // exact private cache directory; do not broaden the native file allowlist.
+  final cache = await cacheDirectory();
+  final directory = await cache.createTemp('send-video-');
   Timer? polling;
   var pollingBusy = false;
   try {

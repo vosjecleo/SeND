@@ -1,6 +1,6 @@
 # Known issues
 
-## Current baseline: 0.9.34+106
+## Current baseline: 0.9.37+116
 
 Feature scope is complete; this remains a Latest/pre-1.0 build, not a declaration
 that all known bugs are resolved. The [1.0 readiness checklist](docs/RELEASE_READINESS.md)
@@ -10,8 +10,8 @@ tracks the hardening phase and required evidence.
   behaviour; Windows clipboard style reset; Android browser-login return/process
   interruption; physical-device RTC, notification and media lifecycle coverage.
 - **Authentication:** SSO/OIDC is discovered from the homeserver, not automatically
-  enabled on deltie.net. Its callback nginx rule was staged but not applied during
-  build 106 deployment. Account login is separate from device encryption trust;
+  enabled on deltie.net. Self-hosters must verify callback cache/log protection
+  against their actual nginx configuration. Account login is separate from device encryption trust;
   complete interactive verification coverage still needs validation.
 - **Collaboration:** encrypted threads/forums and administration need two-client
   and mixed-client validation, particularly historical pages, limited-sync resume,
@@ -25,6 +25,23 @@ tracks the hardening phase and required evidence.
 - **Browser limits:** storage can be evicted, media codecs vary, installed iOS
   notifications need real-device checks, and native macOS/iOS packages are not
   supplied. See [web deployment](docs/web-deployment.md).
+
+## Media, activity and packaging boundaries
+
+- **Android video:** build 116 corrects cache staging; the reported failure still
+  needs confirmation on the reporting phone. Codec-specific encoding failures,
+  long clips and low storage are separate cases. Recovery offers an explicit
+  original-quality upload, not an automatic compression bypass.
+- **Desktop video:** FFmpeg/ffprobe must be available for native compression;
+  PWA sends originals and browser playback depends on codec and size limits.
+- **Linux packages:** AppImage deliberately uses host PipeWire/SVG-loader ABI
+  components. Flatpak supplies a shared GNOME runtime but restricts host process
+  discovery, Steam-library discovery and Discord IPC. See the installation guide.
+- **Activity privacy:** live activity requires opt-in and is hidden by SeND when
+  offline. Public profile metadata is not E2EE and can be retained by readers.
+  Opted-in Last.fm listening history intentionally remains visible offline.
+- **RTC:** two-client mute/deafen and device-change testing is still required.
+  DM/group ringing needs a running client; background OS restrictions apply.
 
 ## Historical notes
 

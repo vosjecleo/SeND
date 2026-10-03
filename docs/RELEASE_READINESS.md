@@ -16,14 +16,27 @@ Local regression results were 366 passing tests, one existing skip, and clean
 static analysis. Compilation and automated tests are evidence, not substitutes
 for physical-device or multi-client testing. Stable was not promoted.
 
+## Current hardening baseline: 0.9.37+116
+
+Since the build 106 milestone, releases have addressed activity interoperability,
+pack editing, notifications, platform packaging, RTC connectivity, sound cues,
+mute/deafen, and media preparation. Build 116 targets Android video staging and
+explicit recovery rather than expanding feature scope. See the
+[current changelog](../CHANGELOG.md) and [video acceptance checks](build-116-video.md).
+
+Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
+packaging/publication stage. Release automation verifies checksums before mirror
+and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
+behavior, end-to-end push delivery or two-client audio quality.
+
 ## Release gates
 
 - [ ] Account safety: password and discovered SSO/OIDC sign-in, cancellation,
   refresh/relaunch, logout, device verification, recovery and upgrades preserve
   sessions and encryption keys. Never fix a failure by silently resetting data.
 - [ ] Security: review Android encrypted-database migration, attachment integrity,
-  links/previews, imports, permissions and browser callback handling. Complete
-  the pending operator callback rule before hosted browser SSO is used.
+  links/previews, imports, permissions and browser callback handling. Verify
+  callback cache/log protection before hosted browser SSO is used.
 - [ ] Lifecycle: repeated background/foreground and network changes preserve
   timely timelines, typing, receipts, room lists, themes and media playback.
 - [ ] Notifications: foreground suppression, dismissal, cadence reset, silent

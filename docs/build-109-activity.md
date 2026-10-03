@@ -1,5 +1,10 @@
 # SeND 0.9.35+109 — independent activity slots and PWA animation
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 ## Activity ownership
 
 Each Matrix device writes only `net.deltiecord.activity.device.<sha256-device-id>`.

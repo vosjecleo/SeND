@@ -1,5 +1,10 @@
 # SeND 0.9.35+108 — release notes
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 SeND is a recursive acronym: **SeND is Not Discord**. The GitHub repository is
 now `vosjecleo/SeND`; the local `github` remote follows that name. This document
 records implementation and validation; CI/deployment results are reported separately.

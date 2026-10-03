@@ -1,6 +1,6 @@
 # SeND service helpers
 
-Current client baseline: 0.9.35+110. See [web hosting](../docs/web-deployment.md)
+Documentation baseline: 0.9.37+116; the video hotfix needs no service changes. See [web hosting](../docs/web-deployment.md)
 and [hardening gates](../docs/RELEASE_READINESS.md).
 
 `giphy_proxy.py` retains its historical filename but serves **KLIPY** search and
@@ -72,5 +72,7 @@ conversion, arbitrary-site proxying, or support for every provider's player.
 no-store caching, isolation/security headers and no application fallback. Apply
 that narrow rule before enabling hosted browser SSO. It is not an identity
 provider deployment and does not change Matrix, RTC, DNS or certificates.
-The 106 PWA was deployed, but this privileged rule was left for the operator;
-see [deployment status](../docs/web-deployment.md).
+The original 106 deployment left this privileged rule for the operator;
+verify the live configuration before making any changes. Historical scripts
+must not be applied blindly after subsequent hosting updates.
+See [deployment guidance](../docs/web-deployment.md).

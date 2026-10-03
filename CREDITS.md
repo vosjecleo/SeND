@@ -1,6 +1,6 @@
 # Credits and acknowledgements
 
-Reviewed for the 0.9.34+106 feature-scope milestone. Credits describe dependency
+Documentation reviewed for 0.9.37+116. Credits describe dependency
 and reference provenance, not an endorsement or security certification. See the
 [documentation index](docs/README.md) for current implementation guides.
 
@@ -56,6 +56,9 @@ dependency under its own license.
   and permission notice are retained in `linux/runner/ext-idle-notify-v1.xml`.
 - [media_kit](https://github.com/media-kit/media-kit) provides inline and
   full-window audio/video playback. Licensed under MIT.
+- AndroidX Media3 provides native Android video preparation/transcoding under
+  Apache-2.0. Desktop optimization invokes FFmpeg/ffprobe; it is separate from
+  the media_kit playback runtime and retains FFmpeg's applicable licences.
 - [youtube_explode_dart](https://github.com/Hexer10/youtube_explode_dart)
   resolves playable YouTube streams only for the user's opted-in direct
   preview modes. Licensed under MIT.

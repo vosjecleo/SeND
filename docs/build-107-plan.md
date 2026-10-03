@@ -1,5 +1,10 @@
 # 0.9.34+107 implementation and validation
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 Status: published as Latest on GitHub and Deltie; PWA deployed to
 `chat.deltie.net`. Release tag: `v0.9.34-b107`, source commit `5ba5050`.
 

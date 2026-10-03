@@ -1,43 +1,14 @@
 # SeND
 
-> **Latest release: SeND 0.9.37 build 115 — Voice controls and web artwork fixes**
+> **SeND 0.9.37 build 116 — Android video-send hotfix**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
->
-> SeND now includes a live Web/PWA build at **[chat.deltie.net](https://chat.deltie.net)**.
-> See [hosting and validation notes](docs/web-deployment.md) for setup and current limitations.
-> Install it on an iPhone/iPad Home Screen, Android, or desktop. Build 106 adds
-> Matrix threads, forums, named server roles and administration rules, browser
-> SSO/OIDC, and shared profile editing/layout improvements.
-> Build 107 improves Space access and administration, shared event filters,
-> read receipts, mobile media navigation, profile layout and accent colours.
-> Build 108 adds opt-in desktop activity, Last.fm linking, a dedicated sticker/emoji
-> pack editor with animated resizing, direct update downloads and Web Push fixes.
-> Build 109 separates game/music/history across devices, improves Last.fm resume
-> and artwork, and polishes mobile profile scrolling and WebKit GIF playback.
-> See [build 109 validation and device-test caveats](docs/build-109-activity.md).
-> Build 110 keeps opted-in Last.fm history visible offline, fixes album artwork,
-> adds 150-item pack merge/split tools, hold-to-favourite, mobile double-tap zoom,
-> compact timeline activity status, fixed desktop profile frames and mobile/PWA
-> update prompts. See [build 110 details](docs/build-110-polish.md).
-> Build 111 adds Windows IPC, improves Steam/Proton detection, camera-video
-> preparation, GIF lifecycle handling, clipboard image paste and notification
-> recovery. See [build 111 validation notes](docs/build-111-reliability.md).
-> Build 112 bundles the AppImage media runtime, fixes attachment reply captions,
-> and hardens automated release/deployment checks.
-> Build 113 refreshes expiring TURN credentials, fixes early RTC invite handling,
-> adds floating voice controls with real connection/ping diagnostics and channel
-> invitations, and uses system-wide desktop activity for the ten-minute away timer.
-> Build 114 adds sound pack v3, up-to-30-second DM/group-chat ringing (never
-> voice-channel ringing), chat below calls, voice-channel text in the details
-> panel, and permission-aware channel editing by long-press on mobile.
-> Build 115 fixes stale speaking outlines while muted, hardens microphone mute
-> and deafen (including screen-share audio), and restores Last.fm artwork on web.
-> See [the changelog](CHANGELOG.md) and
-> [web performance investigation](docs/web-performance-build-100-account-investigation.md).
 
-Start with the [installation and source-build guide](INSTALL.md). Official
-builds and release notes are available on the
-[SeND releases page](https://deltie.net/SeND).
+[Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
+[Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
+
+Build 116 fixes Android videos failing before compression and adds explicit
+retry, original-quality and cancel choices when preparation fails. See the
+[diagnosis and validation notes](docs/build-116-video.md).
 
 ## Preface
 
@@ -67,7 +38,7 @@ the web—including iPhone/iPad as an installed PWA.
 
 The goal of the project is to bring the familiar UX of discord to the secure and open source side, to hopefully get more discord users on a secure platform.
 
-![screenshot-1.png](./Screenshots/screenshot-1.png)
+See the [screenshot gallery](docs/screenshots.md) for the current interface.
 
 SeND is not its own chat network, and it does not require a special SeND server. It connects to ordinary Matrix homeservers such as Synapse and communicates using the Matrix protocol.
 
@@ -88,7 +59,8 @@ SeND uses Matrix Spaces as Discord-style 'servers', Matrix rooms as text 'channe
 
 Some SeND presentation features (such as voice-only rooms, channel categories, channel ordering and profile customization) use namespaced Matrix state/profile fields. Other Matrix clients are free to ignore these while the underlying rooms remain normal interoperable Matrix rooms.
 
-Sometimes this can lead to small bugs, like how other client user's may see the voice rooms as regular text rooms, and type there.
+Other clients may display voice channels as ordinary text rooms; those messages
+remain accessible through SeND’s voice-channel Open chat control.
 
 ---
 
@@ -124,7 +96,7 @@ For self-hosting/builds, see [Web deployment](docs/web-deployment.md).
 
 ## Why SeND?
 
-SeND focuses heavily on a Discord-like user experiencie that most Matrix clients do not currently prioritize.
+SeND focuses heavily on a Discord-like user experience that most Matrix clients do not currently prioritize.
 
 Notable features include:
 
@@ -203,6 +175,10 @@ Notable features include:
 - Configurable keyboard shortcuts
 - Multiple UI density and appearance settings
 - Platform-native text and colour emoji fonts
+- Opt-in native desktop game/program detection, Discord IPC and music activity
+- Last.fm account linking, current listening and optional persistent listening history
+- Independent game/music activity slots, viewable across platforms
+- Local video optimization on supported native platforms; explicit recovery on failure
 - Custom profile theming
 - Declarative JSON themes with semantic tokens, fallback inheritance, custom
   controls/icon packs and a bundled [Aero Glass example](docs/themes.md)
@@ -254,7 +230,8 @@ and [known issues and boundaries](KNOWN_ISSUES.md).
 In particular, threads inherit room access, forum Following is not a separate
 push subscription, and named roles use Matrix's numeric power-level hierarchy.
 SSO authenticates an account; it does not replace encryption-device verification.
-The hosted app's new SSO callback requires an operator-applied nginx rule.
+Self-hosted SSO needs the callback protection described in the hosting guide;
+availability also depends on the homeserver's configured identity provider.
 
 The intended meaning of the version numbers is roughly:
 
@@ -331,6 +308,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Current latest release: v0.9.34 build 107. Not a stable/1.0 declaration.**
+**Documentation baseline: 0.9.37+116. Not a stable/1.0 declaration.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

@@ -1,5 +1,10 @@
 # SeND 0.9.35+110 — release notes
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 Released on 2026-09-26 as latest on GitHub and deltie.net/SeND.
 Release commit: `d3d231f45fbc6c29bdbd0a5ca36523007d44a754`;
 tag: `v0.9.35-b110`. Android, both Linux package jobs, Windows and PWA CI,

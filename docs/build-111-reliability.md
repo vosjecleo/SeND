@@ -1,5 +1,10 @@
 # SeND 0.9.36+111 — reliability pass
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 Scope and changes are listed in the [changelog](../CHANGELOG.md).
 
 ## Implementation boundaries

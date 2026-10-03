@@ -1,13 +1,13 @@
 # Windows support
 
-Current published baseline: 0.9.34+106. CI passed for the installer and portable
-build. The feature set is in place; [1.0 hardening](RELEASE_READINESS.md) still
-requires native-device validation, not just successful compilation.
+Documentation baseline: **0.9.37+116**. CI produces the installer and portable
+build; native Windows testing remains part of [1.0 hardening](RELEASE_READINESS.md).
 
-Build 106 resets rich-composer state after sending to address pasted background
-styles, adds desktop discussions/forums and shared profile editing, and provides
-external-browser SSO/OIDC. Check clipboard paste/send on both light and dark
-themes, browser callback return/cancellation, and session restoration on hardware.
+Recent fixes cover Discord IPC ownership, game/process identification, clipboard
+image styling, notification activation, GIF lifecycle handling and RTC track
+mute/deafen. Verify these on real Windows 10/11 hardware rather than treating
+shared Dart tests as platform certification. Desktop video compression requires
+FFmpeg/ffprobe on PATH; failure offers retry, explicit original upload or cancel.
 
 SeND uses Flutter's standard Windows desktop runner. CI builds a complete
 portable directory and packages it both as a ZIP and a per-user Inno Setup

@@ -1,10 +1,14 @@
-# iPhone/iPad Web Push check — build 108
+# iPhone/iPad Web Push checklist
+
+Reviewed for 0.9.37+116. iOS uses Web Push, not ntfy. Android native
+UnifiedPush setup is a separate flow. See [Android](ANDROID.md).
 
 The automated tests verify the browser bridge, worker and gateway with simulated
-push-provider delivery. They cannot prove physical iPhone delivery. The release
-needs the updated gateway and exact `/_matrix/push/v1/notify` nginx route as well
-as the new PWA client. Re-enable browser notifications after updating: older
-clients used a gateway URL rejected by Synapse.
+push-provider delivery. They cannot prove physical iPhone delivery. Hosting needs
+the gateway and exact `/_matrix/push/v1/notify` nginx route as well as the PWA.
+When migrating from builds before 108, re-enable browser notifications: those
+older clients used a gateway URL rejected by Synapse. Routine PWA updates do not
+require clearing the session or installing an Android ntfy distributor.
 
 1. In Safari, add `https://chat.deltie.net` to the Home Screen. Open **that app**,
    sign in, then Settings → Notifications → Enable browser notifications. Accept

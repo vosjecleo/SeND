@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+116" date="2026-10-03" type="development">
+      <description><p>Fix Android video staging and add explicit compression recovery; refresh installation and technical documentation.</p></description>
+    </release>
     <release version="0.9.37+115" date="2026-10-02" type="development">
       <description><p>Correct muted speaking indicators, enforce voice and screen-share audio deafen, and restore Last.fm artwork in the PWA.</p></description>
     </release>

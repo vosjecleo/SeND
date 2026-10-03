@@ -1,5 +1,10 @@
 # Activity / media local preview — 2026-09-25
 
+> Historical release/investigation record. Versions, observations and validation
+> below apply to that build, not necessarily the latest release. See the
+> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> do not automatically close unverified device tests.
+
 Local Linux review build on top of 0.9.34+107. This is not a published release
 and does not change the public version number. No server changes are required.
 

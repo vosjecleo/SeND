@@ -1,7 +1,7 @@
 # SeND Flatpak
 
-This packages the checksum-pinned, already released **0.9.36+112 x86-64**
-application binary. It is a direct-download package, not a Flathub submission.
+This packages the checksum-pinned Linux application artifact for **0.9.37+116
+x86-64**. It is a direct-download package, not a Flathub submission.
 The legacy application ID remains `net.deltie.deltiecord` for compatibility.
 
 Unlike the AppImage, this uses the GNOME 50 runtime's GTK, icon loaders, FFmpeg,
@@ -11,10 +11,10 @@ The corresponding source extension is published as a separate optional bundle.
 
 ## Install and launch
 
-Download `SeND-0.9.36+112-linux-x86_64.flatpak` from the SeND release and run:
+Download `SeND-0.9.37+116-linux-x86_64.flatpak` from the SeND release and run:
 
 ```sh
-flatpak install --user ./SeND-0.9.36+112-linux-x86_64.flatpak
+flatpak install --user ./SeND-0.9.37+116-linux-x86_64.flatpak
 flatpak run net.deltie.deltiecord
 ```
 
@@ -22,7 +22,7 @@ Accept installation of the GNOME runtime from Flathub when prompted. The runtime
 is an additional shared download; it is not included in the application bundle.
 Verify the download using `FLATPAK-SHA256SUMS`. This initial direct bundle has no
 SeND update repository: install newer bundles manually. `flatpak update` still
-updates the runtime. Build 112's in-app updater falls back to the download page.
+updates the runtime. The in-app updater falls back to the download page for this package.
 
 ## Sandbox boundaries
 
@@ -46,7 +46,9 @@ flatpak-builder --user --install-deps-from=flathub --repo=repo --bundle-sources 
 flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo repo SeND.flatpak net.deltie.deltiecord
 ```
 
-Run from this directory. CI's `[flatpak-only]` commit marker builds, checks native
+Run from this directory. Normal release publication triggers the Flatpak CI
+stage automatically. The `[flatpak-only]` commit marker also allows an isolated
+repackage without changing the application version. CI builds, checks native
 dependencies, launches the installed app inside its final sandbox and publishes
 only the new Flatpak assets. `bash packaging/publish-flatpak.sh` verifies and
 adds them to the existing Deltie download mirror, retaining rollback metadata.

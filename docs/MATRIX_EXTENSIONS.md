@@ -4,7 +4,7 @@ SeND uses normal Matrix rooms, Spaces, events, encryption, media, and
 MatrixRTC. Namespaced fields add presentation and lifecycle metadata; standard
 membership/power levels remain authoritative. Other clients can ignore unknown
 fields, but will not implement SeND's role-propagation or timeout-restoration
-behaviour. Current baseline: 0.9.34+107.
+behaviour. Documentation baseline: 0.9.37+116.
 
 ## Room presentation
 
@@ -305,3 +305,24 @@ membership does not automatically join every child room.
 
 Pronoun entries are limited to 16 graphemes on write and old longer entries are
 truncated for display. No SQL migration is needed for these additions.
+
+## Activity profile extension (108–110 and later)
+
+Each publishing device owns `net.deltiecord.activity.device.<sha256-device-id>`.
+Records contain independent `slots.program` and `slots.music` contributions plus
+optional `lastfm_recent`. Readers aggregate bounded contributions; live slots
+expire and are hidden by SeND while offline/invisible. Opted-in recent Last.fm
+history is persistent and may be displayed offline. Publication never includes
+process paths, program rules or API credentials. These are public profile fields,
+not encrypted messages; another client may retain them or ignore this extension.
+See the historical [109 design](build-109-activity.md) and [110 persistence changes](build-110-polish.md).
+
+The SeND rename deliberately retains existing `net.deltiecord.*` extension keys,
+application IDs and databases. Renaming visible branding must not fork profiles,
+room state, encrypted sessions or notification identities.
+
+## Call invitations
+
+DM/group invitation ringing is separate from MatrixRTC room membership. Server
+voice-channel joins do not ring. Client ringing is capped at 30 seconds and
+requires a running client; this is not native background CallKit integration.

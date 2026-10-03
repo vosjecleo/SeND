@@ -1,29 +1,26 @@
 # Web/PWA deployment
 
-## Current deployment: 0.9.34+107 — 2026-09-25
+## Current release target: 0.9.37+116
 
-Build 107 passed Web/PWA CI (including browser autofill/mode-switch regression)
-and was deployed atomically to `chat.deltie.net`. Public `version.json` reports
-version `0.9.34`, build `107`. All four platform
-artifacts are published as Latest. See [1.0 readiness](RELEASE_READINESS.md) for
-the distinction between feature-scope completion and real-device validation.
+The hosted app is the Flutter PWA at `chat.deltie.net`. Routine publication uses
+CI artifacts; it never builds on the web server. Verify the actual deployed
+version with `https://chat.deltie.net/version.json` after each update rather
+than relying on a historical version recorded in this guide.
 
-**Pending operator action before browser SSO:** the new exact `/auth.html` nginx
-rule prevents callback codes/tokens entering access logs or caches. The PWA
-files are deployed, but this privileged configuration change was not applied.
-On Deltie, the inspected, narrowly scoped candidate and backup/rollback script
-are staged under `/home/cleo/deltiecord-106-server`:
+The build 116 Android fix does not require nginx, certificate, media-helper or
+Web Push service changes. Browser sends keep their original-quality policy.
+See [1.0 readiness](RELEASE_READINESS.md) and [iOS push checks](ios-push-checklist.md)
+for physical-device validation still required.
 
-```sh
-ssh -t deltie 'sudo bash /home/cleo/deltiecord-106-server/apply-auth-nginx.sh'
-```
+### Authentication callback protection
 
-The script refuses a changed live snippet, backs it up, validates nginx, and
-reloads only after validation. Other hosts should adapt only the callback rule
-from `server/chat-nginx.conf` after reviewing their live configuration. Do not
-overwrite unrelated Matrix, RTC, TLS or proxy configuration. This does not enable
-an identity provider on the password-only Deltie homeserver. Real-provider and
-iOS standalone-PWA callback behaviour still need testing.
+Before enabling browser SSO, verify the exact `/auth.html` rule from
+`server/chat-nginx.conf`: callback codes must not enter access logs or caches.
+An old deployment note records a staged build-106 operator script; do not rerun
+that stale candidate against a changed nginx configuration. Inspect the live
+configuration and apply only the needed scoped change, with backup and nginx
+validation. This does not enable an identity provider on a password-only server.
+Account sign-in is separate from Matrix encryption/device verification.
 
 ## Routine updates
 
@@ -123,7 +120,7 @@ gateway dependencies; tests nginx and the two loopback services before reload.
 It preserves the old Element service on port 8089 and its data, and does not
 touch DNS, certificates, Matrix or RTC blocks. It does not print secret values.
 
-Check `https://chat.deltie.net/version.json` reports **0.9.30 / 99**, open the app
+Check `https://chat.deltie.net/version.json` reports the version/build of the artifact you just deployed, open the app
 and confirm login, then perform the real-iOS checklist below. If an old Element
 service worker remains in control, reload once after the new worker activates;
 do not clear all site storage as that would remove existing Matrix keys.

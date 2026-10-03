@@ -7,6 +7,7 @@ import 'package:deltiecord/services/video_preparation_android.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('net.deltie.deltiecord/video_prepare');
+  const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   final draft = AttachmentDraft(
@@ -16,7 +17,47 @@ void main() {
     spoiler: true,
     caption: 'caption',
   );
-  tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  late Directory cache;
+  setUp(() async {
+    cache = await Directory.systemTemp.createTemp('send-android-cache-test-');
+    messenger.setMockMethodCallHandler(pathChannel, (call) async {
+      expect(call.method, 'getTemporaryDirectory');
+      return cache.path;
+    });
+  });
+  tearDown(() async {
+    messenger.setMockMethodCallHandler(channel, null);
+    messenger.setMockMethodCallHandler(pathChannel, null);
+    expect(await cache.list().toList(), isEmpty);
+    await cache.delete();
+  });
+
+  test(
+    'Android stages video in the native-approved cache, not systemTemp',
+    () async {
+      final root = await Directory.systemTemp.createTemp('send-cache-test-');
+      final cache = await Directory('${root.path}/cache').create();
+      addTearDown(() => root.delete(recursive: true));
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'probe') {
+          final input = File(call.arguments['input'] as String);
+          expect(input.path, startsWith('${cache.path}/send-video-'));
+          expect(await input.readAsBytes(), draft.bytes);
+          return {'width': 720, 'height': 1280, 'duration': 5000};
+        }
+        return null;
+      });
+      final result = await prepareAndroidVideo(
+        draft,
+        optimize: false,
+        progress: (_) {},
+        canceled: () => false,
+        cacheDirectory: () async => cache,
+      );
+      expect(result.bytes, draft.bytes);
+      expect(await cache.list().toList(), isEmpty);
+    },
+  );
 
   test(
     'Android preparation retains rotated dimensions and message metadata',

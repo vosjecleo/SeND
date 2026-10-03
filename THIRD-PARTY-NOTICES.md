@@ -1,6 +1,6 @@
 # Third-party notices
 
-Documentation baseline: 0.9.34+106. The documentation refresh does not change
+Documentation baseline: 0.9.37+116. The documentation refresh does not change
 upstream licences or replace the generated per-artifact notices.
 
 SeND is distributed under AGPL-3.0-or-later. It is built with Flutter,
@@ -10,7 +10,8 @@ matrix-dart-sdk, flutter-webrtc, media_kit, and the other packages declared in
 
 The application also bundles the Jome Unicode emoji catalogue and Cal Henderson's
 emoji-data shortcodes under the MIT License (see assets/emoji license files).
-Notification and ringtone sounds are original recordings by VosjeCleo.
+All nine sound pack v3 cues (notifications, ringtone and voice controls) are
+original creations by VosjeCleo.
 Text and colour emoji use platform
 fonts. Dependency notices, including the Apache-2.0 UnifiedPush Android
 connector, are generated into each Flutter release bundle. Project links and
@@ -28,6 +29,11 @@ separate `SeND-VERSION+BUILD-appimage-sources.tar.gz` release asset; the exact l
 is recorded in `usr/share/doc/deltiecord/DEPENDENCY-SOURCES.txt`.
 These native dependencies retain their respective
 upstream licences; they are not relicensed as application code.
+
+Flatpak uses the shared GNOME runtime and builds its media libraries from pinned
+sources. Its source extension and `FLATPAK-SHA256SUMS` are separate release assets;
+see [Flatpak packaging](packaging/flatpak/README.md). Android video preparation
+uses AndroidX Media3 under Apache-2.0; native dependency notices also apply.
 
 Packaging tools such as linuxdeploy and the AppImage runtime are build-time
 tools and are not incorporated as application source. Their upstream projects

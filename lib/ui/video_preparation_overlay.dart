@@ -34,7 +34,9 @@ class VideoPreparationOverlay extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Optimizing ${state.name}',
+                                    state.failure == null
+                                        ? 'Optimizing ${state.name}'
+                                        : 'Could not optimize ${state.name}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -45,12 +47,44 @@ class VideoPreparationOverlay extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            LinearProgressIndicator(
-                              value: state.progress == 0
-                                  ? null
-                                  : state.progress,
-                            ),
-                            const Text('Local preparation · not uploaded yet'),
+                            if (state.failure != null) ...[
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 120,
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Text(state.failure!),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        state.recover(VideoRecovery.retry),
+                                    child: const Text('Retry compression'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        state.recover(VideoRecovery.original),
+                                    child: const Text('Send original'),
+                                  ),
+                                ],
+                              ),
+                              const Text(
+                                'Original quality may use more data. Nothing has been uploaded yet.',
+                              ),
+                            ] else ...[
+                              LinearProgressIndicator(
+                                value: state.progress == 0
+                                    ? null
+                                    : state.progress,
+                              ),
+                              const Text(
+                                'Local preparation · not uploaded yet',
+                              ),
+                            ],
                           ],
                         ),
                       ),

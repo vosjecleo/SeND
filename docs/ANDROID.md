@@ -1,18 +1,21 @@
 # Android implementation and testing
 
-Build 106 APKs/AAB passed CI and are published as Latest. This is the feature-scope
-milestone, not a replacement for the [1.0 device checklist](RELEASE_READINESS.md).
+Documentation baseline: **0.9.37+116**. Signed APKs and the AAB are built in CI;
+see [installation](../INSTALL.md) for architecture selection and upgrades.
+Current native media preparation uses Android Media3. Build 116 fixes the
+cache-directory mismatch that rejected camera clips before encoding and adds
+explicit retry/original/cancel recovery. See [diagnosis and device checks](build-116-video.md).
 
-Build 106 adds the mobile discussion/forum UI, shared profile-card crop previews,
-event filters and Administration. Browser SSO uses an external browser and a
-random-port loopback callback; the return intent only foregrounds SeND.
-Exercise cancellation, process interruption and encrypted-session recovery on
-real devices before considering this flow fully validated.
+Native Android notifications use UnifiedPush; an installed iOS PWA instead uses
+Web Push. Sound pack v3 includes nine cues; call ringing applies only to DM/group
+invitations for up to 30 seconds, never to joining server voice channels.
+Physical codec, camera, RTC, notification and lifecycle checks remain release
+gates; a successful compile is not hardware validation.
 
-SeND's Android application uses the shared `ChatBackend`, Matrix backend,
-models, encryption/session storage, timeline, media, profile, settings, and
-MatrixRTC layers. Phone-specific presentation lives in `lib/ui/mobile`; the
-desktop widget tree is selected independently.
+The phone shell in `lib/ui/mobile` shares the same backend, models, encrypted
+session store, media and RTC services as desktop. Browser SSO returns via a
+random-port loopback callback; the return intent only foregrounds SeND. Test
+cancellation, process interruption and recovery before relying on that flow.
 
 ## Navigation model
 

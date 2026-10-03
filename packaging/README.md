@@ -1,6 +1,6 @@
 # Release packaging and publication
 
-Current release target: 0.9.36+112. The project remains on Latest while
+Current release target: 0.9.37+116. The project remains on Latest while
 [1.0 hardening](../docs/RELEASE_READINESS.md)
 continues. Documentation-only commits use `[skip ci]` and do not move release
 tags or deployed binaries.
@@ -48,12 +48,12 @@ Use the release script rather than invoking `flutter build` directly. It also
 applies the release-only Rust FFI retention flag required by the current
 flutter_vodozemac dependency.
 
-Install the Debian package with `sudo apt install ./dist/SeND-0.9.35+108-linux-debian-amd64.deb`.
+Install the Debian package with `sudo apt install ./dist/SeND-0.9.37+116-linux-debian-amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
 remains in the user's normal XDG application-data and Secret Service stores.
 
-Run the AppImage with `chmod +x dist/SeND-0.9.35+108-linux-appimage-x86_64.AppImage` followed by
-`./dist/SeND-0.9.35+108-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
+Run the AppImage with `chmod +x dist/SeND-0.9.37+116-linux-appimage-x86_64.AppImage` followed by
+`./dist/SeND-0.9.37+116-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
 required for persisted login and E2EE keys. Audio requires a reachable PulseAudio
 or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
@@ -63,7 +63,7 @@ with licence notices and separate corresponding source archives; GTK, libc and g
 drivers remain host-owned. CI also launches it on clean Ubuntu without host mpv.
 The application/Flutter/plugin ELF dependencies are audited too. AppImage-only
 corrections use `[appimage-only]` commits and the dedicated repackage workflow,
-which keeps the build-112 binaries/tag, enforces a 160 MiB runtime budget, and
+which keeps the selected application binaries/tag, enforces a 160 MiB runtime budget, and
 tests standard Nix appimage-run without extraPkgs overrides before replacing
 only that release asset and checksums. Then run
 `bash packaging/publish-appimage-repackage.sh` to mirror only the corrected
@@ -94,3 +94,17 @@ The Arch recipe is in `packaging/arch/PKGBUILD` and intentionally builds from th
 local checkout so it can be used for test packages before a public source release.
 Run `FLUTTER_BIN=/path/to/flutter packaging/arch/build-package.sh` through a
 shell whose `PATH` contains that Flutter SDK to create the package in `dist/`.
+
+## Routine release checklist
+
+Update pubspec, runtime build number, package metadata and changelog together.
+Run formatting, analysis, Flutter tests, helper/packaging tests and shell checks;
+commit a clean main branch. Then run `packaging/publish-release.sh --channel latest`.
+Use `--skip-preflight` only when those checks have already passed for this commit.
+The script pushes both remotes, gates the tag on the four platform CI workflows,
+verifies published checksums, updates the mirror/PWA and waits for Flatpak.
+Do not move a failed release tag or bypass failed CI. Local host installation is
+separate and requires the explicit `--install-host` option.
+
+Android video encoding uses Media3; desktop uses FFmpeg/ffprobe. PWA uploads do
+not transcode locally. The 116 cache fix has no server deployment prerequisites.

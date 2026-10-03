@@ -1243,7 +1243,16 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           );
         }
       }
-    } catch (_) {
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Message not sent: ${error.toString().replaceFirst('Bad state: ', '')}',
+            ),
+          ),
+        );
+      }
       if (mounted &&
           backend.selectedRoom?.id == roomId &&
           _composer.text.isEmpty) {

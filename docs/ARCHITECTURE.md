@@ -1,6 +1,6 @@
 # SeND architecture
 
-Current baseline: 0.9.34+106. See [release readiness](RELEASE_READINESS.md)
+Documentation baseline: 0.9.37+116. See [release readiness](RELEASE_READINESS.md)
 for the distinction between implemented features and validated behaviour.
 
 ## Data flow and boundaries
@@ -101,8 +101,8 @@ into a phone layout.
 associated WebRTC stream, track, timer, and subscription. It applies persisted
 device and local-volume preferences, reconnects when selected devices vanish,
 and releases capture/playback resources on leave or dispose. Persistent voice
-channels remain ordinary Matrix rooms with MatrixRTC membership state; the UI
-simply suppresses their text timeline.
+channels remain ordinary Matrix rooms with MatrixRTC membership state. Their
+text is available through Open chat in the desktop/mobile details panel.
 
 Joining from another SeND device updates a short-lived owner hint in
 account data. A previously connected SeND client then leaves its local
@@ -156,3 +156,19 @@ use an external browser and random loopback callback; web uses a same-origin
 callback/BroadcastChannel. Destination/session/state checks, cancellation and
 SDK persistence remain explicit. Login never substitutes for encryption-device
 verification. See [networking](networking.md) and [hosting](web-deployment.md).
+
+## Media preparation and calls (current)
+
+`VideoPreparation` serializes native video preparation and owns the progress,
+error/retry/original/cancel state. Android stages files through path_provider in
+Context.cacheDir; the Media3 bridge validates canonical paths beneath that root.
+Desktop encoding uses FFmpeg; web keeps original files. Matrix upload/encryption
+still happens after preparation in the normal attachment send path.
+
+DM calls keep a bounded call area above chat. Voice channels expose text through
+Open chat in the details panel. Browser audio elements belong to the call, not
+individual tiles, so navigating/fullscreening cannot duplicate or drop playback.
+Mute gates outgoing microphone tracks (including clones); deafen gates remote
+voice and screen-share audio. Visual speaking state follows live microphone
+levels rather than stale SDK speaker membership. TURN credentials refresh before
+expiry; floating controls expose actual peer/connection diagnostics.

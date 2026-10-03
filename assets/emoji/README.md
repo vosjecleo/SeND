@@ -1,6 +1,6 @@
 # SeND emoji names and aliases
 
-Applies to 0.9.34+106. This is the bundled Unicode catalogue; imported custom
+Applies to 0.9.37+116. This is the bundled Unicode catalogue; imported custom
 emoji names belong to their packs and can be edited through pack management.
 See [current documentation](../../docs/README.md).
 

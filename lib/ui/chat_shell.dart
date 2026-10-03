@@ -509,7 +509,16 @@ class _ChatShellState extends State<ChatShell> {
           );
         }
       }
-    } catch (_) {
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Message not sent: ${error.toString().replaceFirst('Bad state: ', '')}',
+            ),
+          ),
+        );
+      }
       final failedDraft = _RoomDraft(
         delta: submittedDelta,
         attachments: attachments,

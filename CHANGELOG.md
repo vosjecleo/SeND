@@ -1,8 +1,23 @@
 # Changelog
 
-Release target: **0.9.37+115**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+116**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.37 build 116 — 2026-10-03
+
+- Fix Android video sends failing immediately during preparation. Stage clips
+  in Android's app-private cache via path_provider, matching the native media
+  bridge's canonical-path allowlist. Flutter's Dart system temporary directory
+  can instead resolve to code_cache; no allowlist widening is needed.
+- Keep compression failures visible with Retry compression, Send original and
+  Cancel controls. Original-quality upload requires an explicit choice; normal
+  upload checks and room encryption still apply. Cancellation never silently
+  uploads the original. Restore drafts and show send errors on mobile/desktop.
+- Add cache-location, metadata preservation, cleanup and recovery regressions.
+  Hardware-specific Android codec support still needs physical-device testing.
+- Refresh Markdown documentation, separate current guides from historical
+  investigations, and update installation/packaging examples and release gates.
 
 ## SeND 0.9.37 build 115 — 2026-10-02
 
