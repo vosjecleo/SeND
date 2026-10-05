@@ -231,6 +231,9 @@ extension _MatrixSession on MatrixBackend {
     );
     await _loadDeviceAppearance();
     _loadSettings();
+    if (kIsWeb) {
+      await BrowserPushPreviews.start(_matrix).catchError((Object _) {});
+    }
     _initializeVoice();
     _status = SessionStatus.signedIn;
     _connectionStatus = ConnectionStatus.online;

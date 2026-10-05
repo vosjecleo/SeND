@@ -48,6 +48,14 @@ test('Matrix pusher uses the mandatory standard gateway path', () => {
   assert.match(fs.readFileSync('lib/services/browser_push.dart', 'utf8'), /resolve\('\/_matrix\/push\/v1\/notify'\)/);
   assert.match(fs.readFileSync('server/chat-nginx.conf', 'utf8'), /location = \/_matrix\/push\/v1\/notify/);
 });
+test('preview snapshots are attached for restored sessions and fresh authentication', () => {
+  const source = fs.readFileSync('lib/matrix/matrix_session.dart', 'utf8');
+  const start = source.indexOf('Future<void> _finishPasswordAuthentication()');
+  const end = source.indexOf('Future<void> _logoutSession()', start);
+  assert.match(source.slice(0, start), /BrowserPushPreviews\.start\(_matrix\)/);
+  assert.match(source.slice(start, end), /BrowserPushPreviews\.start\(_matrix\)/);
+  assert.match(source.slice(end), /BrowserPushPreviews\.clear\(\)/);
+});
 test('re-enabling notifications replaces a subscription signed by an old VAPID key', async () => {
   const b = browser(); let unsubscribed = false, subscribed = false;
   b.context.Notification.requestPermission = async () => 'granted';
