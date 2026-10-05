@@ -77,3 +77,24 @@ test('worker visibly displays both normal and explicit test pushes', async () =>
   assert.equal(shown[1][1].tag, 'send-push-test');
   assert.match(shown[1][1].body, /Test notification received/);
 });
+test('declarative pushes display once and retain safe room navigation', async () => {
+  const listeners = {}, shown = [], opened = [];
+  const self = {
+    addEventListener: (name, fn) => {listeners[name] = fn;},
+    registration: {showNotification: async (...args) => shown.push(args)},
+    clients: {matchAll: async () => [], openWindow: async target => opened.push(target)},
+  };
+  vm.runInNewContext(fs.readFileSync('web/sw.js', 'utf8'), {self});
+  const payload = {web_push: 8030, room_id: '!room:example', event_id: '$event',
+    notification: {title: 'SeND', body: 'New activity in a conversation',
+      navigate: 'https://chat.deltie.net/?room=ignored'}};
+  let work;
+  listeners.push({data: {json: () => payload}, waitUntil: promise => {work = promise;}});
+  await work;
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0][0], 'SeND');
+  listeners.notificationclick({notification: {data: shown[0][1].data, close() {}},
+    waitUntil: promise => {work = promise;}});
+  await work;
+  assert.equal(opened[0], '/?room=!room%3Aexample&event=%24event');
+});

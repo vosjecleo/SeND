@@ -202,6 +202,43 @@ def unsubscribe():
     return jsonify(ok=True)
 
 
+def declarative_payload(payload):
+    """Visible fallback for WebKit; retain IDs for older installed workers.
+
+    Construct metadata locally, never forward arbitrary homeserver content,
+    notification options or navigation URLs. No plaintext or crypto keys.
+    """
+    room = payload.get('room_id', '')
+    event = payload.get('event_id', '')
+    if (not isinstance(room, str) or len(room) > 1024
+            or not isinstance(event, str) or len(event) > 1024):
+        raise ValueError('Invalid notification identifiers')
+    is_test = payload.get('test') is True
+    if not room and not is_test:
+        raise ValueError('Missing notification room')
+    target = 'https://chat.deltie.net/'
+    if room:
+        target += '?' + urlencode({'room': room, 'event': event})
+    data = {'room_id': room, 'event_id': event}
+    return {
+        **data,
+        **({'test': True} if is_test else {}),
+        'web_push': 8030,
+        'notification': {
+            'title': 'SeND',
+            'body': ('Test notification received. Web Push is working on this device.'
+                     if is_test else 'New activity in a conversation'),
+            'navigate': target,
+            'icon': 'https://chat.deltie.net/icons/Icon-192.png',
+            'badge': 'https://chat.deltie.net/icons/Icon-192.png',
+            'tag': 'send-push-test' if is_test else room,
+            'renotify': True,
+            'silent': False,
+            'data': data,
+        },
+    }
+
+
 def send(subscription, payload):
     # Exact provider hosts only. Reject private resolutions as defence in depth;
     # HTTPS still authenticates the fixed provider hostname. Never follow redirects.
@@ -215,7 +252,7 @@ def send(subscription, payload):
             kwargs['allow_redirects'] = False
             return super().request(*args, **kwargs)
     with NoRedirectSession() as session:
-        return webpush(subscription_info=subscription, data=json.dumps(payload),
+        return webpush(subscription_info=subscription, data=json.dumps(declarative_payload(payload)),
                        vapid_private_key=KEY, vapid_claims={'sub': CONTACT},
                        ttl=300, timeout=8, requests_session=session)
 

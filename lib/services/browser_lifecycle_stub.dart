@@ -1,4 +1,5 @@
 Future<bool> initializeBrowser() async => true;
+Future<void> writeBrowserPushPreview(String? json) async {}
 Future<String> subscribeBrowserPush() =>
     Future.error(UnsupportedError('Browser only'));
 Future<void> clearBrowserNotifications(String roomId) async {}

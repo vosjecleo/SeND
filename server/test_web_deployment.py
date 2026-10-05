@@ -47,3 +47,15 @@ class WebDeploymentTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     deployment.deploy(archive, root / 'web', '0.9.30+99')
                 self.assertFalse((root / 'web/current').exists())
+
+    def test_same_version_patch_retains_original_for_rollback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            archive = root / 'web.tar.gz'
+            self.archive(archive)
+            deployment.deploy(archive, root / 'web', '0.9.30+99')
+            deployment.deploy(archive, root / 'web', '0.9.30+99', 'a' * 40)
+            self.assertEqual((root / 'web/current').readlink().name, '0.9.30+99-web-aaaaaaaaaaaa')
+            self.assertTrue((root / 'web/0.9.30+99/index.html').is_file())
+            with self.assertRaises(ValueError):
+                deployment.deploy(archive, root / 'web', '0.9.30+99', '../escape')

@@ -4,6 +4,19 @@ Release target: **0.9.37+118**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
 
+### Build 118 PWA-only follow-up — notification previews
+
+- Add a Declarative Web Push visible fallback for supporting WebKit versions,
+  while keeping existing worker subscriptions compatible.
+- Add optional device-local encrypted notification previews using a small
+  Vodozemac worker module, separate encrypted key snapshots, bounded direct
+  homeserver event fetches, and generic fallback when previews cannot be made.
+- Keep preview opt-in local to each browser; clear snapshots on logout/disable.
+  No keys or plaintext are shared with the push gateway. New encryption sessions
+  may require reopening the app before previews work.
+- Preserve 0.9.37+118 and native packages. Add browser worker crypto/storage tests
+  and rollback-safe same-version PWA deployment revisions.
+
 ## SeND 0.9.37 build 118 — 2026-10-05
 
 - Restrict outgoing text formatting to inline italic (`*text*` or `_text_`),

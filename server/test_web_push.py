@@ -18,6 +18,47 @@ def subscription(endpoint='https://web.push.apple.com/test'):
 
 
 class WebPushTests(unittest.TestCase):
+    def test_declarative_payload_has_private_fallback_and_safe_navigation(self):
+        from urllib.parse import urlsplit, parse_qs
+        room, event = '!room:example&x=1', '$event#fragment'
+        payload = gateway.declarative_payload({
+            'room_id': room, 'event_id': event,
+            'body': 'private message', 'access_token': 'secret',
+            'notification': {'navigate': 'https://evil.example'},
+        })
+        self.assertEqual(payload['web_push'], 8030)
+        self.assertEqual(payload['room_id'], room)
+        notice = payload['notification']
+        self.assertEqual(notice['body'], 'New activity in a conversation')
+        self.assertEqual(notice['data'], {'room_id': room, 'event_id': event})
+        target = urlsplit(notice['navigate'])
+        self.assertEqual((target.scheme, target.netloc, target.path),
+                         ('https', 'chat.deltie.net', '/'))
+        self.assertEqual(parse_qs(target.query), {'room': [room], 'event': [event]})
+        self.assertFalse(target.fragment)
+        for secret in ['private message', 'access_token', 'evil.example']:
+            self.assertNotIn(secret, json.dumps(payload))
+
+    def test_test_push_has_declarative_fallback_too(self):
+        payload = gateway.declarative_payload({'test': True, 'room_id': '', 'event_id': ''})
+        self.assertTrue(payload['test'])
+        self.assertEqual(payload['notification']['navigate'], 'https://chat.deltie.net/')
+        self.assertEqual(payload['notification']['tag'], 'send-push-test')
+        self.assertIn('Test notification received', payload['notification']['body'])
+        for invalid in [{'room_id': ''}, {'room_id': []}, {'room_id': 'x' * 1025}]:
+            with self.assertRaises(ValueError):
+                gateway.declarative_payload(invalid)
+
+    def test_provider_receives_declarative_envelope(self):
+        with mock.patch.object(gateway.socket, 'getaddrinfo', return_value=[
+            (2, 1, 6, '', ('1.1.1.1', 443)),
+        ]), mock.patch.object(gateway, 'webpush') as provider:
+            gateway.send(subscription(), {'room_id': '!room:test', 'event_id': '$event'})
+        payload = json.loads(provider.call_args.kwargs['data'])
+        self.assertEqual(payload['web_push'], 8030)
+        self.assertEqual(payload['notification']['title'], 'SeND')
+        self.assertEqual(provider.call_args.kwargs['ttl'], 300)
+
     def test_malformed_json_shapes_are_rejected(self):
         for route in ['visibility', 'unsubscribe', '_matrix/push/v1/notify']:
             for body in [[], 'not an object']:

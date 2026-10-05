@@ -15,6 +15,7 @@ import 'dart:developer' as developer;
 import '../services/platform_io.dart';
 import '../services/browser_media.dart';
 import '../services/browser_push.dart';
+import '../services/browser_push_previews.dart';
 import '../services/gif_service.dart';
 import 'dart:math';
 import 'dart:typed_data';
@@ -1765,6 +1766,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    if (kIsWeb) BrowserPushPreviews.stop();
     unawaited(_stopActivities());
     _browserAuthenticationCanceled = true;
     final authBrowser = _activeAuthBrowser;

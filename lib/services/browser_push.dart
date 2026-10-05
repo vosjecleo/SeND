@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:matrix/matrix.dart';
 import 'browser_lifecycle.dart';
 import 'browser_private_store.dart';
+import 'browser_push_previews.dart';
 import 'bounded_http.dart';
 import 'chat_notifications.dart';
 import 'platform_io.dart';
@@ -38,6 +39,7 @@ Future<void> reconcileBrowserPush(Client client) async {
 }
 
 Future<void> disableRegisteredBrowserPush(Client client) async {
+  await BrowserPushPreviews.clear();
   final key = await BrowserPrivateStore.read('pushkey');
   if (key != null) {
     await client.deletePusher(PusherId(appId: _appId, pushkey: key));
@@ -127,6 +129,7 @@ class BrowserChatNotificationSink extends SilentChatNotificationSink {
   Future<void> clearRoom(String roomId) => clearBrowserNotifications(roomId);
   @override
   Future<void> clearPrivateState() async {
+    await BrowserPushPreviews.clear();
     await disableBrowserPush();
     await BrowserPrivateStore.write('pushkey', null);
   }

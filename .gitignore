@@ -1,4 +1,6 @@
 # Miscellaneous
+/tool/push-crypto/target/
+/web/push-crypto/
 *.class
 *.log
 *.pyc

@@ -1,4 +1,5 @@
-/* Browser-only capabilities; Matrix tokens and decrypted room state stay in Dart. */
+/* Browser-only capabilities. Push gateway gets IDs only. Optional local preview
+ * snapshots are isolated in push_preview_store.js, never sent to the gateway. */
 (() => {
   'use strict';
   let releaseLock;
@@ -94,7 +95,7 @@
     // Best effort: the browser may decline persistent storage. The SDK still
     // uses IndexedDB; users must retain their Matrix recovery key independently.
     navigator.storage?.persist?.().catch(() => {});
-    await navigator.serviceWorker.register('/sw.js', {scope: '/'});
+    await navigator.serviceWorker.register('/sw.js', {scope: '/', updateViaCache: 'none'});
     return true;
   };
   // bfcache restoration must reload before opening another IndexedDB writer.

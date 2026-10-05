@@ -9,6 +9,7 @@ import '../models/chat_models.dart';
 import '../version.dart';
 import '../services/app_sounds.dart';
 import '../services/browser_lifecycle.dart' as browser;
+import '../services/browser_push_previews.dart';
 import '../services/microphone_test.dart';
 import '../services/link_preview_policy.dart';
 import '../services/secret_redaction.dart';
@@ -673,7 +674,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         const Text(
           'On iPhone/iPad, add SeND to your Home Screen from Safari, '
           'open that installed app, then enable notifications here (iOS 16.4 or later). '
-          'Web alerts contain no decrypted message previews.',
+          'Web alerts are generic unless device-side previews are enabled below.',
         ),
         FilledButton.icon(
           icon: const Icon(Icons.notifications_active_outlined),
@@ -766,6 +767,33 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           onPressed: AppSounds.notification,
           icon: const Icon(Icons.notifications_active_outlined),
           label: const Text('Test notification sound'),
+        ),
+      if (kIsWeb)
+        ValueListenableBuilder<bool>(
+          valueListenable: BrowserPushPreviews.enabled,
+          builder: (context, enabled, _) => SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Decrypt previews on this browser'),
+            subtitle: const Text(
+              'Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.',
+            ),
+            value: enabled,
+            onChanged: (value) async {
+              try {
+                await BrowserPushPreviews.setEnabled(value);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not save browser preview settings. Please try again.',
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+          ),
         ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,

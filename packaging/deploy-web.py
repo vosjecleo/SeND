@@ -11,14 +11,17 @@ import tarfile
 import tempfile
 
 
-def deploy(archive, root, release):
+def deploy(archive, root, release, revision=None):
     if not re.fullmatch(r'\d+\.\d+\.\d+\+\d+', release):
         raise ValueError('Invalid release identifier')
     root = pathlib.Path(root).resolve()
     if root in (pathlib.Path('/'), pathlib.Path.home()):
         raise ValueError('Refusing broad deployment root')
     root.mkdir(parents=True, exist_ok=True)
-    destination = root / release
+    if revision is not None and not re.fullmatch(r'[0-9a-f]{40}', revision):
+        raise ValueError('Invalid web patch commit')
+    directory = release + ('-web-' + revision[:12] if revision else '')
+    destination = root / directory
     with open(archive, 'rb') as source:
         digest = hashlib.file_digest(source, 'sha256').hexdigest()
     if destination.exists():
@@ -57,15 +60,15 @@ def deploy(archive, root, release):
             staging.chmod(0o755)
             (staging / '.archive-sha256').write_text(digest + '\n')
             staging.rename(destination)
-    link = root / ('.current-' + release)
+    link = root / ('.current-' + directory)
     if link.exists() or link.is_symlink():
         raise ValueError('A deployment is already staged')
     link.symlink_to(destination.name, target_is_directory=True)
     os.replace(link, root / 'current')
-    print('Web release selected: ' + release)
+    print('Web release selected: ' + directory)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        raise SystemExit('usage: deploy-web.py ARCHIVE ROOT VERSION+BUILD')
+    if len(sys.argv) not in (4, 5):
+        raise SystemExit('usage: deploy-web.py ARCHIVE ROOT VERSION+BUILD [WEB_PATCH_COMMIT]')
     deploy(*sys.argv[1:])

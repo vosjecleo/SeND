@@ -16,6 +16,12 @@ external void _lease(JSString key);
 external JSPromise<JSString> _diagnostics();
 @JS('deltieTestPush')
 external JSPromise<JSAny?> _testPush();
+@JS('sendWritePushPreview')
+external JSPromise<JSAny?> _writePreview(JSString? json);
+
+Future<void> writeBrowserPushPreview(String? json) async {
+  await _writePreview(json?.toJS).toDart;
+}
 
 Future<String> browserPushDiagnostics() async =>
     (await _diagnostics().toDart).toDart;

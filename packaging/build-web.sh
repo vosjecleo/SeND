@@ -31,6 +31,7 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals' \
   "$workspace/source/rust/target/wasm32-unknown-unknown/release/vodozemac_bindings_dart.wasm" \
   --target no-modules --no-typescript --out-dir "$PWD/web/pkg" --out-name vodozemac_bindings_dart
 flutter pub get --enforce-lockfile
+bash packaging/build-push-crypto.sh
 python3 packaging/flutter-with-credentials.py build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
 test -s build/web/pkg/vodozemac_bindings_dart_bg.wasm
 test -s build/web/sw.js

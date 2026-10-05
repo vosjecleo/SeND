@@ -7,6 +7,7 @@ part of 'matrix_backend.dart';
 /// generation established by this lifecycle.
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
+    if (kIsWeb) BrowserPushPreviews.stop();
     try {
       await _stopActivities(clear: true);
       _settingsSaveTimer?.cancel();
@@ -54,6 +55,9 @@ extension _MatrixSession on MatrixBackend {
         unawaited(_notifyNewMessages());
       });
       _loginSubscription = _matrix.onLoginStateChanged.stream.listen((_) {
+        if (kIsWeb && !_matrix.isLogged()) {
+          unawaited(BrowserPushPreviews.clear());
+        }
         if (!_matrix.isLogged()) unawaited(_stopActivities());
         // Authentication can report success before initial account data has
         // arrived. Do not expose editable defaults in that interval.
@@ -113,6 +117,7 @@ extension _MatrixSession on MatrixBackend {
         // restoring the session. Messaging remains usable without alerts.
       }
       if (kIsWeb && _matrix.isLogged()) {
+        await BrowserPushPreviews.start(_matrix).catchError((Object _) {});
         unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
       }
       _status = _matrix.isLogged()
@@ -241,6 +246,10 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _logoutSession() async {
     _error = null;
+    if (kIsWeb) {
+      // Still revoke the server token if browser storage itself is unavailable.
+      await BrowserPushPreviews.clear().catchError((Object _) {});
+    }
     try {
       await _stopActivities(clear: true);
       _settingsSaveTimer?.cancel();
@@ -864,6 +873,12 @@ extension _MatrixSession on MatrixBackend {
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     _notificationPreviewsEnabled =
         content?.tryGet<bool>('notification_previews') ?? true;
+    if (kIsWeb) {
+      BrowserPushPreviews.setAllowed(
+        _notificationPreviewsEnabled &&
+            (content?.tryGet<bool>('notifications_enabled') ?? true),
+      );
+    }
     _loadAdvancedAccountData();
     _collapsedChannelCategories
       ..clear()
@@ -1339,6 +1354,11 @@ extension _MatrixSession on MatrixBackend {
         {...?existing, 'notification_previews': enabled},
       );
       _notificationPreviewsEnabled = enabled;
+      if (kIsWeb) {
+        BrowserPushPreviews.setAllowed(
+          enabled && _preferences.notificationsEnabled,
+        );
+      }
       _notifyBackendListeners();
     } catch (exception) {
       _error = _friendlyError(exception);
