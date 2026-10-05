@@ -16,6 +16,7 @@ abstract final class BrowserPushPreviews {
   static StreamSubscription<dynamic>? _sync;
   static final _rooms = <String, StreamSubscription<String>>{};
   static final _sessions = <String, Map<String, Object?>>{};
+  static final _warmedRooms = <String>{};
   static Timer? _timer;
   static var _generation = 0;
   static var _allowed = false;
@@ -51,6 +52,7 @@ abstract final class BrowserPushPreviews {
     _generation++;
     _timer?.cancel();
     _sessions.clear();
+    _warmedRooms.clear();
     // Clear first, so disabling remains safe even if preference persistence fails.
     await _write(null);
     await BrowserPrivateStore.write('push-preview-opt-in', '$value');
@@ -147,7 +149,24 @@ abstract final class BrowserPushPreviews {
       final content = event?.originalSource?.content ?? event?.content;
       final id = content?['session_id'];
       if (id is String) await _capture(room.id, id, generation);
+      // The last event is often our own message. Warm a bounded recent local
+      // window too, so the other participants' existing sessions survive an
+      // app restart. No network pagination or full-history key export.
+      if (_warmedRooms.length < 64 && _warmedRooms.add(room.id)) {
+        try {
+          final recent = await client.database.getEventList(room, limit: 16);
+          for (final event in recent) {
+            final content = event.originalSource?.content ?? event.content;
+            final session = content['session_id'];
+            if (session is String) await _capture(room.id, session, generation);
+          }
+        } catch (_) {
+          _warmedRooms.remove(room.id);
+        }
+      }
       if (generation != _generation) return;
+      // Yield between rooms rather than monopolising the Flutter UI isolate.
+      await Future<void>.delayed(Duration.zero);
     }
     final token = client.accessToken;
     final server = client.homeserver;
@@ -182,6 +201,7 @@ abstract final class BrowserPushPreviews {
     }
     _rooms.clear();
     _sessions.clear();
+    _warmedRooms.clear();
     _client = null;
   }
 
