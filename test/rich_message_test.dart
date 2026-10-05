@@ -29,7 +29,7 @@ void main() {
   for (final markup in ['*italic*', '**bold**', '*italic*\nnext']) {
     testWidgets('desktop markdown has no extra row: $markup', (tester) async {
       final document = Document()..insert(0, markup);
-      final message = serializeRichMessage(document);
+      final message = serializePlainComposer(document);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -71,16 +71,16 @@ void main() {
       {'insert': 'next\n'},
     ]);
   });
-  test('mobile range edits preserve untouched rich formatting', () {
-    final document = richMessageDocument(
+  test('plain range edits do not preserve legacy rich formatting', () {
+    final document = plainMessageDocument(
       'bold plain',
       '<strong>bold</strong> plain',
     );
     reconcileRichMessageDocument(document, 'bold plain', 'bold changed');
-    final message = serializeRichMessage(document);
+    final message = serializePlainComposer(document);
     expect(message.plainText, 'bold changed');
-    expect(message.html, contains('<strong>bold</strong>'));
-    expect(message.html, contains('changed'));
+    expect(message.html, isNull);
+    expect(message.plainText, 'bold changed');
   });
   test('selected custom emoji does not disable typed Markdown', () {
     final emoji = CustomEmojiReference(
@@ -89,7 +89,7 @@ void main() {
     );
     final document = Document()..insert(0, '**bold** :wave:');
     document.format(9, 6, LinkAttribute(customEmojiEditorLink(emoji)));
-    final message = serializeRichMessage(document);
+    final message = serializePlainComposer(document);
     expect(message.html, contains('<strong>bold</strong>'));
     expect(message.html, contains('data-mx-emoticon'));
     expect(message.html, contains('mxc://test/emoji'));
@@ -118,23 +118,10 @@ void main() {
     expect(text.textSpan?.style?.fontSize, 64);
   });
 
-  test('serializes rich text and Matrix spoilers with a plain fallback', () {
-    final document = Document()..insert(0, 'bold secret');
-    document.format(0, 4, Attribute.bold);
-    document.format(5, 6, const BackgroundAttribute(spoilerEditorColor));
-
-    final message = serializeRichMessage(document);
-
-    expect(message.plainText, 'bold secret');
-    expect(message.html, contains('<strong>bold</strong>'));
-    expect(message.html, contains('data-mx-spoiler'));
-    expect(message.html, isNot(contains(spoilerEditorColor)));
-  });
-
   test('converts typed markup without exposing formatting controls', () {
     final document = Document()..insert(0, '**bold** _italic_ ||hidden||');
 
-    final message = serializeRichMessage(document);
+    final message = serializePlainComposer(document);
 
     expect(message.plainText, '**bold** _italic_ ||hidden||');
     expect(message.html, contains('<strong>bold</strong>'));
@@ -146,7 +133,7 @@ void main() {
     final document = Document()
       ..insert(0, 'sudo apt install /path/to/deltiecord_0.3.6_amd64.deb');
 
-    final message = serializeRichMessage(document);
+    final message = serializePlainComposer(document);
 
     expect(
       message.plainText,
@@ -163,7 +150,7 @@ void main() {
     final document = Document()..insert(0, ':wave:');
     document.format(0, 6, LinkAttribute(customEmojiEditorLink(emoji)));
 
-    final message = serializeRichMessage(document);
+    final message = serializePlainComposer(document);
 
     expect(message.plainText, ':wave:');
     expect(message.html, contains('data-mx-emoticon'));

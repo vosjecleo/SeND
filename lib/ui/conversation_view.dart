@@ -58,7 +58,7 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<int> onMentionSelectionChanged;
   final VoidCallback onShowMembers;
   final ValueChanged<(RoomMemberSummary, Offset?)> onShowProfile;
-  final GlobalKey<_RichComposerState> composerKey;
+  final GlobalKey<_MessageComposerState> composerKey;
 
   @override
   State<_Conversation> createState() => _ConversationState();
@@ -1112,7 +1112,7 @@ class _ConversationState extends State<_Conversation> {
                     roomId: room.id,
                     replyToMessageId: widget.replyingTo?.id,
                     onSent: widget.onCancelComposerAction,
-                    builder: (startRecording) => _RichComposer(
+                    builder: (startRecording) => _MessageComposer(
                       key: widget.composerKey,
                       backend: backend,
                       controller: widget.controller,

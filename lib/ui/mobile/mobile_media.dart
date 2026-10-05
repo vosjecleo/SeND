@@ -1,3 +1,4 @@
+import '../audio_attachment_player.dart';
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
 import '../gif_favourite_button.dart';
@@ -103,15 +104,21 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
         backend: widget.backend,
         message: widget.message,
       ),
-      AttachmentKind.video || AttachmentKind.audio => _MobilePlayer(
-        key: attachment.kind == AttachmentKind.video ? _videoKey : null,
+      AttachmentKind.audio => AudioAttachmentPlayer(
+        backend: widget.backend,
+        messageId: widget.message.id,
+        attachment: attachment,
+        onSave: () => _saveAttachment(attachment),
+      ),
+      AttachmentKind.video => _MobilePlayer(
+        key: _videoKey,
         backend: widget.backend,
         message: widget.message,
-        audioOnly: attachment.kind == AttachmentKind.audio,
       ),
       AttachmentKind.file => _MobileFile(
         backend: widget.backend,
         message: widget.message,
+        onSave: () => _saveAttachment(attachment),
       ),
     };
     return GestureDetector(
@@ -259,8 +266,9 @@ class _MobileAttachmentViewState extends State<MobileAttachmentView> {
       final target = await FilePicker.saveFile(
         dialogTitle: 'Save attachment',
         fileName: attachment.name,
+        bytes: bytes,
       );
-      if (target != null) {
+      if (!kIsWeb && target != null) {
         await File(target).writeAsBytes(bytes, flush: true);
       }
     } catch (_) {
@@ -579,7 +587,6 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
                           key: ValueKey(m.id),
                           backend: widget.backend,
                           message: m,
-                          audioOnly: false,
                         ),
                       )
                     : const SizedBox.shrink();
@@ -765,12 +772,10 @@ class _MobilePlayer extends StatefulWidget {
   const _MobilePlayer({
     required this.backend,
     required this.message,
-    required this.audioOnly,
     super.key,
   });
   final ChatBackend backend;
   final ChatMessage message;
-  final bool audioOnly;
 
   @override
   State<_MobilePlayer> createState() => _MobilePlayerState();
@@ -922,20 +927,6 @@ class _MobilePlayerState extends State<_MobilePlayer>
       return const SizedBox.square(
         dimension: 44,
         child: CircularProgressIndicator(strokeWidth: 2),
-      );
-    }
-    if (widget.audioOnly) {
-      return Card(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: player.playOrPause,
-              icon: const Icon(Icons.play_arrow),
-            ),
-            Flexible(child: Text(widget.message.attachment!.name)),
-          ],
-        ),
       );
     }
     final screen = MediaQuery.sizeOf(context);
@@ -1096,7 +1087,12 @@ class _MobileVideoControls extends StatelessWidget {
 }
 
 class _MobileFile extends StatelessWidget {
-  const _MobileFile({required this.backend, required this.message});
+  const _MobileFile({
+    required this.backend,
+    required this.message,
+    required this.onSave,
+  });
+  final VoidCallback onSave;
   final ChatBackend backend;
   final ChatMessage message;
 
@@ -1106,7 +1102,11 @@ class _MobileFile extends StatelessWidget {
       leading: const Icon(Icons.insert_drive_file_outlined),
       title: Text(message.attachment!.name),
       subtitle: Text(message.attachment!.mimeType),
-      trailing: const Icon(Icons.open_in_new),
+      trailing: IconButton(
+        tooltip: 'Download file',
+        onPressed: onSave,
+        icon: const Icon(Icons.download),
+      ),
       onTap: () async {
         final bytes = await backend.downloadAttachment(message.id);
         final file = await TemporaryAttachmentStore.instance.create(

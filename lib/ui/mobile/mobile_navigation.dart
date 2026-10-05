@@ -780,11 +780,19 @@ class _RoomList extends StatelessWidget {
     key: const ValueKey('mobile-room-list'),
     padding: const EdgeInsets.fromLTRB(8, 0, 8, 84),
     itemCount: rooms.length,
+    findChildIndexCallback: (key) {
+      if (key is! ValueKey<String>) return null;
+      final index = rooms.indexWhere((room) => room.id == key.value);
+      return index < 0 ? null : index;
+    },
     itemBuilder: (context, index) {
       final room = rooms[index];
       final age = compactActivityAge(room.lastActivityAt);
       return ListTile(
+        key: ValueKey(room.id),
         minTileHeight: 56,
+        minVerticalPadding: 6,
+        visualDensity: VisualDensity.standard,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         selected: false,
         leading: MobileAvatar(

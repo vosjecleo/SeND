@@ -1,8 +1,30 @@
 # Changelog
 
-Release target: **0.9.37+116**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+117**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.37 build 117 — 2026-10-05
+
+- Replace the desktop WYSIWYG editor with plain text. Keep emoji completion,
+  selected custom emoji, mentions, drafts, attachments and send shortcuts.
+  Remove HTML paste and invisible formatting; explicitly typed Markdown still
+  renders on send, and received formatted messages remain readable. Legacy
+  formatted edits start from their plain-text fallback rather than hidden styles.
+- Preserve typed line and paragraph breaks and ignore HTML formatting whitespace
+  between blocks so it cannot indent the next timeline paragraph.
+- Share an audio player across mobile and desktop, with waveform progress,
+  seeking, elapsed/total time and download. Hide the filename for voice messages;
+  retain it for ordinary audio. Use supplied waveform metadata or neutral bars;
+  unknown duration displays `--:--` until playback metadata is available.
+- Separate collapsed homeserver configuration from the web credential form,
+  mark the server field as a URL, and add password show/hide controls on web and
+  native login. Read silently autofilled values directly at submission.
+- Keep mobile DM row identity and density stable when messages reorder rooms;
+  tighten desktop DM row padding. Extend mobile reply-highlight bars to the
+  timeline edge without moving the message content inward.
+- Expose an explicit download button on mobile file cards. Supply downloaded
+  bytes to the browser save API instead of attempting filesystem writes.
 
 ## SeND 0.9.37 build 116 — 2026-10-03
 

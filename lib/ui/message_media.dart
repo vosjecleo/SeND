@@ -709,15 +709,26 @@ class _AttachmentViewState extends State<_AttachmentView> {
 
   Future<void> _save() async {
     if (_saving) return;
-    final path = await FilePicker.saveFile(
-      dialogTitle: 'Save attachment',
-      fileName: widget.attachment.name,
-    );
-    if (path == null || !mounted) return;
     setState(() => _saving = true);
     try {
       final bytes = await widget.backend.downloadAttachment(widget.messageId);
-      await File(path).writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'Save attachment',
+        fileName: widget.attachment.name,
+        bytes: kIsWeb ? bytes : null,
+      );
+      if (!kIsWeb && path != null) {
+        await File(path).writeAsBytes(bytes, flush: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not download that attachment. Try again.'),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -831,12 +842,11 @@ class _AttachmentViewState extends State<_AttachmentView> {
             _showContextMenu(position, image: false, fullscreen: fullscreen),
         onFullscreen: _showMedia,
       ),
-      AttachmentKind.audio => _InlineAudio(
+      AttachmentKind.audio => AudioAttachmentPlayer(
         backend: widget.backend,
         messageId: widget.messageId,
         attachment: widget.attachment,
         onSave: _save,
-        onOpen: _open,
       ),
       AttachmentKind.file => _buildFile(),
     };
@@ -1576,121 +1586,4 @@ class _LightboxVideoState extends State<_LightboxVideo> {
             ),
           ),
         );
-}
-
-class _InlineAudio extends StatefulWidget {
-  const _InlineAudio({
-    required this.backend,
-    required this.messageId,
-    required this.attachment,
-    required this.onSave,
-    required this.onOpen,
-  });
-
-  final ChatBackend backend;
-  final String messageId;
-  final ChatAttachment attachment;
-  final VoidCallback onSave;
-  final VoidCallback onOpen;
-
-  @override
-  State<_InlineAudio> createState() => _InlineAudioState();
-}
-
-class _InlineAudioState extends State<_InlineAudio> {
-  late final Player _player = Player();
-  bool _opening = false;
-  bool _opened = false;
-  bool _sourceRetained = false;
-  String? _error;
-
-  Future<void> _toggle() async {
-    if (_opening) return;
-    if (_opened) {
-      await _player.playOrPause();
-      return;
-    }
-    setState(() => _opening = true);
-    try {
-      final source = await widget.backend.getMediaPlaybackSource(
-        widget.messageId,
-      );
-      if (source == null) throw StateError('Audio playback is unavailable.');
-      _sourceRetained = true;
-      await _player.open(
-        Media(source.uri.toString(), httpHeaders: source.headers),
-        play: true,
-      );
-      _opened = true;
-    } catch (exception) {
-      _error = safeErrorMessage(exception);
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_sourceRetained) {
-      unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
-    }
-    _player.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxWidth: 460),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: context.deltiecord.elevated,
-      borderRadius: DeltiecordCorners.borderRadius,
-    ),
-    child: StreamBuilder<bool>(
-      stream: _player.stream.playing,
-      initialData: _player.state.playing,
-      builder: (context, snapshot) => Row(
-        children: [
-          IconButton(
-            tooltip: snapshot.data == true ? 'Pause' : 'Play audio',
-            onPressed: _toggle,
-            icon: _opening
-                ? const SizedBox.square(
-                    dimension: 17,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(snapshot.data == true ? Icons.pause : Icons.play_arrow),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.attachment.name, overflow: TextOverflow.ellipsis),
-                if (_error case final error?)
-                  Text(
-                    error,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: DeltiecordTypeScale.normal,
-                      color: Colors.redAccent,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Open audio externally',
-            onPressed: widget.onOpen,
-            icon: const Icon(Icons.open_in_new, size: 18),
-          ),
-          IconButton(
-            tooltip: 'Save audio',
-            onPressed: widget.onSave,
-            icon: const Icon(Icons.download, size: 19),
-          ),
-        ],
-      ),
-    ),
-  );
 }

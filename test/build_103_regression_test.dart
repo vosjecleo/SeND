@@ -1,3 +1,4 @@
+import 'package:deltiecord/ui/plain_message_editor.dart';
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/receipt_frontiers.dart';
@@ -6,7 +7,6 @@ import 'package:deltiecord/ui/accent_color_picker.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 import 'package:deltiecord/ui/rich_message.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'widget_test.dart' show FakeBackend;
 
@@ -50,15 +50,14 @@ void main() {
     );
   });
 
-  test('editing preserves supported rich formatting and spoilers', () {
-    final restored = richMessageDocument(
+  test('legacy formatted edits start from the plain fallback', () {
+    final restored = plainMessageDocument(
       'bold secret',
       '<p><strong>bold</strong> <span data-mx-spoiler>secret</span></p>',
     );
-    final result = serializeRichMessage(restored);
+    final result = serializePlainComposer(restored);
     expect(result.plainText, 'bold secret');
-    expect(result.html, contains('<strong>bold</strong>'));
-    expect(result.html, contains('data-mx-spoiler'));
+    expect(result.html, isNull);
   });
 
   test(
@@ -191,7 +190,7 @@ void main() {
       final initialHeight = tester.getSize(composer).height;
       final userHeight = tester.getSize(user).height;
       tester
-          .widget<QuillEditor>(find.byType(QuillEditor))
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
           .controller
           .replaceText(0, 0, 'a long wrapping message ' * 30, null);
       await tester.pumpAndSettle();

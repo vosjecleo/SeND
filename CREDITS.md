@@ -66,10 +66,12 @@ dependency under its own license.
   and [super_drag_and_drop](https://github.com/superlistapp/super_native_extensions)
   provide desktop clipboard image access and native file drag/drop. Licensed
   under MIT.
-- [flutter_quill](https://github.com/singerdmx/flutter-quill),
-  [vsc_quill_delta_to_html](https://github.com/visual-space/vsc_quill_delta_to_html),
-  and [markdown](https://github.com/dart-lang/tools/tree/main/pkgs/markdown)
-  provide document editing/serialization and typed-markup parsing.
+- [flutter_quill](https://github.com/singerdmx/flutter-quill) supplies the legacy
+  draft document/emoji-offset model; its WYSIWYG editor is no longer used.
+  [markdown](https://github.com/dart-lang/tools/tree/main/pkgs/markdown) parses
+  explicitly typed markup when sending. The former WYSIWYG HTML/Delta conversion
+  paths and their direct dependencies were removed in build 117; Quill still
+  carries its own transitive dependencies for draft compatibility.
 - [flutter_vodozemac](https://github.com/famedly/dart-vodozemac) and Vodozemac
   provide the cryptographic implementation used through the Matrix SDK.
 - [flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)

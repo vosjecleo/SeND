@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+117" date="2026-10-05" type="development">
+      <description><p>Plain-text composition, audio waveforms and timing, login autofill isolation and layout fixes.</p></description>
+    </release>
     <release version="0.9.37+116" date="2026-10-03" type="development">
       <description><p>Fix Android video staging and add explicit compression recovery; refresh installation and technical documentation.</p></description>
     </release>

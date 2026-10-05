@@ -1,14 +1,15 @@
 # SeND
 
-> **SeND 0.9.37 build 116 — Android video-send hotfix**
+> **SeND 0.9.37 build 117 — composition, audio and layout fixes**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
 [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
 
-Build 116 fixes Android videos failing before compression and adds explicit
-retry, original-quality and cancel choices when preparation fails. See the
-[diagnosis and validation notes](docs/build-116-video.md).
+Build 117 replaces WYSIWYG with plain-text composition, adds shared audio
+waveform/timing controls, separates homeserver configuration from web login
+credentials, and polishes conversation spacing. See the [changelog](CHANGELOG.md).
+The [build 116 Android video fix](docs/build-116-video.md) remains included.
 
 ## Preface
 
@@ -123,7 +124,7 @@ Notable features include:
   - timezone and local time
   - About Me
 - Compact profile popovers and full profile views
-- WYSIWYG message composition
+- Plain-text composition with custom emoji and explicitly typed Markdown
 - Spoilers
 - Replies
 - Matrix threads in a desktop side pane or mobile discussion page
@@ -308,6 +309,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Documentation baseline: 0.9.37+116. Not a stable/1.0 declaration.**
+**Documentation baseline: 0.9.37+117. Not a stable/1.0 declaration.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

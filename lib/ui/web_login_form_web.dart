@@ -22,6 +22,10 @@ class WebLoginForm extends StatefulWidget {
 }
 
 class _WebLoginFormState extends State<WebLoginForm> {
+  final _root = web.HTMLDivElement();
+  final _serverSettings = web.HTMLDetailsElement();
+  final _serverSummary =
+      web.document.createElement('summary') as web.HTMLElement;
   final _form = web.HTMLFormElement();
   final _server = web.HTMLInputElement();
   final _username = web.HTMLInputElement();
@@ -30,6 +34,13 @@ class _WebLoginFormState extends State<WebLoginForm> {
   final _submit = web.HTMLButtonElement();
   final _labels = <web.HTMLInputElement, web.HTMLLabelElement>{};
   late final JSFunction _submitListener;
+  late final JSFunction _serverListener;
+  final _eyeButtons = <web.HTMLInputElement, web.HTMLButtonElement>{};
+  final _eyeListeners = <web.HTMLButtonElement, JSFunction>{};
+
+  // Flutter widget tests do not attach HTML platform views to the real DOM.
+  @visibleForTesting
+  web.HTMLElement get debugDomRoot => _root;
 
   @override
   void initState() {
@@ -40,9 +51,24 @@ class _WebLoginFormState extends State<WebLoginForm> {
     _form.method = 'post';
     _form.style.cssText =
         'width:100%;height:100%;display:flex;flex-direction:column;gap:12px;box-sizing:border-box;font-family:Arial,sans-serif;';
-    _addField(_server, 'homeserver', 'Homeserver', 'text', 'off');
+    _root.style.cssText =
+        'width:100%;height:100%;font-family:Arial,sans-serif;';
+    _addField(_server, 'homeserver', 'Homeserver', 'url', 'off');
     _server.value = 'https://matrix.deltie.net';
     _server.setAttribute('inputmode', 'url');
+    _server.setAttribute('data-lpignore', 'true');
+    _server.setAttribute('data-1p-ignore', 'true');
+    // Configuration is outside the credential form and collapsed by default.
+    // The only username candidate in the login form is the real username.
+    _serverSummary.textContent = 'Homeserver: matrix.deltie.net (change)';
+    _serverListener = ((web.Event _) {
+      _serverSummary.textContent = 'Homeserver: ${_server.value} (change)';
+    }).toJS;
+    _server.addEventListener('input', _serverListener);
+    _serverSettings.appendChild(_serverSummary);
+    _serverSettings.appendChild(_labels[_server]!);
+    _root.appendChild(_serverSettings);
+    _root.appendChild(_form);
     _addField(
       _username,
       'username',
@@ -64,6 +90,8 @@ class _WebLoginFormState extends State<WebLoginForm> {
       'password',
       'new-password',
     );
+    _addEye(_password);
+    _addEye(_confirmation);
     _submit.type = 'submit';
     _form.appendChild(_submit);
     _submitListener = ((web.Event event) {
@@ -91,6 +119,11 @@ class _WebLoginFormState extends State<WebLoginForm> {
           _confirmation.setCustomValidity('Passwords do not match.');
         }
       }
+      if (!widget.registering && !_server.checkValidity()) {
+        _serverSettings.open = true;
+        _server.reportValidity();
+        return;
+      }
       if (_form.reportValidity()) {
         widget.onSubmit(
           widget.registering ? 'https://matrix.deltie.net' : _server.value,
@@ -103,6 +136,32 @@ class _WebLoginFormState extends State<WebLoginForm> {
     // before our submit listener gets a chance to clear/re-evaluate it.
     _form.noValidate = true;
     _form.addEventListener('submit', _submitListener);
+  }
+
+  void _addEye(web.HTMLInputElement input) {
+    final row = web.HTMLDivElement()
+      ..style.cssText = 'display:flex;align-items:center;position:relative;';
+    _labels[input]!.appendChild(row);
+    row.appendChild(input);
+    final button = web.HTMLButtonElement()..type = 'button';
+    button.textContent = '👁︎';
+    button.title = 'Show password';
+    button.setAttribute('aria-label', 'Show password');
+    button.setAttribute('aria-pressed', 'false');
+    button.style.cssText =
+        'position:absolute;right:4px;width:40px;height:40px;border:0;background:transparent;color:inherit;font-size:22px;cursor:pointer;';
+    final listener = ((web.Event event) {
+      event.preventDefault();
+      final visible = input.type == 'password';
+      input.type = visible ? 'text' : 'password';
+      button.title = visible ? 'Hide password' : 'Show password';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-pressed', visible.toString());
+    }).toJS;
+    button.addEventListener('click', listener);
+    _eyeButtons[input] = button;
+    _eyeListeners[button] = listener;
+    row.appendChild(button);
   }
 
   void _addField(
@@ -133,6 +192,12 @@ class _WebLoginFormState extends State<WebLoginForm> {
     if (oldWidget.registering != widget.registering) {
       _password.value = '';
       _confirmation.value = '';
+      for (final entry in _eyeButtons.entries) {
+        entry.key.type = 'password';
+        entry.value.title = 'Show password';
+        entry.value.setAttribute('aria-label', 'Show password');
+        entry.value.setAttribute('aria-pressed', 'false');
+      }
       for (final input in _labels.keys) {
         input.setCustomValidity('');
       }
@@ -145,6 +210,10 @@ class _WebLoginFormState extends State<WebLoginForm> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    _root.style.color = _css(colors.onSurface);
+    _serverSettings.style.cssText = 'margin-bottom:12px;font-size:14px;';
+    _serverSettings.style.display = widget.registering ? 'none' : 'block';
+    _serverSummary.textContent = 'Homeserver: ${_server.value} (change)';
     _form.style.color = _css(colors.onSurface);
     for (final entry in _labels.entries) {
       entry.value.style.cssText =
@@ -152,6 +221,9 @@ class _WebLoginFormState extends State<WebLoginForm> {
       entry.key.style.cssText =
           'box-sizing:border-box;width:100%;min-height:46px;padding:10px 12px;border:1px solid ${_css(colors.outline)};border-radius:12px;background:${_css(colors.surfaceContainerHighest)};color:${_css(colors.onSurface)};font:16px Arial,sans-serif;';
       entry.key.readOnly = widget.loading;
+      if (_eyeButtons.containsKey(entry.key)) {
+        entry.key.style.paddingRight = '48px';
+      }
     }
     _labels[_server]!.style.display = widget.registering ? 'none' : 'flex';
     _server.disabled = widget.registering;
@@ -171,13 +243,14 @@ class _WebLoginFormState extends State<WebLoginForm> {
     _submit.style.cssText =
         'min-height:48px;margin-top:6px;border:0;border-radius:24px;background:${_css(colors.primary)};color:${_css(colors.onPrimary)};font:16px Arial,sans-serif;cursor:pointer;';
     return SizedBox(
-      height: 310,
+      height: _serverSettings.open ? 380 : 320,
       child: HtmlElementView.fromTagName(
         tagName: 'div',
         onElementCreated: (element) {
           final host = element as web.HTMLElement;
           host.style.cssText = 'width:100%;height:100%;';
-          host.appendChild(_form);
+          host.style.overflowY = 'auto';
+          host.appendChild(_root);
         },
       ),
     );
@@ -186,10 +259,14 @@ class _WebLoginFormState extends State<WebLoginForm> {
   @override
   void dispose() {
     _form.removeEventListener('submit', _submitListener);
+    _server.removeEventListener('input', _serverListener);
+    for (final entry in _eyeListeners.entries) {
+      entry.key.removeEventListener('click', entry.value);
+    }
     _password.value = '';
     _confirmation.value = '';
     _username.value = '';
-    _form.remove();
+    _root.remove();
     super.dispose();
   }
 }

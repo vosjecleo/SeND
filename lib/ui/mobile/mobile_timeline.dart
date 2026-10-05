@@ -8,7 +8,6 @@ import '../room_event_visibility_dialog.dart';
 import '../room_access_dialog.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart' show Document, LinkAttribute;
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
@@ -90,7 +89,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   final List<AttachmentDraft> _attachments = [];
   ChatMessage? _reply;
   ChatMessage? _edit;
-  Document? _richEdit;
   bool _sending = false;
   bool _autoFillingInitialChunk = false;
   bool _pageLoadInFlight = false;
@@ -208,13 +206,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   void _composerChanged() {
-    if (_edit != null && _richEdit != null) {
-      reconcileRichMessageDocument(
-        _richEdit!,
-        _previousComposerText,
-        _composer.text,
-      );
-    }
     _customEmojiSpans = reconcileCustomEmojiSpans(
       _previousComposerText,
       _composer.text,
@@ -860,9 +851,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                               reverse: true,
                               physics: const ClampingScrollPhysics(),
                               padding: const EdgeInsets.fromLTRB(
-                                6,
+                                0,
                                 8,
-                                6,
+                                0,
                                 typingIndicatorHeight + 1,
                               ),
                               itemCount:
@@ -975,28 +966,16 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                         onEdit: message.own && !message.redacted
                                             ? () => setState(() {
                                                 _edit = message;
-                                                _richEdit = null;
                                                 _reply = null;
                                                 _customEmojiSpans = const [];
-                                                final document =
-                                                    richMessageDocument(
-                                                      message.body,
-                                                      message.formattedBody,
-                                                    );
-                                                final restored =
-                                                    serializeRichMessage(
-                                                      document,
-                                                    );
-                                                _composer.text =
-                                                    restored.plainText;
-                                                _richEdit = document;
+                                                _composer.text = message.body;
                                                 _customEmojiSpans =
                                                     customEmojiSpansFromHtml(
-                                                      restored.html,
-                                                      restored.plainText,
+                                                      message.formattedBody,
+                                                      message.body,
                                                     );
                                                 _previousComposerText =
-                                                    restored.plainText;
+                                                    message.body;
                                                 _composer.selection =
                                                     TextSelection.collapsed(
                                                       offset:
@@ -1164,18 +1143,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _send() async {
-    if (_edit != null && _richEdit != null) {
-      for (final span in _customEmojiSpans) {
-        _richEdit!.format(
-          span.start,
-          span.end - span.start,
-          LinkAttribute(customEmojiEditorLink(span.emoji)),
-        );
-      }
-    }
-    final serialized = _edit != null && _richEdit != null
-        ? serializeRichMessage(_richEdit!)
-        : serializeMarkdownEmojiMessage(_composer.text, _customEmojiSpans);
+    final serialized = serializeMarkdownEmojiMessage(
+      _composer.text,
+      _customEmojiSpans,
+    );
     final text = unescapeLiteralEmojiAliases(serialized.plainText);
     final formatted = serialized.html == null
         ? null
@@ -1184,9 +1155,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     final roomId = widget.room.id;
     final submittedText = text;
     final submittedRawText = _composer.text;
-    final submittedRichEdit = _richEdit == null
-        ? null
-        : Document.fromDelta(_richEdit!.toDelta());
     final submittedEmojiSpans = List<CustomEmojiTextSpan>.of(_customEmojiSpans);
     final submittedAttachments = List<AttachmentDraft>.from(_attachments);
     final reply = _reply;
@@ -1267,7 +1235,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           _attachments.insertAll(0, submittedAttachments);
           _reply = reply;
           _edit = edit;
-          _richEdit = submittedRichEdit;
         });
       }
     } finally {
@@ -1660,7 +1627,7 @@ class _MobileMessageRow extends StatelessWidget {
                 : null,
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

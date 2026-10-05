@@ -1,3 +1,4 @@
+import 'package:deltiecord/ui/plain_message_editor.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -150,7 +151,7 @@ void main() {
     },
   );
 
-  testWidgets('desktop Quill composer displays selected custom emoji', (
+  testWidgets('desktop plain composer displays selected custom emoji', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1400, 900);
@@ -170,7 +171,9 @@ void main() {
       ..currentRoom = room;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.pumpAndSettle();
-    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final editor = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     final emoji = CustomEmojiReference(
       id: Uri.parse('mxc://example.org/cat'),
       name: 'cat',
@@ -189,7 +192,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.descendant(
-        of: find.byType(QuillEditor),
+        of: find.byType(PlainMessageEditor),
         matching: find.byType(CustomEmojiImage),
       ),
       findsOneWidget,

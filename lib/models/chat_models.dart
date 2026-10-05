@@ -969,6 +969,9 @@ class ChatAttachment {
     this.stickerPackId,
     this.stickerPackName,
     this.gifSource,
+    this.voiceMessage = false,
+    this.durationMilliseconds,
+    this.waveform = const [],
   });
 
   final AttachmentKind kind;
@@ -991,6 +994,9 @@ class ChatAttachment {
   final String? stickerPackId;
   final String? stickerPackName;
   final Uri? gifSource;
+  final bool voiceMessage;
+  final int? durationMilliseconds;
+  final List<int> waveform;
 }
 
 class AttachmentDraft {

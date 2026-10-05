@@ -2280,8 +2280,8 @@ class _HomeRoomListTile extends StatelessWidget {
               constraints: BoxConstraints(
                 minHeight: _densityBetween(
                   backend.preferences.compactness,
-                  roomy: 56,
-                  compact: 44,
+                  roomy: 50,
+                  compact: 42,
                 ),
               ),
               child: Padding(
@@ -2289,14 +2289,14 @@ class _HomeRoomListTile extends StatelessWidget {
                   8,
                   _densityBetween(
                     backend.preferences.compactness,
-                    roomy: 6,
-                    compact: 3,
+                    roomy: 4,
+                    compact: 2,
                   ),
                   10,
                   _densityBetween(
                     backend.preferences.compactness,
-                    roomy: 6,
-                    compact: 3,
+                    roomy: 4,
+                    compact: 2,
                   ),
                 ),
                 child: Row(

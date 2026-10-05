@@ -123,7 +123,7 @@ String shortcutActionLabel(AppShortcutAction action) => switch (action) {
 /// Records an arbitrary logical key plus modifiers and rejects conflicts.
 ///
 /// Runtime dispatch happens at ChatShell's root hardware-key handler so these
-/// bindings continue to work while the rich-text composer owns focus.
+/// bindings continue to work while the plain-text composer owns focus.
 class ShortcutRecorder extends StatefulWidget {
   const ShortcutRecorder({
     required this.value,

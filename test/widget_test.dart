@@ -1,3 +1,4 @@
+import 'package:deltiecord/ui/plain_message_editor.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -392,7 +393,7 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.text('shortcut-room'));
     await tester.pump();
-    await tester.tap(find.byType(QuillEditor));
+    await tester.tap(find.byType(PlainMessageEditor));
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);
@@ -844,7 +845,7 @@ void main() {
 
     expect(find.text('VOICE ROOMS'), findsOneWidget);
     expect(find.text('Nobody is connected'), findsOneWidget);
-    expect(find.byType(QuillEditor), findsNothing);
+    expect(find.byType(PlainMessageEditor), findsNothing);
   });
 
   testWidgets('exposes connected MatrixRTC media controls', (tester) async {
@@ -1228,7 +1229,7 @@ void main() {
     expect(find.text('Editing message'), findsNothing);
     expect(
       tester
-          .widget<QuillEditor>(find.byType(QuillEditor))
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
           .controller
           .document
           .toPlainText()
@@ -1614,7 +1615,9 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.text('general'));
     await tester.pump();
-    final composer = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final composer = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     expect(composer.focusNode.hasFocus, isTrue);
     await _enterComposer(tester, 'hello from SeND');
     await tester.tap(find.byTooltip('Send'));
@@ -1652,7 +1655,9 @@ void main() {
     gate.complete();
     await tester.pumpAndSettle();
 
-    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final editor = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     expect(backend.sentMessages, ['first message']);
     expect(
       editor.controller.document.toPlainText(),
@@ -1722,7 +1727,9 @@ void main() {
     expect(find.text('Alice'), findsOneWidget);
     await tester.tap(find.text('Alice').last);
     await tester.pump();
-    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final editor = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     expect(editor.controller.document.toPlainText(), '@alice:example.org \n');
   });
 
@@ -1755,7 +1762,9 @@ void main() {
     expect(find.text('Room'), findsOneWidget);
     await tester.tap(find.text('general').last);
     await tester.pump();
-    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final editor = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     expect(editor.controller.document.toPlainText(), '#general \n');
   });
 
@@ -1841,7 +1850,7 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<QuillEditor>(find.byType(QuillEditor))
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
           .controller
           .document
           .toPlainText(),
@@ -1853,7 +1862,7 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<QuillEditor>(find.byType(QuillEditor))
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
           .controller
           .document
           .toPlainText(),
@@ -2147,7 +2156,9 @@ void main() {
     final initialHeight = tester.getSize(composer).height;
 
     await _enterComposer(tester, ':so');
-    final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+    final editor = tester.widget<PlainMessageEditor>(
+      find.byType(PlainMessageEditor),
+    );
     editor.controller.replaceText(
       3,
       0,
@@ -2891,7 +2902,7 @@ void main() {
 
     expect(
       tester
-          .widget<QuillEditor>(find.byType(QuillEditor))
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
           .controller
           .document
           .toPlainText(),
@@ -3852,7 +3863,9 @@ Future<void> _pumpMobile(WidgetTester tester, FakeBackend backend) async {
 }
 
 Future<void> _enterComposer(WidgetTester tester, String text) async {
-  final editor = tester.widget<QuillEditor>(find.byType(QuillEditor));
+  final editor = tester.widget<PlainMessageEditor>(
+    find.byType(PlainMessageEditor),
+  );
   editor.controller.document = Document()..insert(0, text);
   editor.controller.updateSelection(
     TextSelection.collapsed(offset: text.length),

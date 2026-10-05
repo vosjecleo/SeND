@@ -1,3 +1,4 @@
+import 'audio_attachment_player.dart';
 import 'dart:async';
 import 'activity_widgets.dart';
 import 'navigation_polish.dart';
@@ -39,7 +40,7 @@ import '../services/draft_store.dart';
 import 'giphy_dialog.dart';
 import 'emoji_picker_dialog.dart';
 import 'expression_picker.dart';
-import 'composer_emoji_span.dart';
+import 'plain_message_editor.dart';
 import 'settings_screen.dart';
 import 'profile_dialog.dart';
 import 'profile_card.dart';
@@ -144,7 +145,7 @@ class _ChatShellState extends State<ChatShell> {
   int _mentionSelectionIndex = 0;
   bool _wasTyping = false;
   final GifService _giphy = GifService();
-  final _composerKey = GlobalKey<_RichComposerState>();
+  final _composerKey = GlobalKey<_MessageComposerState>();
   final _conversationKey = GlobalKey<_ConversationState>();
   final _draftStore = DraftStore();
   final Map<String, _RoomDraft> _memoryDrafts = {};
@@ -181,37 +182,7 @@ class _ChatShellState extends State<ChatShell> {
         }
       },
     );
-    _message = QuillController.basic(
-      config: QuillControllerConfig(
-        // Flutter Quill exposes native clipboard images through this API.
-        // ignore: experimental_member_use
-        clipboardConfig: QuillClipboardConfig(
-          // Consume image clipboard data BEFORE Quill's HTML importer. Windows
-          // supplies both a bitmap and an HTML document with a white background.
-          // A key handler racing the importer can attach the bitmap AND import
-          // that document's styles into the composer.
-          // ignore: experimental_member_use
-          onClipboardPaste: _pasteClipboardImage,
-          onImagePaste: (bytes) async {
-            // Quill can offer an already-flattened bitmap. Check the original
-            // clipboard formats before accepting that fallback.
-            _queueClipboardImage(await readClipboardImage() ?? bytes);
-            // SeND sends pasted images as Matrix attachments instead of
-            // inserting a local-only image embed into the text document.
-            return null;
-          },
-          // ignore: experimental_member_use
-          onGifPaste: (bytes) async {
-            _queueAttachment(
-              bytes: bytes,
-              name: 'clipboard-${DateTime.now().millisecondsSinceEpoch}.gif',
-              mimeType: 'image/gif',
-            );
-            return null;
-          },
-        ),
-      ),
-    );
+    _message = QuillController.basic();
     _message.addListener(_updateMentionQuery);
     _message.addListener(_saveActiveDraft);
     _lastBackendStatus = widget.backend.status;
@@ -450,7 +421,7 @@ class _ChatShellState extends State<ChatShell> {
 
   Future<void> _send() async {
     final sendingRoomId = widget.backend.selectedRoom?.id;
-    final serialized = serializeRichMessage(_message.document);
+    final serialized = serializePlainComposer(_message.document);
     final text = _withoutAttachmentPlaceholders(
       unescapeLiteralEmojiAliases(serialized.plainText),
     ).trim();
@@ -578,7 +549,7 @@ class _ChatShellState extends State<ChatShell> {
 
   Future<void> _scheduleCurrentMessage() async {
     if (_sending) return;
-    final text = serializeRichMessage(_message.document).plainText.trim();
+    final text = serializePlainComposer(_message.document).plainText.trim();
     if (text.isEmpty) return;
     if (_pendingAttachments.isNotEmpty || _editingMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -627,7 +598,7 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   void _edit(ChatMessage message) {
-    _message.document = richMessageDocument(
+    _message.document = plainMessageDocument(
       message.body,
       message.formattedBody,
     );

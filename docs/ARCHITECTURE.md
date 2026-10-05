@@ -1,9 +1,25 @@
 # SeND architecture
 
-Documentation baseline: 0.9.37+116. See [release readiness](RELEASE_READINESS.md)
+Documentation baseline: 0.9.37+117. See [release readiness](RELEASE_READINESS.md)
 for the distinction between implemented features and validated behaviour.
 
 ## Data flow and boundaries
+
+### Composition and audio (build 117)
+
+Desktop and mobile use plain text fields, not WYSIWYG editing. Desktop retains
+the Quill document/controller solely for existing draft persistence and stable
+emoji/mention offsets; no `QuillEditor` is mounted and imported rich styles are
+not serialized. Explicitly typed Markdown is parsed on send. Timeline HTML
+rendering remains independent and continues to display received formatting.
+
+`AudioAttachmentPlayer` is shared across layouts. Matrix mapping carries voice
+markers, duration and bounded waveform samples into `ChatAttachment`. Playback
+is lazy: no eager decryption/download or media player allocation for every idle
+audio row. A duration missing from the event displays as unknown until playback
+metadata arrives. Actual position streams update only the player row.
+
+### Backend ownership
 
 Flutter widgets depend on `ChatBackend` and the SDK-independent models in
 `lib/models`. `MatrixBackend` implements that contract and is the only layer

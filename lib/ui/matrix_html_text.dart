@@ -306,6 +306,20 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     required double customEmojiSize,
   }) {
     if (node is dom.Text) {
+      // Pretty-printed HTML puts whitespace BETWEEN block elements. It is not
+      // message content and must not indent the next paragraph after its break.
+      const blocks = {'p', 'div', 'pre', 'ul', 'ol', 'li', 'blockquote', 'br'};
+      final siblings = node.parent?.nodes ?? const <dom.Node>[];
+      final index = siblings.indexOf(node);
+      final previous = index > 0 ? siblings[index - 1] : null;
+      final next = index >= 0 && index + 1 < siblings.length
+          ? siblings[index + 1]
+          : null;
+      if (node.data.trim().isEmpty &&
+          ((previous is dom.Element && blocks.contains(previous.localName)) ||
+              (next is dom.Element && blocks.contains(next.localName)))) {
+        return const [];
+      }
       var parent = node.parent;
       var preformatted = false;
       while (parent != null) {
@@ -318,11 +332,18 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       // HTML source whitespace isn't a hard line break. In particular pretty
       // printed <p>/<em> output was creating additional SelectableText rows on
       // desktop. Only <br>, block boundaries and <pre> introduce hard breaks.
+      var text = node.data;
+      if (!preformatted &&
+          previous is dom.Element &&
+          previous.localName == 'br') {
+        // The HTML renderer writes a source newline after <br>. The element
+        // already supplies the line break; do not turn its source newline into
+        // a visible indentation. Preserve deliberately typed ordinary spaces.
+        text = text.replaceFirst(RegExp(r'^\r?\n'), '');
+      }
       return _emojiAwareTextSpans(
         context,
-        preformatted
-            ? node.data
-            : node.data.replaceAll(RegExp(r'[\t\r\n]+'), ' '),
+        preformatted ? text : text.replaceAll(RegExp(r'[\t\r\n]+'), ' '),
         style,
       );
     }

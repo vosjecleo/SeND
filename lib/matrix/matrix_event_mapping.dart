@@ -408,6 +408,11 @@ extension _MatrixEventMapping on MatrixBackend {
       _ => AttachmentKind.file,
     };
     final text = attachmentText(event);
+    final audio =
+        event.content['org.matrix.msc1767.audio'] ?? event.content['m.audio'];
+    final audioInfo = audio is Map ? audio : const <String, Object?>{};
+    final audioDuration = audioInfo['duration'] ?? event.infoMap['duration'];
+    final waveform = audioInfo['waveform'];
     return ChatAttachment(
       kind: kind,
       name: text.name,
@@ -421,6 +426,21 @@ extension _MatrixEventMapping on MatrixBackend {
               true ||
           event.content.tryGet<bool>('m.spoiler') == true,
       caption: text.caption,
+      voiceMessage:
+          event.content['org.matrix.msc3245.voice'] is Map ||
+          event.content['m.voice'] is Map,
+      durationMilliseconds:
+          audioDuration is num && audioDuration.isFinite && audioDuration >= 0
+          ? audioDuration.toInt()
+          : null,
+      waveform: waveform is List
+          ? waveform
+                .whereType<num>()
+                .where((n) => n.isFinite)
+                .take(120)
+                .map((n) => n.toInt().clamp(0, 1024))
+                .toList(growable: false)
+          : const [],
       gifSource: Uri.tryParse(
         event.content.tryGet<String>('net.deltiecord.gif_source') ?? '',
       ),

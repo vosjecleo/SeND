@@ -23,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   final _passwordConfirmation = TextEditingController();
   bool _registering = false;
+  bool _showPassword = false;
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -184,15 +185,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : AutofillHints.password,
                             ],
                             enabled: !loading,
-                            obscureText: true,
+                            obscureText: !_showPassword,
                             autocorrect: false,
                             enableSuggestions: false,
                             onFieldSubmitted: (_) {
                               if (!loading && !_registering) _submit();
                             },
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Password',
                               border: InputBorder.none,
+                              suffixIcon: IconButton(
+                                tooltip: _showPassword
+                                    ? 'Hide password'
+                                    : 'Show password',
+                                onPressed: () => setState(
+                                  () => _showPassword = !_showPassword,
+                                ),
+                                icon: Icon(
+                                  _showPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                ),
+                              ),
                             ),
                             validator: (value) => value == null || value.isEmpty
                                 ? 'Enter your password.'
@@ -204,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _passwordConfirmation,
                               autofillHints: const [AutofillHints.newPassword],
                               enabled: !loading,
-                              obscureText: true,
+                              obscureText: !_showPassword,
                               onFieldSubmitted: (_) {
                                 if (!loading) _submit();
                               },
