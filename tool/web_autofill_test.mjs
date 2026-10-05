@@ -57,11 +57,11 @@ try {
   }, values);
   // Deliberately no input/change events: manager extensions may omit them.
   await fill({username: 'synthetic-autofill', password: 'not-a-real-password'});
-  await page.click('#deltiecord-login button');
+  await page.click('#deltiecord-login button[type=submit]');
   for (let n = 0; n < 100 && !logins.length; n++) await new Promise(r => setTimeout(r, 100));
   assert.equal(logins[0]?.identifier?.user, 'synthetic-autofill');
   assert.equal(logins[0]?.password, 'not-a-real-password');
-  await waitForDOM(() => !document.querySelector('#deltiecord-login button').disabled);
+  await waitForDOM(() => !document.querySelector('#deltiecord-login button[type=submit]').disabled);
   await page.$eval('flt-semantics-placeholder', node => node.click());
   const toggle = await page.waitForSelector('::-p-text(Create a deltie.net account)');
   // Enabling Flutter semantics can relayout the platform-view form. Wait for
@@ -88,13 +88,13 @@ try {
   }
   assert.equal(await page.$eval('#deltiecord-password', n => n.value), '');
   await fill({username: 'test', password: 'new-password', 'password-confirmation': 'wrong'});
-  await page.click('#deltiecord-login button');
+  await page.click('#deltiecord-login button[type=submit]');
   assert.equal(await page.$eval('#deltiecord-password-confirmation', n => n.validity.customError), true);
   assert.equal(registrations, 0);
   // Correcting a previous validation error must permit a retry. Use an invalid
   // username to exercise revalidation without creating an account.
   await fill({username: 'Invalid name', 'password-confirmation': 'new-password'});
-  await page.click('#deltiecord-login button');
+  await page.click('#deltiecord-login button[type=submit]');
   assert.equal(await page.$eval('#deltiecord-password-confirmation', n => n.validity.customError), false);
   assert.equal(await page.$eval('#deltiecord-username', n => n.validity.customError), true);
   assert.equal(registrations, 0);
