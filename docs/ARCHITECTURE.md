@@ -1,6 +1,6 @@
 # SeND architecture
 
-Documentation baseline: 0.9.37+117. See [release readiness](RELEASE_READINESS.md)
+Documentation baseline: 0.9.37+118. See [release readiness](RELEASE_READINESS.md)
 for the distinction between implemented features and validated behaviour.
 
 ## Data flow and boundaries
@@ -10,7 +10,8 @@ for the distinction between implemented features and validated behaviour.
 Desktop and mobile use plain text fields, not WYSIWYG editing. Desktop retains
 the Quill document/controller solely for existing draft persistence and stable
 emoji/mention offsets; no `QuillEditor` is mounted and imported rich styles are
-not serialized. Explicitly typed Markdown is parsed on send. Timeline HTML
+not serialized. Build 118 parses only inline italic/bold/underline/strike/spoiler
+markup on send; block Markdown remains literal and line breaks stay explicit. Timeline HTML
 rendering remains independent and continues to display received formatting.
 
 `AudioAttachmentPlayer` is shared across layouts. Matrix mapping carries voice

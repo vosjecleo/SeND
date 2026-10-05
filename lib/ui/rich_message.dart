@@ -150,42 +150,47 @@ void reconcileRichMessageDocument(
 }
 
 String? _typedMarkupToHtml(String text) {
-  final hasMarkup = RegExp(
-    r'(^|\n)\s*(?:>|[-*+]\s|\d+\.\s|```)|(^|[\s(])(?:\*\*?\S|_\S|`\S|~~\S|\|\|\S)|\[[^\]]+\]\(',
-  ).hasMatch(text);
-  if (!hasMarkup) return null;
+  if (!RegExp(r'[*_~]|\|\|').hasMatch(text)) return null;
 
+  var prefix = 'SENDINLINESPOILER';
+  while (text.contains(prefix)) {
+    prefix += 'X';
+  }
   final spoilers = <String>[];
-  final withTokens = text.replaceAllMapped(RegExp(r'\|\|(.+?)\|\|'), (match) {
-    final token = 'DELTIECORDSPOILER${spoilers.length}TOKEN';
+  final source = text.replaceAllMapped(RegExp(r'\|\|(.+?)\|\|'), (match) {
+    final token = '$prefix${spoilers.length}END';
     spoilers.add(htmlEscape.convert(match.group(1)!));
     return token;
   });
-  var blankToken = 'SENDCOMPOSERBLANKLINE';
-  while (withTokens.contains(blankToken)) {
-    blankToken += 'X';
-  }
-  // Markdown normally discards consecutive empty lines. Keep each physical
-  // composer line through parsing, then remove the private placeholder.
-  final spaced = withTokens.replaceAllMapped(
-    RegExp(r'\n(?=\n)'),
-    (_) => '\n$blankToken',
+  // Deliberately parse inline only: no paragraphs, quotes, lists, headings,
+  // tables, code blocks, raw HTML, or implicit formatting from pasted content.
+  final document = markdown.Document(
+    withDefaultBlockSyntaxes: false,
+    withDefaultInlineSyntaxes: false,
+    inlineSyntaxes: [
+      markdown.EscapeSyntax(),
+      markdown.EmphasisSyntax.asterisk(),
+      markdown.DelimiterSyntax(
+        '_+',
+        requiresDelimiterRun: true,
+        tags: [markdown.DelimiterTag('em', 1), markdown.DelimiterTag('u', 2)],
+      ),
+      markdown.StrikethroughSyntax(),
+      _ComposerLineBreakSyntax(),
+    ],
   );
-  var html = markdown.markdownToHtml(
-    spaced,
-    extensionSet: markdown.ExtensionSet.gitHubWeb,
-    inlineSyntaxes: [_ComposerLineBreakSyntax()],
-  );
-  html = html.replaceAll(blankToken, '');
-  // Keep a typed paragraph gap rather than collapsing it into one newline.
-  html = html.replaceAll(RegExp(r'</p>\s*<p>'), '</p><br><p>');
+  // The renderer pretty-prints <br> with a source newline. That newline is
+  // not message content and HTML clients can turn it into an unwanted space.
+  var html = markdown
+      .renderToHtml(document.parseInline(source))
+      .replaceAll('<br />\n', '<br>');
   for (var index = 0; index < spoilers.length; index++) {
     html = html.replaceAll(
-      'DELTIECORDSPOILER${index}TOKEN',
+      '$prefix${index}END',
       '<span data-mx-spoiler>${spoilers[index]}</span>',
     );
   }
-  return html;
+  return html == text ? null : html;
 }
 
 class _ComposerLineBreakSyntax extends markdown.InlineSyntax {

@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'browser_animated_image.dart';
 
 bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
     state == null ||
@@ -44,6 +43,9 @@ bool shouldLoopLinkPreview(Uri pageUrl) {
 /// Owns animated decoding independently of route/UI animation tickers.
 /// Callers resolve autoplay and reduced-motion preferences; backgrounding still
 /// stops decoding. Only the current frame is retained, never the full animation.
+/// Use the codec on every platform: CanvasKit supplies a multi-frame Skia codec
+/// when WebKit has no ImageDecoder. Do not stop this loop based on Apple vendor
+/// detection and hand playback to an independently composited HTML image.
 class LifecycleMemoryImage extends StatefulWidget {
   const LifecycleMemoryImage({
     required this.bytes,
@@ -120,10 +122,7 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
       });
       // RenderImage still owns the old frame until this rebuild is painted.
       WidgetsBinding.instance.addPostFrameCallback((_) => previous?.dispose());
-      if (_foreground &&
-          widget.autoplay &&
-          codec.frameCount > 1 &&
-          !prefersBrowserAnimation) {
+      if (_foreground && widget.autoplay && codec.frameCount > 1) {
         final duration = next.duration < const Duration(milliseconds: 20)
             ? const Duration(milliseconds: 20)
             : next.duration;
@@ -171,20 +170,6 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
 
   @override
   Widget build(BuildContext context) {
-    if (_animated &&
-        widget.autoplay &&
-        _foreground &&
-        prefersBrowserAnimation &&
-        _frame != null) {
-      return browserAnimatedImage(
-        bytes: widget.bytes,
-        fit: widget.fit,
-        width: widget.width,
-        height: widget.height,
-        intrinsicWidth: _frame!.width.toDouble(),
-        intrinsicHeight: _frame!.height.toDouble(),
-      );
-    }
     if (!_animated) {
       return Image.memory(
         widget.bytes,

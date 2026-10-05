@@ -1,6 +1,6 @@
 # SeND documentation
 
-Documentation target: **0.9.37+117**. Check the [changelog](../CHANGELOG.md) and
+Documentation target: **0.9.37+118**. Check the [changelog](../CHANGELOG.md) and
 [published releases](https://github.com/VosjeCleo/SeND/releases/latest) for availability.
 Pre-1.0 work focuses on reliability, security and interoperability; feature
 coverage is not a claim of universal device compatibility.

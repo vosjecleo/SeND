@@ -1,14 +1,15 @@
 # SeND
 
-> **SeND 0.9.37 build 117 — composition, audio and layout fixes**
+> **SeND 0.9.37 build 118 — inline formatting and PWA animation fixes**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
 [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
 
-Build 117 replaces WYSIWYG with plain-text composition, adds shared audio
-waveform/timing controls, separates homeserver configuration from web login
-credentials, and polishes conversation spacing. See the [changelog](CHANGELOG.md).
+Build 118 limits sent-message formatting to italic, bold, underline,
+strikethrough and spoilers, preserves typed line breaks, and replaces the
+Apple-only GIF playback path. Build 117's plain-text composer, audio player,
+autofill and layout fixes remain included. See the [changelog](CHANGELOG.md).
 The [build 116 Android video fix](docs/build-116-video.md) remains included.
 
 ## Preface
@@ -309,6 +310,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Documentation baseline: 0.9.37+117. Not a stable/1.0 declaration.**
+**Documentation baseline: 0.9.37+118. Not a stable/1.0 declaration.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

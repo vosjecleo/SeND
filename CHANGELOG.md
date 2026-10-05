@@ -1,8 +1,24 @@
 # Changelog
 
-Release target: **0.9.37+117**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+118**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
+
+## SeND 0.9.37 build 118 — 2026-10-05
+
+- Restrict outgoing text formatting to inline italic (`*text*` or `_text_`),
+  bold (`**text**`), underline (`__text__`), strikethrough (`~~text~~`) and
+  spoilers (`||text||`). Quotes, headings, lists, code blocks and raw HTML stay
+  literal. Existing received Matrix formatting remains readable.
+- Emit explicit line breaks without Markdown paragraph wrappers or renderer
+  whitespace, preventing extra rows and leading spaces in sent messages.
+- Remove the separate Apple-browser HTML-image playback path. GIFs and animated
+  WebP now use the same timed multi-frame codec as other platforms, including
+  CanvasKit's fallback when ImageDecoder is unavailable. Retain pause/resume,
+  autoplay preferences and reuse of downloaded/decrypted bytes.
+- Browser animation coverage now checks changing frame pixels and resume,
+  rather than merely verifying that an HTML image received animated bytes.
+  Physical iOS/PWA playback confirmation remains required.
 
 ## SeND 0.9.37 build 117 — 2026-10-05
 
