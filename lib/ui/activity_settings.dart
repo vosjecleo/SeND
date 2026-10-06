@@ -139,7 +139,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           'Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.',
         ),
         const Text(
-          'Game/program, music, and Last.fm history are separate profile slots. Devices contribute independently; viewing includes activity shared by your other devices. Last.fm refreshes only while this app is open and you are online. Offline activities are hidden.',
+          'Your profile combines game/program activity, music and Last.fm history from your devices. Last.fm refreshes while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.',
         ),
         if (backend.supportsActivityDetection)
           SwitchListTile(
@@ -172,7 +172,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Discord Rich Presence compatibility (preview)'),
             subtitle: const Text(
-              'Linux local IPC only in this preview. Requires Discord to release its socket; abandoned sockets are recovered, but active listeners are never replaced. No join secrets or account access.',
+              'Available on Linux and Windows. Close Discord to free its IPC connection. SeND recovers abandoned Linux sockets but never replaces active listeners. It does not use join secrets or access your Discord account.',
             ),
             value: settings.rpc,
             onChanged: _saving ? null : (v) => save(settings.copyWith(rpc: v)),

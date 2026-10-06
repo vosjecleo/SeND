@@ -42,8 +42,8 @@ Opening the GIF picker can request trending results from
 `https://deltie.net/api/servers/klipy/search` (same-origin API routing on web).
 Typing a search sends the query to that HTTPS proxy. The proxy holds the shared
 KLIPY API key; release binaries do not contain it. Previews and selected GIFs
-contact validated provider media hosts. Older GIPHY favourites remain readable;
-that legacy traffic is not evidence that new search uses GIPHY.
+contact validated provider media hosts. Opening older GIPHY favourites still
+contacts GIPHY; new searches use KLIPY.
 
 Search JSON is capped at 2 MiB and GIF downloads at 25 MiB. Both use connection
 and inactivity timeouts, status/content-type validation, and bounded redirects.
@@ -141,8 +141,8 @@ The signed-in application performs one bounded advisory check per process
 against `https://deltie.net/SeND/releases.json`; Settings also exposes an
 explicit retry. Checking alone never installs an update. The user's download
 action selects the matching installed package when known; unknown/Flatpak builds
-use the download page. A Windows installer installation also offers a deliberate
-download-and-run flow that checks manifest size and SHA-256 before launching
+use the download page. Copies installed with the Windows installer also offer a
+download-and-run option that checks manifest size and SHA-256 before launching
 the interactive installer. It does not silently elevate or force an exit.
 
 ## Current activity and media boundaries

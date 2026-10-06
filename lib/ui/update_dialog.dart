@@ -42,7 +42,7 @@ Future<void> showReleaseUpdate(
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
                   child: Text(
-                    'SeND will download and verify the installer. Review the upgrade in Windows after finishing recordings and uploads. Setup may ask you to close SeND. Your account data is kept.',
+                    'Finish recordings and uploads first. SeND will download and verify the installer, then open Windows setup. Setup may ask you to close SeND; it keeps your account data.',
                   ),
                 ),
               if (busy)

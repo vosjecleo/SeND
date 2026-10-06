@@ -20,7 +20,7 @@ Stable was not promoted.
 Since the build 106 milestone, releases have addressed activity interoperability,
 pack editing, notifications, platform packaging, RTC connectivity, sound cues,
 mute/deafen, and media preparation. Build 116 targets Android video staging and
-explicit recovery rather than expanding feature scope. See the
+recovery options when preparation fails. See the
 [current changelog](../CHANGELOG.md) and [video acceptance checks](build-116-video.md).
 
 Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
@@ -56,7 +56,7 @@ behavior, end-to-end push delivery or two-client audio quality.
 - [ ] Distribution: verify signed Android upgrades, Windows shortcuts/installer,
   Linux dependencies, PWA cache updates, rollback and current documentation.
 
-## Boundaries to keep honest
+## Current limitations
 
 - Threads share room access; independent private-thread membership and locks
   are not implemented. Forum Following organises posts, not push subscriptions.

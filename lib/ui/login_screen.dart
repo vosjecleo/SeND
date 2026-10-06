@@ -281,10 +281,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          'SeND works with compatible Matrix homeservers. '
-                          'A custom server may not provide SeND’s dedicated '
-                          'push endpoint, media conversion, or link-preview service, '
-                          'and server policy can limit uploads or account features.',
+                          'You can sign in with another Matrix homeserver. '
+                          'Its upload limits and account features may differ. '
+                          'SeND’s push, media conversion and link-preview '
+                          'services may not be available there.',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),

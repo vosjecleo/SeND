@@ -5,8 +5,7 @@ build; native Windows testing remains part of [1.0 hardening](RELEASE_READINESS.
 
 Recent fixes cover Discord IPC ownership, game/process identification, clipboard
 image styling, notification activation, GIF lifecycle handling and RTC track
-mute/deafen. Verify these on real Windows 10/11 hardware rather than treating
-shared Dart tests as platform certification. Desktop video compression requires
+mute/deafen. The device-testing checklist is below. Desktop video compression requires
 FFmpeg/ffprobe on PATH; failure offers retry, explicit original upload or cancel.
 
 SeND uses Flutter's standard Windows desktop runner. CI builds a complete

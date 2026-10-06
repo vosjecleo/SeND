@@ -1,16 +1,13 @@
 # SeND
 
 > **SeND 0.9.37 build 119: DM layout, forums and animated avatars**
-> Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
 [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
 
 Build 119 fixes DM-row spacing, keyboard language switching, forum reply order,
-read handling and post deletion, and animated profile pictures. Earlier inline
-formatting, media and opt-in PWA notification preview fixes remain included.
+read handling and post deletion, and animated profile pictures.
 See the [changelog](CHANGELOG.md).
-The [build 116 Android video fix](docs/build-116-video.md) remains included.
 
 ## Preface
 
@@ -32,8 +29,8 @@ Please forgive my sins of vibecoding.
 
 ## What is SeND?
 
-**SeND is Not Discord** is a recursive acronym. Previously named Deltiecord,
-the app keeps existing accounts, settings and encrypted sessions during upgrades.
+SeND stands for **“SeND is Not Discord”**, a recursive acronym.
+It was previously called Deltiecord.
 
 SeND is an open-source Flutter client for Matrix on desktop, Android, and
 the web, including iPhone/iPad as an installed PWA.
@@ -185,10 +182,8 @@ Notable features include:
 - Declarative JSON themes with semantic tokens, fallback inheritance, custom
   controls/icon packs and a bundled [Aero Glass example](docs/themes.md)
 
-SeND now includes a dedicated Android phone interface. It reuses the same
-Matrix, encryption, timeline, profile, media, settings, and RTC layers without
-squeezing the desktop three-column interface onto a phone. Desktop remains the
-primary development platform while Android receives device testing.
+Android has a dedicated phone interface and shares the desktop app's backend.
+Desktop is the primary development platform; Android is also tested on devices.
 
 ---
 
@@ -226,11 +221,10 @@ security review, interoperability and release reliability, not another planned
 major feature expansion. See the [1.0 readiness checklist](docs/RELEASE_READINESS.md)
 and [known issues and boundaries](KNOWN_ISSUES.md).
 
-Threads inherit room access, forum Following is not a separate
-push subscription, and named roles use Matrix's numeric power-level hierarchy.
-SSO authenticates an account; it does not replace encryption-device verification.
-Self-hosted SSO needs the callback protection described in the hosting guide;
-availability also depends on the homeserver's configured identity provider.
+For protocol limitations, see [known issues](KNOWN_ISSUES.md). Self-hosters
+should read the [SSO callback security requirements](docs/web-deployment.md)
+before enabling browser sign-in. SSO depends on the homeserver's identity
+provider and does not replace encryption-device verification.
 
 Version numbers indicate:
 
@@ -305,6 +299,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Documentation baseline: 0.9.37+119. Not a stable/1.0 declaration.**
+**Documentation baseline: 0.9.37+119.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

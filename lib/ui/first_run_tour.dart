@@ -104,7 +104,7 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
         title: 'Welcome to SeND!',
         body:
             'SeND connects to Matrix on desktop and phone. '
-            'Your rooms and encryption remain Matrix-compatible. '
+            'You can chat with people using other Matrix clients. '
             'Some SeND preferences can sync between your devices.',
       ),
       _TourPage(

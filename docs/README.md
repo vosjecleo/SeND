@@ -2,8 +2,7 @@
 
 Documentation target: **0.9.37+119**. Check the [changelog](../CHANGELOG.md) and
 [published releases](https://github.com/VosjeCleo/SeND/releases/latest) for availability.
-Pre-1.0 work focuses on reliability, security and interoperability; feature
-coverage is not a claim of universal device compatibility.
+Pre-1.0 work focuses on reliability, security, interoperability and device testing.
 
 ## Using SeND
 
@@ -24,9 +23,8 @@ coverage is not a claim of universal device compatibility.
 
 ## Historical release and investigation records
 
-These preserve their original observations and test results. An old proposal is
-not automatically implemented, and a later release does not close an untested
-device issue. Use the current guides above for setup instructions.
+These records preserve earlier plans, observations and test results, including
+unimplemented proposals and unresolved issues. Use the guides above for setup.
 
 - [111 reliability](build-111-reliability.md), [110 packs/activity/polish](build-110-polish.md)
 - [109 independent activities](build-109-activity.md), [108 rename and updates](build-108-send.md)

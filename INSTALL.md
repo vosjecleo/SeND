@@ -7,8 +7,8 @@ PulseAudio compatibility service is supported. Packaged dependencies include
 these tools; standalone AppImage users must provide them on the host.
 
 This guide targets SeND 0.9.37 build 116 for Android,
-x86-64 Windows, Linux, and Web/PWA. It marks feature-scope completion, not a
-stable-release certification. See [1.0 readiness](docs/RELEASE_READINESS.md).
+x86-64 Windows, Linux, and Web/PWA. SeND is still pre-1.0;
+see the [release checklist](docs/RELEASE_READINESS.md).
 Download official builds from the [SeND releases page](https://deltie.net/SeND)
 or the [published GitHub releases](https://github.com/vosjecleo/SeND/releases/latest).
 
