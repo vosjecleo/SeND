@@ -17,7 +17,7 @@ final class _AvatarMediaEntry {
   final int dimension;
 }
 
-/// Shared bounded cache for Matrix avatar thumbnails.
+/// Shared bounded cache for Matrix avatar originals and fallback thumbnails.
 ///
 /// Room lists, timelines, profiles, member lists, voice, and notifications all
 /// refer to the same immutable MXC content. Pooling by MXC URI prevents each UI
@@ -231,5 +231,5 @@ final class AvatarMediaPool {
   String _key(Uri uri, int dimension) => '${uri.toString()}|$dimension';
 
   String _fileName(Uri uri, int dimension) =>
-      '${sha256.convert(utf8.encode(uri.toString()))}-$dimension.bin';
+      '${sha256.convert(utf8.encode(uri.toString()))}-$dimension-animated.bin';
 }

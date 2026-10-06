@@ -1,10 +1,33 @@
 # Changelog
 
-Release target: **0.9.37+118**. Following the build 106 feature-scope milestone,
+Release target: **0.9.37+119**. Following the build 106 feature-scope milestone,
 work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
 Historical entries preserve the scope of their own releases.
 
-### Build 118 PWA-only follow-up — notification previews
+## SeND 0.9.37 build 119 — 2026-10-06
+
+- Fix mobile DM rows compressing around avatars when an online contact has no
+  status text. Keep desktop row identity stable across reordering so hover and
+  avatar state cannot migrate to another contact.
+- Preserve composer focus while the system keyboard/language chooser makes the
+  app temporarily inactive; actual backgrounding still dismisses input.
+- Give forum channels their own icon on mobile and desktop. Opening the forum
+  index acknowledges new posts without marking unopened thread replies read.
+- Show forum replies oldest-to-newest down the screen, acknowledge the newest
+  visible reply, restore message grouping/day separators, and remove the extra
+  action-button row above every message.
+- Keep the discussion keyboard open while sending; preserve a new draft typed
+  during an in-flight send and retain failed drafts for retry.
+- Allow creators/moderators with redaction permission to delete forum posts,
+  with confirmation and visible failure messages. Replies are not bulk-deleted.
+- Preserve animated avatar originals in the shared bounded media cache, retire
+  cached still thumbnails, and use lifecycle-aware GIF playback in desktop,
+  mobile and profile avatars. Reduced-motion preferences remain respected.
+- Carry forward the build 118 opt-in encrypted PWA notification preview support.
+
+## SeND 0.9.37 build 118 — 2026-10-05
+
+### PWA-only follow-up — notification previews
 
 - Add a Declarative Web Push visible fallback for supporting WebKit versions,
   while keeping existing worker subscriptions compatible.
@@ -17,7 +40,7 @@ Historical entries preserve the scope of their own releases.
 - Preserve 0.9.37+118 and native packages. Add browser worker crypto/storage tests
   and rollback-safe same-version PWA deployment revisions.
 
-## SeND 0.9.37 build 118 — 2026-10-05
+### Initial release
 
 - Restrict outgoing text formatting to inline italic (`*text*` or `_text_`),
   bold (`**text**`), underline (`__text__`), strikethrough (`~~text~~`) and

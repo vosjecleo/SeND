@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+119" date="2026-10-06" type="development">
+      <description><p>Repair DM row spacing and identity, keyboard language switching, forum discussions and deletion, and animated avatars.</p></description>
+    </release>
     <release version="0.9.37+118" date="2026-10-05" type="development">
       <description><p>Inline-only message formatting and unified GIF playback for the PWA.</p></description>
     </release>

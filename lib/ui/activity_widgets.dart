@@ -68,6 +68,15 @@ class TimelineActivityStatus extends StatelessWidget {
 }
 
 class ActivityStatus extends StatelessWidget {
+  static bool hasContent(ChatBackend backend, RoomSummary room) =>
+      room.presence != UserPresence.offline &&
+      (room.directUserId != null
+              ? backend.activityFor(room.directUserId!)?.label ??
+                    room.statusMessage?.trim() ??
+                    ''
+              : room.statusMessage?.trim() ?? '')
+          .isNotEmpty;
+
   const ActivityStatus({
     required this.backend,
     required this.userId,

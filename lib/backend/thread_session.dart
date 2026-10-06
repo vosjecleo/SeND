@@ -7,6 +7,8 @@ import '../models/chat_models.dart';
 abstract class ThreadSession extends ChangeNotifier {
   String get roomId;
   String get rootId;
+
+  /// Newest first, matching the main timeline and its reversed scroll view.
   List<ChatMessage> get messages;
   bool get loading;
   bool get canLoadMore;

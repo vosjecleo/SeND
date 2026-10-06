@@ -3472,6 +3472,80 @@ void main() {
     expect(backend.conversationVisibilityStates.last, isFalse);
   });
 
+  testWidgets(
+    'IME language chooser keeps the composer focused while inactive',
+    (tester) async {
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..roomList = const [
+          RoomSummary(
+            id: '!ime',
+            name: 'IME chat',
+            lastMessage: '',
+            unreadCount: 0,
+            usesChannelIcon: false,
+            isDirect: true,
+          ),
+        ];
+      await _pumpMobile(tester, backend);
+      await tester.tap(find.text('IME chat'));
+      await tester.pumpAndSettle();
+      final editable = find.byType(EditableText).hitTestable().first;
+      await tester.tap(editable);
+      await tester.pump();
+      final focus = tester.widget<EditableText>(editable).focusNode;
+      expect(focus.hasFocus, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+    },
+  );
+
+  testWidgets(
+    'mobile DM presence changes and reorder do not compress avatar rows',
+    (tester) async {
+      RoomSummary room(String id, UserPresence presence) => RoomSummary(
+        id: id,
+        name: id,
+        lastMessage: '',
+        unreadCount: 0,
+        usesChannelIcon: false,
+        isDirect: true,
+        presence: presence,
+      );
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..roomList = [
+          room('Alice', UserPresence.offline),
+          room('Bob', UserPresence.offline),
+          room('Carol', UserPresence.offline),
+        ];
+      await _pumpMobile(tester, backend);
+      final initial = tester.getSize(find.byKey(const ValueKey('Bob'))).height;
+      for (var i = 0; i < 6; i++) {
+        backend.roomList = [
+          room('Bob', i.isEven ? UserPresence.online : UserPresence.offline),
+          room('Carol', UserPresence.offline),
+          room('Alice', UserPresence.offline),
+        ];
+        backend.notifyListeners();
+        await tester.pumpAndSettle();
+        final bob = find.byKey(const ValueKey('Bob'));
+        final carol = find.byKey(const ValueKey('Carol'));
+        expect(tester.widget<ListTile>(bob).subtitle, isNull);
+        expect(tester.getSize(bob).height, initial);
+        expect(
+          tester.getBottomLeft(bob).dy,
+          lessThanOrEqualTo(tester.getTopLeft(carol).dy),
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets('Android header alone opens details and Back dismisses it', (
     tester,
   ) async {

@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:deltiecord/ui/lifecycle_memory_image.dart';
+import 'package:deltiecord/ui/json_theme.dart';
+import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -89,6 +91,18 @@ void main() {
     await tester.pump();
     expect((await observeFrames(tester)).length, greaterThan(1));
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('desktop and mobile GIF avatars advance frames', (tester) async {
+    final bytes = animatedFixture();
+    for (final avatar in <Widget>[
+      ThemeAvatar(backgroundImage: MemoryImage(bytes)),
+      MobileAvatar(bytes: bytes, fallback: 'A'),
+    ]) {
+      await tester.pumpWidget(MaterialApp(home: Center(child: avatar)));
+      expect((await observeFrames(tester)).length, greaterThan(1));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets('autoplay off retains a single frame', (tester) async {

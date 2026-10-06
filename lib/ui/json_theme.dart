@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/chat_models.dart';
 import 'deltiecord_theme.dart';
 import 'theme_surface_style.dart';
+import 'lifecycle_memory_image.dart';
 export 'theme_surface_style.dart';
 part 'theme_icons.dart';
 
@@ -455,6 +456,21 @@ class ThemeAvatar extends StatelessWidget {
   final Widget? child;
   @override
   Widget build(BuildContext context) {
+    final provider = backgroundImage;
+    if (provider is MemoryImage && hasAnimatedImageHeader(provider.bytes)) {
+      return SizedBox.square(
+        dimension: (radius ?? 20) * 2,
+        child: ThemeAvatarClip(
+          child: LifecycleMemoryImage(
+            bytes: provider.bytes,
+            animated: true,
+            decodeWidth: 256,
+            autoplay: !MediaQuery.disableAnimationsOf(context),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
     if (Theme.of(context).extension<ThemeChrome>()?.glassAvatars != true) {
       return CircleAvatar(
         radius: radius,

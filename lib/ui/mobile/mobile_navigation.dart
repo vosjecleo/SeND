@@ -801,7 +801,7 @@ class _RoomList extends StatelessWidget {
           presence: room.isDirect ? room.presence : null,
         ),
         title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: room.isDirect && room.presence != UserPresence.offline
+        subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
             ? ActivityStatus(
                 backend: backend,
                 userId: room.directUserId,
@@ -975,7 +975,11 @@ class _SpaceRoomTile extends StatelessWidget {
     minTileHeight: 32,
     minVerticalPadding: 0,
     leading: Icon(
-      room.isVoice ? Icons.volume_up_outlined : Icons.tag,
+      room.isVoice
+          ? Icons.volume_up_outlined
+          : room.presentation == RoomPresentation.forum
+          ? Icons.forum_outlined
+          : Icons.tag,
       size: 20,
     ),
     title: Text(

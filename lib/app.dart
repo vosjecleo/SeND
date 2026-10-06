@@ -719,11 +719,15 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
     // A null lifecycle is used by some Flutter test bindings before their
     // first frame; the active widget tree is considered foregrounded there.
     _lifecycleState = state;
-    if (!applicationIsForeground(state, viewFocused: true)) {
+    // IME language pickers temporarily make the app inactive. Do not dismiss
+    // the input connection while the user is interacting with their keyboard.
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       FocusManager.instance.primaryFocus?.unfocus();
       unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
       InAppNotificationCenter.dismiss();
-    } else {
+    } else if (applicationIsForeground(state, viewFocused: true)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         widget.backend.refreshApplicationState();

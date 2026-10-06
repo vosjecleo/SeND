@@ -435,6 +435,9 @@ extension _MatrixMessages on MatrixBackend {
     if (!event.canRedact) throw StateError('You cannot delete that message.');
     try {
       await event.redactEvent(redactAllEdits: true);
+      // Indexed roots outside the live timeline do not receive its in-place
+      // redaction updates. Drop the cached copy once the server accepts it.
+      if (_forumRoots.remove(messageId) != null) _notifyBackendListeners();
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 
 import 'package:deltiecord/services/avatar_media_pool.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +41,24 @@ void main() {
     expect(results[1], [1, 2, 3]);
     await pool.clear();
   });
+
+  test(
+    'legacy still thumbnails are not reused as animated originals',
+    () async {
+      final uri = Uri.parse('mxc://example.org/animated');
+      final oldName = '${sha256.convert(utf8.encode(uri.toString()))}-512.bin';
+      await File('${cacheDirectory.path}/$oldName').writeAsBytes([1, 2, 3]);
+      final pool = AvatarMediaPool(directory: cacheDirectory);
+      var loads = 0;
+      final bytes = await pool.load(uri, 512, () async {
+        loads++;
+        return Uint8List.fromList([4, 5, 6]);
+      });
+      expect(loads, 1);
+      expect(bytes, [4, 5, 6]);
+      await pool.clear();
+    },
+  );
 
   test('larger cached avatars satisfy smaller surfaces', () async {
     final pool = AvatarMediaPool(directory: cacheDirectory);

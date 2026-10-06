@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:deltiecord/backend/thread_session.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/chat_shell.dart';
@@ -9,6 +10,8 @@ import 'widget_test.dart' show FakeBackend;
 class _Session extends ThreadSession {
   bool closed = false;
   bool fail = false;
+  Completer<void>? sendGate;
+  final read = <String>[];
   final sent = <String>[];
   final items = <ChatMessage>[];
   @override
@@ -28,12 +31,15 @@ class _Session extends ThreadSession {
   @override
   Future<void> attach(AttachmentDraft attachment) async {}
   @override
+  Future<void> markRead(String eventId) async => read.add(eventId);
+  @override
   Future<void> send(
     String text, {
     String? formattedBody,
     String? editMessageId,
   }) async {
     if (fail) throw StateError('Offline');
+    await sendGate?.future;
     sent.add(text);
   }
 
@@ -52,6 +58,64 @@ class _Backend extends FakeBackend {
 }
 
 void main() {
+  testWidgets(
+    'new replies stay below old replies and sending keeps the keyboard',
+    (tester) async {
+      final backend = _Backend();
+      backend.session.items.addAll([
+        ChatMessage(
+          id: 'new',
+          sender: 'Alice',
+          body: 'Newest reply',
+          timestamp: DateTime(2026, 10, 6, 12),
+          pending: false,
+        ),
+        ChatMessage(
+          id: 'old',
+          sender: 'Alice',
+          body: 'Older reply',
+          timestamp: DateTime(2026, 10, 6, 11),
+          pending: false,
+        ),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+          ),
+          home: Scaffold(
+            body: ThreadView(
+              backend: backend,
+              roomId: '!room',
+              rootId: r'$root',
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('Newest reply')).dy,
+        greaterThan(tester.getTopLeft(find.text('Older reply')).dy),
+      );
+      expect(backend.session.read.last, 'new');
+      await tester.enterText(find.byType(TextField), 'First draft');
+      backend.session.sendGate = Completer<void>();
+      await tester.tap(find.byTooltip('Send reply'));
+      await tester.pump();
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.enterText(find.byType(TextField), 'Next draft');
+      backend.session.sendGate!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Next draft',
+      );
+      expect(tester.testTextInput.isVisible, isTrue);
+    },
+  );
+
   testWidgets('touch actions can edit and cancel without leaving edited text', (
     tester,
   ) async {

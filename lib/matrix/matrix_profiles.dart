@@ -527,14 +527,30 @@ extension _MatrixProfiles on MatrixBackend {
 
   Future<Uint8List?> _avatarMedia(Uri? mxc, int dimension) {
     if (mxc == null) return Future<Uint8List?>.value();
-    return _avatarMediaPool.load(mxc, dimension, () async {
+    final effectiveDimension = max(dimension, AvatarMediaPool.profileDimension);
+    // Thumbnail animation is optional on Matrix homeservers. Preserve the
+    // original avatar (shared across row/profile sizes) rather than trusting a
+    // thumbnail endpoint which can silently flatten GIFs to PNGs.
+    return _avatarMediaPool.load(mxc, effectiveDimension, () async {
+      try {
+        final original = await _matrix.getContent(
+          mxc.host,
+          mxc.pathSegments.join('/'),
+        );
+        if (original.data.isNotEmpty &&
+            original.data.length <= _avatarMediaPool.maximumEntryBytes) {
+          return original.data;
+        }
+      } catch (_) {
+        // Preserve support for servers which only expose thumbnails.
+      }
       final response = await _matrix.getContentThumbnail(
         mxc.host,
         mxc.pathSegments.join('/'),
-        dimension,
-        dimension,
+        effectiveDimension,
+        effectiveDimension,
         method: Method.crop,
-        animated: false,
+        animated: true,
       );
       return response.data;
     });

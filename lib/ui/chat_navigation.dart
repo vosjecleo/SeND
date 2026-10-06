@@ -1176,11 +1176,19 @@ class _RoomPanelState extends State<_RoomPanel> {
                                   textRooms.isNotEmpty)
                                 const _RoomSectionLabel('TEXT ROOMS'),
                               for (final room in textRooms)
-                                _RoomListTile(backend: backend, room: room),
+                                _RoomListTile(
+                                  key: ValueKey(room.id),
+                                  backend: backend,
+                                  room: room,
+                                ),
                               if (voiceRooms.isNotEmpty)
                                 const _RoomSectionLabel('VOICE ROOMS'),
                               for (final room in voiceRooms)
-                                _RoomListTile(backend: backend, room: room),
+                                _RoomListTile(
+                                  key: ValueKey(room.id),
+                                  backend: backend,
+                                  room: room,
+                                ),
                             ],
                           ),
                   ),
@@ -1784,6 +1792,7 @@ Future<void> showChannelActions(
 
 class _RoomListTile extends StatelessWidget {
   const _RoomListTile({
+    super.key,
     required this.backend,
     required this.room,
     this.canArrange,
@@ -2189,7 +2198,8 @@ class _RoomListTile extends StatelessWidget {
               ? participantCount == 0
                     ? null
                     : Text('$participantCount connected')
-              : backend.selectedSpaceId == null
+              : backend.selectedSpaceId == null &&
+                    ActivityStatus.hasContent(backend, room)
               ? ActivityStatus(
                   backend: backend,
                   userId: room.directUserId,
@@ -2407,7 +2417,12 @@ class _RoomIcon extends StatelessWidget {
       return SizedBox(
         width: size,
         height: size,
-        child: const ThemeIcon(Icons.tag, size: 18),
+        child: ThemeIcon(
+          room.presentation == RoomPresentation.forum
+              ? Icons.forum_outlined
+              : Icons.tag,
+          size: 18,
+        ),
       );
     }
     final avatar = room.avatarBytes;

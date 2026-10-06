@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../models/chat_models.dart';
+import '../lifecycle_memory_image.dart';
 
 class MobileAttentionBadge extends StatelessWidget {
   const MobileAttentionBadge({
@@ -86,6 +87,14 @@ class MobileAvatar extends StatelessWidget {
                             ),
                           ),
                         ),
+                      )
+                    : hasAnimatedImageHeader(bytes!)
+                    ? LifecycleMemoryImage(
+                        bytes: bytes!,
+                        animated: true,
+                        decodeWidth: 256,
+                        autoplay: !MediaQuery.disableAnimationsOf(context),
+                        fit: BoxFit.cover,
                       )
                     : Image.memory(
                         bytes!,

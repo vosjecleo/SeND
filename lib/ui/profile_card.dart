@@ -6,6 +6,7 @@ import '../services/timezone_catalog.dart';
 import 'deltiecord_theme.dart';
 import 'json_theme.dart';
 import 'activity_widgets.dart';
+import 'lifecycle_memory_image.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -414,6 +415,16 @@ class _ProfileHeader extends StatelessWidget {
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                                )
+                              : hasAnimatedImageHeader(profile.avatarBytes!)
+                              ? LifecycleMemoryImage(
+                                  bytes: profile.avatarBytes!,
+                                  animated: true,
+                                  decodeWidth: 512,
+                                  autoplay: !MediaQuery.disableAnimationsOf(
+                                    context,
+                                  ),
+                                  fit: BoxFit.cover,
                                 )
                               : Image.memory(
                                   profile.avatarBytes!,

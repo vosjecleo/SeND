@@ -54,6 +54,7 @@ class LifecycleMemoryImage extends StatefulWidget {
     this.fit = BoxFit.contain,
     this.width,
     this.height,
+    this.decodeWidth,
     super.key,
   });
   final Uint8List bytes;
@@ -62,6 +63,9 @@ class LifecycleMemoryImage extends StatefulWidget {
   final BoxFit fit;
   final double? width;
   final double? height;
+
+  /// Bound decoded avatar frames without changing the shared original bytes.
+  final int? decodeWidth;
   @override
   State<LifecycleMemoryImage> createState() => _LifecycleMemoryImageState();
 }
@@ -96,7 +100,11 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
     _stop();
     final generation = _generation;
     try {
-      final codec = await ui.instantiateImageCodec(widget.bytes);
+      final codec = await ui.instantiateImageCodec(
+        widget.bytes,
+        targetWidth: widget.decodeWidth,
+        allowUpscaling: false,
+      );
       if (!mounted || generation != _generation) {
         codec.dispose();
         return;
@@ -139,6 +147,7 @@ class _LifecycleMemoryImageState extends State<LifecycleMemoryImage>
     if ((!identical(oldWidget.bytes, widget.bytes) &&
             !listEquals(oldWidget.bytes, widget.bytes)) ||
         oldWidget.autoplay != widget.autoplay ||
+        oldWidget.decodeWidth != widget.decodeWidth ||
         oldWidget.animated != widget.animated) {
       _stop();
       if (_animated) unawaited(_start());

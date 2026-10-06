@@ -112,7 +112,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
         ModalRoute.of(context)?.isCurrent == false) {
       return;
     }
-    final message = _session?.messages.lastOrNull;
+    final message = _session?.messages.firstOrNull;
     if (message != null) unawaited(_session!.markRead(message.id));
   }
 
@@ -139,7 +139,8 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   Future<void> _send() async {
     final session = _session;
     if (session == null || _draft.text.trim().isEmpty) return;
-    final value = serializeMarkdownEmojiMessage(_draft.text, const []);
+    final sentText = _draft.text;
+    final value = serializeMarkdownEmojiMessage(sentText, const []);
     await _run(() async {
       await session.send(
         value.plainText,
@@ -148,7 +149,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
       );
       if (mounted) {
         setState(() {
-          _draft.clear();
+          if (_draft.text == sentText) _draft.clear();
           _editing = null;
         });
       }
@@ -315,69 +316,102 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                           )
                         : const SizedBox.shrink();
                   }
-                  final message = messages[messages.length - index - 1];
+                  final message = messages[index];
+                  final older = index + 1 < messages.length
+                      ? messages[index + 1]
+                      : null;
+                  final newDay =
+                      older == null ||
+                      !DateUtils.isSameDay(
+                        older.timestamp.toLocal(),
+                        message.timestamp.toLocal(),
+                      );
+                  final startsGroup =
+                      newDay ||
+                      older.system ||
+                      message.system ||
+                      (older.senderId ?? older.sender) !=
+                          (message.senderId ?? message.sender) ||
+                      message.timestamp.difference(older.timestamp) >
+                          const Duration(minutes: 7) ||
+                      message.reply != null;
                   return GestureDetector(
+                    key: ValueKey('thread-message-${message.id}'),
                     onLongPress: () => _messageActions(message),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: IconButton(
-                            tooltip: 'Message actions',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _messageActions(message),
-                            icon: const Icon(Icons.more_horiz, size: 18),
-                          ),
-                        ),
-                        _MessageRow(
-                          allowThreadNavigation: false,
-                          key: ValueKey(message.id),
-                          message: message,
-                          highlighted: false,
-                          startsGroup: true,
-                          backend: widget.backend,
-                          mediaMessages: messages,
-                          onReply: () => FocusScope.of(context).nextFocus(),
-                          onEdit: message.own && message.attachment == null
-                              ? () => setState(() {
-                                  _editing = message;
-                                  _draft.text = message.body;
-                                })
-                              : null,
-                          onDelete: message.canRedact
-                              ? () => _run(
-                                  () =>
-                                      widget.backend.redactMessage(message.id),
-                                )
-                              : null,
-                          onReact: () => _react(message),
-                          onRetry: message.failed
-                              ? () => _run(
-                                  () => widget.backend.retryMessage(message.id),
-                                )
-                              : null,
-                          onCancel: message.failed
-                              ? () => _run(
-                                  () => widget.backend.cancelPendingMessage(
+                        if (newDay)
+                          MessageDaySeparator(date: message.timestamp),
+                        Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(right: 32),
+                              child: _MessageRow(
+                                allowThreadNavigation: false,
+                                key: ValueKey(message.id),
+                                message: message,
+                                highlighted: false,
+                                startsGroup: startsGroup,
+                                backend: widget.backend,
+                                mediaMessages: messages,
+                                onReply: () =>
+                                    FocusScope.of(context).nextFocus(),
+                                onEdit:
+                                    message.own && message.attachment == null
+                                    ? () => setState(() {
+                                        _editing = message;
+                                        _draft.text = message.body;
+                                      })
+                                    : null,
+                                onDelete: message.canRedact
+                                    ? () => _run(
+                                        () => widget.backend.redactMessage(
+                                          message.id,
+                                        ),
+                                      )
+                                    : null,
+                                onReact: () => _react(message),
+                                onRetry: message.failed
+                                    ? () => _run(
+                                        () => widget.backend.retryMessage(
+                                          message.id,
+                                        ),
+                                      )
+                                    : null,
+                                onCancel: message.failed
+                                    ? () => _run(
+                                        () => widget.backend
+                                            .cancelPendingMessage(message.id),
+                                      )
+                                    : null,
+                                onToggleReaction: (reaction) => _run(
+                                  () => widget.backend.toggleReaction(
                                     message.id,
+                                    reaction.key,
+                                    customEmoji: reaction.customEmoji,
                                   ),
-                                )
-                              : null,
-                          onToggleReaction: (reaction) => _run(
-                            () => widget.backend.toggleReaction(
-                              message.id,
-                              reaction.key,
-                              customEmoji: reaction.customEmoji,
+                                ),
+                                onJumpToReply: (_) {},
+                                onShowProfile: (request) => showMemberProfile(
+                                  context,
+                                  widget.backend,
+                                  request.$1,
+                                ),
+                                onActionsShown: (_) {},
+                              ),
                             ),
-                          ),
-                          onJumpToReply: (_) {},
-                          onShowProfile: (request) => showMemberProfile(
-                            context,
-                            widget.backend,
-                            request.$1,
-                          ),
-                          onActionsShown: (_) {},
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: IconButton(
+                                tooltip: 'Message actions',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _messageActions(message),
+                                icon: const Icon(Icons.more_horiz, size: 18),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -418,7 +452,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                       decoration: const InputDecoration(
                         hintText: 'Reply in discussion',
                       ),
-                      enabled: session != null && !_sending,
+                      enabled: session != null,
                     ),
                   ),
                   IconButton(

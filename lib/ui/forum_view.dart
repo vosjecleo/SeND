@@ -14,7 +14,7 @@ class ForumView extends StatefulWidget {
   State<ForumView> createState() => _ForumViewState();
 }
 
-class _ForumViewState extends State<ForumView> {
+class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
   String _query = '';
   String? _tag;
   bool _oldest = false;
@@ -23,6 +23,70 @@ class _ForumViewState extends State<ForumView> {
   bool _indexLoading = false;
   String? _indexRequestedFor;
   String? _indexError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _acknowledge() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          widget.backend.timelineLoading ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      // Opening the index reads new posts, not replies in unopened threads.
+      // Backend foreground/visibility gates still prevent background receipts.
+      widget.backend.setConversationAtPresent(true);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _acknowledge();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.backend.setConversationAtPresent(false);
+    super.dispose();
+  }
+
+  Future<void> _deletePost(ChatMessage post) async {
+    if (!post.canRedact) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete forum post?'),
+        content: const Text(
+          'This removes the opening post. Existing replies are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.backend.redactMessage(post.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(safeErrorMessage(error))));
+      }
+    }
+  }
 
   Future<void> _loadIndex({bool refresh = false, bool older = false}) async {
     if (_indexLoading) return;
@@ -53,6 +117,7 @@ class _ForumViewState extends State<ForumView> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.backend,
     builder: (context, _) {
+      _acknowledge();
       if (_indexRequestedFor != widget.room.id &&
           !widget.backend.timelineLoading) {
         _indexRequestedFor = widget.room.id;
@@ -259,6 +324,12 @@ class _ForumViewState extends State<ForumView> {
                                 Text(post.sender),
                                 Text('$replies replies'),
                                 if (post.threadUnread) const Text('Unread'),
+                                if (post.canRedact)
+                                  IconButton(
+                                    tooltip: 'Delete forum post',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: () => _deletePost(post),
+                                  ),
                                 IconButton(
                                   tooltip:
                                       widget.backend.preferences.followedThreads

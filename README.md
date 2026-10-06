@@ -1,15 +1,15 @@
 # SeND
 
-> **SeND 0.9.37 build 118 — inline formatting and PWA animation fixes**
+> **SeND 0.9.37 build 119 — DM layout, forums and animated avatars**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
 [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
 
-Build 118 limits sent-message formatting to italic, bold, underline,
-strikethrough and spoilers, preserves typed line breaks, and replaces the
-Apple-only GIF playback path. Build 117's plain-text composer, audio player,
-autofill and layout fixes remain included. See the [changelog](CHANGELOG.md).
+Build 119 fixes DM-row spacing, keyboard language switching, forum reply order,
+read handling and post deletion, and animated profile pictures. Earlier inline
+formatting, media and opt-in PWA notification preview fixes remain included.
+See the [changelog](CHANGELOG.md).
 The [build 116 Android video fix](docs/build-116-video.md) remains included.
 
 ## Preface
@@ -310,6 +310,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Documentation baseline: 0.9.37+118. Not a stable/1.0 declaration.**
+**Documentation baseline: 0.9.37+119. Not a stable/1.0 declaration.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

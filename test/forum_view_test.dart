@@ -22,6 +22,67 @@ class _ForumBackend extends FakeBackend {
 }
 
 void main() {
+  testWidgets(
+    'opening forums acknowledges posts and permission-gates deletion',
+    (tester) async {
+      final backend = _ForumBackend()
+        ..messageList = [
+          ChatMessage(
+            id: 'owned',
+            sender: 'Me',
+            body: 'My post',
+            timestamp: DateTime(2026, 10, 6),
+            pending: false,
+            own: true,
+            canRedact: true,
+          ),
+          ChatMessage(
+            id: 'other',
+            sender: 'Other',
+            body: 'Their post',
+            timestamp: DateTime(2026, 10, 5),
+            pending: false,
+            canRedact: false,
+          ),
+        ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+          ),
+          home: Scaffold(
+            body: ForumView(
+              backend: backend,
+              room: const RoomSummary(
+                id: '!forum',
+                name: 'Forum',
+                lastMessage: '',
+                unreadCount: 1,
+                usesChannelIcon: true,
+                presentation: RoomPresentation.forum,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(backend.conversationAtPresentStates.last, isTrue);
+      expect(find.byTooltip('Delete forum post'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete forum post'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(backend.redactedMessageIds, isEmpty);
+      await tester.tap(find.byTooltip('Delete forum post'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(backend.redactedMessageIds, ['owned']);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(backend.conversationAtPresentStates.last, isFalse);
+    },
+  );
+
   testWidgets('failed forum send preserves editable draft for retry', (
     tester,
   ) async {
