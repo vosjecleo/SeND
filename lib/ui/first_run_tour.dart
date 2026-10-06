@@ -103,9 +103,9 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
         icon: Icons.waving_hand_outlined,
         title: 'Welcome to SeND!',
         body:
-            'SeND is a Matrix client with desktop and phone interfaces. '
-            'Your rooms and encryption remain Matrix-compatible, while a few '
-            'SeND preferences can sync between your devices.',
+            'SeND connects to Matrix on desktop and phone. '
+            'Your rooms and encryption remain Matrix-compatible. '
+            'Some SeND preferences can sync between your devices.',
       ),
       _TourPage(
         icon: Icons.link_outlined,
@@ -154,27 +154,26 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
               'enable browser notifications in Settings > Notifications. '
               'Push requires iOS 16.4 or later and your permission. Android and '
               'desktop browsers can install it from their browser menu too.\n\n'
-              'Your session and encryption keys are kept in this browser’s '
-              'site storage. Keep your Matrix recovery key safe: clearing site '
-              'data, private browsing, or storage eviction can remove the local '
+              'This browser stores your session and encryption keys. '
+              'Keep your Matrix recovery key safe: clearing site data, '
+              'private browsing, or storage eviction can remove the local '
               'session. Only one SeND tab may use this session at a time.',
         ),
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _TourPage(
           icon: Icons.notifications_active_outlined,
-          title: 'Set up reliable background notifications',
+          title: 'Set up background notifications',
           body:
               '1. Install ntfy and open it once.\n'
               '2. In ntfy, add https://push.deltiecord.net as a server and select '
               'it for UnifiedPush.\n'
               '3. In SeND, open Settings > Notifications, choose ntfy, '
               'then refresh registration.\n\n'
-              'Android may stop background network work, so allow ntfy to run '
-              'in the background and exclude it from aggressive battery '
-              'optimisation if delivery is delayed. The shared ntfy.sh service '
-              'can rate-limit bursts or be affected by public traffic; '
-              'push.deltiecord.net is SeND’s dedicated alternative. You can '
-              'also use another compatible ntfy server you trust.',
+              'Allow ntfy to run in the background. If alerts are delayed, '
+              'exempt it from battery optimisation. Use SeND’s dedicated '
+              'push.deltiecord.net server or another compatible ntfy server '
+              'you trust. The public ntfy.sh server may limit delivery during '
+              'bursts or heavy traffic.',
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(

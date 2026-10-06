@@ -998,7 +998,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       const SizedBox(height: 8),
       const Text(
-        'Diagnostics deliberately exclude access tokens, recovery material, '
+        'Diagnostics exclude access tokens, recovery material, '
         'decrypted messages, and media encryption keys.',
       ),
       const SizedBox(height: 12),

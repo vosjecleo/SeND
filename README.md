@@ -1,6 +1,6 @@
 # SeND
 
-> **SeND 0.9.37 build 119 — DM layout, forums and animated avatars**
+> **SeND 0.9.37 build 119: DM layout, forums and animated avatars**
 > Previously Deltiecord. Existing accounts, settings and encrypted sessions survive the rename.
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
@@ -32,11 +32,11 @@ Please forgive my sins of vibecoding.
 
 ## What is SeND?
 
-**SeND is Not Discord**—a recursive acronym. Previously named Deltiecord,
+**SeND is Not Discord** is a recursive acronym. Previously named Deltiecord,
 the app keeps existing accounts, settings and encrypted sessions during upgrades.
 
 SeND is an open-source Flutter client for Matrix on desktop, Android, and
-the web—including iPhone/iPad as an installed PWA.
+the web, including iPhone/iPad as an installed PWA.
 
 The goal of the project is to bring the familiar UX of discord to the secure and open source side, to hopefully get more discord users on a secure platform.
 
@@ -44,7 +44,7 @@ See the [screenshot gallery](docs/screenshots.md) for the current interface.
 
 SeND is not its own chat network, and it does not require a special SeND server. It connects to ordinary Matrix homeservers such as Synapse and communicates using the Matrix protocol.
 
-This means a SeND user can still talk to people using Element, FluffyChat, or other Matrix clients. SeND-specific features are designed to fall back or simply be ignored by clients that do not understand them.
+SeND users can still talk to people using Element, FluffyChat, or other Matrix clients. SeND-specific features are designed to fall back or be ignored by clients that do not support them.
 
 The project is especially aimed at people who want:
 
@@ -194,9 +194,7 @@ primary development platform while Android receives device testing.
 
 ## Privacy
 
-SeND is intended to be a privacy-respecting alternative to centralized chat platforms.
-
-The application itself contains no intentional analytics or user-tracking system.
+SeND is a privacy-respecting alternative to centralized chat platforms. It has no intentional analytics or user tracking.
 
 Normal network activity may include:
 
@@ -220,29 +218,26 @@ For more detail, see [Networking and privacy](docs/networking.md).
 
 ## Feature complete in scope; hardening toward 1.0
 
-Build 106 closes the planned feature-expansion phase. In that theoretical sense,
-SeND is feature complete. It does **not** mean every flow is bug-free,
-every Matrix client behaves identically, or every device has been validated.
+Build 106 closed the planned feature-expansion phase. SeND is feature complete
+in scope, but bugs, client differences and untested devices remain.
 
 From here, work focuses on hardening, bug fixes, performance, accessibility,
-security review, interoperability and release reliability—not another planned
+security review, interoperability and release reliability, not another planned
 major feature expansion. See the [1.0 readiness checklist](docs/RELEASE_READINESS.md)
 and [known issues and boundaries](KNOWN_ISSUES.md).
 
-In particular, threads inherit room access, forum Following is not a separate
+Threads inherit room access, forum Following is not a separate
 push subscription, and named roles use Matrix's numeric power-level hierarchy.
 SSO authenticates an account; it does not replace encryption-device verification.
 Self-hosted SSO needs the callback protection described in the hosting guide;
 availability also depends on the homeserver's configured identity provider.
 
-The intended meaning of the version numbers is roughly:
+Version numbers indicate:
 
 ```text
 0.9.x   Feature-scope complete; pre-1.0 hardening releases
 1.0     Stability milestone after documented release gates are met
 ```
-
-The work between 0.9 and 1.0 is primarily bug fixing, testing, performance work, security review, packaging and general release hardening rather than another major feature expansion.
 
 ---
 

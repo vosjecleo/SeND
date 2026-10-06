@@ -36,13 +36,13 @@ Future<void> showReleaseUpdate(
               ),
               if (kIsWeb)
                 const Text(
-                  'Reload to open the updated web app. Finish recordings and uploads first; unsent drafts may be lost.',
+                  'Finish recordings and uploads before reloading. Unsent drafts may be lost.',
                 ),
               if (canInstall)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
                   child: Text(
-                    'Download and verify the installer, then review the upgrade in Windows. Finish recordings and uploads first; setup may ask you to close SeND. Your account data is kept.',
+                    'SeND will download and verify the installer. Review the upgrade in Windows after finishing recordings and uploads. Setup may ask you to close SeND. Your account data is kept.',
                   ),
                 ),
               if (busy)
@@ -110,7 +110,7 @@ Future<void> showReleaseUpdate(
                             setState(() {
                               busy = false;
                               error =
-                                  'The installer could not be downloaded, verified or opened. Nothing was installed by SeND. Try the direct download instead.';
+                                  'Could not download, verify or open the installer. SeND has not installed anything. Try the direct download.';
                             });
                           }
                         }

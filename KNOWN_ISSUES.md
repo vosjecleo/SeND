@@ -2,9 +2,9 @@
 
 ## Current baseline: 0.9.37+116
 
-Feature scope is complete; this remains a Latest/pre-1.0 build, not a declaration
-that all known bugs are resolved. The [1.0 readiness checklist](docs/RELEASE_READINESS.md)
-tracks the hardening phase and required evidence.
+SeND is feature complete in scope, but this Latest build is still pre-1.0.
+Known bugs and testing gaps remain. The [1.0 readiness checklist](docs/RELEASE_READINESS.md)
+lists the checks required before 1.0.
 
 - **Unvalidated device paths:** real iOS PWA keyboard/safe-area and browser-login
   behaviour; Windows clipboard style reset; Android browser-login return/process
@@ -46,7 +46,7 @@ tracks the hardening phase and required evidence.
 ## Historical notes
 
 The records below describe older releases, including their then-current channel
-names. They are not the current issue list. In particular, pack authoring/imports
+names. They are not the current issue list. Pack authoring/imports
 and named roles have since shipped; old “not included” statements apply only to
 the versions named below.
 

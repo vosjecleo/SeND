@@ -3,18 +3,17 @@
 ## Milestone: 0.9.34+106
 
 On 2026-09-24, SeND reached the end of its planned feature-expansion phase.
-The intended product is now implemented in the theoretical, feature-scope sense.
-The next phase is hardening and bug fixing, not a new feature roadmap.
+SeND is feature complete in scope. The next phase is hardening and bug fixing.
 
 This is not a claim of security certification, complete Discord parity, or
-universal hardware compatibility. Existing gaps must be fixed, validated, or
-clearly bounded before 1.0; calling the scope complete does not erase them.
+universal hardware compatibility. Remaining gaps must be fixed, validated, or
+documented as limitations before 1.0.
 
 Build 106 passed all four CI targets (Linux, Windows, Android, Web/PWA), was
 published as Latest on GitHub and deltie.net, and was deployed to chat.deltie.net.
 Local regression results were 366 passing tests, one existing skip, and clean
-static analysis. Compilation and automated tests are evidence, not substitutes
-for physical-device or multi-client testing. Stable was not promoted.
+static analysis. Physical-device and multi-client testing is still required.
+Stable was not promoted.
 
 ## Current hardening baseline: 0.9.37+116
 
