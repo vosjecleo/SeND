@@ -537,12 +537,21 @@ class _SpaceBar extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                               ),
                             )
-                          : Image.memory(
-                              space.avatarBytes!,
-                              width: double.infinity,
-                              height: double.infinity,
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
+                          : NavigationHover(
+                              builder: (hovered) => LifecycleMemoryImage(
+                                bytes: space.avatarBytes!,
+                                width: double.infinity,
+                                height: double.infinity,
+                                decodeWidth: 128,
+                                animated: hasAnimatedImageHeader(
+                                  space.avatarBytes!,
+                                ),
+                                autoplay:
+                                    (backend.selectedSpaceId == space.id ||
+                                        hovered) &&
+                                    !MediaQuery.disableAnimationsOf(context),
+                                fit: BoxFit.cover,
+                              ),
                             ),
                     ),
                   ),
@@ -2175,7 +2184,11 @@ class _RoomListTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (mayArrange) dragGrip(),
-              _RoomIcon(room: room, size: 21),
+              _RoomIcon(
+                room: room,
+                size: 21,
+                autoplay: backend.selectedRoom?.id == room.id || hovered,
+              ),
             ],
           ),
           title: Text(
@@ -2316,6 +2329,7 @@ class _HomeRoomListTile extends StatelessWidget {
                       room: room,
                       size: 34,
                       showPresence: room.isDirect,
+                      autoplay: selected || hovered,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -2398,11 +2412,13 @@ class _RoomIcon extends StatelessWidget {
     required this.room,
     required this.size,
     this.showPresence = false,
+    this.autoplay = false,
   });
 
   final RoomSummary room;
   final double size;
   final bool showPresence;
+  final bool autoplay;
 
   @override
   Widget build(BuildContext context) {
@@ -2433,6 +2449,7 @@ class _RoomIcon extends StatelessWidget {
         children: [
           Positioned.fill(
             child: ThemeAvatar(
+              autoplay: autoplay,
               backgroundColor: context.deltiecord.elevated,
               backgroundImage: avatar == null ? null : MemoryImage(avatar),
               child: avatar == null

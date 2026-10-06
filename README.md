@@ -1,12 +1,12 @@
 # SeND
 
-> **SeND 0.9.37 build 119: DM layout, forums and animated avatars**
+> **SeND 0.9.37 build 120: voice chat history and avatar controls**
 
 [Download SeND](https://deltie.net/SeND) · [Installation](INSTALL.md) ·
 [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
 
-Build 119 fixes DM-row spacing, keyboard language switching, forum reply order,
-read handling and post deletion, and animated profile pictures.
+Build 120 restores voice-channel chat history, adds avatar animation controls,
+balances desktop message spacing and preserves focus during keyboard switching.
 See the [changelog](CHANGELOG.md).
 
 ## Preface
@@ -299,6 +299,6 @@ See [LICENSE](LICENSE) for SeND's license and
 
 ---
 
-**Documentation baseline: 0.9.37+119.**
+**Documentation baseline: 0.9.37+120.**
 
 Find technical guides and historical reports in the [documentation index](docs/README.md).

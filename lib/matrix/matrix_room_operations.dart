@@ -415,11 +415,6 @@ extension _MatrixRoomOperations on MatrixBackend {
       if (!_isCurrentSelection(roomId, generation)) return;
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
-      if (_presentationFor(room) == RoomPresentation.voice) {
-        _timelineLoading = false;
-        _notifyBackendListeners();
-        return;
-      }
       // Publish locally available events before restoring only the sessions
       // needed by this window. Never import a whole room's backup on entry.
       stageTimer.reset();

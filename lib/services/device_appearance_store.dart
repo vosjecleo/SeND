@@ -71,6 +71,7 @@ final class DeviceAppearanceSnapshot {
     required this.reducedMotion,
     required this.highContrast,
     required this.autoplayGifs,
+    this.animateTimelineAvatars = false,
     required this.accentColor,
     required this.fontFamily,
     required this.emojiFontFamily,
@@ -91,6 +92,7 @@ final class DeviceAppearanceSnapshot {
         reducedMotion: value.reducedMotion,
         highContrast: value.highContrast,
         autoplayGifs: value.autoplayGifs,
+        animateTimelineAvatars: value.animateTimelineAvatars,
         accentColor: value.accentColor,
         fontFamily: value.fontFamily,
         emojiFontFamily: value.emojiFontFamily,
@@ -126,6 +128,7 @@ final class DeviceAppearanceSnapshot {
       reducedMotion: json['reduced_motion'] == true,
       highContrast: json['high_contrast'] == true,
       autoplayGifs: json['autoplay_gifs'] != false,
+      animateTimelineAvatars: json['animate_timeline_avatars'] == true,
       accentColor: (json['accent_color'] as num?)?.toInt() ?? 0xff6975d9,
       fontFamily: json['font_family'] as String? ?? 'System',
       emojiFontFamily: json['emoji_font_family'] as String? ?? 'System',
@@ -145,6 +148,7 @@ final class DeviceAppearanceSnapshot {
   final bool reducedMotion;
   final bool highContrast;
   final bool autoplayGifs;
+  final bool animateTimelineAvatars;
   final int accentColor;
   final String fontFamily;
   final String emojiFontFamily;
@@ -164,6 +168,7 @@ final class DeviceAppearanceSnapshot {
     highContrast: highContrast,
     syncAppearance: false,
     autoplayGifs: autoplayGifs,
+    animateTimelineAvatars: animateTimelineAvatars,
     accentColor: accentColor,
     fontFamily: fontFamily,
     emojiFontFamily: emojiFontFamily,
@@ -184,6 +189,7 @@ final class DeviceAppearanceSnapshot {
     'reduced_motion': reducedMotion,
     'high_contrast': highContrast,
     'autoplay_gifs': autoplayGifs,
+    'animate_timeline_avatars': animateTimelineAvatars,
     'accent_color': accentColor,
     'font_family': fontFamily,
     'emoji_font_family': emojiFontFamily,

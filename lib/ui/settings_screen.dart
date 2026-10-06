@@ -1675,6 +1675,17 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
+        title: const Text('Animate profile pictures in messages'),
+        subtitle: const Text(
+          'Off by default. Desktop hover still animates avatars unless Reduce motion is on.',
+        ),
+        value: preferences.animateTimelineAvatars,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(animateTimelineAvatars: value),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
         title: const Text('Reduce motion'),
         subtitle: const Text(
           'Snap UI transitions instantly and pause automatic GIF playback.',

@@ -148,9 +148,8 @@ class _MessageRowState extends State<_MessageRow> {
   @override
   Widget build(BuildContext context) {
     final compactness = widget.backend.preferences.compactness;
-    final groupTop = 11 - (compactness * 5);
-    final continuationTop = 4 - (compactness * 3);
-    final rowBottom = 3 - (compactness * 2);
+    final rowPadding = (7 - compactness * 5) / 2;
+    final groupGap = 7 - compactness * 2;
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
     final clock = _formatMessageClock(
@@ -249,6 +248,7 @@ class _MessageRowState extends State<_MessageRow> {
           onExit: _exit,
           child: AnimatedContainer(
             key: Key('message-row-${message.id}'),
+            margin: EdgeInsets.only(top: widget.startsGroup ? groupGap : 0),
             duration: widget.backend.preferences.reducedMotion
                 ? Duration.zero
                 : const Duration(milliseconds: 110),
@@ -277,9 +277,9 @@ class _MessageRowState extends State<_MessageRow> {
                   Padding(
                     padding: EdgeInsets.fromLTRB(
                       10,
-                      widget.startsGroup ? groupTop : continuationTop,
+                      rowPadding,
                       20,
-                      rowBottom,
+                      rowPadding,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -627,7 +627,7 @@ class _MessageRowState extends State<_MessageRow> {
                       // gutters make the timeline read as one aligned column.
                       left: 10,
                       top:
-                          groupTop +
+                          rowPadding +
                           (MediaQuery.textScalerOf(
                                         context,
                                       ).scale(DeltiecordTypeScale.bigChat) *
@@ -659,6 +659,12 @@ class _MessageRowState extends State<_MessageRow> {
                         onTapDown: (details) =>
                             _profileAnchorPosition = details.globalPosition,
                         child: ThemeAvatar(
+                          autoplay:
+                              widget
+                                  .backend
+                                  .preferences
+                                  .animateTimelineAvatars ||
+                              _hovered,
                           radius: 19,
                           backgroundColor: context.deltiecord.elevated,
                           backgroundImage: message.avatarBytes == null

@@ -44,3 +44,28 @@ Confidence is high that this sample is corrupted during banner conversion,
 not just displayed incorrectly by the profile widget. The exact decoding or
 composition defect is not yet isolated. This does not establish a cause for
 unrelated GIF playback reports.
+
+## Follow-up: frame composition isolated
+
+A second probe decoded each GIF frame separately with `GifDecoder.decodeFrame`
+and compared its opaque pixels with Flutter's composited frame at the same
+coordinates. All 121 frames matched: zero differing opaque pixels. The same
+library's complete animated decode differed at 5,251,886 pixels. The first frame
+matched; the corruption began on frame 1, before cropping or PNG encoding.
+
+The sample's first eight frames all use disposal method 1 and full-canvas
+rectangles. Their palettes change from 256 to 128 entries. This narrows the
+failure to the library's animated frame assembly, not the individual frame
+decoder, banner widget, or network transfer. The precise faulty operation in
+that assembly still needs isolation; palette remapping is a suspect, not a
+confirmed explanation.
+
+The next fix to test is cropping fully composited RGBA frames from Flutter's
+codec, then encoding them with their original timing and loop policy. That
+avoids the faulty assembly path. It needs a bounded-memory implementation and
+native/web checks before replacing the crop pipeline. No banner-conversion
+change has been applied in this patch.
+
+Separately, cropped animated avatars are APNG. Avatar animation detection now
+recognizes that format so selection, hover and reduced-motion rules apply to
+them too. This does not repair already corrupted banner uploads.

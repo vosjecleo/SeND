@@ -445,12 +445,14 @@ class ThemeSurface extends StatelessWidget {
 class ThemeAvatar extends StatelessWidget {
   const ThemeAvatar({
     this.radius,
+    this.autoplay = true,
     this.backgroundImage,
     this.backgroundColor,
     this.child,
     super.key,
   });
   final double? radius;
+  final bool autoplay;
   final ImageProvider? backgroundImage;
   final Color? backgroundColor;
   final Widget? child;
@@ -465,7 +467,7 @@ class ThemeAvatar extends StatelessWidget {
             bytes: provider.bytes,
             animated: true,
             decodeWidth: 256,
-            autoplay: !MediaQuery.disableAnimationsOf(context),
+            autoplay: autoplay && !MediaQuery.disableAnimationsOf(context),
             fit: BoxFit.cover,
           ),
         ),

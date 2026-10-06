@@ -395,6 +395,7 @@ class _SpaceRail extends StatelessWidget {
                   unread: backend.hasUnreadForSpace(space.id),
                   child: MobileAvatar(
                     bytes: space.avatarBytes,
+                    autoplay: backend.selectedSpaceId == space.id,
                     fallback: space.name,
                     size: 54,
                     square: true,
@@ -797,6 +798,7 @@ class _RoomList extends StatelessWidget {
         selected: false,
         leading: MobileAvatar(
           bytes: room.avatarBytes,
+          autoplay: backend.selectedRoom?.id == room.id,
           fallback: room.name,
           presence: room.isDirect ? room.presence : null,
         ),

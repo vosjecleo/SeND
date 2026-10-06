@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.37+120" date="2026-10-06" type="development">
+      <description><p>Restore voice-channel chat history, control avatar animation, balance message spacing and preserve composer focus during keyboard switching.</p></description>
+    </release>
     <release version="0.9.37+119" date="2026-10-06" type="development">
       <description><p>Repair DM row spacing and identity, keyboard language switching, forum discussions and deletion, and animated avatars.</p></description>
     </release>

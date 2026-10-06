@@ -724,8 +724,11 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      FocusManager.instance.primaryFocus?.unfocus();
-      unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
+      // Let the OS hide the keyboard when backgrounding. IME switches can
+      // briefly report hidden/paused too; discarding focus closes the new IME.
+      if (state == AppLifecycleState.detached) {
+        FocusManager.instance.primaryFocus?.unfocus();
+      }
       InAppNotificationCenter.dismiss();
     } else if (applicationIsForeground(state, viewFocused: true)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

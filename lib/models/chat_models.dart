@@ -66,6 +66,7 @@ class AppPreferences {
     this.highContrast = false,
     this.syncAppearance = true,
     this.autoplayGifs = true,
+    this.animateTimelineAvatars = false,
     this.notificationsEnabled = true,
     this.notificationSound = true,
     this.notificationVolume = 1,
@@ -121,6 +122,7 @@ class AppPreferences {
   final bool highContrast;
   final bool syncAppearance;
   final bool autoplayGifs;
+  final bool animateTimelineAvatars;
   final bool notificationsEnabled;
   final bool notificationSound;
   final double notificationVolume;
@@ -185,6 +187,7 @@ class AppPreferences {
     bool? highContrast,
     bool? syncAppearance,
     bool? autoplayGifs,
+    bool? animateTimelineAvatars,
     bool? notificationsEnabled,
     bool? notificationSound,
     double? notificationVolume,
@@ -242,6 +245,8 @@ class AppPreferences {
     highContrast: highContrast ?? this.highContrast,
     syncAppearance: syncAppearance ?? this.syncAppearance,
     autoplayGifs: autoplayGifs ?? this.autoplayGifs,
+    animateTimelineAvatars:
+        animateTimelineAvatars ?? this.animateTimelineAvatars,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     notificationSound: notificationSound ?? this.notificationSound,
     notificationVolume: notificationVolume ?? this.notificationVolume,

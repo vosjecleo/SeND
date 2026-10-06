@@ -1643,6 +1643,8 @@ class _MobileMessageRow extends StatelessWidget {
                             onTap: onProfile,
                             child: MobileAvatar(
                               bytes: message.avatarBytes,
+                              autoplay:
+                                  backend.preferences.animateTimelineAvatars,
                               fallback: message.sender,
                               size: 40,
                             ),

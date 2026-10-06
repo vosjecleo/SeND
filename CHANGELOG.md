@@ -3,6 +3,22 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.37 build 120 (2026-10-06)
+
+- Load voice-channel chat history and acknowledge messages when its chat is
+  visible, without marking messages read from the voice overview alone.
+- Preserve composer focus through keyboard language-switch lifecycle changes.
+  Real-device confirmation is still needed for the reported keyboard behaviour.
+- Keep timeline avatars static by default, with an Accessibility setting for
+  autoplay. Animate room and space avatars when selected, and avatars on
+  desktop room, space and message hover. Reduce motion overrides playback.
+- Recognize cropped APNG avatars so the same animation controls apply to them.
+- Balance desktop message padding and separate sender groups with a gap outside
+  the message highlight.
+- Investigate animated banner colour corruption. Individual GIF frames decode
+  correctly, but animation assembly corrupts colours before cropping. The
+  banner conversion fix is not included in this release.
+
 ## SeND 0.9.37 build 119 (2026-10-06)
 
 - Fix mobile DM rows compressing around avatars when an online contact has no

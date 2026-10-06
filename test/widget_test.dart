@@ -823,6 +823,8 @@ void main() {
   testWidgets('opens voice rooms without exposing a message composer', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
       ..currentSpaceId = '!space:example.org'
@@ -846,6 +848,11 @@ void main() {
     expect(find.text('VOICE ROOMS'), findsOneWidget);
     expect(find.text('Nobody is connected'), findsOneWidget);
     expect(find.byType(PlainMessageEditor), findsNothing);
+    expect(backend.conversationVisibilityStates.last, isFalse);
+    await tester.tap(find.byTooltip('Open chat'));
+    await tester.pumpAndSettle();
+    expect(backend.conversationVisibilityStates.last, isTrue);
+    expect(find.byKey(const ValueKey('mobile-composer-field')), findsOneWidget);
   });
 
   testWidgets('exposes connected MatrixRTC media controls', (tester) async {

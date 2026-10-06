@@ -8,6 +8,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 void main() {
+  test(
+    'APNG profile images are recognized, ordinary and truncated PNG are not',
+    () {
+      final first = img.Image(width: 2, height: 2);
+      expect(
+        hasAnimatedImageHeader(Uint8List.fromList(img.encodePng(first))),
+        isFalse,
+      );
+      first.addFrame(img.Image(width: 2, height: 2));
+      final bytes = Uint8List.fromList(img.encodePng(first));
+      expect(hasAnimatedImageHeader(bytes), isTrue);
+      expect(hasAnimatedImageHeader(bytes.sublist(0, 20)), isFalse);
+    },
+  );
   test('visible unfocused web views keep playing; hidden views stop', () {
     expect(
       imageLifecycleVisible(AppLifecycleState.inactive, browser: true),
@@ -118,6 +132,40 @@ void main() {
     expect((await observeFrames(tester)).length, 1);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets(
+    'avatar policy pauses and resumes, reduced motion takes priority',
+    (tester) async {
+      final bytes = animatedFixture();
+      for (final mobile in [false, true]) {
+        Widget tree(bool autoplay, {bool reduced = false}) => MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: reduced),
+            child: Center(
+              child: mobile
+                  ? MobileAvatar(
+                      bytes: bytes,
+                      fallback: 'A',
+                      autoplay: autoplay,
+                    )
+                  : ThemeAvatar(
+                      backgroundImage: MemoryImage(bytes),
+                      autoplay: autoplay,
+                    ),
+            ),
+          ),
+        );
+        await tester.pumpWidget(tree(false));
+        expect((await observeFrames(tester)).length, 1);
+        await tester.pumpWidget(tree(true));
+        expect((await observeFrames(tester)).length, greaterThan(1));
+        await tester.pumpWidget(tree(true, reduced: true));
+        await observeFrames(tester);
+        expect((await observeFrames(tester)).length, 1);
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
 
   test('only GIF-like preview providers request looping playback', () {
     expect(

@@ -923,6 +923,8 @@ extension _MatrixSession on MatrixBackend {
       reducedMotion: content?.tryGet<bool>('reduced_motion') ?? false,
       highContrast: content?.tryGet<bool>('high_contrast') ?? false,
       autoplayGifs: content?.tryGet<bool>('autoplay_gifs') ?? true,
+      animateTimelineAvatars:
+          content?.tryGet<bool>('animate_timeline_avatars') ?? false,
       notificationsEnabled:
           content?.tryGet<bool>('notifications_enabled') ?? true,
       notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
@@ -1181,6 +1183,7 @@ extension _MatrixSession on MatrixBackend {
           'reduced_motion': preferences.reducedMotion,
           'high_contrast': preferences.highContrast,
           'autoplay_gifs': preferences.autoplayGifs,
+          'animate_timeline_avatars': preferences.animateTimelineAvatars,
           'accent_color': preferences.accentColor,
           'font_family': preferences.fontFamily,
           'emoji_font_family': preferences.emojiFontFamily,

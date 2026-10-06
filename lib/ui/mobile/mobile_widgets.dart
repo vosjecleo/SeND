@@ -34,6 +34,7 @@ class MobileAvatar extends StatelessWidget {
     this.borderColor,
     this.speaking = false,
     this.square = false,
+    this.autoplay = true,
     super.key,
   });
 
@@ -44,6 +45,7 @@ class MobileAvatar extends StatelessWidget {
   final Color? borderColor;
   final bool speaking;
   final bool square;
+  final bool autoplay;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
@@ -93,7 +95,9 @@ class MobileAvatar extends StatelessWidget {
                         bytes: bytes!,
                         animated: true,
                         decodeWidth: 256,
-                        autoplay: !MediaQuery.disableAnimationsOf(context),
+                        autoplay:
+                            autoplay &&
+                            !MediaQuery.disableAnimationsOf(context),
                         fit: BoxFit.cover,
                       )
                     : Image.memory(
