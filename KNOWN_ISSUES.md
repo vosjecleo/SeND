@@ -1,10 +1,19 @@
 # Known issues
 
-## Current baseline: 0.9.37+116
+Use this page to distinguish reported defects, incomplete testing and product
+limitations. The [release checklist](docs/RELEASE_READINESS.md) tracks broader
+validation required before 1.0.
 
-SeND is feature complete in scope, but this Latest build is still pre-1.0.
-Known bugs and testing gaps remain. The [1.0 readiness checklist](docs/RELEASE_READINESS.md)
-lists the checks required before 1.0.
+## Open investigations
+
+- **Animated banner colours:** a supplied GIF loses pink colours during banner
+  conversion. Reproduced locally; the exact decoding/composition fault is not
+  isolated and no fix is applied. See the [investigation](docs/gif-banner-investigation.md).
+
+## Validation backlog recorded at build 116
+
+The checks below were recorded at build 116. Later releases may change these
+paths; an item still needs a matching device/test result before it can be closed.
 
 - **Unvalidated device paths:** real iOS PWA keyboard/safe-area and browser-login
   behaviour; Windows clipboard style reset; Android browser-login return/process
@@ -26,7 +35,7 @@ lists the checks required before 1.0.
   notifications need real-device checks, and native macOS/iOS packages are not
   supplied. See [web deployment](docs/web-deployment.md).
 
-## Media, activity and packaging boundaries
+## Media, activity and packaging limitations
 
 - **Android video:** build 116 corrects cache staging; the reported failure still
   needs confirmation on the reporting phone. Codec-specific encoding failures,

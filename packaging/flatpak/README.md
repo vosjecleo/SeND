@@ -1,8 +1,7 @@
 # SeND Flatpak
 
-This packages the checksum-pinned Linux application artifact for **0.9.37+116
-x86-64**. It is a direct-download package, not a Flathub submission.
-The legacy application ID remains `net.deltie.deltiecord` for compatibility.
+SeND is available as a direct-download x86-64 Flatpak, not a Flathub listing.
+It uses the application ID `net.deltie.deltiecord` for upgrade compatibility.
 
 Unlike the AppImage, this uses the GNOME 50 runtime's GTK, icon loaders, FFmpeg,
 audio libraries and graphics stack. Libass, libplacebo and libmpv are built
@@ -11,17 +10,19 @@ The corresponding source extension is published as a separate optional bundle.
 
 ## Install and launch
 
-Download `SeND-0.9.37+116-linux-x86_64.flatpak` from the SeND release and run:
+Download the bundle from the [SeND releases page](https://deltie.net/SeND).
+Check its checksum against `FLATPAK-SHA256SUMS` before installing.
+For build 119, run:
 
 ```sh
-flatpak install --user ./SeND-0.9.37+116-linux-x86_64.flatpak
+flatpak install --user ./SeND-0.9.37+119-linux-x86_64.flatpak
 flatpak run net.deltie.deltiecord
 ```
 
 Accept installation of the GNOME runtime from Flathub when prompted. The runtime
 is an additional shared download; it is not included in the application bundle.
-Verify the download using `FLATPAK-SHA256SUMS`. This initial direct bundle has no
-SeND update repository: install newer bundles manually. `flatpak update` still
+This direct bundle has no SeND update repository: install newer bundles manually.
+`flatpak update` still
 updates the runtime. The in-app updater falls back to the download page for this package.
 
 ## Sandbox boundaries

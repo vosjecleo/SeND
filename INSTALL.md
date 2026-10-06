@@ -1,100 +1,86 @@
 # Installing SeND
 
-Voice-message recording (build 104 onward) needs a microphone and OS/browser
-permission. On Linux, install `ffmpeg` and the PulseAudio client tools `parecord`
-and `pactl` (`pulseaudio-utils` on Debian/Ubuntu, `libpulse` on Arch). PipeWire's
-PulseAudio compatibility service is supported. Packaged dependencies include
-these tools; standalone AppImage users must provide them on the host.
+Download SeND from [deltie.net](https://deltie.net/SeND) or
+[GitHub Releases](https://github.com/vosjecleo/SeND/releases/latest).
+To use it without a native package, open [chat.deltie.net](https://chat.deltie.net).
 
-This guide targets SeND 0.9.37 build 116 for Android,
-x86-64 Windows, Linux, and Web/PWA. SeND is still pre-1.0;
-see the [release checklist](docs/RELEASE_READINESS.md).
-Download official builds from the [SeND releases page](https://deltie.net/SeND)
-or the [published GitHub releases](https://github.com/vosjecleo/SeND/releases/latest).
+Choose your platform:
 
-The filename examples below target **SeND 0.9.37+116**. Existing
-accounts survive the rename; the internal `deltiecord` executable/package name
-is retained for compatibility; new Linux packages also provide a `SeND` launcher.
-See [rename and update notes](docs/build-108-send.md).
-Update publishing and viewing clients to build 109 together for independent
-game/music/history slots; build 108 does not read the new device-owned records.
-Build 110 is needed on both ends for persistent offline Last.fm history and its
-artwork. PWA users can choose **Reload app** when prompted for an update; finish
-uploads/recordings and save drafts first.
+- [Android](#android)
+- [Windows](#windows)
+- [Debian, Ubuntu or Linux Mint](#debian-ubuntu-and-linux-mint)
+- [Arch Linux](#arch-linux)
+- [Flatpak](#flatpak-direct-download-package)
+- [AppImage](#appimage)
+- [Web app, iPhone or iPad](#webpwa-including-iphoneipad)
 
-### Video sending in build 116
+For an existing installation, see [upgrading](#upgrading).
+Developers can follow [building from source](docs/BUILDING.md).
 
-Android compression is built in; no FFmpeg installation is needed on the phone.
-Desktop optimization requires FFmpeg/ffprobe on PATH. If preparation fails,
-choose Retry compression, Send original, or Cancel. Original quality is never
-uploaded automatically and can use much more data; playback still depends on
-the recipient's codec support. PWA uploads keep original quality. See the
-[Android fix and acceptance checklist](docs/build-116-video.md).
+The filename examples use build **0.9.37+119**. Use the matching filename
+from the release you downloaded. SeND is still pre-1.0; check
+[known issues](KNOWN_ISSUES.md) for platform limitations.
 
-Before installing a downloaded build, verify it against the included
-`SHA256SUMS` file:
+## Check the download
+
+Compare the file's SHA-256 checksum with its entry in the release's
+`SHA256SUMS` file before installing.
+
+On Linux:
 
 ```sh
-sha256sum -c SHA256SUMS
+sha256sum SeND-0.9.37+119-linux-appimage-x86_64.AppImage
 ```
+
+On Windows, use PowerShell:
+
+```powershell
+Get-FileHash .\SeND-0.9.37+119-windows-x64-setup.exe -Algorithm SHA256
+```
+
+If you downloaded all files listed in `SHA256SUMS`, you can check them together
+with `sha256sum -c SHA256SUMS`.
 
 ## Android
 
-Download the APK matching the device architecture. Most current phones use
-`SeND-0.9.37+116-android-arm64-v8a.apk`; older 32-bit phones use
-`armeabi-v7a`, while `x86_64` is primarily for emulators. Verify
-its checksum, allow installation from the browser or file manager when Android
-asks, then open the APK. The APK uses SeND's persistent release-signing
-identity; v0.9.19 was the first build signed by this identity.
-The private keystore and passwords are stored outside the repository. APKs from
-builds 62 and 63 used ephemeral identities and require one uninstall before this
-first persistently signed build can be installed; later upgrades retain the same
-identity.
+Download the APK for your device:
 
-Android may require microphone, camera, media, and notification permissions as
-the corresponding features are used. Notifications can use a separately
-installed UnifiedPush distributor. SeND pairs the private endpoint with
-the Matrix gateway belonging to the same ntfy server.
+- Most current phones: `SeND-0.9.37+119-android-arm64-v8a.apk`.
+- Older 32-bit phones: the `armeabi-v7a.apk` file.
+- x86-64 devices and emulators: the `x86_64.apk` file.
 
-The AAB produced by CI is intended for future repository/store distribution and
-is not directly installable. Android RTC, encrypted media, screen capture,
-notification delivery, suspend/resume, and vendor-specific battery management
-still require broader real-device testing.
+Open the APK and allow installation from your browser or file manager when
+Android asks. The AAB is for store distribution and cannot be installed directly.
+
+SeND requests microphone, camera, media and notification permissions when you
+use the corresponding features. For background notifications, install a
+UnifiedPush distributor such as ntfy and select it in SeND's notification
+settings. See [Android notifications](docs/ANDROID.md#notifications-and-background-operation).
 
 ## Windows
 
 ### Installer
 
-Download `SeND-0.9.37+116-windows-x64-setup.exe`, run it, and follow the
-installer. A normal per-user installation does not require administrator
-privileges. The installer creates a Start Menu entry and can optionally create
-a desktop shortcut.
+Run `SeND-0.9.37+119-windows-x64-setup.exe` and follow the instructions.
+A normal per-user installation does not require administrator privileges.
+It creates a Start Menu entry and offers a desktop shortcut.
 
-Windows may warn about an unrecognized application because this release is not yet
-code-signed. Only continue if the filename and SHA-256 checksum match the
-official release.
-
-Upgrading or uninstalling SeND does not delete Matrix sessions or other
-per-user application data.
+Windows may warn that the application is unrecognized because the release is
+not code-signed. Continue only if the file and checksum match the official release.
 
 ### Portable build
 
-Download `SeND-0.9.37+116-windows-x64-portable.zip`, extract the entire
-archive, and run `deltiecord.exe` from the extracted directory. Do not move only
-the executable: its accompanying DLLs, plugins, data, and assets are required.
-
-Native Windows behavior still needs broader testing on physical Windows 10 and
-11 systems. Please report platform-specific notification, secure-storage,
-clipboard, drag-and-drop, audio/video device, screen-sharing, and media-playback
-issues.
+Extract the entire `SeND-0.9.37+119-windows-x64-portable.zip` archive, then
+run `deltiecord.exe` inside it. Keep the accompanying DLLs, plugins, data and
+assets in place; the executable cannot run alone.
 
 ## Debian, Ubuntu, and Linux Mint
 
-Download `SeND-0.9.37+116-linux-debian-amd64.deb`, open a terminal in its directory, and
+Download `SeND-0.9.37+119-linux-debian-amd64.deb`, open a terminal in its directory, and
 install it with APT:
 
 ```sh
-sudo apt install ./SeND-0.9.37+116-linux-debian-amd64.deb
+sudo apt install ./SeND-0.9.37+119-linux-debian-amd64.deb
 ```
 
 APT installs the package and its declared runtime dependencies. Launch it from
@@ -115,10 +101,10 @@ data.
 
 ## Arch Linux
 
-Download `SeND-0.9.37+116-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
+Download `SeND-0.9.37+119-linux-arch-x86_64.pkg.tar.zst` and install it with pacman:
 
 ```sh
-sudo pacman -U ./SeND-0.9.37+116-linux-arch-x86_64.pkg.tar.zst
+sudo pacman -U ./SeND-0.9.37+119-linux-arch-x86_64.pkg.tar.zst
 ```
 
 Launch SeND from the application menu or run `deltiecord`. Remove the
@@ -127,7 +113,7 @@ package with `sudo pacman -R deltiecord`; user data remains untouched.
 ## Flatpak (direct-download package)
 
 An x86-64 Flatpak package is published alongside the native Linux
-downloads. Install it with `flatpak install --user ./SeND-0.9.37+116-linux-x86_64.flatpak`
+downloads. Install it with `flatpak install --user ./SeND-0.9.37+119-linux-x86_64.flatpak`
 and launch with `flatpak run net.deltie.deltiecord`. It downloads a shared GNOME
 runtime separately. This is not yet a Flathub listing or an automatic SeND
 update repository. See [Flatpak installation and sandbox limitations](packaging/flatpak/README.md),
@@ -136,19 +122,18 @@ particularly for desktop game detection and Discord IPC.
 ## AppImage
 
 The AppImage is useful on other current x86-64 Linux distributions. Download
-`SeND-0.9.37+116-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
+`SeND-0.9.37+119-linux-appimage-x86_64.AppImage`, make it executable, and launch it:
 
 ```sh
-chmod +x SeND-0.9.37+116-linux-appimage-x86_64.AppImage
-./SeND-0.9.37+116-linux-appimage-x86_64.AppImage
+chmod +x SeND-0.9.37+119-linux-appimage-x86_64.AppImage
+./SeND-0.9.37+119-linux-appimage-x86_64.AppImage
 ```
 
-The AppImage includes libmpv and its media dependencies starting with build 112;
-installing host libmpv is no longer required. The AppImage
-also bundles Flutter/plugin dependencies including libepoxy. Matching sources
-are a separate optional `SeND-0.9.37+116-appimage-sources.tar.gz` release download;
-licence notices remain included. It deliberately relies on some
-ABI-sensitive desktop libraries from the host. It requires a reasonably current
+The AppImage bundles libmpv, its media dependencies, and Flutter/plugin
+dependencies including libepoxy. You do not need to install host libmpv. Matching sources
+are a separate optional `SeND-0.9.37+119-appimage-sources.tar.gz` release download;
+licence notices are included in the AppImage. Some desktop libraries must come
+from the host to match its plugins. The AppImage requires a reasonably current
 GTK 3 Linux system, a working desktop Secret Service for session and E2EE-key
 storage, and PulseAudio or PipeWire-Pulse for audio.
 PipeWire/SPA client libraries must come from the host so they match its modules
@@ -157,136 +142,89 @@ does not bundle an older PipeWire client or a PipeWire-JACK adapter.
 Likewise, librsvg comes from the host GTK/SVG icon-loader stack; mixing an old
 bundled SVG renderer with newer desktop icon loaders can prevent startup.
 
-On Wayland, screen sharing requires PipeWire, `xdg-desktop-portal`, and a portal
-backend for the desktop environment, such as `xdg-desktop-portal-gtk` or
+## Linux voice recording and screen sharing
+
+Voice-message recording needs a microphone, permission to use it, `ffmpeg`,
+and the PulseAudio tools `parecord` and `pactl`. The PulseAudio tools are in
+`pulseaudio-utils` on Debian/Ubuntu and `libpulse` on Arch. PipeWire's
+PulseAudio compatibility service is supported.
+
+Native packages declare these dependencies. AppImage users must install the
+recording tools on the host. Flatpak uses its packaged runtime.
+
+On Wayland, screen sharing also needs PipeWire, `xdg-desktop-portal`, and a
+portal backend for your desktop, such as `xdg-desktop-portal-gtk` or
 `xdg-desktop-portal-kde`.
 
 ## Web/PWA, including iPhone/iPad
 
-Open [chat.deltie.net](https://chat.deltie.net). On iPhone/iPad, use Safari's
-Share → Add to Home Screen, then open the installed app. Android and desktop
-browsers can use their Install app option. This is the Flutter web target, not
-a native macOS/iOS package. Keep your Matrix recovery key before clearing site
-data; browser storage can be evicted. Enable notifications from the installed
-app's settings and validate delivery on your device.
+Open [chat.deltie.net](https://chat.deltie.net).
 
-Password sign-in remains available. **SSO / browser sign-in** discovers what
-the chosen homeserver supports; it does not create an identity provider. Device
-verification and encryption recovery remain separate. Self-hosters must apply
-the [callback hosting safeguards](docs/web-deployment.md) before browser SSO.
+- On iPhone or iPad, open the site in Safari, choose **Share → Add to Home
+  Screen**, then launch the installed app.
+- On Android or desktop, use the browser's **Install app** option, or use the
+  site in a browser tab.
 
-See [browser limitations](KNOWN_ISSUES.md) and [deployment](docs/web-deployment.md).
+Enable notifications in the installed app's settings. iOS Web Push requires
+iOS 16.4 or later and Home Screen installation. Check delivery on your device;
+see the [iOS notification checklist](docs/ios-push-checklist.md) if it fails.
 
-## Application data
+Keep your Matrix recovery key somewhere safe. Clearing site data, private
+browsing or browser storage eviction can remove your local session and keys.
 
-SeND stores runtime data in the operating system's normal per-user
-application-data and secure-storage locations. Package upgrades and ordinary
-uninstallation do not remove that data. Never copy or publish those directories:
-they can contain Matrix session and encryption state.
+Browser sign-in is available when your homeserver supports SSO/OIDC. It does
+not replace encryption-device verification or recovery. Self-hosters must
+apply the [callback security rules](docs/web-deployment.md) before enabling SSO.
 
-If persisted login or E2EE storage does not work on Linux, first confirm that a
-Secret Service provider such as GNOME Keyring or KWallet is installed, unlocked,
-and available to the desktop session.
+## Upgrading
 
-## Building from source
+Install the new package over the existing installation. Ordinary package
+upgrades and uninstalls leave per-user application data in place; do not delete
+that data to resolve an upgrade error.
 
-The authoritative project version is in `pubspec.yaml`. Release CI currently
-pins Flutter 3.47.0 and Rust 1.97.1. Using those versions is recommended when
-reproducing an official build.
+SeND was previously called Deltiecord. The rename preserves accounts, settings
+and encrypted sessions. Some package names, executable names and application
+IDs still use `deltiecord` for compatibility. Linux packages also provide a
+`SeND` launcher.
 
-Clone the repository and fetch Dart dependencies:
+- **Android:** current APKs use a persistent release-signing identity, introduced
+  in v0.9.19. Builds 62 and 63 used temporary signing identities and need an
+  uninstall before installing a current APK. Before uninstalling, save your
+  recovery key and confirm that your encrypted history can be restored.
+- **Windows:** rerun the installer, or replace the complete portable directory.
+- **Linux:** install the newer package using the same package manager. For a
+  downloaded AppImage, replace the AppImage file. The direct-download Flatpak
+  has no automatic SeND update repository; install the new bundle.
+- **PWA:** choose **Reload app** when prompted. Finish uploads and recordings,
+  and save unsent drafts before reloading.
 
-```sh
-git clone https://github.com/vosjecleo/SeND.git
-cd SeND
-flutter pub get
-```
+For older clients sharing activity: both ends need build 109 or newer for
+independent game/music/history slots, and build 110 or newer for persistent
+Last.fm history and artwork.
 
-Before packaging a change, run the same basic validation used by CI:
+## Media requirements
 
-```sh
-dart format --output=none --set-exit-if-changed .
-flutter analyze
-flutter test --concurrency=1
-```
+Android video compression is built in. Native desktop compression requires
+`ffmpeg` and `ffprobe` on PATH. If preparation fails, choose **Retry
+compression**, **Send original**, or **Cancel**. Original-quality uploads are
+not automatic and can use much more data. Playback depends on the recipient's
+codec support. PWA uploads keep the original video quality.
 
-### Linux source build
+## Application data and recovery
 
-Linux builds require a C/C++ toolchain, CMake, Ninja, pkg-config, Rust, and the
-development packages for GTK 3, libsecret, PulseAudio, ALSA, libv4l, libmpv,
-and PipeWire. Debian 12 package names and the exact CI setup are documented in
-[the Linux workflow](.github/workflows/linux.yml).
+SeND stores sessions and encryption state in the operating system's per-user
+application-data and secure-storage locations. Never publish or casually copy
+those directories; they can contain credentials and encryption keys.
 
-For a local development build:
-
-```sh
-flutter run -d linux
-```
-
-For reproducible release packages, use the packaging entry point instead of
-calling `flutter build` directly:
-
-```sh
-FLUTTER_BIN="$(command -v flutter)" packaging/build-release.sh
-```
-
-It builds a Linux release, validates required native libraries, and writes the
-Debian package, AppImage, checksums, and build metadata to `dist/`. On an Arch
-host with `makepkg`, it also produces the native Arch package. The release
-scripts apply the Rust FFI retention flag required by the current E2EE stack and
-verify downloaded AppImage tooling against pinned SHA-256 hashes.
-
-The official AppImage and Debian package are built in Debian 12 to retain a
-glibc 2.36 baseline. Building them on a newer rolling distribution may produce
-binaries that cannot run on Debian 12.
-
-More packaging details are in [packaging/README.md](packaging/README.md).
-
-### Windows source build
-
-Install Flutter 3.47.0, Git, Rust 1.97.1, and Visual Studio with the **Desktop
-development with C++** workload. Then run in PowerShell:
-
-```powershell
-flutter pub get
-dart format --output=none --set-exit-if-changed .
-flutter analyze
-flutter test --concurrency=1
-flutter build windows --release
-```
-
-The complete runnable directory is written to
-`build\windows\x64\runner\Release`. The executable is not standalone. Inno
-Setup 6 can build the per-user installer using
-`packaging\windows\deltiecord.iss`; the exact automated process is in
-[the Windows workflow](.github/workflows/windows.yml).
-
-Further Windows notes are available in [docs/WINDOWS.md](docs/WINDOWS.md).
-
-### Android source build
-
-Install the Android SDK, Android SDK command-line/build tools, Java 17, Flutter
-3.47.0, and Rust 1.97.1. Add the Android Rust targets used by the E2EE native
-library, then run:
-
-```sh
-flutter pub get
-flutter build apk --release --split-per-abi
-flutter build appbundle --release
-```
-
-The APK is written below `build/app/outputs/flutter-apk/` and the AAB below
-`build/app/outputs/bundle/release/`. The exact pinned CI setup is documented in
-[the Android workflow](.github/workflows/android.yml). See
-[Android implementation and testing notes](docs/ANDROID.md) before distributing
-a build. Release signing credentials must be supplied outside the repository;
-an unconfigured local build falls back to Android's debug identity for developer
-testing and must not be published as an upgradeable release.
+If login persistence or encryption storage fails on Linux, check that a Secret
+Service provider such as GNOME Keyring or KWallet is installed, unlocked and
+available to your desktop session.
 
 ## Getting help
 
-Check [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before reporting a problem. Useful bug
-reports include the operating system and desktop environment, SeND build,
-homeserver implementation, whether the room is encrypted, and clear steps that
-reproduce the issue. Do not include access tokens, recovery keys, decrypted
-messages, encryption keys, or private media URLs in a report.
+Check [known issues](KNOWN_ISSUES.md) first. Include your OS, desktop environment
+or browser, SeND build, homeserver, whether the room is encrypted, and steps to
+reproduce the problem.
+
+Do not include access tokens, recovery keys, decrypted messages, encryption
+keys or private media URLs in a report.

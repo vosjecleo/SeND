@@ -1,21 +1,10 @@
 # Android implementation and testing
 
-Documentation baseline: **0.9.37+116**. Signed APKs and the AAB are built in CI;
-see [installation](../INSTALL.md) for architecture selection and upgrades.
-Current native media preparation uses Android Media3. Build 116 fixes the
-cache-directory mismatch that rejected camera clips before encoding and adds
-explicit retry/original/cancel recovery. See [diagnosis and device checks](build-116-video.md).
+For APK selection and installation, see [Installing SeND](../INSTALL.md#android).
+This guide covers Android integration, signing, notifications and device testing.
 
-Native Android notifications use UnifiedPush; an installed iOS PWA instead uses
-Web Push. Sound pack v3 includes nine cues; call ringing applies only to DM/group
-invitations for up to 30 seconds, never to joining server voice channels.
-Physical codec, camera, RTC, notification and lifecycle checks remain release
-gates; a successful compile is not hardware validation.
-
-The phone shell in `lib/ui/mobile` shares the same backend, models, encrypted
-session store, media and RTC services as desktop. Browser SSO returns via a
-random-port loopback callback; the return intent only foregrounds SeND. Test
-cancellation, process interruption and recovery before relying on that flow.
+The phone UI in `lib/ui/mobile` shares the desktop backend, models, encrypted
+session store, media and RTC services.
 
 ## Navigation model
 
@@ -31,6 +20,19 @@ scroll position, and local per-room draft while panels move on or off screen.
 - A local left swipe on a message replies without invoking global navigation.
 - Android Back closes temporary UI, details, and then the timeline in that
   order before deferring to the operating system.
+
+## Authentication and media
+
+Browser SSO returns via a random-port loopback callback; the return intent only
+foregrounds SeND. Test cancellation, process interruption and recovery before
+relying on that flow.
+
+Android Media3 prepares videos locally. If preparation fails, the user can retry,
+send the original or cancel. See the [build 116 diagnosis and device checks](build-116-video.md)
+for the camera-clip cache-directory fix.
+
+Sound pack v3 includes nine cues. DM/group invitations ring for up to 30 seconds;
+joining a server voice channel does not ring.
 
 ## Signing
 

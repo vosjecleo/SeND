@@ -1,7 +1,9 @@
 # SeND service helpers
 
-Documentation baseline: 0.9.37+116; the video hotfix needs no service changes. See [web hosting](../docs/web-deployment.md)
-and [hardening gates](../docs/RELEASE_READINESS.md).
+These helpers provide GIF search, Telegram pack imports and web previews.
+For routing, TLS and PWA deployment, see [Web hosting](../docs/web-deployment.md).
+
+## GIF search and Telegram imports
 
 `giphy_proxy.py` retains its historical filename but serves **KLIPY** search and
 trending for current clients, alongside legacy GIPHY routes. Store the KLIPY key
@@ -47,7 +49,8 @@ separate per-client/global rate limits. These defaults can be tightened with
 bounded client download workers can import a full 150-item set. Place a shared
 limiter in front when running multiple proxy processes; like the GIPHY limiter,
 this process-local limit is intentionally not distributed.
-## Web preview bridge (introduced in 105)
+
+## Web preview bridge
 
 `web_preview.py` extends the existing media service at
 `/api/servers/preview`; `giphy_proxy.Handler.do_GET` dispatches that endpoint.
@@ -66,7 +69,7 @@ Documents are limited to 1 MiB, images to 5 MiB, and video range responses to
 no-script CSP; SVG and generic files are not served. This does not add media
 conversion, arbitrary-site proxying, or support for every provider's player.
 
-## Build 106 authentication callback
+## Authentication callback protection
 
 `chat-nginx.conf` contains an exact `/auth.html` rule with no access logging,
 no-store caching, isolation/security headers and no application fallback. Apply

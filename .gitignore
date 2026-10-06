@@ -1,4 +1,5 @@
 # Miscellaneous
+/AGENTS.md
 /tool/push-crypto/target/
 /web/push-crypto/
 *.class

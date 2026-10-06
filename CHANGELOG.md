@@ -1,10 +1,9 @@
 # Changelog
 
-Release target: **0.9.37+119**. Following the build 106 feature-scope milestone,
-work focuses on [hardening and bug fixes toward 1.0](docs/RELEASE_READINESS.md).
-Historical entries preserve the scope of their own releases.
+Changes are listed newest first. Each entry describes that release, including
+its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
-## SeND 0.9.37 build 119 — 2026-10-06
+## SeND 0.9.37 build 119 (2026-10-06)
 
 - Fix mobile DM rows compressing around avatars when an online contact has no
   status text. Keep desktop row identity stable across reordering so hover and
@@ -25,9 +24,9 @@ Historical entries preserve the scope of their own releases.
   mobile and profile avatars. Reduced-motion preferences remain respected.
 - Carry forward the build 118 opt-in encrypted PWA notification preview support.
 
-## SeND 0.9.37 build 118 — 2026-10-05
+## SeND 0.9.37 build 118 (2026-10-05)
 
-### PWA-only follow-up — notification previews
+### PWA-only follow-up: notification previews
 
 - Add a Declarative Web Push visible fallback for supporting WebKit versions,
   while keeping existing worker subscriptions compatible.
@@ -56,7 +55,7 @@ Historical entries preserve the scope of their own releases.
   rather than merely verifying that an HTML image received animated bytes.
   Physical iOS/PWA playback confirmation remains required.
 
-## SeND 0.9.37 build 117 — 2026-10-05
+## SeND 0.9.37 build 117 (2026-10-05)
 
 - Replace the desktop WYSIWYG editor with plain text. Keep emoji completion,
   selected custom emoji, mentions, drafts, attachments and send shortcuts.
@@ -78,7 +77,7 @@ Historical entries preserve the scope of their own releases.
 - Expose an explicit download button on mobile file cards. Supply downloaded
   bytes to the browser save API instead of attempting filesystem writes.
 
-## SeND 0.9.37 build 116 — 2026-10-03
+## SeND 0.9.37 build 116 (2026-10-03)
 
 - Fix Android video sends failing immediately during preparation. Stage clips
   in Android's app-private cache via path_provider, matching the native media
@@ -93,7 +92,7 @@ Historical entries preserve the scope of their own releases.
 - Refresh Markdown documentation, separate current guides from historical
   investigations, and update installation/packaging examples and release gates.
 
-## SeND 0.9.37 build 115 — 2026-10-02
+## SeND 0.9.37 build 115 (2026-10-02)
 
 - Fix the local green speaking outline remaining active while muted or silent:
   cached SDK active-speaker state no longer overrides the live microphone meter.
@@ -111,7 +110,7 @@ Historical entries preserve the scope of their own releases.
   stale speaking state, and both Last.fm artwork widgets. Physical two-client
   audio verification remains a separate device test.
 
-## SeND 0.9.37 build 114 — 2026-10-02
+## SeND 0.9.37 build 114 (2026-10-02)
 
 - Replace the original sound assets with all nine sound pack v3 cues:
   notification, ringtone, voice join/leave/disconnect, mute/unmute and
@@ -135,7 +134,7 @@ Historical entries preserve the scope of their own releases.
   secondary-click. Editing uses per-field room power levels, and layout actions
   remain gated by Space permissions. The editor scrolls on small screens.
 
-## SeND 0.9.36 build 113 — 2026-10-02
+## SeND 0.9.36 build 113 (2026-10-02)
 
 - Retain Windows Discord-IPC pipe ownership continuously when clients disconnect
   or a transient pipe error occurs, rather than allowing another listener to
@@ -167,7 +166,7 @@ Historical entries preserve the scope of their own releases.
   and presence-sharing preferences still take precedence. No input contents
   are captured or published.
 
-## SeND 0.9.36 build 112 — 2026-10-01
+## SeND 0.9.36 build 112 (2026-10-01)
 
 - Add an optional x86-64 Flatpak bundle of the same application build, using
   GNOME's runtime and SDK-built media libraries. Include a separate sources
@@ -200,7 +199,7 @@ Historical entries preserve the scope of their own releases.
   release tag. Bound network requests and retry artifact downloads, then verify
   checksums and deploy the downloads/PWA through the existing release script.
 
-## SeND 0.9.36 build 111 — 2026-10-01
+## SeND 0.9.36 build 111 (2026-10-01)
 
 - Keep GIF decoding active in visible, unfocused desktop windows, covering the
   shared picker, timeline and fullscreen playback path. Hidden windows still
@@ -235,7 +234,7 @@ Historical entries preserve the scope of their own releases.
 
 See [build 111 validation and limitations](docs/build-111-reliability.md).
 
-## SeND 0.9.35 build 110 — 2026-09-26
+## SeND 0.9.35 build 110 (2026-09-26)
 
 - Recheck updates in long-lived mobile sessions and on resume, and offer PWA
   users an explicit reload action. Compare the running compiled PWA build,
@@ -265,7 +264,7 @@ See [build 111 validation and limitations](docs/build-111-reliability.md).
 - Double-tap mobile fullscreen images to zoom toward the tapped point; repeat
   to reset. Pinch/pan remain available, and gallery swiping resumes when reset.
 
-## SeND 0.9.35 build 109 — 2026-09-25
+## SeND 0.9.35 build 109 (2026-09-25)
 
 - Separate live game/program activity, live music, and Last.fm last-played
   history. Profiles and DM activity blocks can show game and music together;
@@ -293,7 +292,7 @@ See [build 111 validation and limitations](docs/build-111-reliability.md).
 
 Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.md).
 
-## SeND 0.9.35 build 108 — 2026-09-25
+## SeND 0.9.35 build 108 (2026-09-25)
 
 - Rename visible application branding, notifications, installers, web metadata,
   documentation and release assets to SeND: “SeND is Not Discord.” Update GitHub
@@ -329,10 +328,10 @@ Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.
   instead of discarding alerts or forcing homeserver backoff. Cancel queued
   alerts when reading the room. Release leases on page hide,
   renew subscriptions after VAPID-key rotation, and add browser setup diagnostics
-  and a capability-protected test-push action. Physical iPhone delivery remains
-  a required device check, not a claimed automated test result.
+  and a capability-protected test-push action. Physical iPhone delivery still
+  needs device testing.
 
-## SeND 0.9.34 build 107 — 2026-09-25
+## SeND 0.9.34 build 107 (2026-09-25)
 
 - Expose channel access, history visibility, directory listing and Space defaults;
   discover accessible unjoined channels and join them when opened.
@@ -353,7 +352,7 @@ Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.
 
 Validation and remaining device checks: `docs/build-107-plan.md`.
 
-## SeND 0.9.34 build 106 — 2026-09-24
+## SeND 0.9.34 build 106 (2026-09-24)
 
 - Keep onboarding text scrollable with navigation outside the content viewport.
 - Share the profile layout across desktop/mobile cards and editors, use a
@@ -409,7 +408,7 @@ Hardware/cross-client authentication validation remains outstanding. Hosted
 browser SSO requires the narrowly scoped auth callback hosting rule.
 See `docs/build-106-plan.md` for details and implementation boundaries.
 
-## SeND 0.9.33 build 105 — 2026-09-24
+## SeND 0.9.33 build 105 (2026-09-24)
 
 - Fix web attachment selection by reading browser File objects directly while
   preserving Safari's user activation for camera/photo/file pickers. Avoid
@@ -470,7 +469,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   borders, light/dark variants and configurable accents. Accessibility settings
   override decorative effects. No scripts or remote theme assets are executed.
 
-## SeND 0.9.32 build 104 — 2026-09-24
+## SeND 0.9.32 build 104 (2026-09-24)
 
 - Add composer voice messages: microphone when empty, live waveform and timer,
   pause/resume, stop-to-review, local playback, delete and explicit send. Reuse
@@ -493,7 +492,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   recording, Linux emoji appearance and notification races need device checks
   across real hardware, particularly Safari/PWA microphone codecs.
 
-## SeND 0.9.31 build 103 — 2026-09-24
+## SeND 0.9.31 build 103 (2026-09-24)
 
 - Move sent/read progress markers and edited labels after message content.
   Show receipt frontiers rather than repeating acknowledgement on every message;
@@ -529,7 +528,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   checks still need device validation. Packages are built by CI; this release is
   published to latest, not stable.
 
-## SeND 0.9.30 build 102 — 2026-09-23
+## SeND 0.9.30 build 102 (2026-09-23)
 
 - PWA-only password autofill fix: use persistent, labelled browser-native
   username/password fields with standard autocomplete hints on login/signup.
@@ -540,7 +539,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Add browser regression tests and web-only release automation. Android,
   Linux and Windows remain on build 101; stable is unchanged.
 
-## SeND 0.9.30 build 101 — 2026-09-23
+## SeND 0.9.30 build 101 (2026-09-23)
 
 - Keep build 100's complete Flutter application; do not ship the experimental
   HTML adapter or replace the Matrix SDK/cryptography implementation.
@@ -563,11 +562,10 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   modification time, rather than relying on an album. Surface limited access
   with a control for selecting more photos.
 - Add focused navigation, invite and notification-batching regression tests.
-  Remaining validation: real iOS performance, large-account recovery, and
-  physical-device push delivery. These changes are not a claim that every
-  browser's performance problems are resolved.
+  Real iOS performance, large-account recovery and physical-device push delivery
+  still need validation; browser performance issues may remain.
 
-## SeND 0.9.30 build 100 — 2026-09-23
+## SeND 0.9.30 build 100 (2026-09-23)
 
 - Reuse the application theme/navigation configuration for ordinary backend
   updates instead of regenerating it for every sync, typing, and receipt event.
@@ -585,11 +583,10 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Exclude the homeserver configuration field from login credential autofill
   and disable credential autocorrection. Password-manager compatibility still
   requires real-browser/manager validation.
-- Keep timeline scrolling/media-height changes deferred. These targeted web
-  improvements do not establish that all interaction lag or the reported
-  two-minute recovery delay is resolved; see the build-100 investigation report.
+- Defer timeline scrolling/media-height changes. Interaction lag and the reported
+  two-minute recovery delay still need verification; see the build-100 investigation report.
 
-## SeND 0.9.30 build 99 — 2026-09-23
+## SeND 0.9.30 build 99 (2026-09-23)
 
 - Add a shared-code Web/PWA target with mobile and desktop layouts, SDK-owned
   IndexedDB session/crypto persistence, single-tab session ownership, and
@@ -617,7 +614,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   alias text, stable references, and editing offsets. Plain aliases stay text.
 - Left-align stickers with message content on desktop and mobile.
 
-## SeND 0.9.29 build 98 — 2026-09-22
+## SeND 0.9.29 build 98 (2026-09-22)
 
 - Give animated images their own bounded, lifecycle-aware frame decoder so GIF
   playback is independent of paused UI tickers. Preserve autoplay/Reduce Motion
@@ -638,7 +635,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Request an Android IME draft-state reset after sending without hiding and
   showing the keyboard window. Physical keyboard Caps Lock remains OS-managed.
 
-## SeND 0.9.29 build 97 — 2026-09-16
+## SeND 0.9.29 build 97 (2026-09-16)
 
 - Reset every Android per-conversation alert cadence when SeND opens, so
   the next message can vibrate immediately after the app is backgrounded.
@@ -648,7 +645,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   GIF/APNG/WebP MIME metadata and GIF signatures, and made GIF-provider video
   renditions loop continuously while preserving Reduce Motion behavior.
 
-## SeND 0.9.29 build 96 — 2026-09-16
+## SeND 0.9.29 build 96 (2026-09-16)
 
 - Added first-party account registration for `matrix.deltie.net`, including
   password-manager autofill, password confirmation, Matrix UI-auth handling,
@@ -667,7 +664,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Renamed the user-facing Regular appearance option to Gray while preserving
   its stored setting and palette for compatibility.
 
-## SeND 0.9.29 build 95 — 2026-09-16
+## SeND 0.9.29 build 95 (2026-09-16)
 
 - Unified own-user, room-list, timeline, and profile avatar caching; validate
   sender avatar metadata on newly sent/received messages and propagate changed
@@ -701,7 +698,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   Matrix homeserver caveats, password-manager-ready login/password fields, and
   detailed ntfy/UnifiedPush setup and public-rate-limit guidance.
 
-## SeND 0.9.28 build 94 — 2026-09-15
+## SeND 0.9.28 build 94 (2026-09-15)
 
 - Fixed Android’s five-minute alert cadence so each conversation owns an
   independent alert identity and atomically committed cooldown timestamp.
@@ -733,7 +730,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   battery/rate-limit notes, and a dedicated-provider explanation. Desktop no
   longer sees the Android page and the tour now ends with Close.
 
-## SeND 0.9.27 build 93 — 2026-09-04
+## SeND 0.9.27 build 93 (2026-09-04)
 
 - Made transparent-canvas trimming the default for imported and reprocessed
   static custom emoji while keeping it optional, with a stable live preview.
@@ -749,7 +746,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Kept cached generated build tooling outside CI formatting checks and made
   verified Flutter archive cache guards portable across Linux containers.
 
-## SeND 0.9.27 build 90 — 2026-09-04
+## SeND 0.9.27 build 90 (2026-09-04)
 
 - Fixed custom-emoji imports silently completing without becoming available
   in the emoji picker or `:alias:` autocomplete.
@@ -761,7 +758,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Preserved legacy personal packs during migration and made deletion remove
   only the selected pack from a merged personal collection.
 
-## SeND 0.9.27 build 89 — 2026-09-04
+## SeND 0.9.27 build 89 (2026-09-04)
 
 - Fixed personal sticker and custom-emoji imports replacing the previously
   saved pack by assigning additional packs distinct synced account-data slots.
@@ -773,7 +770,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Added visible progress while uploading imported packs and increased inline
   custom-emoji rendering from 20 to 26 logical pixels.
 
-## SeND 0.9.27 build 88 — 2026-09-04
+## SeND 0.9.27 build 88 (2026-09-04)
 
 - Added optional transparent-padding trimming when importing static custom
   emoji, fitting visible artwork into a centred 128×128 canvas without
@@ -784,7 +781,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   resolving older emoji by their immutable Matrix media ID and degrading
   gracefully when a pack is unavailable.
 
-## SeND 0.9.27 build 87 — 2026-09-04
+## SeND 0.9.27 build 87 (2026-09-04)
 
 - Fixed sticker and custom-emoji previews permanently waiting on a
   self-referential completion future, including inline historical emoji.
@@ -798,7 +795,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   bounded retries, earlier upstream timeouts, and cached static and converted
   media that avoids redundant Telegram downloads.
 
-## SeND 0.9.27 build 86 — 2026-09-04
+## SeND 0.9.27 build 86 (2026-09-04)
 
 - Added bounded server-side conversion of Telegram TGS and WebM animations to
   animated WebP, with separate 128px emoji and 256px sticker outputs.
@@ -820,7 +817,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   notification dismissal races when opening a room, desktop AFK detection
   during keyboard/pointer activity, and desktop bottom-island spacing.
 
-## SeND 0.9.27 build 85 — 2026-09-04
+## SeND 0.9.27 build 85 (2026-09-04)
 
 - Fixed Telegram pack links copied from rich message text being rejected when
   they contain invisible direction/format characters, wrappers, harmless
@@ -828,7 +825,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Added an explicit release-publisher option for clearing an invalidated
   stable channel while preserving historical artifacts.
 
-## SeND 0.9.27 build 84 — 2026-09-04
+## SeND 0.9.27 build 84 (2026-09-04)
 
 - Restyled sticker selection and pack management as bounded desktop dialogs
   while retaining draggable mobile sheets, and made every pack/import action
@@ -843,7 +840,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
   platform CI, verifies the exact artifact set, and atomically publishes
   `latest`, `stable`, or both on deltie.net.
 
-## SeND 0.9.27 build 83 — 2026-09-04
+## SeND 0.9.27 build 83 (2026-09-04)
 
 - Added custom/server emoji on top of Matrix image packs, including 120-item
   packs, strict 128×128 and 256 KiB per-emoji limits, animated inline
@@ -866,7 +863,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Reduced the timeline-to-composer gutter to the typing row's actual height
   and tightened all aligned desktop bottom panels accordingly.
 
-## SeND 0.9.26 build 82 — 2026-09-03
+## SeND 0.9.26 build 82 (2026-09-03)
 
 - Fixed mobile attachment-only image and video events rendering an empty text
   row above their media.
@@ -881,7 +878,7 @@ See `docs/build-106-plan.md` for details and implementation boundaries.
 - Restyled category labels on desktop and mobile with preserved casing, a
   one-pixel-smaller bold font, leading-panel alignment, and trailing chevrons.
 
-## SeND 0.9.26 build 81 — 2026-09-03
+## SeND 0.9.26 build 81 (2026-09-03)
 
 - Added per-installation first-run guidance for preview privacy, Matrix
   recovery, and private Android notification setup with ntfy/UnifiedPush.

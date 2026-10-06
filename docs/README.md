@@ -1,8 +1,8 @@
 # SeND documentation
 
-Documentation target: **0.9.37+119**. Check the [changelog](../CHANGELOG.md) and
-[published releases](https://github.com/VosjeCleo/SeND/releases/latest) for availability.
-Pre-1.0 work focuses on reliability, security, interoperability and device testing.
+Start with [installation](../INSTALL.md) to get SeND running. The guides below
+cover using the app, contributing code and running its optional services.
+Release changes are in the [changelog](../CHANGELOG.md).
 
 ## Using SeND
 
@@ -13,11 +13,11 @@ Pre-1.0 work focuses on reliability, security, interoperability and device testi
 
 ## Development and operations
 
+- [Building from source](BUILDING.md)
 - [Architecture](ARCHITECTURE.md) · [Matrix extensions](MATRIX_EXTENSIONS.md)
 - [Networking and privacy](networking.md) · [1.0 release gates](RELEASE_READINESS.md)
 - [Build and publish](../packaging/README.md) · [Flatpak](../packaging/flatpak/README.md)
 - [PWA hosting and updates](web-deployment.md) · [Optional server helpers](../server/README.md)
-- [Build 116 video diagnosis and validation](build-116-video.md)
 - [Credits](../CREDITS.md) · [Third-party notices](../THIRD-PARTY-NOTICES.md)
   · [Tango provenance](../assets/icons/tango/SOURCE.md)
 
@@ -26,6 +26,8 @@ Pre-1.0 work focuses on reliability, security, interoperability and device testi
 These records preserve earlier plans, observations and test results, including
 unimplemented proposals and unresolved issues. Use the guides above for setup.
 
+- [Animated banner colour investigation](gif-banner-investigation.md)
+- [116 Android video diagnosis and validation](build-116-video.md)
 - [111 reliability](build-111-reliability.md), [110 packs/activity/polish](build-110-polish.md)
 - [109 independent activities](build-109-activity.md), [108 rename and updates](build-108-send.md)
 - [Activity/media prototype](activity-local-preview.md)

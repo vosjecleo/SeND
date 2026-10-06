@@ -1,9 +1,8 @@
 # Networking and privacy
 
-SeND intentionally limits the network destinations it contacts.
-
-Documentation baseline: 0.9.37+116. Security claims describe implemented boundaries,
-not an independent security certification; see [1.0 readiness](RELEASE_READINESS.md).
+This guide describes where SeND connects, what triggers each connection and
+which data it sends. It documents the implementation, not an independent
+security audit. Validation requirements are in the [release checklist](RELEASE_READINESS.md).
 
 ## Configured Matrix homeserver
 
@@ -87,8 +86,10 @@ device testing. Closing or interrupting an unfinished sign-in may require retry.
 
 The hosted PWA's Web Push gateway accepts short-lived Matrix OpenID proof and
 opaque subscription capabilities, not Matrix access tokens or decrypted message
-bodies. Browser alerts contain generic room activity; OS/browser push services
-are part of delivery. This is separate from Android's ntfy distributor path.
+bodies. Browser alerts show generic room activity by default. Optional local
+previews decrypt on the device using a separate encrypted snapshot; keys and
+Matrix access tokens stay off the gateway. See [preview privacy and limits](ios-push-checklist.md).
+OS/browser push services are part of delivery, separate from Android's ntfy path.
 
 ## X/Twitter preview compatibility
 

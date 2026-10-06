@@ -1,14 +1,8 @@
 # Credits and acknowledgements
 
-Documentation reviewed for 0.9.37+116. Credits describe dependency
-and reference provenance, not an endorsement or security certification. See the
-[documentation index](docs/README.md) for current implementation guides.
-
-SeND is original application code built on open-source libraries and
-public services. No third-party client repository has been vendored into this
-repository. Where an upstream workflow has been adapted, it is called out
-below; where SeND directly uses a package, that package stays an external
-dependency under its own license.
+SeND builds on the libraries, services and reference projects listed below.
+Dependencies retain their own licenses. Adapted workflows are credited
+separately; no third-party client repository is vendored here.
 
 ## Matrix foundations and client references
 

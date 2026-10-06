@@ -1,24 +1,9 @@
 # SeND architecture
 
-Documentation baseline: 0.9.37+118. See [release readiness](RELEASE_READINESS.md)
-for the distinction between implemented features and validated behaviour.
+SeND separates Flutter UI, application models, Matrix state and platform
+services. This guide describes who owns each part and how updates reach the UI.
 
 ## Data flow and boundaries
-
-### Composition and audio (build 117)
-
-Desktop and mobile use plain text fields, not WYSIWYG editing. Desktop retains
-the Quill document/controller solely for existing draft persistence and stable
-emoji/mention offsets; no `QuillEditor` is mounted and imported rich styles are
-not serialized. Build 118 parses only inline italic/bold/underline/strike/spoiler
-markup on send; block Markdown remains literal and line breaks stay explicit. Timeline HTML
-rendering remains independent and continues to display received formatting.
-
-`AudioAttachmentPlayer` is shared across layouts. Matrix mapping carries voice
-markers, duration and bounded waveform samples into `ChatAttachment`. Playback
-is lazy: no eager decryption/download or media player allocation for every idle
-audio row. A duration missing from the event displays as unknown until playback
-metadata arrives. Actual position streams update only the player row.
 
 ### Backend ownership
 
@@ -81,8 +66,23 @@ Timeline history and caches are bounded separately. Search, pin, reply and
 notification navigation can reconstruct history around a target rather than
 paginating from the present. Preserve stable Matrix event identities and avoid
 changing scroll bookkeeping as a side effect of metadata or feature work.
-The [scroll investigation](timeline-scroll-investigation-99.md) remains an
-investigation record, not proof that every jitter cause has been eliminated.
+Unconfirmed causes of jitter are listed in the
+[scroll investigation](timeline-scroll-investigation-99.md).
+
+## Composition and audio
+
+Desktop and mobile use plain text fields, not WYSIWYG editing. Desktop retains
+the Quill document/controller solely for existing draft persistence and stable
+emoji/mention offsets; no `QuillEditor` is mounted and imported rich styles are
+not serialized. Build 118 parses only inline italic/bold/underline/strike/spoiler
+markup on send; block Markdown remains literal and line breaks stay explicit. Timeline HTML
+rendering remains independent and continues to display received formatting.
+
+`AudioAttachmentPlayer` is shared across layouts. Matrix mapping carries voice
+markers, duration and bounded waveform samples into `ChatAttachment`. Playback
+is lazy: no eager decryption/download or media player allocation for every idle
+audio row. A duration missing from the event displays as unknown until playback
+metadata arrives. Actual position streams update only the player row.
 
 ## Media pipeline
 

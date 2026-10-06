@@ -1,12 +1,7 @@
 # Windows support
 
-Documentation baseline: **0.9.37+116**. CI produces the installer and portable
-build; native Windows testing remains part of [1.0 hardening](RELEASE_READINESS.md).
-
-Recent fixes cover Discord IPC ownership, game/process identification, clipboard
-image styling, notification activation, GIF lifecycle handling and RTC track
-mute/deafen. The device-testing checklist is below. Desktop video compression requires
-FFmpeg/ffprobe on PATH; failure offers retry, explicit original upload or cancel.
+For downloads and installation steps, see [Installing SeND](../INSTALL.md#windows).
+This guide covers the Windows runner, source builds and device testing.
 
 SeND uses Flutter's standard Windows desktop runner. CI builds a complete
 portable directory and packages it both as a ZIP and a per-user Inno Setup
@@ -16,6 +11,9 @@ the executable is not standalone.
 The installer defaults to `%LOCALAPPDATA%\Programs\SeND`, creates a Start
 Menu shortcut, and optionally creates a desktop shortcut. Upgrading or
 uninstalling does not delete Matrix sessions or other per-user application data.
+
+Desktop video compression requires FFmpeg/ffprobe on PATH. If preparation fails,
+the user can retry, choose an original-quality upload or cancel.
 
 ## Build locally
 

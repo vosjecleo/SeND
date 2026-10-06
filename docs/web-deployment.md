@@ -1,26 +1,12 @@
 # Web/PWA deployment
 
-## Current release target: 0.9.37+116
+The hosted PWA runs at `chat.deltie.net`. Use CI artifacts for deployment;
+do not build on the web server. Check `/version.json` after each update.
 
-The hosted app is the Flutter PWA at `chat.deltie.net`. Routine publication uses
-CI artifacts; it never builds on the web server. Verify the actual deployed
-version with `https://chat.deltie.net/version.json` after each update rather
-than relying on a historical version recorded in this guide.
-
-The build 116 Android fix does not require nginx, certificate, media-helper or
-Web Push service changes. Browser sends keep their original-quality policy.
-See [1.0 readiness](RELEASE_READINESS.md) and [iOS push checks](ios-push-checklist.md)
-for physical-device validation still required.
-
-### Authentication callback protection
-
-Before enabling browser SSO, verify the exact `/auth.html` rule from
-`server/chat-nginx.conf`: callback codes must not enter access logs or caches.
-An old deployment note records a staged build-106 operator script; do not rerun
-that stale candidate against a changed nginx configuration. Inspect the live
-configuration and apply only the needed scoped change, with backup and nginx
-validation. This does not enable an identity provider on a password-only server.
-Account sign-in is separate from Matrix encryption/device verification.
+For an existing deployment, follow [routine updates](#routine-updates). New
+hosts need the [hosting prerequisites](#hosting-prerequisites), callback protection
+and Web Push setup below. The old Element cutover is recorded at the end of this
+guide for reference, not as an update procedure.
 
 ## Routine updates
 
@@ -32,28 +18,14 @@ atomic `current` symlink switch. It does not build, change release channels,
 edit services, or restart nginx. Normal automated publication already performs
 the web switch; this is also available for a manual retry.
 
-Build 99 adds a separate browser artifact; it does not replace Matrix or run
-Matrix encryption on the server. `bash packaging/build-web.sh` builds pinned
+### Build the web artifact
+
+Matrix encryption runs in the browser, not on the web server.
+`bash packaging/build-web.sh` builds pinned
 vodozemac Rust/WASM bindings, checks the committed Dart lockfile, builds Flutter
 without remote renderer dependencies, and packages `dist/*-web.tar.gz`.
 
 ## Hosting prerequisites
-
-### Historical build 99 cutover — 2026-09-23
-
-The owner completed the approved cutover from Element to SeND at
-`chat.deltie.net`. Post-cutover checks confirm version 0.9.30 build 99, active
-nginx/contact-api/Web Push services, the required isolation headers and WASM
-MIME type, working public KLIPY search/trending routes, and a responding Web
-Push configuration endpoint. The download site now includes the Web/PWA entry.
-An isolated Chromium smoke test of the live site reached startup without
-JavaScript errors, opened the SDK's IndexedDB database, and activated `/sw.js`.
-These infrastructure checks do not establish end-to-end notification delivery
-on a real iPhone; the real-device checklist below remains required.
-
-Reported first-release issues are tracked in
-[the build 99 follow-up notes](web-build-99-follow-up.md). No fixes for those
-reports are included in this deployment verification.
 
 A new host's deployment is **not complete** until it has all of these:
 
@@ -88,6 +60,92 @@ extracts into an immutable version directory, and atomically switches a
 `current` symlink. Rollback is selecting the previous release directory. The
 release publisher transfers this script with the checksum-verified archive.
 
+## Authentication callback protection
+
+Before enabling browser SSO, verify the exact `/auth.html` rule from
+`server/chat-nginx.conf`: callback codes must not enter access logs or caches.
+An old deployment note records a staged build-106 operator script; do not rerun
+that stale candidate against a changed nginx configuration. Inspect the live
+configuration and apply only the needed scoped change, with backup and nginx
+validation. This does not enable an identity provider on a password-only server.
+Account sign-in is separate from Matrix encryption/device verification.
+
+## Web Push gateway
+
+Use a dedicated unprivileged service account and a private state directory,
+excluded from public/static hosting and unencrypted backups. Install
+`server/requirements-web-push.txt` in its own virtual environment. Generate a
+P-256 VAPID private key with a standard cryptographic tool, mode 0600, and keep
+that key stable across deployments. Configure `WEB_PUSH_STATE`,
+`WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_CONTACT` (a monitored mailto address).
+
+Run `web_push:app` from the `server` directory using gunicorn with **one worker,
+four threads, a 45-second timeout, and a loopback bind**. The bounded in-memory
+rate limiter assumes one worker. A multi-process deployment needs an external
+shared rate limiter first. Retain normal nginx request/body/time limits; never
+log request bodies or OpenID tokens. The gateway verifies short-lived OpenID
+proofs against explicitly configured homeservers, limits subscriptions per
+account and globally, and permits only known browser push hosts. Subscription
+capabilities are stored in a mode-0600 SQLite file under a mode-0700 directory.
+
+Foreground clients refresh a short visibility lease. Suppression is done before
+sending a push because Safari requires every delivered push to display a
+notification. If a visibility update is lost, the lease expires within a minute.
+The gateway sends room/event identifiers and a generic visible fallback, never
+message plaintext. Optional device-side previews use a separate encrypted local
+snapshot to fetch and decrypt an event on the device. They are off by default;
+keys and Matrix access tokens are not sent to the gateway. See the
+[preview storage and privacy details](ios-push-checklist.md).
+Expired endpoints are removed on 404/410. Transient delivery failures return 503
+for Matrix retry.
+
+## Validation before publication
+
+- Run formatting, analysis, full native Flutter tests and Python tests in the
+  gateway virtual environment. Run JS syntax checks and the Web/PWA workflow.
+- `python3 tool/serve_web.py` serves a local isolated build on port 8139 for
+  browser smoke tests. Confirm SDK crypto startup, desktop/mobile layouts,
+  single-tab exclusion, reload persistence, login/logout, encrypted send/receive,
+  and media opening. Use a test account, not copied production credentials.
+- On a real iPhone/iPad (16.4+), install from Safari onto the Home Screen, grant
+  notifications with the in-app button, background/close it, send a test Matrix
+  event, and verify display, click navigation, permission revocation and logout.
+  Desktop Chromium emulation cannot verify actual iOS push delivery.
+- Verify deployed `/version.json`, crypto assets and security headers, and
+  check the live KLIPY and Web Push paths. Only then advertise the public app.
+
+## Browser limitations
+
+The SDK owns IndexedDB session/crypto persistence; small app documents use the
+existing secure-storage plugin's WebCrypto implementation. Browsers can still
+evict storage, and same-origin script compromise can access a browser session.
+Keep a Matrix recovery key and avoid private browsing for durable sessions.
+
+Native gallery enumeration is replaced by the browser picker. Video playback
+uses a bounded (64 MiB) SDK-decrypted Blob URL because browser video elements
+cannot use the native authenticated range proxy. Blobs are released when their
+playback references are closed. Codec support and background call behaviour are
+browser-dependent. General direct link previews remain subject to browser CORS;
+homeserver previews are preferred. Web Push initially accepts only deltie.net
+OpenID issuers; add other trusted issuers deliberately, not via arbitrary URL
+discovery.
+
+## Historical build 99 cutover (2026-09-23)
+
+The owner completed the approved cutover from Element to SeND at
+`chat.deltie.net`. Post-cutover checks confirm version 0.9.30 build 99, active
+nginx/contact-api/Web Push services, the required isolation headers and WASM
+MIME type, working public KLIPY search/trending routes, and a responding Web
+Push configuration endpoint. The download site now includes the Web/PWA entry.
+An isolated Chromium smoke test of the live site reached startup without
+JavaScript errors, opened the SDK's IndexedDB database, and activated `/sw.js`.
+These infrastructure checks do not establish end-to-end notification delivery
+on a real iPhone; the [device checklist](#validation-before-publication) remains required.
+
+Reported first-release issues are tracked in
+[the build 99 follow-up notes](web-build-99-follow-up.md). No fixes for those
+reports are included in this deployment verification.
+
 **Historical pre-cutover installation:** inspection found Element already serving
 `chat.deltie.net`. The owner approved replacing Element there. Preserve its
 files/configuration and browser data; do not clear
@@ -121,7 +179,7 @@ It preserves the old Element service on port 8089 and its data, and does not
 touch DNS, certificates, Matrix or RTC blocks. It does not print secret values.
 
 Check `https://chat.deltie.net/version.json` reports the version/build of the artifact you just deployed, open the app
-and confirm login, then perform the real-iOS checklist below. If an old Element
+and confirm login, then perform the [device checklist](#validation-before-publication). If an old Element
 service worker remains in control, reload once after the new worker activates;
 do not clear all site storage as that would remove existing Matrix keys.
 
@@ -130,59 +188,3 @@ from the printed backup to their original locations; run `sudo nginx -t`, then
 reload nginx and restart contact-api. Disable `deltiecord-web-push` if reverting
 the feature. Keep its private VAPID key/state for future re-enabling. Back up
 that private state only with an explicitly encrypted backup policy.
-
-## Web Push gateway
-
-Use a dedicated unprivileged service account and a private state directory,
-excluded from public/static hosting and unencrypted backups. Install
-`server/requirements-web-push.txt` in its own virtual environment. Generate a
-P-256 VAPID private key with a standard cryptographic tool, mode 0600, and keep
-that key stable across deployments. Configure `WEB_PUSH_STATE`,
-`WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_CONTACT` (a monitored mailto address).
-
-Run `web_push:app` from the `server` directory using gunicorn with **one worker,
-four threads, a 45-second timeout, and a loopback bind**. The bounded in-memory
-rate limiter assumes one worker. A multi-process deployment needs an external
-shared rate limiter first. Retain normal nginx request/body/time limits; never
-log request bodies or OpenID tokens. The gateway verifies short-lived OpenID
-proofs against explicitly configured homeservers, limits subscriptions per
-account and globally, and permits only known browser push hosts. Subscription
-capabilities are stored in a mode-0600 SQLite file under a mode-0700 directory.
-
-Foreground clients refresh a short visibility lease. Suppression is done before
-sending a push because Safari requires every delivered push to display a
-notification. If a visibility update is lost, the lease expires within a minute.
-Payloads contain only room/event IDs; the worker displays generic text, never
-decrypts messages, and contains no Matrix session credential. Expired endpoints
-are removed on 404/410. Transient delivery failures return 503 for Matrix retry.
-
-## Validation before publication
-
-- Run formatting, analysis, full native Flutter tests and Python tests in the
-  gateway virtual environment. Run JS syntax checks and the Web/PWA workflow.
-- `python3 tool/serve_web.py` serves a local isolated build on port 8139 for
-  browser smoke tests. Confirm SDK crypto startup, desktop/mobile layouts,
-  single-tab exclusion, reload persistence, login/logout, encrypted send/receive,
-  and media opening. Use a test account, not copied production credentials.
-- On a real iPhone/iPad (16.4+), install from Safari onto the Home Screen, grant
-  notifications with the in-app button, background/close it, send a test Matrix
-  event, and verify display, click navigation, permission revocation and logout.
-  Desktop Chromium emulation cannot verify actual iOS push delivery.
-- Verify deployed `/version.json`, crypto assets and security headers, and
-  check the live KLIPY and Web Push paths. Only then advertise the public app.
-
-## Known browser boundaries
-
-The SDK owns IndexedDB session/crypto persistence; small app documents use the
-existing secure-storage plugin's WebCrypto implementation. Browsers can still
-evict storage, and same-origin script compromise can access a browser session.
-Keep a Matrix recovery key and avoid private browsing for durable sessions.
-
-Native gallery enumeration is replaced by the browser picker. Video playback
-uses a bounded (25 MiB) SDK-decrypted Blob URL because browser video elements
-cannot use the native authenticated range proxy. Blobs are released when their
-playback references are closed. Codec support and background call behaviour are
-browser-dependent. General direct link previews remain subject to browser CORS;
-homeserver previews are preferred. Web Push initially accepts only deltie.net
-OpenID issuers; add other trusted issuers deliberately, not via arbitrary URL
-discovery.

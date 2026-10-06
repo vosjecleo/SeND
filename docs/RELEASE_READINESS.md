@@ -1,32 +1,9 @@
-# From feature completeness to 1.0
+# Release readiness for 1.0
 
-## Milestone: 0.9.34+106
-
-On 2026-09-24, SeND reached the end of its planned feature-expansion phase.
-SeND is feature complete in scope. The next phase is hardening and bug fixing.
-
-This is not a claim of security certification, complete Discord parity, or
-universal hardware compatibility. Remaining gaps must be fixed, validated, or
-documented as limitations before 1.0.
-
-Build 106 passed all four CI targets (Linux, Windows, Android, Web/PWA), was
-published as Latest on GitHub and deltie.net, and was deployed to chat.deltie.net.
-Local regression results were 366 passing tests, one existing skip, and clean
-static analysis. Physical-device and multi-client testing is still required.
-Stable was not promoted.
-
-## Current hardening baseline: 0.9.37+116
-
-Since the build 106 milestone, releases have addressed activity interoperability,
-pack editing, notifications, platform packaging, RTC connectivity, sound cues,
-mute/deafen, and media preparation. Build 116 targets Android video staging and
-recovery options when preparation fails. See the
-[current changelog](../CHANGELOG.md) and [video acceptance checks](build-116-video.md).
-
-Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
-packaging/publication stage. Release automation verifies checksums before mirror
-and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
-behavior, end-to-end push delivery or two-client audio quality.
+SeND is feature complete in scope. Before 1.0, the checks below need recorded
+results, and remaining gaps must be fixed or documented as limitations.
+Feature completeness does not establish security certification, full Discord
+parity or universal device compatibility.
 
 ## Release gates
 
@@ -79,3 +56,25 @@ does not prove a behavioural fix.
 
 See [known issues](../KNOWN_ISSUES.md), [build 106 scope](build-106-plan.md),
 [security review](build-103-security-review.md) and [platform guides](README.md).
+
+## Milestone: 0.9.34+106
+
+On 2026-09-24, SeND reached the end of its planned feature-expansion phase.
+
+Build 106 passed all four CI targets (Linux, Windows, Android, Web/PWA), was
+published as Latest on GitHub and deltie.net, and was deployed to chat.deltie.net.
+Local regression results were 366 passing tests, one existing skip, and clean
+static analysis. Stable was not promoted.
+
+## Recorded progress through build 116
+
+Since the build 106 milestone, releases have addressed activity interoperability,
+pack editing, notifications, platform packaging, RTC connectivity, sound cues,
+mute/deafen, and media preparation. Build 116 targets Android video staging and
+recovery options when preparation fails. See the
+[current changelog](../CHANGELOG.md) and [video acceptance checks](build-116-video.md).
+
+Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
+packaging/publication stage. Release automation verifies checksums before mirror
+and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
+behavior, end-to-end push delivery or two-client audio quality.

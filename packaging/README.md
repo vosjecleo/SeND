@@ -1,12 +1,11 @@
 # Release packaging and publication
 
-Current release target: 0.9.37+116. The project remains on Latest while
-[1.0 hardening](../docs/RELEASE_READINESS.md)
-continues. Documentation-only commits use `[skip ci]` and do not move release
-tags or deployed binaries.
+Use the release scripts below to build, verify and publish SeND. For a development
+build, see [Building from source](../docs/BUILDING.md).
 
-Filename examples below use the SeND naming. Internal package/executable IDs remain compatible.
-See [rename, website and updater notes](../docs/build-108-send.md).
+Documentation-only commits use `[skip ci]` and must not move release tags or
+deployed binaries. Package and executable IDs still use `deltiecord` where needed
+for upgrade compatibility.
 
 ## Automated publication
 
@@ -24,9 +23,8 @@ the full preflight, pushes `main` to GitHub and the Deltie mirror, and waits for
 all required platform CI workflows on that exact commit to succeed before
 creating/pushing the version tag. It then waits for release publication,
 verifies the package/source checksum set, then
-stages and atomically publishes it to deltie.net. This removes the repeated
-manual download/upload work; the platform compilation time still belongs to
-CI. Network downloads have timeouts, stall detection and bounded retries.
+stages and atomically publishes it to deltie.net. Compilation runs in CI.
+Network downloads have timeouts, stall detection and bounded retries.
 `--skip-preflight` exists for a retry only after the same commit has already
 passed the complete local preflight.
 
@@ -35,6 +33,8 @@ For a PWA-only patch, include `[web-only]` in the release commit message and run
 are skipped for that push; the tagged release waits only for Web PWA and
 requires exactly one web archive. Existing native and stable channel entries
 are preserved. Omit the marker and flag for the next all-platform release.
+
+## Local Linux packages
 
 Run `FLUTTER_BIN=/path/to/flutter packaging/build-release.sh` from the
 repository root. GIF search uses SeND's HTTPS proxy; the KLIPY key exists
@@ -48,12 +48,14 @@ Use the release script rather than invoking `flutter build` directly. It also
 applies the release-only Rust FFI retention flag required by the current
 flutter_vodozemac dependency.
 
-Install the Debian package with `sudo apt install ./dist/SeND-0.9.37+116-linux-debian-amd64.deb`.
+Install the Debian package with `sudo apt install ./dist/SeND-0.9.37+119-linux-debian-amd64.deb`.
 The package removes only application files when uninstalled; Matrix/session data
 remains in the user's normal XDG application-data and Secret Service stores.
 
-Run the AppImage with `chmod +x dist/SeND-0.9.37+116-linux-appimage-x86_64.AppImage` followed by
-`./dist/SeND-0.9.37+116-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
+### AppImage runtime and repackaging
+
+Run the AppImage with `chmod +x dist/SeND-0.9.37+119-linux-appimage-x86_64.AppImage` followed by
+`./dist/SeND-0.9.37+119-linux-appimage-x86_64.AppImage`. A working desktop Secret Service is
 required for persisted login and E2EE keys. Audio requires a reachable PulseAudio
 or PipeWire-Pulse service. Wayland screen sharing requires PipeWire,
 `xdg-desktop-portal`, and a working desktop portal backend such as
@@ -76,6 +78,8 @@ original-binary checksum comparison excludes only those removed host libraries.
 Official x86_64 artifacts are built inside Debian 12 so native
 plugins retain a glibc 2.36 baseline; building them directly on a newer rolling
 distribution produces packages that may not start on Debian.
+
+### Build environment
 
 The Debian 12 build environment needs Flutter plus `clang`, `cmake`, `make`, `ninja`,
 `pkg-config`, `fakeroot`, `patchelf`, and the development packages for GTK 3,
