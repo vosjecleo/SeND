@@ -23,6 +23,8 @@ class _Client extends Client {
   final preview = Completer<FileResponse>();
   final writes = <Map<String, Object?>>[];
   final writeTypes = <String>[];
+  final writeTargets = <String>[];
+  final childContent = <String, Map<String, Object?>>{};
   final children = <String, List<String>>{};
   final left = <String>[];
   String? failLeave;
@@ -37,6 +39,7 @@ class _Client extends Client {
         'state_key': id,
         'content': {
           'via': ['test'],
+          ...?childContent[id],
         },
       }),
   ];
@@ -114,12 +117,95 @@ class _Client extends Client {
   ) async {
     writes.add(body);
     writeTypes.add(eventType);
+    writeTargets.add('$roomId|$eventType|$stateKey');
+    if (eventType == 'm.space.child') childContent[stateKey] = body;
     return '\$saved';
   }
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'category ordering follows child order and survives another move and reload',
+    () async {
+      final client = _Client();
+      final space = Room(id: '!space:test', client: client);
+      void state(String type, String key, Map<String, Object?> content) {
+        space.setState(
+          Event.fromJson({
+            'type': type,
+            'state_key': key,
+            'content': content,
+            'sender': '@me:test',
+            'event_id': '\$event',
+            'origin_server_ts': 1,
+          }, space),
+        );
+      }
+
+      state('m.room.create', '', {'type': 'm.space', 'room_version': '11'});
+      state('net.deltiecord.space.channels', '', {
+        'categories': [
+          {'id': 'cat', 'name': 'Text'},
+        ],
+        'rooms': {'!a:test': 'cat', '!b:test': 'cat', '!c:test': 'cat'},
+      });
+      client.children[space.id] = ['!a:test', '!b:test', '!c:test'];
+      for (final (index, id) in client.children[space.id]!.indexed) {
+        final content = <String, Object?>{
+          'via': ['remote.test'],
+          'suggested': true,
+          'custom': 'keep',
+          'order': index.toString().padLeft(6, '0'),
+        };
+        client.childContent[id] = content;
+        state('m.space.child', id, content);
+      }
+      client.rooms = [space];
+      final backend = MatrixBackend(client: client)..selectSpace(space.id);
+      await backend.moveRoomInSpace(
+        '!c:test',
+        categoryId: 'cat',
+        beforeRoomId: '!a:test',
+      );
+      expect(backend.selectedSpaceCategories.single.roomIds, [
+        '!c:test',
+        '!a:test',
+        '!b:test',
+      ]);
+      // The SDK has not received the first move yet.
+      await backend.moveRoomInSpace(
+        '!b:test',
+        categoryId: 'cat',
+        beforeRoomId: '!a:test',
+      );
+      expect(backend.selectedSpaceCategories.single.roomIds, [
+        '!c:test',
+        '!b:test',
+        '!a:test',
+      ]);
+      expect(client.writeTypes, isNot(contains('m.space.parent')));
+      expect(client.writeTypes, isNot(contains('m.room.power_levels')));
+      for (var i = 0; i < client.writes.length; i++) {
+        final parts = client.writeTargets[i].split('|');
+        expect(parts.first, space.id);
+        if (client.writeTypes[i] == 'm.space.child') {
+          expect(client.writes[i]['via'], ['remote.test']);
+          expect(client.writes[i]['suggested'], true);
+          expect(client.writes[i]['custom'], 'keep');
+        }
+        state(client.writeTypes[i], parts.last, client.writes[i]);
+      }
+      final reloaded = MatrixBackend(client: client)..selectSpace(space.id);
+      expect(reloaded.selectedSpaceCategories.single.roomIds, [
+        '!c:test',
+        '!b:test',
+        '!a:test',
+      ]);
+      reloaded.dispose();
+      backend.dispose();
+    },
+  );
   for (final fail in [false, true]) {
     test('leaving Space includes nested channels, failure=$fail', () async {
       final client = _Client();

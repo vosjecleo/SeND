@@ -40,7 +40,14 @@ extension _MatrixSession on MatrixBackend {
           _spaceChannelLayoutEventIds.remove(spaceId);
           return true;
         });
-        _spaceRoomOrderOverrides.clear();
+        _spaceRoomOrderOverrides.removeWhere((spaceId, expected) {
+          final actual = _matrix
+              .getRoomById(spaceId)
+              ?.spaceChildren
+              .map((child) => child.roomId)
+              .toList();
+          return actual != null && listEquals(actual, expected);
+        });
         final roleSignature = jsonEncode([
           for (final space in _matrix.rooms.where((room) => room.isSpace))
             [space.id, space.getState(spaceRolesEventType)?.content],

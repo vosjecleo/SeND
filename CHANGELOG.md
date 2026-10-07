@@ -3,6 +3,15 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.38 build 125 (2026-10-08)
+
+- Display rooms within categories in their saved order on desktop, mobile and
+  in channel settings, rather than category-assignment order.
+- Save room ordering on the parent server without rewriting child-room parent
+  links. Preserve routing, suggested-room flags and custom child metadata.
+- Check channel-management permission before reordering and keep the saved
+  order visible until sync catches up, including successive moves.
+
 ## SeND 0.9.38 build 124 (2026-10-07)
 
 - Leaving a server also leaves its joined channels and nested servers. Shared

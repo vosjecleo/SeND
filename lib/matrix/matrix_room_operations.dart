@@ -108,6 +108,15 @@ extension _MatrixRoomOperations on MatrixBackend {
     if (spaceId == null) return const [];
     final layout = _spaceChannelLayout(spaceId);
     final roomCategories = layout.tryGetMap<String, dynamic>('rooms') ?? {};
+    final orderedIds = <String>{
+      ...?_spaceRoomOrderOverrides[spaceId],
+      ...?_matrix
+          .getRoomById(spaceId)
+          ?.spaceChildren
+          .map((child) => child.roomId)
+          .whereType<String>(),
+      ...roomCategories.keys,
+    };
     final collapsed = _collapsedChannelCategories[spaceId] ?? const <String>{};
     return (layout.tryGetList('categories') ?? const [])
         .whereType<Map>()
@@ -118,9 +127,8 @@ extension _MatrixRoomOperations on MatrixBackend {
             id: id,
             name: category.tryGet<String>('name') ?? 'Category',
             collapsed: collapsed.contains(id),
-            roomIds: roomCategories.entries
-                .where((entry) => entry.value == id)
-                .map((entry) => entry.key)
+            roomIds: orderedIds
+                .where((roomId) => roomCategories[roomId] == id)
                 .toList(growable: false),
           );
         })
@@ -250,18 +258,41 @@ extension _MatrixRoomOperations on MatrixBackend {
     final spaceId = _selectedSpaceId;
     final space = spaceId == null ? null : _matrix.getRoomById(spaceId);
     if (spaceId == null || space == null) return;
-    final ids = space.spaceChildren
-        .map((child) => child.roomId)
-        .whereType<String>()
-        .where((id) => id != roomId)
-        .toList();
+    await _ensureSpaceChannelLayoutPermission(spaceId);
+    final state = await _matrix.getRoomState(spaceId);
+    final children = {
+      for (final event in state)
+        if (event.type == EventTypes.SpaceChild &&
+            event.stateKey != null &&
+            event.content['via'] is List &&
+            (event.content['via'] as List).isNotEmpty)
+          event.stateKey!: event.content,
+    };
+    if (!children.containsKey(roomId) || beforeRoomId == roomId) return;
+    final serverIds = children.keys.toList()
+      ..sort((a, b) {
+        final first = children[a]!['order'] as String? ?? '';
+        final second = children[b]!['order'] as String? ?? '';
+        return first.isEmpty || second.isEmpty
+            ? second.compareTo(first)
+            : first.compareTo(second);
+      });
+    final ids = <String>{
+      ...?_spaceRoomOrderOverrides[spaceId]?.where(children.containsKey),
+      ...serverIds,
+    }.where((id) => id != roomId).toList();
     final insertion = beforeRoomId == null ? -1 : ids.indexOf(beforeRoomId);
     ids.insert(insertion < 0 ? ids.length : insertion, roomId);
     for (var index = 0; index < ids.length; index++) {
-      await space.setSpaceChild(
-        ids[index],
-        order: index.toString().padLeft(6, '0'),
-      );
+      final id = ids[index];
+      final order = index.toString().padLeft(6, '0');
+      if (children[id]!['order'] == order) continue;
+      // Reordering belongs to the Space. Do not rewrite the child's parent
+      // event or discard routing, suggested, or custom metadata.
+      await _matrix.setRoomStateWithKey(spaceId, EventTypes.SpaceChild, id, {
+        ...children[id]!,
+        'order': order,
+      });
     }
     _spaceRoomOrderOverrides[spaceId] = List.unmodifiable(ids);
     final layout = _spaceChannelLayout(spaceId);
