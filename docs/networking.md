@@ -100,7 +100,7 @@ to FxTwitter while the setting is enabled. This behavior is configurable and
 does not bypass the homeserver-first preview policy; direct webpage traffic
 still requires the separate privacy opt-in.
 
-## Android UnifiedPush
+## Android background notifications
 
 Configured from Android notification settings. SeND uses the standard
 UnifiedPush distributor protocol and contains no shared ntfy credentials. The
@@ -121,10 +121,17 @@ entries without asking the distributor to rotate its capability. Notification
 settings expose stage timestamps and a gateway-to-receiver test; the private
 endpoint itself never enters logs, visible diagnostics, or WorkManager input.
 
-Release builds use an installed external distributor such as ntfy. Embedded
-Firebase-compatible WebPush is disabled until SeND has a dedicated,
-VAPID-configured Matrix WebPush gateway; it cannot safely reuse the ntfy
-gateway contract.
+Android also offers an opt-in built-in listener for `https://push.deltie.net`.
+It creates a random 256-bit topic and holds one HTTPS JSON stream, without an
+external distributor or Google Play services. That server sees the device's IP
+address and Matrix event/room identifiers, not decrypted messages or Matrix keys.
+The capability stays in app-private storage. Stream frames are size-limited,
+redirects are refused, and cached hints are replayed after reconnects. The
+listener stops on logout, disable or a switch to an external distributor.
+See [Android setup and limits](ANDROID.md#notifications-and-background-operation).
+
+This is not embedded Firebase-compatible WebPush. That separate connector mode
+remains disabled and cannot reuse the ntfy gateway contract.
 
 The gateway and distributor receive Matrix room/event metadata sufficient to
 wake the application. The push path is not trusted as a source of plaintext.

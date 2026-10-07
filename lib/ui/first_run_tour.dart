@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/first_run_tour_store.dart';
 import 'deltiecord_theme.dart';
+import 'android_notification_setup.dart';
 
 class FirstRunTourGate extends StatefulWidget {
   const FirstRunTourGate({
@@ -112,8 +112,8 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
         title: 'Choose how previews connect',
         body:
             'SeND asks your Matrix homeserver for link previews first. '
-            'A direct fallback can reveal your IP address and browsing metadata '
-            'to linked websites.',
+            'If you allow direct previews, linked websites can see your IP address '
+            'and request details.',
         child: DropdownButtonFormField<DirectLinkPreviewMode>(
           key: const ValueKey('tour-link-preview-mode'),
           isExpanded: true,
@@ -164,27 +164,10 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
           icon: Icons.notifications_active_outlined,
           title: 'Set up background notifications',
           body:
-              '1. Install ntfy and open it once.\n'
-              '2. In ntfy, add https://push.deltiecord.net as a server and select '
-              'it for UnifiedPush.\n'
-              '3. In SeND, open Settings > Notifications, choose ntfy, '
-              'then refresh registration.\n\n'
-              'Allow ntfy to run in the background. If alerts are delayed, '
-              'exempt it from battery optimisation. Use SeND’s dedicated '
-              'push.deltiecord.net server or another compatible ntfy server '
-              'you trust. The public ntfy.sh server may limit delivery during '
-              'bursts or heavy traffic.',
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => launchUrl(
-                Uri.parse('https://f-droid.org/packages/io.heckel.ntfy/'),
-                mode: LaunchMode.externalApplication,
-              ),
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Get ntfy from F-Droid'),
-            ),
-          ),
+              'Choose how SeND receives messages when it is closed. '
+              'Built-in delivery uses push.deltie.net. Messages are decrypted on your device; '
+              'the push server receives room and event IDs, not message text or encryption keys.',
+          child: AndroidNotificationSetup(backend: widget.backend),
         ),
     ];
     return AlertDialog(

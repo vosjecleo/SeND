@@ -65,6 +65,10 @@ class DeltiecordPushWorker(
         val eventId = inputData.getString(KEY_EVENT_ID)?.takeIf { it.isNotBlank() }
             ?: return Result.failure()
         val notificationAction = inputData.getString(KEY_ACTION)
+        val pushInstance = inputData.getString(KEY_INSTANCE)
+        if (notificationAction == null && pushInstance != null &&
+            DeltiecordPushService.knownInstance(applicationContext) != pushInstance
+        ) return Result.success()
         // Capture lifecycle epochs before sync/decryption. Opening the app or
         // clearing this room invalidates work that was already in flight.
         val appGeneration = DeltiecordNotificationPublisher.appGeneration(applicationContext)
@@ -132,6 +136,9 @@ class DeltiecordPushWorker(
                 }
                 val message = resolution?.let(DeltiecordNotificationPublisher::fromMap)
                 if (message != null) {
+                    if (pushInstance != null &&
+                        DeltiecordPushService.knownInstance(applicationContext) != pushInstance
+                    ) return Result.success()
                     // Foreground state can change while Matrix sync and E2EE
                     // resolution are running, so it must be checked at the
                     // publication boundary rather than only at worker start.
@@ -404,13 +411,14 @@ class DeltiecordPushWorker(
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .build()
 
-        fun enqueue(context: Context, roomId: String, eventId: String) {
+        fun enqueue(context: Context, roomId: String, eventId: String): androidx.work.Operation {
             val data = Data.Builder()
+                .putString(KEY_INSTANCE, DeltiecordPushService.knownInstance(context))
                 .putString(KEY_ROOM_ID, roomId)
                 .putString(KEY_EVENT_ID, eventId)
                 .build()
             val request = request(data)
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            return WorkManager.getInstance(context).enqueueUniqueWork(
                 StableIdentifier.workName("deltiecord-push", roomId),
                 // Only the most recent event per room needs resolution. A
                 // stalled encrypted-event lookup must not block later pushes.

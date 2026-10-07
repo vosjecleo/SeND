@@ -25,6 +25,7 @@ import 'app_shortcuts.dart';
 import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
 import 'deltiecord_theme.dart';
+import 'android_notification_setup.dart';
 
 enum _SettingsPage {
   account,
@@ -119,7 +120,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
 
   void _reloadUnifiedPush() {
     final userId = backend.userId;
-    if (userId == null) return;
+    if (!mounted || userId == null) return;
     setState(() {
       _unifiedPushState = UnifiedPushPlatform.instance.state(userId);
     });
@@ -866,11 +867,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ],
       if (UnifiedPushPlatform.instance.supported) ...[
         const Divider(height: 28),
-        Text('UnifiedPush', style: Theme.of(context).textTheme.titleMedium),
-        const Text(
-          'Uses a distributor app such as ntfy to wake SeND for Matrix '
-          'activity. The distributor endpoint and Matrix gateway are kept on '
-          'the same ntfy server, including custom servers.',
+        Text(
+          'Background notifications',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        AndroidNotificationSetup(
+          backend: backend,
+          onChanged: _reloadUnifiedPush,
         ),
         if (_unifiedPushState case final stateFuture?)
           FutureBuilder<UnifiedPushState>(
@@ -886,17 +889,18 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                 ),
                 title: Text(
                   state?.registered != true
-                      ? 'UnifiedPush not registered'
+                      ? 'Not registered'
                       : state?.lastPusherResult == 'verified' ||
                             state?.lastPusherResult == 'repaired'
-                      ? 'UnifiedPush and Matrix pusher verified'
-                      : 'UnifiedPush endpoint available',
+                      ? 'Notification delivery registered'
+                      : 'Waiting for Matrix registration',
                 ),
                 subtitle: Text(
                   state?.error != null
-                      ? 'Distributor error: ${state!.error}'
-                      : state?.distributor ??
-                            'Install and configure a UnifiedPush distributor.',
+                      ? 'Notification service error: ${state!.error}'
+                      : state?.builtIn == true
+                      ? 'Built-in: ${state?.connection ?? 'stopped'}'
+                      : state?.distributor ?? 'Choose a delivery method above.',
                 ),
                 trailing: snapshot.connectionState != ConnectionState.done
                     ? const SizedBox.square(
@@ -911,20 +915,10 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            FilledButton.icon(
-              onPressed: _chooseUnifiedPushDistributor,
-              icon: const Icon(Icons.hub_outlined),
-              label: const Text('Choose distributor'),
-            ),
             OutlinedButton.icon(
               onPressed: _refreshUnifiedPushRegistration,
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh registration'),
-            ),
-            TextButton.icon(
-              onPressed: _disableUnifiedPush,
-              icon: const Icon(Icons.link_off),
-              label: const Text('Disable'),
             ),
           ],
         ),
@@ -1475,46 +1469,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]);
   }
 
-  Future<void> _chooseUnifiedPushDistributor() async {
-    final platform = UnifiedPushPlatform.instance;
-    final userId = backend.userId;
-    if (userId == null) return;
-    try {
-      final distributors = await platform.distributors();
-      if (!mounted) return;
-      if (distributors.isEmpty) {
-        _showSettingMessage(
-          'No configured UnifiedPush distributor was found. Install ntfy and '
-          'configure it with https://push.deltie.net first.',
-        );
-        return;
-      }
-      final selected = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => SimpleDialog(
-          title: const Text('Choose UnifiedPush distributor'),
-          children: [
-            for (final distributor in distributors)
-              SimpleDialogOption(
-                onPressed: () =>
-                    Navigator.pop(dialogContext, distributor.packageName),
-                child: Text(
-                  distributor.label == distributor.packageName
-                      ? distributor.label
-                      : '${distributor.label}\n${distributor.packageName}',
-                ),
-              ),
-          ],
-        ),
-      );
-      if (selected == null) return;
-      final state = await platform.selectDistributor(selected, userId);
-      await _waitForUnifiedPushEndpoint(userId, initialState: state);
-    } catch (exception) {
-      if (mounted) _showSettingMessage('UnifiedPush setup failed: $exception');
-    }
-  }
-
   Future<void> _refreshUnifiedPushRegistration() async {
     final userId = backend.userId;
     if (userId == null) return;
@@ -1522,9 +1476,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       final platform = UnifiedPushPlatform.instance;
       final state = await platform.register(userId);
       await _waitForUnifiedPushEndpoint(userId, initialState: state);
-    } catch (exception) {
+    } catch (_) {
       if (mounted) {
-        _showSettingMessage('UnifiedPush refresh failed: $exception');
+        _showSettingMessage('Could not refresh notifications. Try again.');
       }
     }
   }
@@ -1542,7 +1496,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       await backend.setUnifiedPushEndpoint(endpoint);
       if (mounted) {
         _reloadUnifiedPush();
-        _showSettingMessage('UnifiedPush registered.');
+        _showSettingMessage('Background notifications are on.');
       }
       return;
     }
@@ -1554,21 +1508,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   'account and connection, then refresh registration.'
             : 'The distributor rejected registration (${state.error}).',
       );
-    }
-  }
-
-  Future<void> _disableUnifiedPush() async {
-    final userId = backend.userId;
-    if (userId == null) return;
-    final platform = UnifiedPushPlatform.instance;
-    final state = await platform.state(userId);
-    if (state.endpoint case final endpoint?) {
-      await backend.removeUnifiedPushEndpoint(endpoint);
-    }
-    await platform.unregister(userId);
-    if (mounted) {
-      _reloadUnifiedPush();
-      _showSettingMessage('UnifiedPush disabled.');
     }
   }
 

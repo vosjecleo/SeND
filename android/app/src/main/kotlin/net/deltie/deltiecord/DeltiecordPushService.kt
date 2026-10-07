@@ -1,81 +1,34 @@
 package net.deltie.deltiecord
 
 import android.content.Context
+import java.util.UUID
+import org.json.JSONObject
 import org.unifiedpush.android.connector.FailedReason
 import org.unifiedpush.android.connector.MessagingReceiver
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
-import org.json.JSONObject
-import java.util.UUID
 
 /**
- * Receives capability endpoints and Matrix sync pokes from a user-selected
- * UnifiedPush distributor. Endpoint URLs stay in private Android preferences;
- * they are never logged because they are bearer capabilities.
+ * Receives capability endpoints and Matrix sync pokes from a user-selected UnifiedPush distributor.
+ * Endpoint URLs stay in private Android preferences; they are never logged because they are bearer
+ * capabilities.
  *
- * Android must export this receiver for distributor delivery. MessagingReceiver
- * validates the connector's random per-instance token before these callbacks;
- * duplicating that protocol here would weaken compatibility and key rotation.
+ * Android must export this receiver for distributor delivery. MessagingReceiver validates the
+ * connector's random per-instance token before these callbacks; duplicating that protocol here
+ * would weaken compatibility and key rotation.
  */
 class DeltiecordPushService : MessagingReceiver() {
     override fun onNewEndpoint(context: Context, endpoint: PushEndpoint, instance: String) {
-        val endpointUrl = endpoint.url
-            .replace(Regex("[\\u0000-\\u001f\\u007f\\u200b\\ufeff]"), "")
-            .trim()
-        if (endpointUrl.isBlank()) {
-            preferences(context).edit()
-                .putString(errorKey(instance), "EMPTY_ENDPOINT")
-                .apply()
-            stateChangedListener?.invoke(instance)
-            return
-        }
-        val previous = preferences(context).getString(endpointKey(instance), null)
-        val editor = preferences(context).edit()
-            .putString(endpointKey(instance), endpointUrl)
-            .putString("last_instance", instance)
-            .putString("last_pusher_result", "verification_pending")
-            .remove(errorKey(instance))
-            .putString("registration_stage", "endpoint_received")
-        if (previous != endpointUrl) {
-            editor.putLong("last_endpoint_rotation_ms", System.currentTimeMillis())
-        }
-        editor.apply()
-        if (previous != endpointUrl) {
-            DeltiecordPushWorker.enqueuePusherReconciliation(context, instance)
-        }
-        DeltiecordPushWorker.schedulePusherVerification(context, instance)
-        stateChangedListener?.invoke(instance)
+        acceptEndpoint(context, endpoint.url, instance)
     }
 
     override fun onMessage(context: Context, message: PushMessage, instance: String) {
-        // Matrix push payloads are wake-up hints, not a source of decrypted
-        // message text. Do not post an intermediate generic notification: if
-        // local decryption is slow or fails that placeholder otherwise becomes
-        // a permanent, content-free "silent" alert.
-        preferences(context).edit()
-            .putLong("last_message_received_ms", System.currentTimeMillis())
-            .putString("registration_stage", "push_received")
-            .apply()
-        val metadata = parseMatrixMetadata(message.content)
-        if (metadata.eventId?.startsWith(TEST_EVENT_PREFIX) == true) {
-            preferences(context).edit()
-                .putLong("last_test_received_ms", System.currentTimeMillis())
-                .putString("last_test_result", "receiver_callback_reached")
-                .putString("registration_stage", "test_push_received")
-                .apply()
-            stateChangedListener?.invoke(instance)
-            return
-        }
-        if (metadata.roomId != null && metadata.eventId != null) {
-            DeltiecordPushWakeService.start(context)
-            DeltiecordPushWorker.enqueue(context, metadata.roomId, metadata.eventId)
-        } else {
-            recordWorkerResult(context, "push_payload_missing_event")
-        }
+        receivePayload(context, message.content, instance)
     }
 
     override fun onRegistrationFailed(context: Context, reason: FailedReason, instance: String) {
-        preferences(context).edit()
+        preferences(context)
+            .edit()
             .putString(errorKey(instance), reason.name)
             .putString("registration_stage", "registration_failed")
             .apply()
@@ -91,77 +44,149 @@ class DeltiecordPushService : MessagingReceiver() {
         private const val PREFS = "deltiecord_unified_push"
         internal const val TEST_EVENT_PREFIX = "\$deltiecord-push-test-"
 
+        internal fun acceptEndpoint(context: Context, url: String, instance: String) {
+            if (knownInstance(context) != instance) return
+            val endpointUrl =
+                url.replace(Regex("[\\u0000-\\u001f\\u007f\\u200b\\ufeff]"), "").trim()
+            if (endpointUrl.isBlank()) {
+                preferences(context).edit().putString(errorKey(instance), "EMPTY_ENDPOINT").apply()
+                stateChangedListener?.invoke(instance)
+                return
+            }
+            val previous = preferences(context).getString(endpointKey(instance), null)
+            val editor =
+                preferences(context)
+                    .edit()
+                    .putString(endpointKey(instance), endpointUrl)
+                    .putString("last_instance", instance)
+                    .remove(errorKey(instance))
+                    .putString("registration_stage", "endpoint_received")
+            if (previous != endpointUrl) {
+                editor.putString("last_pusher_result", "verification_pending")
+                editor.putLong("last_endpoint_rotation_ms", System.currentTimeMillis())
+            }
+            editor.apply()
+            if (previous != endpointUrl) {
+                DeltiecordPushWorker.enqueuePusherReconciliation(context, instance)
+            }
+            DeltiecordPushWorker.schedulePusherVerification(context, instance)
+            stateChangedListener?.invoke(instance)
+        }
+
+        internal fun receivePayload(
+            context: Context,
+            payload: ByteArray,
+            instance: String,
+        ): androidx.work.Operation? {
+            // Ignore late delivery after logout, disable or a provider switch.
+            if (knownInstance(context) != instance || endpoint(context, instance) == null)
+                return null
+            // Matrix push payloads are wake-up hints, not a source of decrypted
+            // message text. Do not post an intermediate generic notification: if
+            // local decryption is slow or fails that placeholder otherwise becomes
+            // a permanent, content-free "silent" alert.
+            preferences(context)
+                .edit()
+                .putLong("last_message_received_ms", System.currentTimeMillis())
+                .putString("registration_stage", "push_received")
+                .apply()
+            val metadata = parseMatrixMetadata(payload)
+            if (metadata.eventId?.startsWith(TEST_EVENT_PREFIX) == true) {
+                preferences(context)
+                    .edit()
+                    .putLong("last_test_received_ms", System.currentTimeMillis())
+                    .putString("last_test_result", "receiver_callback_reached")
+                    .putString("registration_stage", "test_push_received")
+                    .apply()
+                stateChangedListener?.invoke(instance)
+                return null
+            }
+            if (metadata.roomId != null && metadata.eventId != null) {
+                DeltiecordPushWakeService.start(context)
+                return DeltiecordPushWorker.enqueue(context, metadata.roomId, metadata.eventId)
+            } else {
+                recordWorkerResult(context, "push_payload_missing_event")
+            }
+            return null
+        }
+
         /**
          * Completes an in-flight registration while Flutter is alive.
          *
-         * UnifiedPush registration is asynchronous: `register()` merely asks
-         * the distributor to create or refresh an endpoint. Element X uses the
-         * same callback-correlated lifecycle and waits for `onNewEndpoint`
-         * before it registers the Matrix pusher. When Flutter is not alive the
-         * endpoint remains in private preferences and is reconciled on launch.
+         * UnifiedPush registration is asynchronous: `register()` merely asks the distributor to
+         * create or refresh an endpoint. Element X uses the same callback-correlated lifecycle and
+         * waits for `onNewEndpoint` before it registers the Matrix pusher. When Flutter is not
+         * alive the endpoint remains in private preferences and is reconciled on launch.
          */
-        @Volatile
-        var stateChangedListener: ((String) -> Unit)? = null
+        @Volatile var stateChangedListener: ((String) -> Unit)? = null
 
         private fun preferences(context: Context) =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         private fun endpointKey(instance: String) = "endpoint:$instance"
+
         private fun errorKey(instance: String) = "error:$instance"
 
-        fun state(context: Context, instance: String): Map<String, String?> = mapOf(
-            "distributor" to org.unifiedpush.android.connector.UnifiedPush.getSavedDistributor(context),
-            "endpoint" to preferences(context).getString(endpointKey(instance), null),
-            "error" to preferences(context).getString(errorKey(instance), null),
-            "lastMessageReceived" to preferences(context)
-                .getLong("last_message_received_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastNotificationPosted" to preferences(context)
-                .getLong("last_notification_posted_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastWorkerResult" to preferences(context)
-                .getString("last_worker_result", null),
-            "lastEndpointRotation" to preferences(context)
-                .getLong("last_endpoint_rotation_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastPusherVerification" to preferences(context)
-                .getLong("last_pusher_verification_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastPusherResult" to preferences(context)
-                .getString("last_pusher_result", null),
-            "registrationStage" to preferences(context)
-                .getString("registration_stage", null),
-            "lastTestRequest" to preferences(context)
-                .getLong("last_test_request_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastTestReceived" to preferences(context)
-                .getLong("last_test_received_ms", 0L)
-                .takeIf { it > 0L }
-                ?.toString(),
-            "lastTestResult" to preferences(context)
-                .getString("last_test_result", null),
-        )
+        fun state(context: Context, instance: String): Map<String, String?> =
+            mapOf(
+                "distributor" to
+                    if (BuiltInPushService.activeInstance(context) == instance) "builtin"
+                    else org.unifiedpush.android.connector.UnifiedPush.getSavedDistributor(context),
+                "disabled" to BuiltInPushService.isExplicitlyDisabled(context).toString(),
+                "connection" to BuiltInPushService.connectionState(context),
+                "endpoint" to preferences(context).getString(endpointKey(instance), null),
+                "error" to preferences(context).getString(errorKey(instance), null),
+                "lastMessageReceived" to
+                    preferences(context)
+                        .getLong("last_message_received_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastNotificationPosted" to
+                    preferences(context)
+                        .getLong("last_notification_posted_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastWorkerResult" to preferences(context).getString("last_worker_result", null),
+                "lastEndpointRotation" to
+                    preferences(context)
+                        .getLong("last_endpoint_rotation_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastPusherVerification" to
+                    preferences(context)
+                        .getLong("last_pusher_verification_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastPusherResult" to preferences(context).getString("last_pusher_result", null),
+                "registrationStage" to preferences(context).getString("registration_stage", null),
+                "lastTestRequest" to
+                    preferences(context)
+                        .getLong("last_test_request_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastTestReceived" to
+                    preferences(context)
+                        .getLong("last_test_received_ms", 0L)
+                        .takeIf { it > 0L }
+                        ?.toString(),
+                "lastTestResult" to preferences(context).getString("last_test_result", null),
+            )
 
         fun recordWorkerResult(context: Context, result: String) {
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .putString("last_worker_result", result.take(96))
                 .putString("registration_stage", result.take(96))
                 .apply()
         }
 
         fun recordRegistrationStage(context: Context, stage: String) {
-            preferences(context).edit()
-                .putString("registration_stage", stage.take(96))
-                .apply()
+            preferences(context).edit().putString("registration_stage", stage.take(96)).apply()
         }
 
         fun recordTestRequest(context: Context, result: String) {
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .putLong("last_test_request_ms", System.currentTimeMillis())
                 .putString("last_test_result", result.take(96))
                 .putString("registration_stage", "test_$result".take(96))
@@ -169,20 +194,22 @@ class DeltiecordPushService : MessagingReceiver() {
         }
 
         fun recordTestResult(context: Context, result: String) {
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .putString("last_test_result", result.take(96))
                 .putString("registration_stage", "test_$result".take(96))
                 .apply()
         }
 
-        fun lastTestReceived(context: Context): Long = preferences(context)
-            .getLong("last_test_received_ms", 0L)
+        fun lastTestReceived(context: Context): Long =
+            preferences(context).getLong("last_test_received_ms", 0L)
 
-        fun lastTestRequest(context: Context): Long = preferences(context)
-            .getLong("last_test_request_ms", 0L)
+        fun lastTestRequest(context: Context): Long =
+            preferences(context).getLong("last_test_request_ms", 0L)
 
         fun recordPusherVerification(context: Context, result: String) {
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .putLong("last_pusher_verification_ms", System.currentTimeMillis())
                 .putString("last_pusher_result", result.take(96))
                 .apply()
@@ -193,32 +220,31 @@ class DeltiecordPushService : MessagingReceiver() {
         }
 
         fun accountForInstance(context: Context, instance: String): String =
-            preferences(context).getString("account_for_instance:$instance", null)
-                ?.takeIf { it.isNotBlank() }
-                ?: instance
+            preferences(context).getString("account_for_instance:$instance", null)?.takeIf {
+                it.isNotBlank()
+            } ?: instance
 
         /**
-         * New registrations use an opaque per-account instance. Existing
-         * registrations keyed by a Matrix ID remain valid until the user
-         * changes distributor or disables push, avoiding a silent migration
-         * window during upgrade.
+         * New registrations use an opaque per-account instance. Existing registrations keyed by a
+         * Matrix ID remain valid until the user changes distributor or disables push, avoiding a
+         * silent migration window during upgrade.
          */
-        fun instanceForAccount(
-            context: Context,
-            account: String,
-            create: Boolean,
-        ): String {
+        fun instanceForAccount(context: Context, account: String, create: Boolean): String {
             val prefs = preferences(context)
-            prefs.getString("instance_for_account:$account", null)
+            prefs
+                .getString("instance_for_account:$account", null)
                 ?.takeIf { it.isNotBlank() }
-                ?.let { return it }
+                ?.let {
+                    return it
+                }
             if (endpoint(context, account) != null || !create) return account
             return newInstanceForAccount(context, account)
         }
 
         fun newInstanceForAccount(context: Context, account: String): String {
             val instance = UUID.randomUUID().toString().replace("-", "")
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .putString("instance_for_account:$account", instance)
                 .putString("account_for_instance:$instance", account)
                 .apply()
@@ -226,32 +252,28 @@ class DeltiecordPushService : MessagingReceiver() {
         }
 
         fun forgetInstanceForAccount(context: Context, account: String, instance: String) {
-            preferences(context).edit()
+            preferences(context)
+                .edit()
                 .remove("instance_for_account:$account")
                 .remove("account_for_instance:$instance")
                 .apply()
         }
 
-        fun knownInstance(context: Context): String? = preferences(context)
-            .getString("last_instance", null)
-            ?.takeIf { it.isNotBlank() }
+        fun knownInstance(context: Context): String? =
+            preferences(context).getString("last_instance", null)?.takeIf { it.isNotBlank() }
 
-        fun endpoint(context: Context, instance: String): String? = preferences(context)
-            .getString(endpointKey(instance), null)
-            ?.takeIf { it.isNotBlank() }
+        fun endpoint(context: Context, instance: String): String? =
+            preferences(context).getString(endpointKey(instance), null)?.takeIf { it.isNotBlank() }
 
         fun clear(context: Context, instance: String) {
-            val editor = preferences(context).edit()
-                .remove(endpointKey(instance))
-                .remove(errorKey(instance))
+            val editor =
+                preferences(context).edit().remove(endpointKey(instance)).remove(errorKey(instance))
             if (knownInstance(context) == instance) editor.remove("last_instance")
             editor.apply()
         }
 
         fun clearError(context: Context, instance: String) {
-            preferences(context).edit()
-                .remove(errorKey(instance))
-                .apply()
+            preferences(context).edit().remove(errorKey(instance)).apply()
         }
 
         private data class MatrixMetadata(
@@ -260,24 +282,30 @@ class DeltiecordPushService : MessagingReceiver() {
             val title: String,
         )
 
-        private fun parseMatrixMetadata(payload: ByteArray): MatrixMetadata = runCatching {
-            if (payload.size > 256 * 1024) {
-                return@runCatching MatrixMetadata(null, null, "SeND")
-            }
-            val root = JSONObject(payload.toString(Charsets.UTF_8))
-            val json = root.optJSONObject("notification") ?: root
-            val roomId = json.optString("room_id").takeIf { it.isNotBlank() }
-            val eventId = json.optString("event_id").takeIf { it.isNotBlank() }
-            val roomName = json.optString("room_name").takeIf { it.isNotBlank() }
-            val senderName = json.optString("sender_display_name").takeIf { it.isNotBlank() }
-            val title = when {
-                senderName != null && roomName != null && senderName != roomName ->
-                    "$senderName in $roomName"
-                senderName != null -> senderName
-                roomName != null -> roomName
-                else -> "SeND"
-            }
-            MatrixMetadata(roomId, eventId, title.take(128))
-        }.getOrDefault(MatrixMetadata(null, null, "SeND"))
+        private fun parseMatrixMetadata(payload: ByteArray): MatrixMetadata =
+            runCatching {
+                    if (payload.size > 256 * 1024) {
+                        return@runCatching MatrixMetadata(null, null, "SeND")
+                    }
+                    val root = JSONObject(payload.toString(Charsets.UTF_8))
+                    val json = root.optJSONObject("notification") ?: root
+                    val roomId =
+                        json.optString("room_id").takeIf { it.isNotBlank() && it.length <= 2048 }
+                    val eventId =
+                        json.optString("event_id").takeIf { it.isNotBlank() && it.length <= 2048 }
+                    val roomName = json.optString("room_name").takeIf { it.isNotBlank() }
+                    val senderName =
+                        json.optString("sender_display_name").takeIf { it.isNotBlank() }
+                    val title =
+                        when {
+                            senderName != null && roomName != null && senderName != roomName ->
+                                "$senderName in $roomName"
+                            senderName != null -> senderName
+                            roomName != null -> roomName
+                            else -> "SeND"
+                        }
+                    MatrixMetadata(roomId, eventId, title.take(128))
+                }
+                .getOrDefault(MatrixMetadata(null, null, "SeND"))
     }
 }

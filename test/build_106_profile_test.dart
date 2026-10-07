@@ -50,14 +50,14 @@ void main() {
     final close = tester.getRect(find.text('Close'));
     expect(close.bottom, lessThan(640));
     await tester.scrollUntilVisible(
-      find.text('Get ntfy from F-Droid'),
+      find.text('Battery settings'),
       160,
       scrollable: find
           .descendant(of: scroll, matching: find.byType(Scrollable))
           .first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Get ntfy from F-Droid').hitTestable(), findsOneWidget);
+    expect(find.text('Battery settings').hitTestable(), findsOneWidget);
     expect(tester.getRect(find.text('Close')), close);
     expect(tester.takeException(), isNull);
     debugDefaultTargetPlatformOverride = null;

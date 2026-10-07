@@ -105,7 +105,9 @@ extension _MatrixSession on MatrixBackend {
       _unifiedPushSubscription ??= UnifiedPushPlatform.instance.stateChanges
           .listen((instance) {
             if (instance == _matrix.userID) {
-              unawaited(_reconcileUnifiedPushState(instance));
+              unawaited(
+                _reconcileUnifiedPushState(instance).catchError((Object _) {}),
+              );
             }
           });
       try {
@@ -248,6 +250,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    final pushAccount = _matrix.userID;
     _error = null;
     if (kIsWeb) {
       // Still revoke the server token if browser storage itself is unavailable.
@@ -262,6 +265,11 @@ extension _MatrixSession on MatrixBackend {
       await _disposeVoice();
       await _closeTimeline();
       await _matrix.logout();
+      if (UnifiedPushPlatform.instance.supported && pushAccount != null) {
+        await UnifiedPushPlatform.instance
+            .unregister(pushAccount)
+            .catchError((Object _) {});
+      }
       _settingsHydrated = false;
       _selectedRoomId = null;
       _selectedSpaceId = null;
@@ -523,10 +531,16 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _deleteAccount(String password) async {
+    final pushAccount = _matrix.userID;
     await _runPasswordUia(
       password,
       (auth) => _matrix.deactivateAccount(auth: auth, erase: true),
     );
+    if (UnifiedPushPlatform.instance.supported && pushAccount != null) {
+      await UnifiedPushPlatform.instance
+          .unregister(pushAccount)
+          .catchError((Object _) {});
+    }
     try {
       await _matrix.logout();
     } catch (_) {
@@ -1390,6 +1404,7 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _reconcileUnifiedPushState(String instance) async {
     if (_matrix.userID != instance || !_matrix.isLogged()) return;
     final state = await UnifiedPushPlatform.instance.state(instance);
+    if (_matrix.userID != instance || !_matrix.isLogged()) return;
     if (state.endpoint case final endpoint?) {
       await _setUnifiedPushEndpoint(endpoint);
     }

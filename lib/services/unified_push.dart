@@ -22,6 +22,8 @@ final class UnifiedPushState {
     this.lastTestRequest,
     this.lastTestReceived,
     this.lastTestResult,
+    this.disabled = false,
+    this.connection,
   });
 
   final String? distributor;
@@ -37,6 +39,9 @@ final class UnifiedPushState {
   final DateTime? lastTestRequest;
   final DateTime? lastTestReceived;
   final String? lastTestResult;
+  final bool disabled;
+  final String? connection;
+  bool get builtIn => distributor == 'builtin';
 
   bool get registered => endpoint?.isNotEmpty == true;
 }
@@ -122,6 +127,12 @@ final class UnifiedPushPlatform {
   Future<UnifiedPushState> register(String instance) =>
       _invokeRegistration('register', {'instance': instance}, instance);
 
+  Future<UnifiedPushState> enableBuiltIn(String instance) =>
+      _invokeRegistration('enableBuiltIn', {'instance': instance}, instance);
+
+  Future<void> openBatterySettings() =>
+      _channel.invokeMethod<void>('batterySettings');
+
   Future<void> unregister(String instance) =>
       _channel.invokeMethod<void>('unregister', {'instance': instance});
 
@@ -153,7 +164,9 @@ final class UnifiedPushPlatform {
   Future<bool> ensureDefaultDistributor(String instance) async {
     if (!supported) return false;
     final current = await state(instance);
-    if (current.distributor?.isNotEmpty == true) return false;
+    if (current.disabled || current.distributor?.isNotEmpty == true) {
+      return false;
+    }
     final available = await distributors();
     if (available.isEmpty) return false;
     const preferredPackages = ['io.heckel.ntfy', 'foundation.e.ntfy'];
@@ -185,9 +198,14 @@ final class UnifiedPushPlatform {
 
     Future<void> refresh() async {
       if (completer.isCompleted) return;
-      latest = await state(instance);
-      if (latest.registered || latest.error != null) {
-        completer.complete(latest);
+      try {
+        latest = await state(instance);
+        if (!completer.isCompleted &&
+            (latest.registered || latest.error != null)) {
+          completer.complete(latest);
+        }
+      } catch (error, stack) {
+        if (!completer.isCompleted) completer.completeError(error, stack);
       }
     }
 
@@ -234,6 +252,8 @@ final class UnifiedPushPlatform {
         lastTestRequest: _dateFromMilliseconds(result?['lastTestRequest']),
         lastTestReceived: _dateFromMilliseconds(result?['lastTestReceived']),
         lastTestResult: result?['lastTestResult'] as String?,
+        disabled: result?['disabled'] == 'true',
+        connection: result?['connection'] as String?,
       );
 
   DateTime? _dateFromMilliseconds(Object? value) {

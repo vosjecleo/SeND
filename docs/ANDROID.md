@@ -57,12 +57,33 @@ SeND creates an Android message notification channel and preserves the
 existing encrypted-preview privacy preference. Notification payloads select the
 corresponding room/event when the process receives them.
 
-Notifications settings use the standard UnifiedPush Android connector. Install
-and configure an external distributor such as the ntfy Android app, then select
-it in SeND. SeND registers the complete private endpoint with the
-Matrix HTTP push gateway on that same ntfy server. Neither distributor
-credentials nor generated endpoint capabilities are shipped or logged by
-SeND.
+Onboarding and Settings > Notifications offer three delivery choices:
+
+- **Built-in:** SeND keeps a native HTTPS stream open to `push.deltie.net`.
+  No separate app or Google Play services are needed. It shows a quiet ongoing
+  notification. Allow SeND unrestricted background battery use for timely alerts.
+- **UnifiedPush:** install and configure a distributor such as ntfy, then select
+  it in SeND. This lets several apps share one background connection.
+- **Off:** disables background delivery on this device. Reopening SeND does not
+  silently turn it back on.
+
+The choice is local to the device, not synced through Matrix. Built-in delivery
+uses a random 256-bit topic capability, stored in private Android preferences.
+Both transports register an `event_id_only` pusher with the Matrix gateway on
+the endpoint's origin. Neither credentials nor capabilities are shipped or logged.
+
+The built-in listener decodes bounded ntfy JSON frames and hands event IDs to
+the existing local decryption worker. It does not keep a Flutter engine or a
+Matrix sync loop running between pushes. It reconnects with backoff, responds to
+network changes, and replays cached hints after an interruption. The replay cursor
+advances after WorkManager persists the work. The server's cache retention limits
+how far back it can replay; opening SeND still syncs the full missed timeline.
+
+Android can restart the listener after process eviction, reboot or an app update.
+Force-stop prevents delivery until SeND is opened again. Vendor battery policies
+can also interrupt it. Logout and changing delivery method stop the listener.
+Its foreground service uses Android's `specialUse` type with a declared purpose,
+not a permanent `dataSync` task with a time limit.
 
 Registration is callback-driven: SeND asks the selected distributor for
 an endpoint during setup, explicit refresh, or recovery from a registration
@@ -74,7 +95,8 @@ closed. The Notifications page reports each stage and offers a private
 gateway-to-receiver test so a stopped distributor can be distinguished from a
 gateway, Matrix, decryption, or notification-suppression failure.
 
-The embedded Firebase-compatible distributor is not enabled in release builds.
+This listener is separate from the embedded Firebase-compatible distributor,
+which is not enabled in release builds.
 Matrix requires a WebPush-capable gateway and VAPID configuration for that
 route; silently falling back to an unconfigured embedded distributor would
 leave notifications registered but undeliverable.
@@ -121,6 +143,8 @@ current Android version on multiple vendors:
 - DM/Space navigation, gestures, Back behavior, drafts, and orientation changes
 - encrypted text/media send, receive, streaming, seeking, suspend, and resume
 - notification permission, privacy, delivery, and room/event deep links
+- built-in delivery with the screen off, Doze, network changes, process eviction,
+  reboot, force-stop/reopen, provider changes and logout; measure idle battery use
 - clipboard, file/media picker, camera and microphone permissions
 - voice-room join/reconnect, mute, deafen, speaker/Bluetooth routing, and levels
 - camera switching, group video, screen capture, and capture cancellation
@@ -129,3 +153,10 @@ current Android version on multiple vendors:
 The official CI workflow is `.github/workflows/android.yml`. It pins and verifies
 Flutter and Rust inputs, runs formatting, analysis, and the complete test suite,
 then produces both a sideloadable APK and an AAB.
+
+The built-in listener has a live gateway/stream transport check and unit tests.
+End-to-end delivery and battery use still need physical-device testing before
+release. Implementation references: [FluffyChat's push handling](https://github.com/krille-chan/fluffychat/blob/main/lib/utils/background_push.dart),
+[Element's notification design](https://github.com/element-hq/element-android/blob/develop/docs/notifications.md),
+[ntfy streaming API](https://docs.ntfy.sh/subscribe/api/), and
+[Android foreground services](https://developer.android.com/develop/background-work/services/fgs/service-types).

@@ -79,11 +79,43 @@ class MainActivity : FlutterActivity() {
                             )
                             result.success(DeltiecordPushService.state(this, instance))
                         }
+                        "enableBuiltIn" -> {
+                            try {
+                                val previous = DeltiecordPushService.instanceForAccount(this, account, create = false)
+                                if (BuiltInPushService.activeInstance(this) != previous) {
+                                    BuiltInPushService.activeInstance(this)?.let { old ->
+                                        DeltiecordPushService.clear(this, old)
+                                        DeltiecordPushWorker.cancelPusherVerification(this, old)
+                                    }
+                                    BuiltInPushService.disable(this, explicitly = false)
+                                    runCatching { UnifiedPush.unregister(this, previous) }
+                                    UnifiedPush.removeDistributor(this)
+                                    DeltiecordPushService.clear(this, previous)
+                                    DeltiecordPushWorker.cancelPusherVerification(this, previous)
+                                    DeltiecordPushService.forgetInstanceForAccount(this, account, previous)
+                                }
+                                val instance = DeltiecordPushService.instanceForAccount(this, account, create = true)
+                                DeltiecordPushService.rememberInstance(this, instance)
+                                BuiltInPushService.enable(this, instance)
+                                result.success(DeltiecordPushService.state(this, instance))
+                            } catch (_: Exception) {
+                                result.error("builtin_start_failed", "Could not start background notifications. Reopen SeND and try again.", null)
+                            }
+                        }
+                        "batterySettings" -> {
+                            try {
+                                startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                result.success(null)
+                            } catch (_: Exception) {
+                                result.error("settings_unavailable", "Open Android Settings and allow SeND to run in the background.", null)
+                            }
+                        }
                         "selectDistributor" -> {
                             val distributor = call.argument<String>("distributor")
                             if (distributor.isNullOrBlank()) {
                                 result.error("invalid_distributor", "Choose a UnifiedPush distributor.", null)
                             } else {
+                                BuiltInPushService.disable(this, explicitly = false)
                                 val previous = DeltiecordPushService.instanceForAccount(
                                     this,
                                     account,
@@ -103,13 +135,18 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                         "register" -> {
-                            if (UnifiedPush.getSavedDistributor(this) == null) {
+                            val instance = DeltiecordPushService.instanceForAccount(this, account, create = false)
+                            if (BuiltInPushService.activeInstance(this) == instance) {
+                                BuiltInPushService.resume(this)
+                                result.success(DeltiecordPushService.state(this, instance))
+                            } else if (UnifiedPush.getSavedDistributor(this) == null) {
                                 result.error("no_distributor", "No UnifiedPush distributor is selected.", null)
                             } else {
                                 registerUnifiedPush(account, result)
                             }
                         }
                         "unregister" -> {
+                            BuiltInPushService.disable(this, explicitly = true)
                             // Removing the distributor as well as its instance
                             // prevents Refresh from silently reusing a rejected
                             // or uninstalled provider.
