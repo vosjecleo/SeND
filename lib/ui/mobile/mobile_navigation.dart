@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../deltiecord_theme.dart';
+import '../json_theme.dart';
 import '../activity_widgets.dart';
 import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
@@ -766,6 +767,10 @@ class _RailButton extends StatelessWidget {
   );
 }
 
+class _RoomRowKey extends ValueKey<String> {
+  const _RoomRowKey(super.value);
+}
+
 class _RoomList extends StatelessWidget {
   const _RoomList({
     required this.backend,
@@ -782,65 +787,70 @@ class _RoomList extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(8, 0, 8, 84),
     itemCount: rooms.length,
     findChildIndexCallback: (key) {
-      if (key is! ValueKey<String>) return null;
+      if (key is! _RoomRowKey) return null;
       final index = rooms.indexWhere((room) => room.id == key.value);
       return index < 0 ? null : index;
     },
     itemBuilder: (context, index) {
       final room = rooms[index];
       final age = compactActivityAge(room.lastActivityAt);
-      return ListTile(
-        key: ValueKey(room.id),
-        minTileHeight: 56,
-        minVerticalPadding: 6,
-        visualDensity: VisualDensity.standard,
-        contentPadding: const EdgeInsets.only(left: 4, right: 8),
-        horizontalTitleGap: 12,
-        selected: false,
-        leading: MobileAvatar(
-          bytes: room.avatarBytes,
-          autoplay: backend.selectedRoom?.id == room.id,
-          fallback: room.name,
-          presence: room.isDirect ? room.presence : null,
+      return _SelectedRoomSurface(
+        key: _RoomRowKey(room.id),
+        selected: backend.selectedRoom?.id == room.id,
+        child: ListTile(
+          key: ValueKey(room.id),
+          minTileHeight: 56,
+          minVerticalPadding: 6,
+          visualDensity: VisualDensity.standard,
+          contentPadding: const EdgeInsets.only(left: 4, right: 8),
+          horizontalTitleGap: 12,
+          selected: backend.selectedRoom?.id == room.id,
+          selectedColor: Theme.of(context).colorScheme.onSurface,
+          leading: MobileAvatar(
+            bytes: room.avatarBytes,
+            autoplay: backend.selectedRoom?.id == room.id,
+            fallback: room.name,
+            presence: room.isDirect ? room.presence : null,
+          ),
+          title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
+              ? ActivityStatus(
+                  backend: backend,
+                  userId: room.directUserId,
+                  presence: room.presence,
+                  status: room.statusMessage,
+                )
+              : null,
+          trailing: room.unreadCount == 0 && age.isEmpty
+              ? null
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (room.unreadCount > 0)
+                      Badge(
+                        largeSize: 16,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        label: Text(
+                          '${room.unreadCount}',
+                          style: const TextStyle(fontSize: 9),
+                        ),
+                      ),
+                    if (room.unreadCount > 0 && age.isNotEmpty)
+                      const SizedBox(height: 2),
+                    if (age.isNotEmpty)
+                      Text(
+                        age,
+                        style: TextStyle(
+                          color: context.deltiecord.muted,
+                          fontSize: DeltiecordTypeScale.small,
+                          height: 1.05,
+                        ),
+                      ),
+                  ],
+                ),
+          onTap: () => onOpenRoom(room),
         ),
-        title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
-            ? ActivityStatus(
-                backend: backend,
-                userId: room.directUserId,
-                presence: room.presence,
-                status: room.statusMessage,
-              )
-            : null,
-        trailing: room.unreadCount == 0 && age.isEmpty
-            ? null
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (room.unreadCount > 0)
-                    Badge(
-                      largeSize: 16,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      label: Text(
-                        '${room.unreadCount}',
-                        style: const TextStyle(fontSize: 9),
-                      ),
-                    ),
-                  if (room.unreadCount > 0 && age.isNotEmpty)
-                    const SizedBox(height: 2),
-                  if (age.isNotEmpty)
-                    Text(
-                      age,
-                      style: TextStyle(
-                        color: context.deltiecord.muted,
-                        fontSize: DeltiecordTypeScale.small,
-                        height: 1.05,
-                      ),
-                    ),
-                ],
-              ),
-        onTap: () => onOpenRoom(room),
       );
     },
   );
@@ -958,6 +968,37 @@ class _NavigationCardEdgePainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
+class _SelectedRoomSurface extends StatelessWidget {
+  const _SelectedRoomSurface({
+    required this.selected,
+    required this.child,
+    super.key,
+  });
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = Theme.of(context).extension<ThemeChrome>();
+    return Material(
+      color: selected
+          ? chrome?.selection ??
+                Theme.of(context).colorScheme.primary.withValues(alpha: .13)
+          : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: selected
+              ? chrome?.selectionBorder ?? Colors.transparent
+              : Colors.transparent,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
 class _SpaceRoomTile extends StatelessWidget {
   const _SpaceRoomTile({
     required this.backend,
@@ -969,47 +1010,54 @@ class _SpaceRoomTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-    minLeadingWidth: 20,
-    horizontalTitleGap: 8,
-    dense: true,
-    visualDensity: const VisualDensity(vertical: -4),
-    minTileHeight: 32,
-    minVerticalPadding: 0,
-    leading: Icon(
-      room.isVoice
-          ? Icons.volume_up_outlined
-          : room.presentation == RoomPresentation.forum
-          ? Icons.forum_outlined
-          : Icons.tag,
-      size: 20,
-    ),
-    title: Text(
-      room.name,
-      style: TextStyle(
-        fontWeight:
-            room.unreadCount > 0 || room.markedUnread || room.hasUnreadMessages
-            ? FontWeight.w700
-            : FontWeight.w400,
+  Widget build(BuildContext context) => _SelectedRoomSurface(
+    selected: backend.selectedRoom?.id == room.id,
+    child: ListTile(
+      selected: backend.selectedRoom?.id == room.id,
+      selectedColor: Theme.of(context).colorScheme.onSurface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      minLeadingWidth: 20,
+      horizontalTitleGap: 8,
+      dense: true,
+      visualDensity: const VisualDensity(vertical: -4),
+      minTileHeight: 32,
+      minVerticalPadding: 0,
+      leading: Icon(
+        room.isVoice
+            ? Icons.volume_up_outlined
+            : room.presentation == RoomPresentation.forum
+            ? Icons.forum_outlined
+            : Icons.tag,
+        size: 20,
       ),
+      title: Text(
+        room.name,
+        style: TextStyle(
+          fontWeight:
+              room.unreadCount > 0 ||
+                  room.markedUnread ||
+                  room.hasUnreadMessages
+              ? FontWeight.w700
+              : FontWeight.w400,
+        ),
+      ),
+      subtitle: room.isVoice && room.voiceParticipants.isNotEmpty
+          ? Text(
+              room.voiceParticipants.isEmpty
+                  ? 'Nobody connected'
+                  : '${room.voiceParticipants.length} connected',
+            )
+          : null,
+      trailing: room.unreadCount == 0
+          ? null
+          : Badge(label: Text('${room.unreadCount}')),
+      onTap: onTap,
+      onLongPress: () {
+        final box = context.findRenderObject() as RenderBox?;
+        final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+        showChannelActions(context, backend, room, position);
+      },
     ),
-    subtitle: room.isVoice && room.voiceParticipants.isNotEmpty
-        ? Text(
-            room.voiceParticipants.isEmpty
-                ? 'Nobody connected'
-                : '${room.voiceParticipants.length} connected',
-          )
-        : null,
-    trailing: room.unreadCount == 0
-        ? null
-        : Badge(label: Text('${room.unreadCount}')),
-    onTap: onTap,
-    onLongPress: () {
-      final box = context.findRenderObject() as RenderBox?;
-      final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-      showChannelActions(context, backend, room, position);
-    },
   );
 }
 

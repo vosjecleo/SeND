@@ -246,7 +246,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
   Future<void> _toggle() async {
     final existing = _player;
     if (_opened && existing != null) {
-      await existing.playOrPause();
+      await toggleVideoPlayback(existing);
       return;
     }
     if (_opening) return;
@@ -448,11 +448,12 @@ class _DeltiecordVideoSurface extends StatelessWidget {
               fit: BoxFit.contain,
               controls: NoVideoControls,
             ),
-          StreamBuilder<bool>(
-            stream: player.stream.playing,
-            initialData: player.state.playing,
-            builder: (context, playingSnapshot) {
-              final playing = playingSnapshot.data ?? false;
+          VideoPlaybackStatus(
+            playing: player.stream.playing,
+            completed: player.stream.completed,
+            initialPlaying: player.state.playing,
+            initialCompleted: player.state.completed,
+            builder: (context, playing) {
               return Stack(
                 fit: StackFit.expand,
                 children: [
@@ -833,6 +834,11 @@ class _AttachmentViewState extends State<_AttachmentView> {
     return switch (widget.attachment.kind) {
       AttachmentKind.image => _buildImage(),
       AttachmentKind.video => _InlineVideo(
+        key: ValueKey((
+          widget.messageId,
+          widget.attachment.sourceEventId,
+          widget.attachment.hasThumbnail,
+        )),
         backend: widget.backend,
         messageId: widget.messageId,
         attachment: widget.attachment,
@@ -1113,6 +1119,7 @@ class _InlineVideo extends StatefulWidget {
     required this.onOpen,
     required this.onContextMenu,
     required this.onFullscreen,
+    super.key,
   });
 
   final ChatBackend backend;
@@ -1128,6 +1135,9 @@ class _InlineVideo extends StatefulWidget {
 }
 
 class _InlineVideoState extends State<_InlineVideo> {
+  StreamSubscription<String>? _errorSubscription;
+  Timer? _startupTimer;
+  Uint8List? _fallbackThumbnail;
   StreamSubscription<int?>? _widthSubscription;
   StreamSubscription<int?>? _heightSubscription;
   int? _naturalWidth, _naturalHeight;
@@ -1137,7 +1147,7 @@ class _InlineVideoState extends State<_InlineVideo> {
   bool _opened = false;
   bool _sourceRetained = false;
   String? _error;
-  late final Future<Uint8List>? _thumbnail = widget.attachment.hasThumbnail
+  late Future<Uint8List>? _thumbnail = widget.attachment.hasThumbnail
       ? widget.backend.downloadAttachment(widget.messageId, thumbnail: true)
       : null;
 
@@ -1145,7 +1155,7 @@ class _InlineVideoState extends State<_InlineVideo> {
     if (_opening) return;
     final existing = _player;
     if (_opened && existing != null) {
-      await existing.playOrPause();
+      await toggleVideoPlayback(existing);
       return;
     }
     final player =
@@ -1157,6 +1167,7 @@ class _InlineVideoState extends State<_InlineVideo> {
         );
     _player = player;
     _controller ??= VideoController(player);
+    _errorSubscription ??= player.stream.error.listen((_) => _playbackFailed());
     _widthSubscription ??= player.stream.width.listen((value) {
       if (mounted && value != null && value > 0) {
         setState(() => _naturalWidth = value);
@@ -1169,9 +1180,19 @@ class _InlineVideoState extends State<_InlineVideo> {
     });
     setState(() {
       _opening = true;
+      if (_error != null && widget.attachment.hasThumbnail) {
+        _thumbnail = widget.backend.downloadAttachment(
+          widget.messageId,
+          thumbnail: true,
+        );
+      }
       _error = null;
     });
     try {
+      if (_sourceRetained) {
+        await widget.backend.releaseMediaPlaybackSource(widget.messageId);
+        _sourceRetained = false;
+      }
       final source = await widget.backend.getMediaPlaybackSource(
         widget.messageId,
       );
@@ -1179,15 +1200,52 @@ class _InlineVideoState extends State<_InlineVideo> {
         throw StateError('Encrypted streaming is still being prepared.');
       }
       _sourceRetained = true;
+      if (!mounted) {
+        await widget.backend.releaseMediaPlaybackSource(widget.messageId);
+        _sourceRetained = false;
+        return;
+      }
       await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
       );
+      if (!mounted || _error != null) return;
       _opened = true;
+      _startupTimer?.cancel();
+      _startupTimer = Timer(const Duration(seconds: 60), () {
+        if (mounted &&
+            player.state.position == Duration.zero &&
+            player.state.buffering) {
+          _playbackFailed();
+        }
+      });
+      unawaited(_capturePoster(player));
     } catch (exception) {
       if (mounted) setState(() => _error = safeErrorMessage(exception));
     } finally {
       if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  void _playbackFailed() {
+    if (!mounted) return;
+    _startupTimer?.cancel();
+    unawaited(_player?.pause());
+    setState(() {
+      _opened = false;
+      _error = 'Could not play this video. Press Play to retry.';
+    });
+  }
+
+  Future<void> _capturePoster(Player player) async {
+    try {
+      await _controller!.waitUntilFirstFrameRendered.timeout(
+        const Duration(seconds: 15),
+      );
+      final bytes = await player.screenshot(format: 'image/jpeg');
+      if (mounted && bytes != null) setState(() => _fallbackThumbnail = bytes);
+    } catch (_) {
+      // Poster extraction must not interrupt playback.
     }
   }
 
@@ -1197,6 +1255,8 @@ class _InlineVideoState extends State<_InlineVideo> {
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
+    _errorSubscription?.cancel();
     _widthSubscription?.cancel();
     _heightSubscription?.cancel();
     if (_sourceRetained) {
@@ -1225,12 +1285,15 @@ class _InlineVideoState extends State<_InlineVideo> {
     final height = width / aspectRatio;
     final player = _player;
     final controller = _controller;
-    final thumbnail = _thumbnail == null
+    final fallback = _fallbackThumbnail == null
         ? null
+        : Image.memory(_fallbackThumbnail!, fit: BoxFit.contain);
+    final thumbnail = _thumbnail == null
+        ? fallback
         : FutureBuilder<Uint8List>(
             future: _thumbnail,
             builder: (context, snapshot) => snapshot.data == null
-                ? const SizedBox.shrink()
+                ? fallback ?? const SizedBox.shrink()
                 : Image.memory(snapshot.data!, fit: BoxFit.contain),
           );
     return Align(
@@ -1247,7 +1310,7 @@ class _InlineVideoState extends State<_InlineVideo> {
               onDoubleTap: _showFullscreen,
               onSecondaryTapDown: (details) =>
                   widget.onContextMenu(details.globalPosition, _showFullscreen),
-              child: player == null || controller == null
+              child: player == null || controller == null || _error != null
                   ? _VideoPoster(
                       onPlay: _play,
                       thumbnail: thumbnail,
@@ -1546,6 +1609,8 @@ class _LightboxVideoState extends State<_LightboxVideo> {
 
   Future<void> _open() async {
     try {
+      // Create the video output before opening the source, including fullscreen.
+      await _controller.platform.future;
       final source = await widget.backend.getMediaPlaybackSource(
         widget.messageId,
       );
@@ -1582,7 +1647,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
               player: _player,
               controller: _controller,
               opened: true,
-              onToggle: _player.playOrPause,
+              onToggle: () => toggleVideoPlayback(_player),
               playTooltip: 'Play video',
             ),
           ),

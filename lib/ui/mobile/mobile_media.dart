@@ -1,4 +1,5 @@
 import '../audio_attachment_player.dart';
+import '../video_playback_status.dart';
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
 import '../gif_favourite_button.dart';
@@ -962,18 +963,20 @@ class _MobilePlayerState extends State<_MobilePlayer>
                         controls: NoVideoControls,
                         fit: BoxFit.contain,
                       ),
-                      StreamBuilder<bool>(
-                        stream: player.stream.playing,
-                        initialData: player.state.playing,
-                        builder: (context, snapshot) {
-                          if (snapshot.data ?? false) {
+                      VideoPlaybackStatus(
+                        playing: player.stream.playing,
+                        completed: player.stream.completed,
+                        initialPlaying: player.state.playing,
+                        initialCompleted: player.state.completed,
+                        builder: (context, playing) {
+                          if (playing) {
                             return const SizedBox.shrink();
                           }
                           return Center(
                             child: IconButton.filled(
                               key: const ValueKey('mobile-media-play'),
                               tooltip: 'Play video',
-                              onPressed: player.play,
+                              onPressed: () => toggleVideoPlayback(player),
                               icon: const _PlayGlyph(),
                             ),
                           );
@@ -1020,7 +1023,7 @@ class _MobileFullscreenVideo extends StatelessWidget {
       Positioned.fill(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: player.playOrPause,
+          onTap: () => toggleVideoPlayback(player),
           child: Video(
             controller: controller,
             controls: NoVideoControls,
@@ -1053,13 +1056,15 @@ class _MobileVideoControls extends StatelessWidget {
     ),
     child: Row(
       children: [
-        StreamBuilder<bool>(
-          stream: player.stream.playing,
-          initialData: player.state.playing,
-          builder: (context, snapshot) => IconButton(
+        VideoPlaybackStatus(
+          playing: player.stream.playing,
+          completed: player.stream.completed,
+          initialPlaying: player.state.playing,
+          initialCompleted: player.state.completed,
+          builder: (context, playing) => IconButton(
             color: Colors.white,
-            onPressed: player.playOrPause,
-            icon: Icon(snapshot.data == true ? Icons.pause : Icons.play_arrow),
+            onPressed: () => toggleVideoPlayback(player),
+            icon: Icon(playing ? Icons.pause : Icons.play_arrow),
           ),
         ),
         Expanded(
@@ -1276,7 +1281,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
   Future<void> _play() async {
     final current = _player;
     if (current != null) {
-      await current.playOrPause();
+      await toggleVideoPlayback(current);
       return;
     }
     if (_opening) return;
@@ -1463,6 +1468,24 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       child: Stack(
         children: [
           surface,
+          if (player != null && !_fullscreenOpen)
+            Positioned.fill(
+              child: VideoPlaybackStatus(
+                playing: player.stream.playing,
+                completed: player.stream.completed,
+                initialPlaying: player.state.playing,
+                initialCompleted: player.state.completed,
+                builder: (context, playing) => playing
+                    ? const SizedBox.shrink()
+                    : Center(
+                        child: IconButton.filled(
+                          tooltip: 'Play embedded video',
+                          onPressed: _play,
+                          icon: const _PlayGlyph(),
+                        ),
+                      ),
+              ),
+            ),
           if (player != null && !_fullscreenOpen)
             Positioned(
               right: 6,

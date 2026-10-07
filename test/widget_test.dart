@@ -3436,6 +3436,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('mobile-room-list')), findsOneWidget);
     expect(backend.selectedRoom?.id, '!dm:test');
+    final selectedTile = tester.widget<ListTile>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-room-list')),
+            matching: find.byType(ListTile),
+          )
+          .first,
+    );
+    expect(selectedTile.selected, isTrue);
+    final surfaces = tester.widgetList<Material>(
+      find.ancestor(
+        of: find.descendant(
+          of: find.byKey(const ValueKey('mobile-room-list')),
+          matching: find.text('Alice'),
+        ),
+        matching: find.byType(Material),
+      ),
+    );
+    expect(
+      surfaces.any(
+        (surface) =>
+            surface.shape is RoundedRectangleBorder &&
+            surface.color != Colors.transparent,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('mobile selected server channel has a visible surface', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:test'
+      ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Friends')]
+      ..roomList = const [
+        RoomSummary(
+          id: '!channel:test',
+          name: 'Selected channel',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: true,
+        ),
+      ];
+    await _pumpMobile(tester, backend);
+    await tester.tap(find.text('Selected channel').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mobile-open-navigation')));
+    await tester.pumpAndSettle();
+    final title = find.descendant(
+      of: find.byKey(const ValueKey('mobile-space-room-list')),
+      matching: find.text('Selected channel'),
+    );
+    expect(
+      tester
+          .widget<ListTile>(
+            find.ancestor(of: title, matching: find.byType(ListTile)),
+          )
+          .selected,
+      isTrue,
+    );
+    final surfaces = tester.widgetList<Material>(
+      find.ancestor(of: title, matching: find.byType(Material)),
+    );
+    expect(
+      surfaces.any(
+        (surface) =>
+            surface.shape is RoundedRectangleBorder &&
+            surface.color != Colors.transparent,
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('read receipts require a foreground visible conversation', (
