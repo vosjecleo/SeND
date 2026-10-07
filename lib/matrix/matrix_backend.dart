@@ -320,6 +320,70 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
+  Future<void> editForumPost(
+    String roomId,
+    String messageId,
+    ForumPost post,
+    String body, {
+    AttachmentDraft? cover,
+    bool removeCover = false,
+  }) async {
+    final checked = ForumPost.validated(post.title, post.tags);
+    final room = _matrix.getRoomById(roomId);
+    if (room == null ||
+        room.membership != Membership.join ||
+        _presentationFor(room) != RoomPresentation.forum) {
+      throw StateError('This forum is unavailable.');
+    }
+    final event = _eventById(messageId) ?? await room.getEventById(messageId);
+    if (event == null ||
+        event.room.id != roomId ||
+        event.senderId != _matrix.userID ||
+        event.type != EventTypes.Message ||
+        event.redacted ||
+        !messageId.startsWith(r'$')) {
+      throw StateError('You can only edit your own sent posts.');
+    }
+    if (body.trim().isEmpty) {
+      throw const FormatException('Write a post before saving.');
+    }
+    await _prepareEncryptedSend(room);
+    if (cover != null) {
+      if (!cover.mimeType.startsWith('image/')) {
+        throw const FormatException('Choose an image for the post cover.');
+      }
+      await _sendAttachment(
+        AttachmentDraft(
+          bytes: cover.bytes,
+          name: cover.name,
+          mimeType: cover.mimeType,
+          spoiler: cover.spoiler,
+          caption: '${checked.title}\n\n${body.trim()}',
+        ),
+        roomId: roomId,
+        editMessageId: messageId,
+        additionalContent: {forumPostKey: checked.toJson()},
+      );
+    } else {
+      final timeline = _timeline;
+      final displayed = timeline == null
+          ? event
+          : event.getDisplayEvent(timeline);
+      final content = removeCover
+          ? <String, dynamic>{'msgtype': MessageTypes.Text}
+          : Map<String, dynamic>.from(displayed.content);
+      content
+        ..remove('m.new_content')
+        ..remove('m.relates_to')
+        ..remove('formatted_body')
+        ..remove('format')
+        ..['body'] = '${checked.title}\n\n${body.trim()}'
+        ..[forumPostKey] = checked.toJson();
+      await room.sendEvent(content, editEventId: messageId);
+    }
+  }
+
+  @override
   Future<ThreadSession> openThread(String roomId, String rootId) async {
     final room = _matrix.getRoomById(roomId);
     if (room == null || room.membership != Membership.join) {

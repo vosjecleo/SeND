@@ -78,6 +78,14 @@ abstract class ChatBackend extends ChangeNotifier {
     String body, {
     AttachmentDraft? cover,
   }) => throw UnsupportedError('Forums are unavailable');
+  Future<void> editForumPost(
+    String roomId,
+    String messageId,
+    ForumPost post,
+    String body, {
+    AttachmentDraft? cover,
+    bool removeCover = false,
+  }) => throw UnsupportedError('Forum editing is unavailable');
   List<MentionSuggestion> get mentionSuggestions;
   List<String> get typingUserNames;
   List<RoomMemberSummary> get selectedRoomMembers;

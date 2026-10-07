@@ -53,6 +53,14 @@ void main() {
         );
       }
       expect(find.text('Keep this draft'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+      expect(find.text('Keep this draft'), findsOneWidget);
+      // Deliberate dismissal must still work; no automatic refocus loop.
+      focus.unfocus();
+      await tester.pump();
+      expect(focus.hasFocus, isFalse);
       await tester.pumpWidget(const SizedBox());
     },
   );

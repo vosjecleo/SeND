@@ -6,6 +6,7 @@ import 'package:image/image.dart' as image;
 
 import '../models/chat_models.dart';
 import 'profile_card.dart';
+import 'lifecycle_memory_image.dart';
 
 Future<Uint8List?> showProfileImageCropper(
   BuildContext context, {
@@ -140,14 +141,17 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
     });
     try {
       final region = _region;
-      final result = await compute(cropProfileImage, (
+      final request = (
         bytes: widget.bytes,
         left: region.left.round(),
         top: region.top.round(),
         width: region.width.round(),
         height: region.height.round(),
         maximumWidth: widget.maximumWidth,
-      ));
+      );
+      final result = hasAnimatedImageHeader(widget.bytes)
+          ? await cropAnimatedProfileImage(request)
+          : await compute(cropProfileImage, request);
       if (mounted) Navigator.of(context).pop(result);
     } catch (_) {
       if (mounted) {
@@ -380,21 +384,28 @@ class _CropSlider extends StatelessWidget {
   );
 }
 
-@visibleForTesting
-Uint8List cropProfileImage(
-  ({
-    Uint8List bytes,
-    int left,
-    int top,
-    int width,
-    int height,
-    int maximumWidth,
-  })
-  request,
-) {
+typedef ProfileImageCropRequest = ({
+  Uint8List bytes,
+  int left,
+  int top,
+  int width,
+  int height,
+  int maximumWidth,
+});
+
+Uint8List cropProfileImage(ProfileImageCropRequest request) {
   final decoded = image.decodeImage(request.bytes);
   if (decoded == null) throw const FormatException('Unsupported image');
   final oriented = image.bakeOrientation(decoded);
+  return Uint8List.fromList(
+    image.encodePng(_cropFrame(oriented, request), level: 6),
+  );
+}
+
+image.Image _cropFrame(image.Image oriented, ProfileImageCropRequest request) {
+  if (request.maximumWidth < 1) {
+    throw const FormatException('Invalid crop size');
+  }
   final cropWidth = request.width.clamp(1, oriented.width);
   final cropHeight = request.height.clamp(1, oriented.height);
   final cropLeft = request.left.clamp(0, oriented.width - cropWidth);
@@ -413,5 +424,56 @@ Uint8List cropProfileImage(
       interpolation: image.Interpolation.cubic,
     );
   }
-  return Uint8List.fromList(image.encodePng(cropped, level: 6));
+  return cropped;
+}
+
+/// Use the same compositor as the preview. Decoding indexed GIF animations with
+/// image.decodeImage can reuse the wrong palette when frames have local tables.
+/// Encode full RGBA frames, preserving transparency, timing and loop count.
+Future<Uint8List> cropAnimatedProfileImage(
+  ProfileImageCropRequest request,
+) async {
+  final codec = await ui.instantiateImageCodec(request.bytes);
+  try {
+    final encoder = image.PngEncoder(level: 6)
+      ..repeat = codec.repetitionCount < 0 ? 0 : codec.repetitionCount + 1
+      ..start(codec.frameCount);
+    if (codec.frameCount > 1500) {
+      throw const FormatException(
+        'This animation has too many frames to crop.',
+      );
+    }
+    for (var index = 0; index < codec.frameCount; index++) {
+      final frame = await codec.getNextFrame();
+      try {
+        if (frame.image.width * frame.image.height * codec.frameCount >
+            150000000) {
+          throw const FormatException('This animation is too large to crop.');
+        }
+        final pixels = await frame.image.toByteData(
+          format: ui.ImageByteFormat.rawStraightRgba,
+        );
+        if (pixels == null) {
+          throw const FormatException('Could not read image pixels');
+        }
+        final rgba = image.Image.fromBytes(
+          width: frame.image.width,
+          height: frame.image.height,
+          bytes: pixels.buffer,
+          bytesOffset: pixels.offsetInBytes,
+          numChannels: 4,
+        );
+        final cropped = _cropFrame(rgba, request)
+          ..frameDuration = frame.duration.inMilliseconds;
+        encoder.addFrame(cropped);
+      } finally {
+        frame.image.dispose();
+      }
+      // Keep only one uncompressed frame and let the crop dialog repaint.
+      await Future<void>.delayed(Duration.zero);
+    }
+    return encoder.finish()!;
+  } finally {
+    codec.dispose();
+  }
 }

@@ -794,7 +794,8 @@ class _RoomList extends StatelessWidget {
         minTileHeight: 56,
         minVerticalPadding: 6,
         visualDensity: VisualDensity.standard,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        contentPadding: const EdgeInsets.only(left: 4, right: 8),
+        horizontalTitleGap: 12,
         selected: false,
         leading: MobileAvatar(
           bytes: room.avatarBytes,

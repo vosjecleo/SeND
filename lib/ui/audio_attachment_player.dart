@@ -16,12 +16,15 @@ class AudioAttachmentPlayer extends StatefulWidget {
     required this.messageId,
     required this.attachment,
     required this.onSave,
+    this.createPlayer,
     super.key,
   });
   final ChatBackend backend;
   final String messageId;
   final ChatAttachment attachment;
   final VoidCallback onSave;
+  @visibleForTesting
+  final Player Function()? createPlayer;
 
   @override
   State<AudioAttachmentPlayer> createState() => _AudioAttachmentPlayerState();
@@ -33,6 +36,7 @@ class _AudioAttachmentPlayerState extends State<AudioAttachmentPlayer>
   final _subscriptions = <StreamSubscription<dynamic>>[];
   bool _opening = false;
   bool _playing = false;
+  bool _completed = false;
   bool _retained = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -61,6 +65,10 @@ class _AudioAttachmentPlayerState extends State<AudioAttachmentPlayer>
     try {
       if (_player case final player?) {
         if (player.state.completed) {
+          setState(() {
+            _completed = false;
+            _position = Duration.zero;
+          });
           await player.seek(Duration.zero);
           await player.play();
         } else {
@@ -77,7 +85,7 @@ class _AudioAttachmentPlayerState extends State<AudioAttachmentPlayer>
         return;
       }
       _retained = true;
-      final player = _player = Player();
+      final player = _player = widget.createPlayer?.call() ?? Player();
       _subscriptions.addAll([
         player.stream.playing.listen((value) {
           if (mounted) setState(() => _playing = value);
@@ -87,6 +95,9 @@ class _AudioAttachmentPlayerState extends State<AudioAttachmentPlayer>
         }),
         player.stream.duration.listen((value) {
           if (mounted) setState(() => _duration = value);
+        }),
+        player.stream.completed.listen((value) {
+          if (mounted) setState(() => _completed = value);
         }),
         player.stream.error.listen((value) {
           if (mounted) setState(() => _error = safeErrorMessage(value));
@@ -172,12 +183,20 @@ class _AudioAttachmentPlayerState extends State<AudioAttachmentPlayer>
                     overflow: TextOverflow.ellipsis,
                   ),
                 AudioProgress(
-                  position: _position,
+                  // Position streams may end a few milliseconds before EOF.
+                  // Only the player's completion event fills the final bars.
+                  position: _completed ? duration : _position,
                   duration: duration,
                   waveform: attachment.waveform,
                   onSeek: _player == null || duration <= Duration.zero
                       ? null
-                      : (value) => unawaited(_player!.seek(value)),
+                      : (value) {
+                          setState(() {
+                            _completed = false;
+                            _position = value;
+                          });
+                          unawaited(_player!.seek(value));
+                        },
                 ),
                 if (_error case final error?)
                   Text(

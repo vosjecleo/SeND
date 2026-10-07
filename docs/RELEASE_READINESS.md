@@ -7,6 +7,15 @@ parity or universal device compatibility.
 
 ## Release gates
 
+All supported platforms have had extensive hands-on testing across most features.
+Native Linux, Windows and Android see the most daily use; PWA and iOS PWA get less
+frequent use. The gates below track recorded regression checks for 1.0, not a list
+of platforms or features nobody has tested.
+
+No slow memory leaks have been reported over many hundreds of cumulative usage
+hours. Cleo reports roughly 450 MB idle memory use with a decently populated DM
+and server list. These are usage observations, not controlled benchmarks.
+
 - [ ] Account safety: password and discovered SSO/OIDC sign-in, cancellation,
   refresh/relaunch, logout, device verification, recovery and upgrades preserve
   sessions and encryption keys. Never fix a failure by silently resetting data.
@@ -18,7 +27,7 @@ parity or universal device compatibility.
 - [ ] Notifications: foreground suppression, dismissal, cadence reset, silent
   updates, invitations and thread navigation work on real devices, including
   installed iOS PWAs. Exercise distributor and permission failures.
-- [ ] Messaging: media, spoilers, edits, rich composition, albums, voice messages,
+- [ ] Messaging: media, spoilers, edits, text formatting, albums, voice messages,
   emoji/sticker imports and shared packs survive navigation and retry paths.
 - [ ] Collaboration: two-client encrypted threads/forums, older history, unread
   state, notification taps and legacy-client fallback rendering are verified.

@@ -19,6 +19,7 @@ import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../../services/android_media_saver.dart';
 import '../../services/encoded_image_dimensions.dart';
+import '../../services/media_aspect_ratio.dart';
 import '../../services/temporary_attachment_store.dart';
 import '../deltiecord_theme.dart';
 import '../advanced_chat_dialogs.dart';
@@ -934,9 +935,12 @@ class _MobilePlayerState extends State<_MobilePlayer>
     final frame = mobileMediaFrameSize(
       maxWidth: min(420, max(120, screen.width - 76)),
       maxHeight: min(520, max(180, screen.height * 0.52)),
-      width: _naturalWidth ?? attachment?.width,
-      height: _naturalHeight ?? attachment?.height,
-      fallbackAspectRatio: 16 / 9,
+      width: _naturalWidth,
+      height: _naturalHeight,
+      fallbackAspectRatio: mediaAspectRatio(
+        attachment?.width,
+        attachment?.height,
+      ),
     );
     return SizedBox(
       width: frame.width,
@@ -1400,11 +1404,11 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
 
   @override
   Widget build(BuildContext context) {
-    final width = (_naturalWidth ?? widget.width)?.toDouble() ?? 16;
-    final height = (_naturalHeight ?? widget.height)?.toDouble() ?? 9;
-    final ratio = width > 0 && height > 0
-        ? (width / height).clamp(0.25, 4.0)
-        : 16 / 9;
+    final ratio = mediaAspectRatio(
+      _naturalWidth,
+      _naturalHeight,
+      fallback: mediaAspectRatio(widget.width, widget.height),
+    ).clamp(0.25, 4.0);
     final player = _player;
     final controller = _controller;
     final surface = AspectRatio(

@@ -4,11 +4,17 @@ Use this page to distinguish reported defects, incomplete testing and product
 limitations. The [release checklist](docs/RELEASE_READINESS.md) tracks broader
 validation required before 1.0.
 
+SeND is beta software; expect occasional bugs. Extensive hands-on testing has
+covered most features on all supported platforms. Native Linux, Windows and
+Android see the most daily use, so PWA and iOS PWA fixes may lag behind. Historical
+test lists below do not mean those platforms have gone untested.
+
 ## Open investigations
 
 - **Animated banner colours:** a supplied GIF loses pink colours during banner
-  conversion. Reproduced locally; the exact decoding/composition fault is not
-  isolated and no fix is applied. See the [investigation](docs/gif-banner-investigation.md).
+  conversion in build 120. A local fix now passes all 121 frames of the supplied
+  sample; it is not released yet. Damaged uploads will need re-uploading after
+  the fix. See the [investigation](docs/gif-banner-investigation.md).
 
 ## Validation backlog recorded at build 116
 

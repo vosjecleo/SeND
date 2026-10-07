@@ -67,7 +67,10 @@ class _LinkPreviewCard extends StatelessWidget {
                     resolveUri: () =>
                         backend.resolveLinkPreviewVideo(preview.url, video),
                     thumbnail: preview.imageBytes,
-                    aspectRatio: (preview.width ?? 16) / (preview.height ?? 9),
+                    aspectRatio: mediaAspectRatio(
+                      preview.width,
+                      preview.height,
+                    ),
                     autoplay: true,
                     loop: shouldLoopLinkPreview(preview.url),
                   ),
@@ -93,11 +96,7 @@ class _LinkPreviewCard extends StatelessWidget {
     final screen = MediaQuery.sizeOf(context);
     final maxWidth = screen.width * 0.5;
     final maxHeight = screen.height * 0.5;
-    final sourceWidth = preview.width?.toDouble() ?? 16;
-    final sourceHeight = preview.height?.toDouble() ?? 9;
-    final aspectRatio = sourceWidth > 0 && sourceHeight > 0
-        ? sourceWidth / sourceHeight
-        : 16 / 9;
+    final aspectRatio = mediaAspectRatio(preview.width, preview.height);
     final mediaWidth = maxWidth / maxHeight > aspectRatio
         ? maxHeight * aspectRatio
         : maxWidth;
@@ -646,6 +645,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
   void didUpdateWidget(covariant _AttachmentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.messageId != widget.messageId ||
+        oldWidget.attachment.sourceEventId != widget.attachment.sourceEventId ||
         oldWidget.attachment.mimeType != widget.attachment.mimeType) {
       _imageBytes = null;
       _decodedDimensions = null;
@@ -1211,13 +1211,14 @@ class _InlineVideoState extends State<_InlineVideo> {
     final screen = MediaQuery.sizeOf(context);
     final maxWidth = screen.width * 0.5;
     final maxHeight = screen.height * 0.5;
-    final sourceWidth =
-        (_naturalWidth ?? widget.attachment.width)?.toDouble() ?? 16;
-    final sourceHeight =
-        (_naturalHeight ?? widget.attachment.height)?.toDouble() ?? 9;
-    final aspectRatio = sourceWidth > 0 && sourceHeight > 0
-        ? sourceWidth / sourceHeight
-        : 16 / 9;
+    final aspectRatio = mediaAspectRatio(
+      _naturalWidth,
+      _naturalHeight,
+      fallback: mediaAspectRatio(
+        widget.attachment.width,
+        widget.attachment.height,
+      ),
+    );
     final width = maxWidth / maxHeight > aspectRatio
         ? maxHeight * aspectRatio
         : maxWidth;

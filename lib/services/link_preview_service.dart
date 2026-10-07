@@ -114,6 +114,14 @@ LinkPreview parseHomeserverLinkPreview({
     return null;
   }
 
+  // A pair must describe the same medium. Never combine a video width with
+  // the poster's height when an origin omits part of its metadata.
+  final videoWidth = intValue(const ['og:video:width']);
+  final videoHeight = intValue(const ['og:video:height']);
+  final imageWidth = intValue(const ['og:image:width']);
+  final imageHeight = intValue(const ['og:image:height']);
+  final hasVideoSize = videoWidth != null && videoHeight != null;
+  final hasImageSize = imageWidth != null && imageHeight != null;
   return LinkPreview(
     url: url,
     title: stringValue(const ['og:title', 'title'], maximumLength: 512),
@@ -126,8 +134,16 @@ LinkPreview parseHomeserverLinkPreview({
     // Remote video URLs are deliberately not passed to media_kit. Doing so
     // would bypass the direct-preview opt-in and the validated HTTP client.
     videoUrl: null,
-    width: intValue(const ['og:video:width', 'og:image:width']),
-    height: intValue(const ['og:video:height', 'og:image:height']),
+    width: hasVideoSize
+        ? videoWidth
+        : hasImageSize
+        ? imageWidth
+        : null,
+    height: hasVideoSize
+        ? videoHeight
+        : hasImageSize
+        ? imageHeight
+        : null,
   );
 }
 
@@ -262,6 +278,20 @@ class DirectLinkPreviewFetcher {
     Uri initialUrl, {
     bool Function(Uri uri)? allowUrl,
   }) async {
+    _validateScheme(initialUrl);
+    if (allowUrl != null && !allowUrl(initialUrl)) {
+      throw const HttpException('Preview host is outside the allowed set.');
+    }
+    // Watch pages can exceed the bounded HTML limit. Stream resolution does
+    // not need that page; keep generic preview limits unchanged for all sites.
+    if (_isYouTubeUrl(initialUrl)) {
+      final resolved = await _resolveYouTube(
+        initialUrl,
+        LinkPreview(url: initialUrl),
+        allowUrl: allowUrl,
+      );
+      if (resolved?.videoUrl != null) return resolved;
+    }
     var url = initialUrl;
     for (var redirects = 0; redirects <= _maximumRedirects; redirects++) {
       _validateScheme(url);
@@ -336,14 +366,6 @@ class DirectLinkPreviewFetcher {
         width: metadata.width,
         height: metadata.height,
       );
-      if (_isYouTubeUrl(initialUrl)) {
-        final youtube = await _resolveYouTube(
-          initialUrl,
-          preview,
-          allowUrl: allowUrl,
-        );
-        if (youtube != null) return youtube;
-      }
       return hasUsefulPreview(preview) ? preview : null;
     }
     return null;
@@ -366,6 +388,17 @@ class DirectLinkPreviewFetcher {
       final stream = manifest.muxed.withHighestBitrate();
       final validated = await _validateVideo(stream.url, allowUrl: allowUrl);
       if (validated == null) return fallback;
+      var poster = fallback.imageBytes;
+      if (poster == null) {
+        try {
+          poster = await _fetchImage(
+            Uri.parse(video.thumbnails.mediumResUrl),
+            allowUrl: allowUrl,
+          );
+        } on Exception {
+          // A missing poster must not hide an available video.
+        }
+      }
       return LinkPreview(
         url: url,
         title: video.title.length <= 512
@@ -373,7 +406,7 @@ class DirectLinkPreviewFetcher {
             : video.title.substring(0, 512),
         description: video.author,
         siteName: 'YouTube',
-        imageBytes: fallback.imageBytes,
+        imageBytes: poster,
         videoUrl: validated,
         width: stream.videoResolution.width,
         height: stream.videoResolution.height,
@@ -581,6 +614,18 @@ _DocumentMetadata _metadataFromDocument(Document document, Uri baseUrl) {
   final title =
       meta(const ['og:title', 'twitter:title'], maximumLength: 512) ??
       document.querySelector('title')?.text.trim();
+  final videoWidth = dimension(const [
+    'og:video:width',
+    'twitter:player:width',
+  ]);
+  final videoHeight = dimension(const [
+    'og:video:height',
+    'twitter:player:height',
+  ]);
+  final imageWidth = dimension(const ['og:image:width']);
+  final imageHeight = dimension(const ['og:image:height']);
+  final hasVideoSize = videoWidth != null && videoHeight != null;
+  final hasImageSize = imageWidth != null && imageHeight != null;
   return _DocumentMetadata(
     title: title?.isEmpty == true ? null : title,
     description: meta(const [
@@ -591,8 +636,12 @@ _DocumentMetadata _metadataFromDocument(Document document, Uri baseUrl) {
     siteName: meta(const ['og:site_name'], maximumLength: 128) ?? baseUrl.host,
     imageUrl: resolvedImage,
     videoUrl: resolvedVideo,
-    width: dimension(const ['og:image:width']),
-    height: dimension(const ['og:image:height']),
+    width: resolvedVideo != null
+        ? (hasVideoSize ? videoWidth : null)
+        : (hasImageSize ? imageWidth : null),
+    height: resolvedVideo != null
+        ? (hasVideoSize ? videoHeight : null)
+        : (hasImageSize ? imageHeight : null),
   );
 }
 

@@ -89,13 +89,29 @@ void main() {
     expect(preview?.imageBytes, [1, 2, 3]);
   });
 
+  test('incomplete video dimensions never borrow a poster dimension', () {
+    final preview = parseHomeserverLinkPreview(
+      url: Uri.parse('https://example.org'),
+      properties: const {
+        'og:video:width': 1080,
+        'og:image:width': 600,
+        'og:image:height': 400,
+      },
+    );
+    expect((preview.width, preview.height), (600, 400));
+  });
+
   test(
     'direct fallback validates video metadata before exposing playback',
     () async {
       final transport = _FakeTransport({
         'https://public.example/page': _response(
           '<meta property="og:title" content="Clip">'
-          '<meta property="og:video" content="https://cdn.example/clip.mp4">',
+          '<meta property="og:video" content="https://cdn.example/clip.mp4">'
+          '<meta property="og:video:width" content="1080">'
+          '<meta property="og:video:height" content="1920">'
+          '<meta property="og:image:width" content="600">'
+          '<meta property="og:image:height" content="400">',
         ),
         'https://cdn.example/clip.mp4': DirectPreviewResponse(
           statusCode: HttpStatus.partialContent,
@@ -115,6 +131,7 @@ void main() {
       );
 
       expect(preview?.videoUrl, Uri.parse('https://cdn.example/clip.mp4'));
+      expect((preview?.width, preview?.height), (1080, 1920));
       expect(transport.headers.last[HttpHeaders.rangeHeader], 'bytes=0-0');
     },
   );

@@ -386,6 +386,7 @@ extension _MatrixEventMapping on MatrixBackend {
         'net.deltiecord.sticker_pack',
       );
       return ChatAttachment(
+        sourceEventId: event.eventId,
         kind: AttachmentKind.image,
         name: event.content.tryGet<String>('body') ?? 'Sticker',
         mimeType: info?.tryGet<String>('mimetype') ?? 'image/png',
@@ -414,6 +415,7 @@ extension _MatrixEventMapping on MatrixBackend {
     final audioDuration = audioInfo['duration'] ?? event.infoMap['duration'];
     final waveform = audioInfo['waveform'];
     return ChatAttachment(
+      sourceEventId: event.eventId,
       kind: kind,
       name: text.name,
       mimeType: event.attachmentMimetype,

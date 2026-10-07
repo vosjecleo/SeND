@@ -31,6 +31,7 @@ import '../models/chat_models.dart';
 import '../services/gif_service.dart';
 import '../services/clipboard_image.dart';
 import '../services/encoded_image_dimensions.dart';
+import '../services/media_aspect_ratio.dart';
 import '../services/secret_redaction.dart';
 import '../services/temporary_attachment_store.dart';
 import '../services/emoji_repository.dart';

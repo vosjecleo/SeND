@@ -977,6 +977,7 @@ class ChatAttachment {
     this.voiceMessage = false,
     this.durationMilliseconds,
     this.waveform = const [],
+    this.sourceEventId,
   });
 
   final AttachmentKind kind;
@@ -1002,6 +1003,9 @@ class ChatAttachment {
   final bool voiceMessage;
   final int? durationMilliseconds;
   final List<int> waveform;
+
+  /// Changes when a Matrix replacement supplies new attachment content.
+  final String? sourceEventId;
 }
 
 class AttachmentDraft {

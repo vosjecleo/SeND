@@ -240,18 +240,25 @@ extension _MatrixLinkPreviews on MatrixBackend {
         height: preview.height,
       );
 
-  LinkPreview _mergePreview(LinkPreview homeserver, LinkPreview direct) =>
-      LinkPreview(
-        url: homeserver.url,
-        title: homeserver.title ?? direct.title,
-        description: homeserver.description ?? direct.description,
-        siteName: homeserver.siteName ?? direct.siteName,
-        imageBytes: homeserver.imageBytes ?? direct.imageBytes,
-        videoUrl: homeserver.videoUrl ?? direct.videoUrl,
-        gifSource: homeserver.gifSource ?? direct.gifSource,
-        width: direct.width ?? homeserver.width,
-        height: direct.height ?? homeserver.height,
-      );
+  LinkPreview _mergePreview(
+    LinkPreview homeserver,
+    LinkPreview direct,
+  ) => LinkPreview(
+    url: homeserver.url,
+    title: homeserver.title ?? direct.title,
+    description: homeserver.description ?? direct.description,
+    siteName: homeserver.siteName ?? direct.siteName,
+    imageBytes: homeserver.imageBytes ?? direct.imageBytes,
+    videoUrl: homeserver.videoUrl ?? direct.videoUrl,
+    gifSource: homeserver.gifSource ?? direct.gifSource,
+    // Once enriched with a video, poster dimensions are not a safe fallback.
+    width: direct.videoUrl != null
+        ? direct.width
+        : direct.width ?? homeserver.width,
+    height: direct.videoUrl != null
+        ? direct.height
+        : direct.height ?? homeserver.height,
+  );
 
   int? _previewPropertyInt(Map<String, Object?> properties, List<String> keys) {
     for (final key in keys) {

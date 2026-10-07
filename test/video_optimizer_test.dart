@@ -45,6 +45,12 @@ void main() {
           caption: 'Caption',
         );
         final progress = <double>[];
+        final original = await probeVideo(draft);
+        expect(original.bytes, draft.bytes);
+        expect(original.name, draft.name);
+        expect(original.videoWidth, 360);
+        expect(original.videoHeight, 640);
+        expect(original.videoThumbnail, isNotEmpty);
         final result = await optimizeVideo(
           draft,
           progress: progress.add,
@@ -77,4 +83,25 @@ void main() {
       throwsStateError,
     );
   }, skip: !Platform.isLinux);
+  test('display dimensions respect camera rotation and non-square pixels', () {
+    expect(
+      videoDisplaySize({
+        'width': 1920,
+        'height': 1080,
+        'side_data_list': [
+          {'rotation': -90},
+        ],
+      }),
+      (1080, 1920),
+    );
+    expect(
+      videoDisplaySize({
+        'width': 720,
+        'height': 576,
+        'sample_aspect_ratio': '16:15',
+      }),
+      (768, 576),
+    );
+    expect(videoDisplaySize({'width': 0, 'height': 576}), isNull);
+  });
 }

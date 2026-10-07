@@ -69,3 +69,21 @@ change has been applied in this patch.
 Separately, cropped animated avatars are APNG. Avatar animation detection now
 recognizes that format so selection, hover and reduced-motion rules apply to
 them too. This does not repair already corrupted banner uploads.
+
+## Crop fix tested locally, 2026-10-07
+
+Animated profile crops now use Flutter's composited, straight-RGBA frames.
+The PNG encoder receives one full-colour frame at a time, without indexed
+palette conversion. Static crops keep their existing background-isolate path.
+The animated path disposes each decoded frame, yields between frames, and
+rejects inputs above its frame/pixel budget.
+
+The supplied GIF passes a comparison of every pixel in all 121 cropped frames,
+including the pink regions. Frame durations and looping also match. A generated
+fixture tests changing colours, transparency, cropping and finite looping.
+The private sample remains outside the repository; its test is opt-in through
+`SEND_GIF_CROP_SAMPLE`.
+
+This fix is local and not released. The complete edit/upload/display flow still
+needs a native and browser device check. Already corrupted banners must be
+uploaded again from the original GIF.

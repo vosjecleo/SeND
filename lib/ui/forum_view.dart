@@ -113,6 +113,42 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
         _ForumPostEditor(backend: widget.backend, roomId: widget.room.id),
   );
 
+  bool _canEdit(ChatMessage post) =>
+      post.own && !post.pending && !post.failed && !post.redacted;
+
+  Future<void> _postActions(ChatMessage post, Offset position) async {
+    if (!_canEdit(post) && !post.canRedact) return;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final local = overlay.globalToLocal(position);
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(local.dx, local.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (_canEdit(post))
+          const PopupMenuItem(value: 'edit', child: Text('Edit post')),
+        if (post.canRedact)
+          const PopupMenuItem(value: 'delete', child: Text('Delete post')),
+      ],
+    );
+    if (!mounted) return;
+    if (action == 'delete') {
+      await _deletePost(post);
+    } else if (action == 'edit') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ForumPostEditor(
+          backend: widget.backend,
+          roomId: widget.room.id,
+          original: post,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.backend,
@@ -283,98 +319,119 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
                       horizontal: 12,
                       vertical: 5,
                     ),
-                    child: InkWell(
-                      onTap: () =>
-                          openDiscussion(context, widget.backend, post),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.forumPost?.title ??
-                                  post.body.split('\n').first,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              post.body,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (post.attachment != null)
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxHeight: 180,
-                                ),
-                                child: _AttachmentView(
-                                  backend: widget.backend,
-                                  messageId: post.id,
-                                  attachment: post.attachment!,
-                                  gallery: roots,
-                                ),
+                    child: GestureDetector(
+                      onSecondaryTapDown: (details) =>
+                          _postActions(post, details.globalPosition),
+                      onLongPressStart: (details) =>
+                          _postActions(post, details.globalPosition),
+                      child: InkWell(
+                        onTap: () =>
+                            openDiscussion(context, widget.backend, post),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                post.forumPost?.title ??
+                                    post.body.split('\n').first,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Text(post.sender),
-                                Text('$replies replies'),
-                                if (post.threadUnread) const Text('Unread'),
-                                if (post.canRedact)
+                              const SizedBox(height: 8),
+                              Text(
+                                post.body,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (post.attachment != null)
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxHeight: 180,
+                                  ),
+                                  child: _AttachmentView(
+                                    backend: widget.backend,
+                                    messageId: post.id,
+                                    attachment: post.attachment!,
+                                    gallery: roots,
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(post.sender),
+                                  Text('$replies replies'),
+                                  if (post.threadUnread) const Text('Unread'),
+                                  if (_canEdit(post) || post.canRedact)
+                                    Builder(
+                                      builder: (buttonContext) => IconButton(
+                                        tooltip: 'Post actions',
+                                        icon: const Icon(Icons.more_horiz),
+                                        onPressed: () {
+                                          final box =
+                                              buttonContext.findRenderObject()
+                                                  as RenderBox;
+                                          _postActions(
+                                            post,
+                                            box.localToGlobal(Offset.zero),
+                                          );
+                                        },
+                                      ),
+                                    ),
                                   IconButton(
-                                    tooltip: 'Delete forum post',
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () => _deletePost(post),
-                                  ),
-                                IconButton(
-                                  tooltip:
-                                      widget.backend.preferences.followedThreads
-                                          .contains(post.id)
-                                      ? 'Unfollow discussion'
-                                      : 'Follow discussion',
-                                  icon: Icon(
-                                    widget.backend.preferences.followedThreads
+                                    tooltip:
+                                        widget
+                                            .backend
+                                            .preferences
+                                            .followedThreads
                                             .contains(post.id)
-                                        ? Icons.bookmark
-                                        : Icons.bookmark_border,
-                                  ),
-                                  onPressed: () async {
-                                    final prefs = widget.backend.preferences;
-                                    final followed = {...prefs.followedThreads};
-                                    if (!followed.add(post.id)) {
-                                      followed.remove(post.id);
-                                    }
-                                    try {
-                                      await widget.backend.updatePreferences(
-                                        prefs.copyWith(
-                                          followedThreads: followed,
-                                        ),
-                                      );
-                                    } catch (error) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              safeErrorMessage(error),
-                                            ),
+                                        ? 'Unfollow discussion'
+                                        : 'Follow discussion',
+                                    icon: Icon(
+                                      widget.backend.preferences.followedThreads
+                                              .contains(post.id)
+                                          ? Icons.bookmark
+                                          : Icons.bookmark_border,
+                                    ),
+                                    onPressed: () async {
+                                      final prefs = widget.backend.preferences;
+                                      final followed = {
+                                        ...prefs.followedThreads,
+                                      };
+                                      if (!followed.add(post.id)) {
+                                        followed.remove(post.id);
+                                      }
+                                      try {
+                                        await widget.backend.updatePreferences(
+                                          prefs.copyWith(
+                                            followedThreads: followed,
                                           ),
                                         );
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                safeErrorMessage(error),
+                                              ),
+                                            ),
+                                          );
+                                        }
                                       }
-                                    }
-                                  },
-                                ),
-                                for (final tag
-                                    in post.forumPost?.tags ?? <String>[])
-                                  Text('#$tag'),
-                              ],
-                            ),
-                          ],
+                                    },
+                                  ),
+                                  for (final tag
+                                      in post.forumPost?.tags ?? <String>[])
+                                    Text('#$tag'),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -390,9 +447,14 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
 }
 
 class _ForumPostEditor extends StatefulWidget {
-  const _ForumPostEditor({required this.backend, required this.roomId});
+  const _ForumPostEditor({
+    required this.backend,
+    required this.roomId,
+    this.original,
+  });
   final ChatBackend backend;
   final String roomId;
+  final ChatMessage? original;
   @override
   State<_ForumPostEditor> createState() => _ForumPostEditorState();
 }
@@ -401,9 +463,40 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
   final _title = TextEditingController();
   final _body = TextEditingController();
   final _tags = TextEditingController();
+  final _tagFocus = FocusNode();
+  final _selectedTags = <String>[];
   String? _error;
   bool _sending = false;
   AttachmentDraft? _cover;
+  bool _removeCover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final original = widget.original;
+    if (original == null) return;
+    _title.text = original.forumPost?.title ?? original.body.split('\n').first;
+    final prefix = '${_title.text}\n\n';
+    _body.text = original.body.startsWith(prefix)
+        ? original.body.substring(prefix.length)
+        : original.body;
+    _selectedTags.addAll(original.forumPost?.tags ?? const []);
+  }
+
+  void _addTag() {
+    final tag = _tags.text.trim();
+    if (tag.isEmpty) return;
+    if (!_selectedTags.contains(tag) &&
+        (_selectedTags.length >= 5 || tag.characters.length > 24)) {
+      setState(() => _error = 'Use at most five tags of up to 24 characters.');
+      return;
+    }
+    setState(() {
+      if (!_selectedTags.contains(tag)) _selectedTags.add(tag);
+      _tags.clear();
+      _error = null;
+    });
+  }
 
   Future<void> _pickCover() async {
     try {
@@ -439,16 +532,30 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
       _error = null;
     });
     try {
-      final post = ForumPost.validated(_title.text, _tags.text.split(','));
+      final post = ForumPost.validated(_title.text, [
+        ..._selectedTags,
+        _tags.text,
+      ]);
       if (_body.text.trim().isEmpty) {
         throw const FormatException('Write a post before sending.');
       }
-      await widget.backend.createForumPost(
-        widget.roomId,
-        post,
-        _body.text,
-        cover: _cover,
-      );
+      if (widget.original case final original?) {
+        await widget.backend.editForumPost(
+          widget.roomId,
+          original.id,
+          post,
+          _body.text,
+          cover: _cover,
+          removeCover: _removeCover,
+        );
+      } else {
+        await widget.backend.createForumPost(
+          widget.roomId,
+          post,
+          _body.text,
+          cover: _cover,
+        );
+      }
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) setState(() => _error = safeErrorMessage(error));
@@ -462,6 +569,7 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
     _title.dispose();
     _body.dispose();
     _tags.dispose();
+    _tagFocus.dispose();
     super.dispose();
   }
 
@@ -469,7 +577,9 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_sending,
     child: AlertDialog(
-      title: const Text('New forum post'),
+      title: Text(
+        widget.original == null ? 'New forum post' : 'Edit forum post',
+      ),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -490,23 +600,60 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
                 enabled: !_sending,
                 decoration: const InputDecoration(labelText: 'Post'),
               ),
+              const SizedBox(height: 16),
               TextField(
                 controller: _tags,
+                focusNode: _tagFocus,
                 enabled: !_sending,
+                textInputAction: TextInputAction.done,
+                onEditingComplete: () {
+                  _addTag();
+                  _tagFocus.requestFocus();
+                },
                 decoration: const InputDecoration(
-                  labelText: 'Tags, separated by commas',
+                  labelText: 'Add a tag',
+                  helperText: 'Press Enter to add, up to five tags.',
                 ),
               ),
+              if (_selectedTags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final tag in _selectedTags)
+                        InputChip(
+                          label: Text(tag),
+                          onDeleted: _sending
+                              ? null
+                              : () => setState(() => _selectedTags.remove(tag)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
               TextButton.icon(
                 onPressed: _sending ? null : _pickCover,
                 icon: const Icon(Icons.image_outlined),
-                label: Text(_cover?.name ?? 'Add cover image'),
+                label: Text(
+                  _cover?.name ??
+                      (!_removeCover && widget.original?.attachment != null
+                          ? 'Change cover image'
+                          : 'Add cover image'),
+                ),
               ),
-              if (_cover != null)
+              if (_cover != null ||
+                  (!_removeCover && widget.original?.attachment != null))
                 TextButton(
                   onPressed: _sending
                       ? null
-                      : () => setState(() => _cover = null),
+                      : () => setState(() {
+                          _cover = null;
+                          _removeCover = true;
+                        }),
                   child: const Text('Remove cover'),
                 ),
               if (_error != null) Text(_error!),
@@ -521,7 +668,13 @@ class _ForumPostEditorState extends State<_ForumPostEditor> {
         ),
         FilledButton(
           onPressed: _sending ? null : _submit,
-          child: Text(_sending ? 'Sending…' : 'Create post'),
+          child: Text(
+            _sending
+                ? 'Saving…'
+                : widget.original == null
+                ? 'Create post'
+                : 'Save changes',
+          ),
         ),
       ],
     ),

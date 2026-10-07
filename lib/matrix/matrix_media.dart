@@ -1,8 +1,23 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
-  String? _getAttachmentReference(String messageId) {
+  Event? _currentAttachmentEvent(String messageId) {
     final event = _eventById(messageId) ?? _attachmentEvents[messageId];
+    if (event == null) return null;
+    for (final timeline in [
+      _timeline,
+      ..._threadSessions.map((session) => session._timeline),
+    ]) {
+      if (timeline != null && timeline.room.id == event.room.id) {
+        final displayed = event.getDisplayEvent(timeline);
+        if (displayed.eventId != event.eventId) return displayed;
+      }
+    }
+    return event;
+  }
+
+  String? _getAttachmentReference(String messageId) {
+    final event = _currentAttachmentEvent(messageId);
     if (event == null || !event.hasAttachment) return null;
     final encryptedReference = event.content
         .tryGetMap<String, Object?>('file')
@@ -57,6 +72,7 @@ extension _MatrixMedia on MatrixBackend {
     String? roomId,
     String? replyToMessageId,
     String? threadRootEventId,
+    String? editMessageId,
     Map<String, dynamic>? additionalContent,
   }) async {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
@@ -124,6 +140,7 @@ extension _MatrixMedia on MatrixBackend {
             )
           : room.sendFileEvent(
               file,
+              editEventId: editMessageId,
               thumbnail: attachment.videoThumbnail == null
                   ? null
                   : MatrixImageFile(
@@ -212,7 +229,11 @@ extension _MatrixMedia on MatrixBackend {
     String messageId, {
     bool thumbnail = false,
   }) async {
-    final cacheKey = '$messageId:${thumbnail ? 'thumbnail' : 'original'}';
+    final event = _currentAttachmentEvent(messageId);
+    if (event == null || !event.hasAttachment) {
+      throw StateError('That attachment is no longer available.');
+    }
+    final cacheKey = '${event.eventId}:${thumbnail ? 'thumbnail' : 'original'}';
     final cached = _attachmentBytesCache.remove(cacheKey);
     if (cached != null) {
       _attachmentBytesCache[cacheKey] = cached;
@@ -222,7 +243,7 @@ extension _MatrixMedia on MatrixBackend {
     if (pending != null) return pending;
     final operation = _downloadAndCacheAttachment(
       cacheKey,
-      messageId,
+      event,
       thumbnail: thumbnail,
       generation: _attachmentCacheGeneration,
     );
@@ -236,14 +257,10 @@ extension _MatrixMedia on MatrixBackend {
 
   Future<Uint8List> _downloadAndCacheAttachment(
     String cacheKey,
-    String messageId, {
+    Event event, {
     required bool thumbnail,
     required int generation,
   }) async {
-    final event = _eventById(messageId) ?? _attachmentEvents[messageId];
-    if (event == null || !event.hasAttachment) {
-      throw StateError('That attachment is no longer available.');
-    }
     final file = await event.downloadAndDecryptAttachment(
       getThumbnail: thumbnail && event.hasThumbnail,
     );

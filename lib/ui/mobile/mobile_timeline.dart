@@ -2402,6 +2402,11 @@ class _MobileComposerState extends State<_MobileComposer> {
                           minLines: 1,
                           maxLines: null,
                           keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          // IMEs can finish composition when changing language.
+                          // Sending and dismissing are separate composer actions;
+                          // an editing-complete callback must not drop focus.
+                          onEditingComplete: () {},
                           textCapitalization: TextCapitalization.sentences,
                           contextMenuBuilder: (context, state) =>
                               AdaptiveTextSelectionToolbar.buttonItems(

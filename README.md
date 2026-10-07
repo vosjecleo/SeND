@@ -258,12 +258,20 @@ SeND has currently been built and/or tested on:
 - Android
 - Web/PWA on desktop and mobile, including iPhone/iPad Home Screen installation
 
-Linux is currently the primary development platform.
+Linux is currently the primary development platform. There have been extensive
+hands-on testing days across all supported platforms, covering most features.
+Native Linux, Windows and Android get the most daily use. PWA, particularly iOS,
+may lag behind those clients, but has also been tested extensively.
 
 Windows and Android use the same Flutter/Matrix backend and are tested separately
 for platform-specific behavior such as notifications, secure storage, audio and
 camera devices, screen capture, media playback, and application lifecycle.
 Android uses a phone-specific navigation, timeline, profile, and call interface.
+
+This is beta software. Expect occasional bugs and rough edges. No slow memory
+leaks have been reported over many hundreds of cumulative usage hours. On Cleo's
+setup, idle memory use is around 450 MB with a decently populated DM and server
+list. Usage varies with the platform, account and open media.
 
 ---
 
