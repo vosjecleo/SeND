@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.38+123" date="2026-10-07" type="development">
+      <description><p>Server invitations, mobile room menus and categories, drag-overlay cleanup, safer screen sharing and whole-emoji deletion.</p></description>
+    </release>
     <release version="0.9.38+122" date="2026-10-07" type="development">
       <description><p>Progressive profiles and link previews, media dimensions before download, clearer mobile room selection and video playback recovery.</p></description>
     </release>

@@ -547,6 +547,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, DateTime> _lastForegroundAlertAt = {};
   final Map<String, RoomPresentation> _roomPresentationOverrides = {};
   final Map<String, Map<String, dynamic>> _spaceChannelLayoutOverrides = {};
+  final Map<String, String> _spaceChannelLayoutEventIds = {};
   final Map<String, List<String>> _spaceRoomOrderOverrides = {};
   final Map<String, Set<String>> _collapsedChannelCategories = {};
   final LinkedHashMap<String, List<ChatMessage>> _roomMessageCache =
@@ -1515,6 +1516,9 @@ class MatrixBackend extends ChatBackend {
   Future<void> unbanMember(String userId) =>
       _moderateMember(userId, _MemberModerationAction.unban);
 
+  @override
+  bool canInviteToRoom(String roomId) =>
+      _client?.getRoomById(roomId)?.canInvite ?? false;
   @override
   Future<void> inviteMember(String userId, {String? reason, String? roomId}) =>
       _inviteMember(userId, reason: reason, roomId: roomId);

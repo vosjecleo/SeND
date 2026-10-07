@@ -285,6 +285,7 @@ abstract class ChatBackend extends ChangeNotifier {
       throw UnsupportedError('Member timeouts are unavailable');
   Future<void> unbanMember(String userId) async =>
       throw UnsupportedError('Unbanning members is unavailable');
+  bool canInviteToRoom(String roomId) => false;
   Future<void> inviteMember(
     String userId, {
     String? reason,

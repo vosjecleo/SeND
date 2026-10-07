@@ -257,17 +257,29 @@ Future<void> showInviteMember(
   BuildContext context,
   ChatBackend backend, {
   String? roomId,
+  bool server = false,
 }) async {
   final targetRoomId = roomId ?? backend.selectedRoom?.id;
-  final controller = TextEditingController();
+  var enteredId = '';
   final userId = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Invite to room'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(hintText: '@user:homeserver.tld'),
+      title: Text(server ? 'Invite to server' : 'Invite to room'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            onChanged: (value) => enteredId = value.trim(),
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '@user:homeserver.tld'),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            server
+                ? 'Private channels may need a separate invitation.'
+                : 'For server channels, this also invites them to the server if they are not already a member.',
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -275,13 +287,12 @@ Future<void> showInviteMember(
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          onPressed: () => Navigator.pop(context, enteredId),
           child: const Text('Invite'),
         ),
       ],
     ),
   );
-  controller.dispose();
   if (userId?.startsWith('@') == true) {
     try {
       await backend.inviteMember(userId!, roomId: targetRoomId);
@@ -290,7 +301,7 @@ Future<void> showInviteMember(
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not invite this user. Check their ID and your room invitation permissions.',
+              'Could not complete the invitation. Check their ID and your room and server invitation permissions. A server invitation may already have been sent.',
             ),
           ),
         );

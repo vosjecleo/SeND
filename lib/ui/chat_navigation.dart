@@ -406,6 +406,14 @@ class _SpaceBar extends StatelessWidget {
         Offset.zero & MediaQuery.sizeOf(context),
       ),
       items: [
+        if (backend.canInviteToRoom(space.id))
+          const PopupMenuItem(
+            value: 'invite',
+            child: _RoomContextMenuEntry(
+              icon: Icons.person_add_alt_1_outlined,
+              label: 'Invite to server',
+            ),
+          ),
         PopupMenuItem(
           value: 'mute',
           child: _RoomContextMenuEntry(
@@ -456,6 +464,13 @@ class _SpaceBar extends StatelessWidget {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case 'invite':
+        await showInviteMember(
+          context,
+          backend,
+          roomId: space.id,
+          server: true,
+        );
       case 'mute':
         await backend.setRoomMuted(space.id, !space.muted);
       case 'notifications':
@@ -951,34 +966,7 @@ class _RoomPanelState extends State<_RoomPanel> {
   }
 
   Future<void> _createCategory(BuildContext context) async {
-    final controller = TextEditingController();
-    final create = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create category'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Category name'),
-          onSubmitted: (_) => Navigator.of(context).pop(true),
-        ),
-        actions: [
-          TextButton(
-            onPressed: Navigator.of(context).pop,
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-    final name = controller.text.trim();
-    controller.dispose();
-    if (create == true && name.isNotEmpty) {
-      await backend.createChannelCategory(name);
-    }
+    await showCreateChannelCategory(context, backend);
   }
 
   @override
@@ -1157,7 +1145,11 @@ class _RoomPanelState extends State<_RoomPanel> {
                     ),
                   ),
                   Expanded(
-                    child: visibleRooms.isEmpty
+                    child:
+                        visibleRooms.isEmpty &&
+                            (backend.selectedSpaceId == null ||
+                                backend.selectedSpaceCategories.isEmpty ||
+                                query.isNotEmpty)
                         ? Center(
                             child: Text(
                               query.isEmpty
@@ -1784,6 +1776,40 @@ class _ChannelCategorySection extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> showCreateChannelCategory(
+  BuildContext context,
+  ChatBackend backend,
+) async {
+  final spaceId = backend.selectedSpaceId;
+  if (spaceId == null || !backend.canManageSpaceChannelLayout(spaceId)) return;
+  var name = '';
+  final create = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Create category'),
+      content: TextField(
+        onChanged: (value) => name = value.trim(),
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Category name'),
+        onSubmitted: (_) => Navigator.pop(context, true),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Create'),
+        ),
+      ],
+    ),
+  );
+  if (create == true && name.isNotEmpty && backend.selectedSpaceId == spaceId) {
+    await backend.createChannelCategory(name);
   }
 }
 

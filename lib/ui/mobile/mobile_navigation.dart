@@ -11,7 +11,8 @@ import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
 import '../relative_activity_time.dart';
 import '../space_settings_screen.dart';
-import '../chat_shell.dart' show showChannelActions;
+import '../member_management.dart';
+import '../chat_shell.dart' show showChannelActions, showCreateChannelCategory;
 import 'mobile_widgets.dart';
 import 'mobile_channel_manager.dart';
 
@@ -184,7 +185,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                             : 'Create a room',
                                         onPressed: () => selectedSpace == null
                                             ? _startChat(context)
-                                            : _createRoom(context),
+                                            : _showCreateActions(context),
                                         icon: const Icon(Icons.add),
                                       ),
                                     ],
@@ -250,6 +251,36 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
         ),
       ),
     );
+  }
+
+  Future<void> _showCreateActions(BuildContext context) async {
+    final spaceId = backend.selectedSpaceId;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add_comment_outlined),
+              title: const Text('Create room'),
+              onTap: () => Navigator.pop(context, 'room'),
+            ),
+            if (spaceId != null && backend.canManageSpaceChannelLayout(spaceId))
+              ListTile(
+                leading: const Icon(Icons.create_new_folder_outlined),
+                title: const Text('Create category'),
+                onTap: () => Navigator.pop(context, 'category'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'room') await _createRoom(context);
+    if (action == 'category' && context.mounted) {
+      await showCreateChannelCategory(context, backend);
+    }
   }
 
   Future<void> _startChat(BuildContext context) async {
@@ -456,6 +487,12 @@ class _SpaceRail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (backend.canInviteToRoom(space.id))
+              ListTile(
+                leading: const Icon(Icons.person_add_alt_1_outlined),
+                title: const Text('Invite to server'),
+                onTap: () => Navigator.pop(sheetContext, 'invite'),
+              ),
             ListTile(
               leading: Icon(
                 space.muted
@@ -492,6 +529,13 @@ class _SpaceRail extends StatelessWidget {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case 'invite':
+        await showInviteMember(
+          context,
+          backend,
+          roomId: space.id,
+          server: true,
+        );
       case 'mute':
         await backend.setRoomMuted(space.id, !space.muted);
       case 'settings':
@@ -797,59 +841,74 @@ class _RoomList extends StatelessWidget {
       return _SelectedRoomSurface(
         key: _RoomRowKey(room.id),
         selected: backend.selectedRoom?.id == room.id,
-        child: ListTile(
-          key: ValueKey(room.id),
-          minTileHeight: 56,
-          minVerticalPadding: 6,
-          visualDensity: VisualDensity.standard,
-          contentPadding: const EdgeInsets.only(left: 4, right: 8),
-          horizontalTitleGap: 12,
-          selected: backend.selectedRoom?.id == room.id,
-          selectedColor: Theme.of(context).colorScheme.onSurface,
-          leading: MobileAvatar(
-            bytes: room.avatarBytes,
-            autoplay: backend.selectedRoom?.id == room.id,
-            fallback: room.name,
-            presence: room.isDirect ? room.presence : null,
+        child: Builder(
+          builder: (context) => ListTile(
+            key: ValueKey(room.id),
+            minTileHeight: 56,
+            minVerticalPadding: 6,
+            visualDensity: VisualDensity.standard,
+            contentPadding: const EdgeInsets.only(left: 4, right: 8),
+            horizontalTitleGap: 12,
+            selected: backend.selectedRoom?.id == room.id,
+            selectedColor: Theme.of(context).colorScheme.onSurface,
+            leading: MobileAvatar(
+              bytes: room.avatarBytes,
+              autoplay: backend.selectedRoom?.id == room.id,
+              fallback: room.name,
+              presence: room.isDirect ? room.presence : null,
+            ),
+            title: Text(
+              room.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
+                ? ActivityStatus(
+                    backend: backend,
+                    userId: room.directUserId,
+                    presence: room.presence,
+                    status: room.statusMessage,
+                  )
+                : null,
+            trailing: room.unreadCount == 0 && age.isEmpty
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (room.unreadCount > 0)
+                        Badge(
+                          largeSize: 16,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          label: Text(
+                            '${room.unreadCount}',
+                            style: const TextStyle(fontSize: 9),
+                          ),
+                        ),
+                      if (room.unreadCount > 0 && age.isNotEmpty)
+                        const SizedBox(height: 2),
+                      if (age.isNotEmpty)
+                        Text(
+                          age,
+                          style: TextStyle(
+                            color: context.deltiecord.muted,
+                            fontSize: DeltiecordTypeScale.small,
+                            height: 1.05,
+                          ),
+                        ),
+                    ],
+                  ),
+            onTap: () => onOpenRoom(room),
+            onLongPress: () {
+              final box = context.findRenderObject() as RenderBox?;
+              showChannelActions(
+                context,
+                backend,
+                room,
+                box?.localToGlobal(Offset.zero) ?? Offset.zero,
+              );
+            },
           ),
-          title: Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
-              ? ActivityStatus(
-                  backend: backend,
-                  userId: room.directUserId,
-                  presence: room.presence,
-                  status: room.statusMessage,
-                )
-              : null,
-          trailing: room.unreadCount == 0 && age.isEmpty
-              ? null
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (room.unreadCount > 0)
-                      Badge(
-                        largeSize: 16,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        label: Text(
-                          '${room.unreadCount}',
-                          style: const TextStyle(fontSize: 9),
-                        ),
-                      ),
-                    if (room.unreadCount > 0 && age.isNotEmpty)
-                      const SizedBox(height: 2),
-                    if (age.isNotEmpty)
-                      Text(
-                        age,
-                        style: TextStyle(
-                          color: context.deltiecord.muted,
-                          fontSize: DeltiecordTypeScale.small,
-                          height: 1.05,
-                        ),
-                      ),
-                  ],
-                ),
-          onTap: () => onOpenRoom(room),
         ),
       );
     },

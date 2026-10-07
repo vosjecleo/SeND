@@ -87,7 +87,11 @@ final class _DeltiecordMediaDevices implements MediaDevices {
 
   @override
   Future<MediaStream> getDisplayMedia(Map<String, dynamic> constraints) async {
-    final withAudio = _shareDesktopAudio();
+    final withAudio =
+        _shareDesktopAudio() &&
+        (kIsWeb ||
+            (defaultTargetPlatform != TargetPlatform.android &&
+                defaultTargetPlatform != TargetPlatform.iOS));
     try {
       return await _delegate.getDisplayMedia({
         ...constraints,

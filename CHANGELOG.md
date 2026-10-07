@@ -3,6 +3,25 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.38 build 123 (2026-10-07)
+
+- Add Invite to server to server menus on desktop and mobile. Channel invites
+  also invite new members to the parent server when permitted. Accepting a
+  channel joins its single matching pending server invitation and selects the
+  server after sync. Other private channels may still need separate invitations.
+- Open the shared room menu by holding a mobile Home-list entry, including
+  permission-aware room settings and renaming.
+- Add mobile category creation and show empty categories on desktop. Keep new
+  category layouts visible while waiting for their state event to arrive.
+- Reject browser-page drags as attachments and clear the drop overlay when a
+  drag ends, is cancelled, or the room changes.
+- Explain why screen sharing needs a connected participant before starting
+  capture. Add Android's screen-capture foreground service, fresh capture
+  consent and cleanup when sharing stops or the call ends. Physical-device
+  screen-sharing confirmation remains pending.
+- Delete selected custom emoji as whole items on backspace, while keeping
+  ordinary typed shortcodes editable as text.
+
 ## SeND 0.9.38 build 122 (2026-10-07)
 
 - Show selected mobile DMs and channels with the same rounded highlight as

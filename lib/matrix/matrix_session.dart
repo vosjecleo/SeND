@@ -29,9 +29,17 @@ extension _MatrixSession on MatrixBackend {
       _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((_) {
         _settingsHydrated = true;
-        // Successful local state writes are mirrored until this authoritative
-        // sync makes the SDK's room-state cache current.
-        _spaceChannelLayoutOverrides.clear();
+        // An unrelated sync may arrive before our state write. Keep the local
+        // layout until the SDK has received the acknowledged event.
+        _spaceChannelLayoutOverrides.removeWhere((spaceId, _) {
+          final state = _matrix
+              .getRoomById(spaceId)
+              ?.getState(MatrixBackend._spaceChannelsEventType);
+          final received = state is MatrixEvent ? state.eventId : null;
+          if (received != _spaceChannelLayoutEventIds[spaceId]) return false;
+          _spaceChannelLayoutEventIds.remove(spaceId);
+          return true;
+        });
         _spaceRoomOrderOverrides.clear();
         final roleSignature = jsonEncode([
           for (final space in _matrix.rooms.where((room) => room.isSpace))
@@ -296,6 +304,7 @@ extension _MatrixSession on MatrixBackend {
       _lastNotificationEventIds.clear();
       _roomPresentationOverrides.clear();
       _spaceChannelLayoutOverrides.clear();
+      _spaceChannelLayoutEventIds.clear();
       _spaceRoomOrderOverrides.clear();
       _collapsedChannelCategories.clear();
       _roomMessageCache.clear();

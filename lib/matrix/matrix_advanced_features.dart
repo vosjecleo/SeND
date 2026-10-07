@@ -1312,6 +1312,26 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
   }) async {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('No room is selected.');
+    if (!room.canInvite) {
+      throw StateError('You cannot invite people to this room.');
+    }
+    final space = room.isSpace ? null : _spaceForRoom(room);
+    if (space != null) {
+      final member = await space.requestUser(
+        userId,
+        requestProfile: false,
+        ignoreErrors: true,
+      );
+      if (member?.membership != Membership.join &&
+          member?.membership != Membership.invite) {
+        if (!space.canInvite) {
+          throw StateError(
+            'Ask a server admin to invite this person to the server first.',
+          );
+        }
+        await space.invite(userId, reason: reason);
+      }
+    }
     await room.invite(userId, reason: reason);
   }
 
@@ -1319,12 +1339,40 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) throw StateError('That invitation is unavailable.');
     await room.join();
+    await _matrix.waitForRoomInSync(roomId, join: true);
     await _notifications.clearRoom(roomId);
-    if (room.isSpace) {
-      _selectSpace(room.id);
+    final joined = _matrix.getRoomById(roomId)!;
+    if (joined.isSpace) {
+      _selectSpace(joined.id);
     } else {
-      await _selectRoom(room.id);
+      String? parentJoinError;
+      // Accept only an existing invitation to the channel's stated parent.
+      // Do not join arbitrary public spaces named by an untrusted room.
+      final parents = joined.spaceParents
+          .map((parent) => _matrix.getRoomById(parent.roomId ?? ''))
+          .whereType<Room>()
+          .where(
+            (parent) =>
+                parent.isSpace && parent.membership == Membership.invite,
+          )
+          .toList();
+      if (_spaceForRoom(joined) == null && parents.length == 1) {
+        final parent = parents.single;
+        try {
+          await parent.join();
+          await _matrix.waitForRoomInSync(parent.id, join: true);
+          await _notifications.clearRoom(parent.id);
+        } catch (_) {
+          parentJoinError =
+              'Joined the channel, but could not join its server. Accept the server invitation in Inbox to try again.';
+        }
+      }
+      final space = _spaceForRoom(joined);
+      if (space != null) _selectSpace(space.id);
+      await _selectRoom(joined.id);
+      if (parentJoinError != null) _error = parentJoinError;
     }
+    _notifyBackendListeners();
   }
 
   Future<void> _rejectRoomInvite(String roomId) async {
@@ -1602,7 +1650,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
             roomName: room.getLocalizedDisplayname(),
             kind: InboxItemKind.invite,
             timestamp: room.lastEvent?.originServerTs ?? DateTime.now().toUtc(),
-            preview: 'Room invitation',
+            preview: room.isSpace ? 'Server invitation' : 'Room invitation',
             avatarBytes: _avatarBytes[room.id],
             isSpace: room.isSpace,
           ),

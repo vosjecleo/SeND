@@ -4,6 +4,7 @@ import 'package:flutter_quill/flutter_quill.dart'
     show QuillController, ChangeSource;
 
 import '../backend/chat_backend.dart';
+import '../services/custom_emoji.dart';
 import 'composer_emoji_span.dart';
 import 'rich_message.dart';
 
@@ -129,6 +130,7 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
       child: TextField(
         key: const ValueKey('plain-message-editor'),
         controller: _text,
+        inputFormatters: [CustomEmojiDeletionFormatter(widget.controller)],
         focusNode: widget.focusNode,
         scrollController: widget.scrollController,
         enabled: widget.enabled,
@@ -169,6 +171,70 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
       ),
     ),
   );
+}
+
+/// A displayed custom emoji is one editing unit, not its hidden shortcode.
+class CustomEmojiDeletionFormatter extends TextInputFormatter {
+  CustomEmojiDeletionFormatter(this.controller);
+  final QuillController controller;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.length >= oldValue.text.length ||
+        !newValue.composing.isCollapsed ||
+        !oldValue.composing.isCollapsed ||
+        controller.document.toPlainText() != '${oldValue.text}\n') {
+      return newValue;
+    }
+    var start = 0;
+    while (start < newValue.text.length &&
+        oldValue.text[start] == newValue.text[start]) {
+      start++;
+    }
+    var suffix = 0;
+    while (suffix < newValue.text.length - start &&
+        oldValue.text[oldValue.text.length - 1 - suffix] ==
+            newValue.text[newValue.text.length - 1 - suffix]) {
+      suffix++;
+    }
+    if (start + suffix != newValue.text.length) return newValue;
+    var end = oldValue.text.length - suffix;
+    final cursor = oldValue.selection.extentOffset;
+    final removed = oldValue.text.length - newValue.text.length;
+    if (oldValue.selection.isCollapsed &&
+        cursor >= removed &&
+        oldValue.text.replaceRange(cursor - removed, cursor, '') ==
+            newValue.text) {
+      start = cursor - removed;
+      end = cursor;
+    }
+    var offset = 0;
+    for (final op in controller.document.toDelta().toJson()) {
+      final text = op['insert'];
+      if (text is! String) continue;
+      final next = offset + text.length;
+      final link = (op['attributes'] as Map?)?['link'] as String?;
+      if (customEmojiFromEditorLink(link) != null) {
+        for (final token in RegExp(r':[^:\s]+:').allMatches(text)) {
+          final tokenStart = offset + token.start;
+          final tokenEnd = offset + token.end;
+          if (tokenStart < end && tokenEnd > start) {
+            start = start < tokenStart ? start : tokenStart;
+            end = end > tokenEnd ? end : tokenEnd;
+          }
+        }
+      }
+      offset = next;
+    }
+    end = end.clamp(start, oldValue.text.length);
+    return TextEditingValue(
+      text: oldValue.text.replaceRange(start, end, ''),
+      selection: TextSelection.collapsed(offset: start),
+    );
+  }
 }
 
 class _PlainController extends TextEditingController {

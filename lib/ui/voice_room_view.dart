@@ -234,7 +234,7 @@ class _VoiceHeader extends StatelessWidget {
               case _VoiceMenuAction.camera:
                 backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled);
               case _VoiceMenuAction.share:
-                backend.setVoiceScreenSharing(!backend.voiceScreenSharing);
+                toggleVoiceScreenSharing(context, backend);
               case _VoiceMenuAction.desktopAudio:
                 backend.updatePreferences(
                   backend.preferences.copyWith(

@@ -9,6 +9,7 @@ import '../models/chat_models.dart';
 import '../models/rtc_connectivity.dart';
 import '../services/app_sounds.dart';
 import '../services/rtc_audio_controls.dart';
+import '../services/screen_capture_service.dart';
 import 'deltiecord_webrtc_delegate.dart';
 import 'refreshing_voip.dart';
 
@@ -141,6 +142,7 @@ class MatrixVoiceController extends ChangeNotifier {
   bool _deafened = false;
   bool _cameraEnabled = false;
   bool _screenSharing = false;
+  bool _changingScreenShare = false;
   String? _error;
   String? _activeSpeakerUserId;
   List<AudioInputSummary> _audioInputs = const [];
@@ -736,6 +738,7 @@ class MatrixVoiceController extends ChangeNotifier {
         _activeSpeakerUserId = participant.userId;
       case GroupCallLocalScreenshareStateChanged(:final screensharing):
         _screenSharing = screensharing;
+        if (!screensharing) unawaited(ScreenCaptureService.stop());
       case GroupCallStreamAdded() ||
           GroupCallStreamRemoved() ||
           GroupCallStreamReplaced():
@@ -936,16 +939,47 @@ class MatrixVoiceController extends ChangeNotifier {
 
   Future<void> setScreenSharing(bool enabled) async {
     final call = _activeCall;
-    if (call == null || _disposed || _screenSharing == enabled) return;
+    if (call == null ||
+        _disposed ||
+        _screenSharing == enabled ||
+        _changingScreenShare) {
+      return;
+    }
+    if (enabled &&
+        (_status != VoiceConnectionStatus.connected ||
+            call.localParticipant == null ||
+            _connectivity.connectedPeers == 0)) {
+      _error =
+          'Wait for another participant to connect before sharing your screen.';
+      notifyListeners();
+      return;
+    }
     _error = null;
+    _changingScreenShare = true;
     try {
+      if (enabled) {
+        if (!await ScreenCaptureService.prepare()) return;
+        if (_disposed ||
+            !identical(call, _activeCall) ||
+            _status != VoiceConnectionStatus.connected ||
+            _connectivity.connectedPeers == 0) {
+          return;
+        }
+      }
       await call.backend.setScreensharingEnabled(call, enabled, '');
+      if (_disposed || !identical(call, _activeCall)) {
+        await call.backend.setScreensharingEnabled(call, false, '');
+        return;
+      }
       _screenSharing = call.backend.localScreenshareStream != null;
     } catch (exception) {
       _error = friendlyError(exception);
       _screenSharing = call.backend.localScreenshareStream != null;
+    } finally {
+      _changingScreenShare = false;
+      if (!_screenSharing) await ScreenCaptureService.stop();
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void _applyLocalMuteGate() {
@@ -1011,6 +1045,7 @@ class MatrixVoiceController extends ChangeNotifier {
     _connectivity = const RtcConnectivity();
     final call = _activeCall;
     if (call == null) {
+      await ScreenCaptureService.stop();
       _status = VoiceConnectionStatus.disconnected;
       _error = null;
       if (!_disposed) notifyListeners();
@@ -1033,6 +1068,7 @@ class MatrixVoiceController extends ChangeNotifier {
       _activeSpeakerUserId = null;
       if (kIsWeb) await _syncWebAudio();
       _screenSharing = false;
+      await ScreenCaptureService.stop();
       _status = _rejoining
           ? VoiceConnectionStatus.reconnecting
           : VoiceConnectionStatus.disconnected;

@@ -107,7 +107,7 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
                 case 'camera':
                   backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled);
                 case 'share':
-                  backend.setVoiceScreenSharing(!backend.voiceScreenSharing);
+                  toggleVoiceScreenSharing(context, backend);
                 case 'devices':
                   _showDeviceSheet();
               }

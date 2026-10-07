@@ -42,6 +42,45 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "net.deltie.deltiecord/screen_share").setMethodCallHandler { call, result ->
+            val service = Intent(this, ScreenShareService::class.java)
+            when (call.method) {
+                "start" -> {
+                    var completed = false
+                    val timeout = Runnable {
+                        if (!completed) {
+                            completed = true
+                            stopService(service)
+                            result.error("capture_service_timeout", "Screen sharing could not start. Try again.", null)
+                        }
+                    }
+                    val reply = object : android.os.ResultReceiver(mainHandler) {
+                        override fun onReceiveResult(code: Int, data: android.os.Bundle?) {
+                            if (completed) return
+                            completed = true
+                            mainHandler.removeCallbacks(timeout)
+                            if (code == 0) result.success(null)
+                            else result.error("capture_service_failed", "Android could not start screen sharing.", null)
+                        }
+                    }
+                    service.putExtra("reply", reply)
+                    mainHandler.postDelayed(timeout, 10_000)
+                    try {
+                        androidx.core.content.ContextCompat.startForegroundService(this, service)
+                    } catch (_: Exception) {
+                        completed = true
+                        mainHandler.removeCallbacks(timeout)
+                        result.error("capture_service_failed", "Android could not start screen sharing.", null)
+                    }
+                }
+                "stop" -> {
+                    stopService(service)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         videoPreparation?.dispose()
         videoPreparation = VideoPreparationBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,

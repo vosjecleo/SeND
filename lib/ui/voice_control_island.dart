@@ -4,6 +4,34 @@ import '../backend/chat_backend.dart';
 import '../models/rtc_connectivity.dart';
 import 'deltiecord_theme.dart';
 
+Future<void> toggleVoiceScreenSharing(
+  BuildContext context,
+  ChatBackend backend,
+) async {
+  if (!backend.voiceScreenSharing &&
+      backend.rtcConnectivity.connectedPeers == 0) {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('No one is connected to you yet'),
+        content: const Text(
+          'You can wait in the voice channel alone, but audio, video and screen '
+          'sharing need another connected participant. Wait for someone to join '
+          'and for the connection icon to turn green, then share your screen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  await backend.setVoiceScreenSharing(!backend.voiceScreenSharing);
+}
+
 class RtcConnectivityIcon extends StatelessWidget {
   const RtcConnectivityIcon({required this.backend, super.key});
   final ChatBackend backend;

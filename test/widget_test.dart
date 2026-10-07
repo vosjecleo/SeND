@@ -13,6 +13,9 @@ import 'package:deltiecord/ui/advanced_chat_dialogs.dart';
 import 'package:deltiecord/ui/emoji_picker_dialog.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 import 'package:deltiecord/ui/typing_indicator.dart';
+import 'package:deltiecord/ui/voice_control_island.dart';
+import 'package:super_drag_and_drop/super_drag_and_drop.dart';
+import 'package:super_clipboard/super_clipboard.dart' show DataReader;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +24,153 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mobile in [false, true]) {
+    testWidgets('server invitation menu targets the server, mobile=$mobile', (
+      tester,
+    ) async {
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Friends')];
+      backend.editableRoomIds.add('!space:test');
+      if (mobile) {
+        await _pumpMobile(tester, backend);
+        await tester.longPress(find.byTooltip('Friends'));
+      } else {
+        await tester.pumpWidget(DeltiecordApp(backend: backend));
+        await _revealMessageActions(tester, find.byTooltip('Friends'));
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invite to server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, '@user:homeserver.tld'),
+        '@friend:test',
+      );
+      await tester.tap(find.text('Invite'));
+      await tester.pumpAndSettle();
+      expect(backend.sentInvites, [('@friend:test', '!space:test')]);
+    });
+  }
+
+  testWidgets('mobile DM hold opens permission-aware room settings', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = const [
+        RoomSummary(
+          id: '!dm:test',
+          name: 'Alice',
+          lastMessage: '',
+          unreadCount: 0,
+          usesChannelIcon: false,
+          isDirect: true,
+        ),
+      ];
+    backend.editableRoomIds.add('!dm:test');
+    await _pumpMobile(tester, backend);
+    await tester.longPress(find.text('Alice'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit DM name'), findsOneWidget);
+    await tester.tap(find.text('Edit DM name'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save'), findsOneWidget);
+  });
+
+  testWidgets('mobile can create a category in an empty server', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:test'
+      ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Friends')];
+    await _pumpMobile(tester, backend);
+    await tester.tap(find.byKey(const ValueKey('mobile-start-chat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Category name'),
+      'Projects',
+    );
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(backend.categoryList.single.name, 'Projects');
+    expect(find.text('Projects'), findsOneWidget);
+  });
+
+  testWidgets('desktop displays categories without any rooms', (tester) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:test'
+      ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Friends')]
+      ..categoryList = const [
+        ChannelCategorySummary(id: 'empty', name: 'Projects', roomIds: []),
+      ];
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.pumpAndSettle();
+    expect(find.text('Projects'), findsOneWidget);
+  });
+
+  testWidgets(
+    'screen sharing without peers explains why capture cannot start',
+    (tester) async {
+      final backend = FakeBackend();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => toggleVoiceScreenSharing(context, backend),
+              child: const Text('Share'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Share'));
+      await tester.pumpAndSettle();
+      expect(find.text('No one is connected to you yet'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'attachment drag rejects browser text and clears on cancellation',
+    (tester) async {
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..roomList = const [
+          RoomSummary(
+            id: '!room:test',
+            name: 'Chat',
+            lastMessage: '',
+            unreadCount: 0,
+            usesChannelIcon: false,
+          ),
+        ];
+      await backend.selectRoom('!room:test');
+      await tester.pumpWidget(DeltiecordApp(backend: backend));
+      await tester.pumpAndSettle();
+      final region = tester.widget<DropRegion>(find.byType(DropRegion));
+      final browser = _TestDropSession([
+        Formats.plainText,
+        Formats.htmlText,
+        Formats.htmlFile,
+        Formats.uri,
+      ]);
+      DropOverEvent over(DropSession session) => DropOverEvent(
+        session: session,
+        position: DropPosition(local: Offset.zero, global: Offset.zero),
+      );
+      expect(await region.onDropOver(over(browser)), DropOperation.none);
+      final image = _TestDropSession([Formats.png]);
+      expect(await region.onDropOver(over(image)), DropOperation.copy);
+      await tester.pump();
+      expect(find.text('Drop files to attach'), findsOneWidget);
+      image.ended.notifyListeners();
+      await tester.pump();
+      expect(find.text('Drop files to attach'), findsNothing);
+    },
+  );
+
   testWidgets('shows login controls when signed out', (tester) async {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedOut;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
@@ -4068,7 +4218,43 @@ Future<void> _revealMessageActions(WidgetTester tester, Finder message) async {
   await mouse.removePointer();
 }
 
+class _TestDropSession extends DropSession {
+  _TestDropSession(List<DataFormat> formats) : items = [_TestDropItem(formats)];
+  final ended = ChangeNotifier();
+  @override
+  final List<DropItem> items;
+  @override
+  Listenable get onDisposed => ended;
+  @override
+  Set<DropOperation> get allowedOperations => {DropOperation.copy};
+}
+
+class _TestDropItem extends DropItem {
+  _TestDropItem(this.formats);
+  final List<DataFormat> formats;
+  @override
+  bool canProvide(DataFormat format) => formats.contains(format);
+  @override
+  DataReader? get dataReader => null;
+  @override
+  Object? get localData => null;
+  @override
+  List<PlatformFormat> get platformFormats => const [];
+}
+
 class FakeBackend extends ChatBackend {
+  final sentInvites = <(String, String?)>[];
+  @override
+  bool canInviteToRoom(String roomId) => editableRoomIds.contains(roomId);
+  @override
+  Future<void> inviteMember(
+    String userId, {
+    String? reason,
+    String? roomId,
+  }) async {
+    sentInvites.add((userId, roomId));
+  }
+
   final editableRoomIds = <String>{};
   @override
   bool canChangeRoomState(String roomId, String eventType) =>
@@ -4077,7 +4263,13 @@ class FakeBackend extends ChatBackend {
   List<ChannelCategorySummary> get selectedSpaceCategories => categoryList;
 
   @override
-  Future<void> createChannelCategory(String name) async {}
+  Future<void> createChannelCategory(String name) async {
+    categoryList = [
+      ...categoryList,
+      ChannelCategorySummary(id: name, name: name, roomIds: const []),
+    ];
+    notifyListeners();
+  }
 
   @override
   Future<void> renameChannelCategory(String categoryId, String name) async {}

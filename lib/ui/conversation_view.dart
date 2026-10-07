@@ -74,6 +74,9 @@ class _ConversationState extends State<_Conversation> {
   bool _loadingAnchoredHistory = false;
   bool _fillingInitialViewport = false;
   bool _draggingFiles = false;
+  DropSession? _dropSession;
+  final Set<DropItem> _checkedDropItems = {};
+  final Set<DropItem> _localFileItems = {};
   bool _scrolledAwayFromPresent = false;
   DateTime _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _suppressPaginationUntil = DateTime.fromMillisecondsSinceEpoch(0);
@@ -314,6 +317,8 @@ class _ConversationState extends State<_Conversation> {
         !_scrolledAwayFromPresent &&
         (!_scrollController.hasClients || _scrollController.offset <= 48);
     if (_roomId != roomId) {
+      _draggingFiles = false;
+      _clearDropSession();
       widget.backend.setConversationAtPresent(false);
       _roomId = roomId;
       _scrolledAwayFromPresent = false;
@@ -350,6 +355,7 @@ class _ConversationState extends State<_Conversation> {
 
   @override
   void dispose() {
+    _dropSession?.onDisposed.removeListener(_clearDropSession);
     widget.backend.setConversationAtPresent(false);
     _scrollController.dispose();
     super.dispose();
@@ -507,17 +513,63 @@ class _ConversationState extends State<_Conversation> {
   }
 
   DropOperation _onDropOver(DropOverEvent event) {
-    if (!_draggingFiles) setState(() => _draggingFiles = true);
-    return event.session.allowedOperations.contains(DropOperation.copy)
-        ? DropOperation.copy
-        : DropOperation.none;
+    if (!identical(_dropSession, event.session)) {
+      _dropSession?.onDisposed.removeListener(_clearDropSession);
+      _dropSession = event.session;
+      _checkedDropItems.clear();
+      _localFileItems.clear();
+      event.session.onDisposed.addListener(_clearDropSession);
+    }
+    for (final item in event.session.items) {
+      final reader = item.dataReader;
+      if (reader != null &&
+          item.canProvide(Formats.fileUri) &&
+          _checkedDropItems.add(item)) {
+        reader.getValue(Formats.fileUri, (uri) {
+          if (mounted &&
+              identical(_dropSession, event.session) &&
+              uri != null) {
+            _localFileItems.add(item);
+            if (event.session.allowedOperations.contains(DropOperation.copy)) {
+              setState(() => _draggingFiles = true);
+            }
+          }
+        }, onError: (_) {});
+      }
+    }
+    final accepts =
+        event.session.allowedOperations.contains(DropOperation.copy) &&
+        event.session.items.any(
+          (item) =>
+              _localFileItems.contains(item) ||
+              Formats.standardFormats
+                  .whereType<FileFormat>()
+                  .where(
+                    (format) =>
+                        format != Formats.plainTextFile &&
+                        format != Formats.htmlFile,
+                  )
+                  .any(item.canProvide),
+        );
+    if (_draggingFiles != accepts) setState(() => _draggingFiles = accepts);
+    return accepts ? DropOperation.copy : DropOperation.none;
   }
 
   void _onDropLeave(DropEvent _) {
-    if (_draggingFiles) setState(() => _draggingFiles = false);
+    _clearDropSession();
+  }
+
+  void _clearDropSession() {
+    _dropSession?.onDisposed.removeListener(_clearDropSession);
+    _dropSession = null;
+    _checkedDropItems.clear();
+    _localFileItems.clear();
+    if (mounted && _draggingFiles) setState(() => _draggingFiles = false);
   }
 
   Future<void> _onPerformDrop(PerformDropEvent event) async {
+    final roomId = widget.backend.selectedRoom?.id;
+    _clearDropSession();
     final attachments = <AttachmentDraft>[];
     try {
       for (final item in event.session.items) {
@@ -547,7 +599,9 @@ class _ConversationState extends State<_Conversation> {
         final attachment = await completed.future;
         if (attachment != null) attachments.add(attachment);
       }
-      widget.onDropAttachments(attachments);
+      if (mounted && widget.backend.selectedRoom?.id == roomId) {
+        widget.onDropAttachments(attachments);
+      }
     } finally {
       if (mounted) setState(() => _draggingFiles = false);
     }
@@ -589,6 +643,7 @@ class _ConversationState extends State<_Conversation> {
         onDropOver: _onDropOver,
         onPerformDrop: _onPerformDrop,
         onDropLeave: _onDropLeave,
+        onDropEnded: _onDropLeave,
         child: Stack(
           children: [
             Positioned.fill(

@@ -105,7 +105,7 @@ extension _MatrixRoomOperations on MatrixBackend {
     Map<String, dynamic> content,
   ) async {
     await _ensureSpaceChannelLayoutPermission(spaceId);
-    await _matrix.setRoomStateWithKey(
+    final eventId = await _matrix.setRoomStateWithKey(
       spaceId,
       MatrixBackend._spaceChannelsEventType,
       '',
@@ -114,6 +114,7 @@ extension _MatrixRoomOperations on MatrixBackend {
     // The SDK exposes newly-written state only after the next sync. Keep the
     // successful write visible immediately, then drop the override on sync.
     _spaceChannelLayoutOverrides[spaceId] = {'version': 1, ...content};
+    _spaceChannelLayoutEventIds[spaceId] = eventId;
     _notifyBackendListeners();
   }
 
