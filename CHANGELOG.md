@@ -3,6 +3,29 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.38 build 121 (2026-10-07)
+
+- Add optional built-in Android background notifications, alongside UnifiedPush
+  and Off, in onboarding and Notifications settings. No separate app is needed.
+  The listener uses a quiet ongoing notification and decrypts messages locally.
+  Screen-off delivery and battery use still need physical-device testing.
+- Add author-only forum post editing for title, body, tags and cover. Open post
+  actions with right-click or long-press; deletion requires confirmation and
+  remains available to creators and moderators with permission.
+- Improve the forum editor's spacing and replace comma-separated tags with
+  removable tags added by pressing Enter.
+- Preserve composer focus after keyboard-language changes and tighten mobile DM
+  avatar spacing. Physical keyboard-switching confirmation remains pending.
+- Fix colours becoming black when cropping animated GIF banners by converting
+  frame palettes before animation assembly. Verify against the reported GIF.
+- Fill audio progress to the end when playback completes, even when the final
+  playback position falls slightly short of the reported duration.
+- Improve YouTube video discovery and FxTwitter preview dimensions. Use video
+  dimensions rather than poster dimensions, and repair upload metadata and
+  thumbnails where possible. Provider and browser playback restrictions remain.
+- Update testing notes to reflect cross-platform use, with Linux, Windows and
+  Android receiving the most day-to-day testing.
+
 ## SeND 0.9.37 build 120 (2026-10-06)
 
 - Load voice-channel chat history and acknowledge messages when its chat is
