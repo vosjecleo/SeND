@@ -94,6 +94,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   late _SettingsPage _page = widget.initialPage ?? _SettingsPage.account;
   late bool _mobilePageOpen = widget.initialPage != null;
   Future<UserProfileSummary>? _ownProfile;
+  int? _ownProfileRevision;
   Future<UnifiedPushState>? _unifiedPushState;
   bool _checkingForUpdates = false;
   bool _loggingOut = false;
@@ -114,8 +115,14 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   }
 
   void _reloadOwnProfile() {
+    _ownProfileRevision = backend.profileRevision;
     final userId = backend.userId;
     if (userId != null) _ownProfile = backend.getUserProfile(userId);
+  }
+
+  Future<UserProfileSummary>? _currentOwnProfile() {
+    if (_ownProfileRevision != backend.profileRevision) _reloadOwnProfile();
+    return _ownProfile;
   }
 
   void _reloadUnifiedPush() {
@@ -1101,7 +1108,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   }
 
   Widget _account() => _section('Account', [
-    if (_ownProfile case final profileFuture?)
+    if (_currentOwnProfile() case final profileFuture?)
       FutureBuilder<UserProfileSummary>(
         future: profileFuture,
         builder: (context, snapshot) {

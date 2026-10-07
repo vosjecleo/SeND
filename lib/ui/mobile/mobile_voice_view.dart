@@ -40,6 +40,8 @@ class MobileVoiceView extends StatefulWidget {
 
 class _MobileVoiceViewState extends State<MobileVoiceView> {
   final Map<String, Future<UserProfileSummary>> _profiles = {};
+  int? _profileRevision;
+  ChatBackend? _profileBackend;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -49,6 +51,12 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
 
   Widget _buildVoice(BuildContext context) {
     final backend = widget.backend;
+    if (_profileRevision != backend.profileRevision ||
+        !identical(_profileBackend, backend)) {
+      _profileRevision = backend.profileRevision;
+      _profileBackend = backend;
+      _profiles.clear();
+    }
     final room = backend.selectedRoom?.id == widget.room.id
         ? backend.selectedRoom!
         : widget.room;

@@ -32,6 +32,8 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   String? _pinnedStreamId;
   bool _showOwnPreview = true;
   final Map<String, Future<UserProfileSummary>> _profiles = {};
+  int? _profileRevision;
+  ChatBackend? _profileBackend;
 
   @override
   void initState() {
@@ -80,6 +82,12 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
 
   Widget _buildVoice(BuildContext context) {
     final backend = widget.backend;
+    if (_profileRevision != backend.profileRevision ||
+        !identical(_profileBackend, backend)) {
+      _profileRevision = backend.profileRevision;
+      _profileBackend = backend;
+      _profiles.clear();
+    }
     final room = backend.selectedRoom?.id == widget.room.id
         ? backend.selectedRoom!
         : widget.room;

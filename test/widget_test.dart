@@ -252,6 +252,31 @@ void main() {
     expect(find.text('@deltie:example.org'), findsWidgets);
   });
 
+  testWidgets('account preview refreshes when profile data arrives', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..testProfile = const UserProfileSummary(
+        userId: '@deltie:example.org',
+        displayName: 'Before refresh',
+      );
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Before refresh'), findsWidgets);
+
+    backend.testProfile = const UserProfileSummary(
+      userId: '@deltie:example.org',
+      displayName: 'After refresh',
+    );
+    backend.testProfileRevision++;
+    backend.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('Before refresh'), findsNothing);
+    expect(find.text('After refresh'), findsWidgets);
+  });
+
   testWidgets('appearance exposes themes, scaling, and exact colour', (
     tester,
   ) async {
