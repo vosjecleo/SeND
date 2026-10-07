@@ -420,6 +420,7 @@ class MatrixBackend extends ChatBackend {
   static const _roomTimeoutsEventType = 'net.deltiecord.room.timeouts';
 
   MatrixBackend({
+    this._client,
     ChatNotificationSink? notifications,
     DirectLinkPreviewFetcher? directPreviewFetcher,
     AvatarMediaPool? avatarMediaPool,
@@ -512,6 +513,10 @@ class MatrixBackend extends ChatBackend {
   final Map<String, Uint8List> _spaceProfileBannerBytes = {};
   final Map<String, Uint8List> _spaceProfileVoiceBackgroundBytes = {};
   final Map<String, Uri?> _senderAvatarUris = {};
+  final Map<String, Uri> _memberAvatarUris = {};
+  final Set<String> _memberAvatarLoads = {};
+  int _memberAvatarGeneration = 0;
+  final Map<String, DateTime> _memberAvatarRetryAfter = {};
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
   final Map<String, List<LinkPreview>> _linkPreviews = {};
@@ -800,6 +805,7 @@ class MatrixBackend extends ChatBackend {
   List<RoomMemberSummary> get selectedRoomMembers {
     final room = _client?.getRoomById(_selectedRoomId ?? '');
     if (room == null) return const [];
+    unawaited(_hydrateMemberAvatars(room));
     final roles = _rolesForRoom(room);
     final members = room
         .getParticipants()
@@ -1836,6 +1842,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _memberAvatarGeneration++;
     if (kIsWeb) BrowserPushPreviews.stop();
     unawaited(_stopActivities());
     _browserAuthenticationCanceled = true;

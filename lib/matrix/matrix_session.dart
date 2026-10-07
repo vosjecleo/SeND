@@ -290,6 +290,9 @@ extension _MatrixSession on MatrixBackend {
       _spaceProfileBannerBytes.clear();
       _spaceProfileVoiceBackgroundBytes.clear();
       _senderAvatarUris.clear();
+      _memberAvatarUris.clear();
+      _memberAvatarGeneration++;
+      _memberAvatarRetryAfter.clear();
       _avatarValidatedEventIds.clear();
       await _avatarMediaPool.clear();
       _decryptedPreviews.clear();

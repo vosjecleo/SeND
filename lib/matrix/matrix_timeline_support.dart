@@ -51,7 +51,6 @@ extension _MatrixTimelineSupport on MatrixBackend {
       if (profile?.avatarUri == avatar &&
           profile?.profile.avatarBytes != null) {
         final bytes = profile!.profile.avatarBytes!;
-        _avatarMediaPool.seed(avatar, bytes, AvatarMediaPool.profileDimension);
         _senderAvatarBytes[event.senderId] = bytes;
         continue;
       }

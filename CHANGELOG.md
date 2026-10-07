@@ -3,6 +3,23 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.38 build 124 (2026-10-07)
+
+- Leaving a server also leaves its joined channels and nested servers. Shared
+  channels are included. The confirmation explains this, and a failed leave
+  stops before leaving the parent so it can be retried.
+- Stop category creation from automatically rewriting server permissions. With
+  permissions still loading, that write could remove existing admin entries.
+  Explicit channel-management permission changes now fetch the current server
+  state and preserve other permissions. This fix does not restore permissions
+  already lost on an affected server.
+- Keep the category dialog open after a failed save, show an error and preserve
+  the entered name for retry.
+- Load member-list avatars independently of timeline messages and refresh the
+  user island and matching inline avatars when profile media arrives.
+- Keep still profile previews out of the original-image cache so they do not
+  prevent animated originals from loading.
+
 ## SeND 0.9.38 build 123 (2026-10-07)
 
 - Add Invite to server to server menus on desktop and mobile. Channel invites

@@ -286,12 +286,28 @@ extension _MatrixProfiles on MatrixBackend {
         banner: banner,
         voiceBackground: voice,
       );
+      if (avatar != null && avatarUri != null) {
+        _senderAvatarUris[userId] = avatarUri;
+        _senderAvatarBytes[userId] = avatar;
+        // Keep room-specific avatars separate from the global profile.
+        for (final room in _matrix.rooms) {
+          final key = '${room.id}|$userId';
+          if (_memberAvatarUris[key] == avatarUri) {
+            _senderAvatarBytes[key] = avatar;
+          }
+          if (room.directChatMatrixID == userId &&
+              _avatarUris[room.id] == avatarUri) {
+            _avatarBytes[room.id] = avatar;
+          }
+        }
+        if (userId == _matrix.userID) _applyOwnProfileSummary(entry.profile);
+      }
       _trimProfileCache();
       _profileRevision++;
       _notifyBackendListeners();
     }
 
-    if (refreshMedia || old == null || avatarChanged) {
+    if (refreshMedia || old?.avatarBytes == null || avatarChanged) {
       unawaited(
         _progressiveProfileMedia(
           avatarUri,
@@ -535,19 +551,9 @@ extension _MatrixProfiles on MatrixBackend {
     final avatarUri = userId == null ? null : _profileCache[userId]?.avatarUri;
     final avatarBytes = profile.avatarBytes;
     if (userId != null && avatarUri != null && avatarBytes != null) {
-      // Own messages use the same sender cache as everyone else. Seeding both
-      // dimensions here prevents room opening from waiting on a second copy of
-      // an avatar already visible in the user island/profile.
-      _avatarMediaPool.seed(
-        avatarUri,
-        avatarBytes,
-        AvatarMediaPool.profileDimension,
-      );
-      _avatarMediaPool.seed(
-        avatarUri,
-        avatarBytes,
-        AvatarMediaPool.rowDimension,
-      );
+      // Own messages use the same sender cache as everyone else.
+      // Progressive still previews must not enter the original-media pool:
+      // doing so would prevent the animated original from being downloaded.
       _senderAvatarUris[userId] = avatarUri;
       _senderAvatarBytes[userId] = avatarBytes;
     }

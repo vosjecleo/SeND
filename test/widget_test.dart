@@ -99,6 +99,37 @@ void main() {
     expect(find.text('Projects'), findsOneWidget);
   });
 
+  testWidgets('failed category creation keeps the name and allows retry', (
+    tester,
+  ) async {
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..currentSpaceId = '!space:test'
+      ..spaceList = const [SpaceSummary(id: '!space:test', name: 'Friends')]
+      ..failCategoryCreation = true;
+    await _pumpMobile(tester, backend);
+    await tester.tap(find.byKey(const ValueKey('mobile-start-chat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create category'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Category name'),
+      'Test',
+    );
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Could not create the category.'),
+      findsOneWidget,
+    );
+    expect(find.text('Test'), findsOneWidget);
+    backend.failCategoryCreation = false;
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(backend.categoryList.single.name, 'Test');
+    expect(find.text('Create category'), findsNothing);
+  });
+
   testWidgets('desktop displays categories without any rooms', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
@@ -4261,9 +4292,11 @@ class FakeBackend extends ChatBackend {
       editableRoomIds.contains(roomId);
   @override
   List<ChannelCategorySummary> get selectedSpaceCategories => categoryList;
+  bool failCategoryCreation = false;
 
   @override
   Future<void> createChannelCategory(String name) async {
+    if (failCategoryCreation) throw StateError('Save failed');
     categoryList = [
       ...categoryList,
       ChannelCategorySummary(id: name, name: name, roomIds: const []),

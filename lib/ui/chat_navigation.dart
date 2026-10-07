@@ -352,8 +352,8 @@ class _SpaceBar extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text('Leave ${space.name}?'),
         content: const Text(
-          'Rooms in the Space are not left automatically. You may need '
-          'another invitation to rejoin the Space itself.',
+          'You will also leave all joined channels and nested servers, including '
+          'channels shared with other servers. You may need new invitations to rejoin.',
         ),
         actions: [
           TextButton(
@@ -1786,31 +1786,71 @@ Future<void> showCreateChannelCategory(
   final spaceId = backend.selectedSpaceId;
   if (spaceId == null || !backend.canManageSpaceChannelLayout(spaceId)) return;
   var name = '';
-  final create = await showDialog<bool>(
+  var saving = false;
+  String? error;
+  await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Create category'),
-      content: TextField(
-        onChanged: (value) => name = value.trim(),
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Category name'),
-        onSubmitted: (_) => Navigator.pop(context, true),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Create'),
-        ),
-      ],
+    barrierDismissible: false,
+    builder: (context) => StatefulBuilder(
+      builder: (context, update) {
+        Future<void> save() async {
+          if (saving || name.isEmpty) return;
+          if (backend.selectedSpaceId != spaceId) {
+            update(
+              () => error =
+                  'The selected server changed. Close this dialog and try again.',
+            );
+            return;
+          }
+          update(() {
+            saving = true;
+            error = null;
+          });
+          try {
+            await backend.createChannelCategory(name);
+            if (context.mounted) Navigator.pop(context);
+          } catch (_) {
+            if (context.mounted) {
+              update(() {
+                saving = false;
+                error =
+                    'Could not create the category. Check your connection and channel-management permissions, then try again.';
+              });
+            }
+          }
+        }
+
+        return PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            title: const Text('Create category'),
+            scrollable: true,
+            content: TextField(
+              enabled: !saving,
+              onChanged: (value) => name = value.trim(),
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Category name',
+                errorText: error,
+                errorMaxLines: 4,
+              ),
+              onSubmitted: (_) => save(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: saving ? null : save,
+                child: Text(saving ? 'Creating…' : 'Create'),
+              ),
+            ],
+          ),
+        );
+      },
     ),
   );
-  if (create == true && name.isNotEmpty && backend.selectedSpaceId == spaceId) {
-    await backend.createChannelCategory(name);
-  }
 }
 
 /// Shared touch/secondary-click channel menu. Permissions are evaluated for

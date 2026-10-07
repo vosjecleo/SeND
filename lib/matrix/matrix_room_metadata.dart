@@ -1,6 +1,67 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixRoomMetadata on MatrixBackend {
+  Future<void> _hydrateMemberAvatars(Room room) async {
+    if (!_memberAvatarLoads.add(room.id)) return;
+    final client = _client;
+    final generation = _memberAvatarGeneration;
+    // Getters may run during build. Publish only after leaving that frame's
+    // synchronous work, and never restore media after logout/client replacement.
+    await Future<void>.delayed(Duration.zero);
+    try {
+      final members = room.getParticipants();
+      for (var start = 0; start < members.length; start += 4) {
+        if (generation != _memberAvatarGeneration ||
+            !identical(client, _client) ||
+            _selectedRoomId != room.id) {
+          return;
+        }
+        await Future.wait(
+          members.skip(start).take(4).map((user) async {
+            final key = '${room.id}|${user.id}';
+            final uri = user.avatarUrl ?? _profileCache[user.id]?.avatarUri;
+            if (uri == null || !uri.isScheme('mxc')) return;
+            if (_memberAvatarUris[key] == uri &&
+                _senderAvatarBytes[key] != null) {
+              return;
+            }
+            if (_memberAvatarUris[key] == uri &&
+                (_memberAvatarRetryAfter[key]?.isAfter(DateTime.now()) ??
+                    false)) {
+              return;
+            }
+            _memberAvatarUris[key] = uri;
+            _memberAvatarRetryAfter[key] = DateTime.now().add(
+              const Duration(seconds: 30),
+            );
+            try {
+              final profile = _profileCache[user.id];
+              final bytes =
+                  profile?.avatarUri == uri &&
+                      profile?.profile.avatarBytes != null
+                  ? profile!.profile.avatarBytes
+                  : await _avatarMedia(uri, AvatarMediaPool.rowDimension);
+              if (generation != _memberAvatarGeneration ||
+                  !identical(client, _client) ||
+                  _memberAvatarUris[key] != uri) {
+                return;
+              }
+              if (bytes != null && bytes.isNotEmpty) {
+                _senderAvatarBytes[key] = bytes;
+                _memberAvatarRetryAfter.remove(key);
+                _notifyBackendListeners();
+              }
+            } catch (_) {
+              // Retry transient media failures on a later member-list refresh.
+            }
+          }),
+        );
+      }
+    } finally {
+      _memberAvatarLoads.remove(room.id);
+    }
+  }
+
   RoomSummary _roomSummary(Room room) => RoomSummary(
     id: room.id,
     name: room.getLocalizedDisplayname(),

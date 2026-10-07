@@ -1,6 +1,18 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixRoomOperations on MatrixBackend {
+  int _authoritativeLayoutActorPower(Room space, Map<String, dynamic> content) {
+    if ((int.tryParse(space.roomVersion ?? '') ?? 0) >= 12 &&
+        space.creatorUserIds.contains(_matrix.userID)) {
+      return space.ownPowerLevel.level;
+    }
+    return content
+            .tryGetMap<String, dynamic>('users')
+            ?.tryGet<int>(_matrix.userID!) ??
+        content.tryGet<int>('users_default') ??
+        0;
+  }
+
   int _spaceChannelLayoutPowerLevel(String spaceId) {
     final powerLevels = _matrix
         .getRoomById(spaceId)
@@ -30,11 +42,23 @@ extension _MatrixRoomOperations on MatrixBackend {
       throw StateError('You cannot change this Space permission.');
     }
     final content = Map<String, dynamic>.from(
-      space.getState(EventTypes.RoomPowerLevels)?.content ?? const {},
+      await _matrix.getRoomStateWithKey(
+        spaceId,
+        EventTypes.RoomPowerLevels,
+        '',
+      ),
     );
     final events = Map<String, dynamic>.from(
       content.tryGetMap<String, Object?>('events') ?? const {},
     );
+    final actorPower = _authoritativeLayoutActorPower(space, content);
+    final required =
+        events.tryGet<int>(EventTypes.RoomPowerLevels) ??
+        content.tryGet<int>('state_default') ??
+        50;
+    if (actorPower < required || powerLevel > actorPower) {
+      throw StateError('You cannot change this Space permission.');
+    }
     events[MatrixBackend._spaceChannelsEventType] = powerLevel.clamp(0, 100);
     // Room ordering is carried by m.space.child state while categories use
     // SeND's namespaced layout state. Keep both at the same advertised
@@ -50,16 +74,20 @@ extension _MatrixRoomOperations on MatrixBackend {
   Future<void> _ensureSpaceChannelLayoutPermission(String spaceId) async {
     final space = _matrix.getRoomById(spaceId);
     if (space == null) throw StateError('Space is unavailable.');
-    final existing = space
-        .getState(EventTypes.RoomPowerLevels)
-        ?.content
+    // Creating a category must never rewrite the server's permissions. Read
+    // current permissions directly: SDK state can still be loading here.
+    final content = Map<String, dynamic>.from(
+      await _matrix.getRoomStateWithKey(
+        spaceId,
+        EventTypes.RoomPowerLevels,
+        '',
+      ),
+    );
+    final existing = content
         .tryGetMap<String, Object?>('events')
         ?.tryGet<int>(MatrixBackend._spaceChannelsEventType);
-    if (existing == null && space.canChangePowerLevel) {
-      await _setSpaceChannelLayoutPowerLevel(spaceId, 100);
-    }
     final required = existing ?? 100;
-    if (space.ownPowerLevel.level < required) {
+    if (_authoritativeLayoutActorPower(space, content) < required) {
       throw StateError(
         'This Space requires power level $required to change channel layout.',
       );
@@ -663,15 +691,46 @@ extension _MatrixRoomOperations on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) throw StateError('That room is no longer available.');
     try {
-      if (_voice?.activeRoomId == roomId) await _leaveVoiceRoom();
-      await room.leave();
-      if (_selectedRoomId == roomId) {
-        _selectedRoomId = null;
-        await _closeTimeline();
+      final toLeave = <Room>[];
+      final visited = <String>{};
+      Future<void> collect(Room current) async {
+        if (!visited.add(current.id)) return;
+        if (current.isSpace && current.membership == Membership.join) {
+          // Fetch before leaving anything. A partially loaded sidebar must not
+          // leave channels behind, and cycles/shared children are visited once.
+          final state = await _matrix.getRoomState(current.id);
+          for (final event in state) {
+            if (event.type != EventTypes.SpaceChild ||
+                event.content['via'] is! List ||
+                (event.content['via'] as List).isEmpty) {
+              continue;
+            }
+            final child = _matrix.getRoomById(event.stateKey ?? '');
+            if (child != null && child.membership == Membership.join) {
+              await collect(child);
+            }
+          }
+        }
+        toLeave.add(current);
+      }
+
+      await collect(room);
+      for (final target in toLeave) {
+        if (_voice?.activeRoomId == target.id) await _leaveVoiceRoom();
+        // Stop on failure. The parent remains joined so the user can retry.
+        await target.leave();
+        if (_selectedRoomId == target.id) {
+          _selectedRoomId = null;
+          await _closeTimeline();
+        }
+        if (_selectedSpaceId == target.id) _selectedSpaceId = null;
       }
       unawaited(_refreshRoomMetadata());
     } catch (exception) {
-      _error = _friendlyError(exception);
+      _error = room.isSpace
+          ? 'Could not finish leaving the server. Some channels may already '
+                'have been left. Please try again.'
+          : _friendlyError(exception);
       rethrow;
     } finally {
       _notifyBackendListeners();
