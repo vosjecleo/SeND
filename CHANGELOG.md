@@ -3,6 +3,30 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.38 build 122 (2026-10-07)
+
+- Show selected mobile DMs and channels with the same rounded highlight as
+  desktop, while preserving row identity when rooms reorder.
+- Show Play when a video ends, including players that still report playing at
+  EOF. Pressing it starts the video again.
+- Reject expired cached streaming URLs and resolve edited attachments before
+  playback. Recover failed desktop streams up to 64 MiB through a verified
+  Matrix download, with private temporary files removed when the player closes. Initialize the
+  fullscreen video output before opening media and retain a decoded poster when
+  available. The reported clip passed standalone, range-proxy and Flutter video
+  tests; its original logged-in timeline failure was not reproduced.
+- Load profile metadata and presence concurrently. Display the card before its
+  media, load images independently, and show small still thumbnails before
+  animated originals. Late responses cannot restore an evicted or logged-out
+  profile, and profile media remains bounded.
+- Load link previews alongside other timeline metadata and publish each card
+  as it becomes available. Show text and dimensions before waiting for images
+  and optional provider lookups, using black placeholders for pending media.
+- Include dimensions in new image uploads, including GIFs, using standard
+  Matrix metadata inside the room's existing encryption. Use homeserver and
+  provider dimensions for previews. Old messages and external sites without
+  dimensions still require media loading; other authors' events are not rewritten.
+
 ## SeND 0.9.38 build 121 (2026-10-07)
 
 - Add optional built-in Android background notifications, alongside UnifiedPush

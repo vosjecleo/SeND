@@ -152,6 +152,13 @@ class _LinkPreviewCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                )
+              else if (preview.mediaPending &&
+                  preview.width != null &&
+                  preview.height != null)
+                AspectRatio(
+                  aspectRatio: aspectRatio,
+                  child: const ColoredBox(color: Colors.black),
                 ),
               InkWell(
                 onTap: () => launchUrl(preview.url),
@@ -1135,6 +1142,8 @@ class _InlineVideo extends StatefulWidget {
 }
 
 class _InlineVideoState extends State<_InlineVideo> {
+  File? _downloadedVideo;
+  bool _tryingDownloadedVideo = false;
   StreamSubscription<String>? _errorSubscription;
   Timer? _startupTimer;
   Uint8List? _fallbackThumbnail;
@@ -1205,12 +1214,6 @@ class _InlineVideoState extends State<_InlineVideo> {
         _sourceRetained = false;
         return;
       }
-      await player.open(
-        Media(source.uri.toString(), httpHeaders: source.headers),
-        play: true,
-      );
-      if (!mounted || _error != null) return;
-      _opened = true;
       _startupTimer?.cancel();
       _startupTimer = Timer(const Duration(seconds: 60), () {
         if (mounted &&
@@ -1219,9 +1222,15 @@ class _InlineVideoState extends State<_InlineVideo> {
           _playbackFailed();
         }
       });
+      await player.open(
+        Media(source.uri.toString(), httpHeaders: source.headers),
+        play: true,
+      );
+      if (!mounted || _error != null || _tryingDownloadedVideo) return;
+      _opened = true;
       unawaited(_capturePoster(player));
     } catch (exception) {
-      if (mounted) setState(() => _error = safeErrorMessage(exception));
+      if (mounted) _playbackFailed();
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -1230,11 +1239,74 @@ class _InlineVideoState extends State<_InlineVideo> {
   void _playbackFailed() {
     if (!mounted) return;
     _startupTimer?.cancel();
+    final size = widget.attachment.size;
+    if (!kIsWeb &&
+        !_tryingDownloadedVideo &&
+        size != null &&
+        size > 0 &&
+        size <= 64 * 1024 * 1024) {
+      _tryingDownloadedVideo = true;
+      unawaited(_playDownloadedVideo());
+      return;
+    }
     unawaited(_player?.pause());
     setState(() {
       _opened = false;
       _error = 'Could not play this video. Press Play to retry.';
     });
+  }
+
+  Future<void> _playDownloadedVideo() async {
+    final player = _player;
+    if (player == null) return;
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    try {
+      await player.stop();
+      // Use the same verified Matrix download as Save, avoiding a failed or
+      // expired streaming source. Never pass homeserver credentials to a file.
+      final bytes = await widget.backend.downloadAttachment(widget.messageId);
+      if (!mounted) return;
+      final file = await TemporaryAttachmentStore.instance.create(
+        bytes: bytes,
+        displayName: widget.attachment.name,
+      );
+      if (!mounted) {
+        await file.delete();
+        return;
+      }
+      _downloadedVideo = file;
+      await player.open(Media(file.path), play: true);
+      if (!mounted) return;
+      setState(() => _opened = true);
+      unawaited(_capturePoster(player));
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _opened = false;
+          _error = 'Could not play this video. Try downloading it.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  Future<void> _disposePlayback() async {
+    try {
+      await _player?.dispose();
+    } finally {
+      final file = _downloadedVideo;
+      if (file != null) {
+        try {
+          await file.delete();
+        } catch (_) {
+          // Startup cleanup retries if the OS still holds the file.
+        }
+      }
+    }
   }
 
   Future<void> _capturePoster(Player player) async {
@@ -1262,7 +1334,7 @@ class _InlineVideoState extends State<_InlineVideo> {
     if (_sourceRetained) {
       unawaited(widget.backend.releaseMediaPlaybackSource(widget.messageId));
     }
-    _player?.dispose();
+    unawaited(_disposePlayback());
     super.dispose();
   }
 

@@ -89,6 +89,51 @@ void main() {
     expect(preview?.imageBytes, [1, 2, 3]);
   });
 
+  test('publishes dimensions before a slow preview image finishes', () async {
+    final image = StreamController<List<int>>();
+    final metadataReady = Completer<void>();
+    final fetcher = DirectLinkPreviewFetcher(
+      resolveHost: (_) async => [InternetAddress('93.184.216.34')],
+      transport: _FakeTransport({
+        'https://public.example/page': _response(
+          '<meta property="og:title" content="Preview">'
+          '<meta property="og:image" content="/image.png">'
+          '<meta property="og:image:width" content="640">'
+          '<meta property="og:image:height" content="360">',
+        ),
+        'https://public.example/image.png': DirectPreviewResponse(
+          statusCode: 200,
+          contentType: 'image/png',
+          contentLength: 3,
+          body: image.stream,
+        ),
+      }),
+    );
+    var finished = false;
+    final request = fetcher
+        .fetch(
+          Uri.parse('https://public.example/page'),
+          onMetadata: (metadata) {
+            expect(metadata.width, 640);
+            expect(metadata.height, 360);
+            expect(metadata.imageBytes, isNull);
+            expect(metadata.mediaPending, isTrue);
+            metadataReady.complete();
+          },
+        )
+        .then((value) {
+          finished = true;
+          return value;
+        });
+    await metadataReady.future;
+    expect(finished, isFalse);
+    image.add([1, 2, 3]);
+    await image.close();
+    final completed = await request;
+    expect(completed?.imageBytes, [1, 2, 3]);
+    expect(completed?.mediaPending, isFalse);
+  });
+
   test('incomplete video dimensions never borrow a poster dimension', () {
     final preview = parseHomeserverLinkPreview(
       url: Uri.parse('https://example.org'),

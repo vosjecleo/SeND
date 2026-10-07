@@ -1197,6 +1197,14 @@ class MobileLinkPreviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
+              )
+            else if (preview.mediaPending &&
+                preview.width != null &&
+                preview.height != null)
+              SizedBox(
+                width: mediaFrame.width,
+                height: mediaFrame.height,
+                child: const ColoredBox(color: Colors.black),
               ),
             InkWell(
               onTap: () =>

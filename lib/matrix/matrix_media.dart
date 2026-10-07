@@ -84,6 +84,11 @@ extension _MatrixMedia on MatrixBackend {
         attachment = await VideoPreparation.probe(attachment);
       }
       await _validateUploadSize(attachment.bytes.length);
+      // Standard Matrix info travels with the (encrypted) event, so receivers
+      // can lay out images before downloading them, including animated GIFs.
+      final imageDimensions = attachment.mimeType.startsWith('image/')
+          ? await readEncodedImageDimensions(attachment.bytes)
+          : null;
       await _prepareEncryptedSend(room);
       final replyEvent = replyToMessageId == null
           ? null
@@ -103,10 +108,20 @@ extension _MatrixMedia on MatrixBackend {
               duration: attachment.durationMilliseconds,
             )
           : attachment.mimeType == 'image/gif'
-          ? MatrixFile(
+          ? SizedMatrixFile(
               bytes: attachment.bytes,
               name: attachment.name,
               mimeType: attachment.mimeType,
+              width: imageDimensions?.width,
+              height: imageDimensions?.height,
+            )
+          : imageDimensions != null
+          ? MatrixImageFile(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+              width: imageDimensions.width,
+              height: imageDimensions.height,
             )
           : MatrixFile.fromMimeType(
               bytes: attachment.bytes,
@@ -285,14 +300,20 @@ extension _MatrixMedia on MatrixBackend {
   }
 
   Future<MediaPlaybackSource?> _getMediaPlaybackSource(String messageId) async {
-    final event = _eventById(messageId) ?? _attachmentEvents[messageId];
+    final event = _currentAttachmentEvent(messageId);
     if (event == null || !event.hasAttachment) {
       return null;
     }
     final cached = _mediaPlaybackSources[messageId];
-    if (cached != null) {
+    if (cached != null &&
+        (kIsWeb ||
+            cached.uri.host != '127.0.0.1' ||
+            _mediaRangeProxy.contains(cached.uri))) {
       _mediaPlaybackReferences.update(messageId, (value) => value + 1);
       return cached;
+    }
+    if (cached != null) {
+      _mediaPlaybackSources.remove(messageId);
     }
     if (kIsWeb) {
       // Browser video elements cannot attach Authorization headers or use the
@@ -327,7 +348,8 @@ extension _MatrixMedia on MatrixBackend {
         headers: const {},
       );
       _mediaPlaybackSources[messageId] = source;
-      _mediaPlaybackReferences[messageId] = 1;
+      _mediaPlaybackReferences[messageId] =
+          (_mediaPlaybackReferences[messageId] ?? 0) + 1;
       return source;
     }
     if (event.isAttachmentEncrypted) {
@@ -366,7 +388,8 @@ extension _MatrixMedia on MatrixBackend {
       );
       final source = MediaPlaybackSource(uri: localUri, headers: const {});
       _mediaPlaybackSources[messageId] = source;
-      _mediaPlaybackReferences[messageId] = 1;
+      _mediaPlaybackReferences[messageId] =
+          (_mediaPlaybackReferences[messageId] ?? 0) + 1;
       return source;
     }
     final uri = await event.getAttachmentUri(skipScanner: false);
@@ -379,7 +402,8 @@ extension _MatrixMedia on MatrixBackend {
       },
     );
     _mediaPlaybackSources[messageId] = source;
-    _mediaPlaybackReferences[messageId] = 1;
+    _mediaPlaybackReferences[messageId] =
+        (_mediaPlaybackReferences[messageId] ?? 0) + 1;
     return source;
   }
 

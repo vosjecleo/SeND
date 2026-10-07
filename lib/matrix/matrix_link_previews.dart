@@ -86,13 +86,41 @@ extension _MatrixLinkPreviews on MatrixBackend {
         plaintextBody: true,
       ),
     ).toSet().take(3).toList(growable: false);
-    if (urls.isEmpty) return;
-    _linkPreviews[sourceEvent.eventId] = await Future.wait(
-      urls.map((url) => _resolveLinkPreview(url, sourceEvent)),
-    );
+    final cards = urls
+        .map(
+          (url) =>
+              _linkPreviewUrlCache.get(url) ??
+              LinkPreview(url: url, title: url.host),
+        )
+        .toList();
+    _linkPreviews[sourceEvent.eventId] = cards;
+    if (cards.isEmpty) return;
+    _notifyBackendListeners();
+    await Future.wait([
+      for (var index = 0; index < urls.length; index++)
+        () async {
+          void publish(LinkPreview card) {
+            if (!identical(_linkPreviews[sourceEvent.eventId], cards)) return;
+            cards[index] = card;
+            _notifyBackendListeners();
+          }
+
+          publish(
+            await _resolveLinkPreview(
+              urls[index],
+              sourceEvent,
+              onUpdate: publish,
+            ),
+          );
+        }(),
+    ]);
   }
 
-  Future<LinkPreview> _resolveLinkPreview(Uri original, Event source) async {
+  Future<LinkPreview> _resolveLinkPreview(
+    Uri original,
+    Event source, {
+    void Function(LinkPreview)? onUpdate,
+  }) async {
     final cached = _linkPreviewUrlCache.getEntry(original);
     if (cached.$1 && cached.$2 != null) return cached.$2!;
 
@@ -108,6 +136,16 @@ extension _MatrixLinkPreviews on MatrixBackend {
       final properties = Map<String, Object?>.from(
         response.additionalProperties,
       );
+      // Dimensions and text are useful before the poster or provider stream.
+      final metadata = parseHomeserverLinkPreview(
+        url: original,
+        properties: properties,
+        mediaPending: response.ogImage != null,
+      );
+      if (hasUsefulPreview(metadata)) {
+        result = metadata;
+        onUpdate?.call(metadata);
+      }
       Uint8List? imageBytes;
       final image = response.ogImage;
       final declaredImageSize =
@@ -134,7 +172,10 @@ extension _MatrixLinkPreviews on MatrixBackend {
         properties: properties,
         imageBytes: imageBytes,
       );
-      if (hasUsefulPreview(parsed)) result = parsed;
+      if (hasUsefulPreview(parsed)) {
+        result = parsed;
+        onUpdate?.call(parsed);
+      }
     } catch (exception) {
       developer.log(
         'Homeserver URL preview failed (${exception.runtimeType}).',
@@ -198,6 +239,12 @@ extension _MatrixLinkPreviews on MatrixBackend {
             DirectLinkPreviewMode.trustedProviders;
         final fetched = await _directPreviewFetcher.fetch(
           requestUrl,
+          onMetadata: (metadata) {
+            final direct = _previewAtOriginalUrl(metadata, original);
+            onUpdate?.call(
+              result == null ? direct : _mergePreview(result, direct),
+            );
+          },
           allowUrl: trustedOnly
               ? (uri) => LinkPreviewNetworkPolicy.isTrustedProviderUrl(
                   uri,
@@ -236,6 +283,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
         imageBytes: preview.imageBytes,
         videoUrl: preview.videoUrl,
         gifSource: preview.gifSource,
+        mediaPending: preview.mediaPending,
         width: preview.width,
         height: preview.height,
       );
@@ -251,6 +299,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
     imageBytes: homeserver.imageBytes ?? direct.imageBytes,
     videoUrl: homeserver.videoUrl ?? direct.videoUrl,
     gifSource: homeserver.gifSource ?? direct.gifSource,
+    mediaPending: homeserver.imageBytes == null && direct.mediaPending,
     // Once enriched with a video, poster dimensions are not a safe fallback.
     width: direct.videoUrl != null
         ? direct.width

@@ -528,6 +528,15 @@ class MediaRangeProxy {
     _removeEntry(localUri.pathSegments.last);
   }
 
+  bool contains(Uri localUri) {
+    _removeExpired();
+    return localUri.host == InternetAddress.loopbackIPv4.address &&
+        localUri.port == _server?.port &&
+        localUri.pathSegments.length == 2 &&
+        localUri.pathSegments.first == 'media' &&
+        _entries.containsKey(localUri.pathSegments.last);
+  }
+
   void _removeExpired() {
     final cutoff = _clock().subtract(entryTtl);
     for (final id

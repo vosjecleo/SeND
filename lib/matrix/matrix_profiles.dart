@@ -166,7 +166,11 @@ extension _MatrixProfiles on MatrixBackend {
           throw StateError('Profile loading failed without an error.');
         });
     _profileRequests[userId] = request;
-    return request.whenComplete(() => _profileRequests.remove(userId));
+    return request.whenComplete(() {
+      if (identical(_profileRequests[userId], request)) {
+        _profileRequests.remove(userId);
+      }
+    });
   }
 
   Future<UserProfileSummary> _fetchUserProfile(
@@ -178,18 +182,22 @@ extension _MatrixProfiles on MatrixBackend {
     final previous = _profileCache[userId];
     final needsProfileResponse =
         previous == null || refreshMetadata || refreshMedia;
+    final presenceRequest = () async {
+      if (previous != null && !refreshStatus) return null;
+      try {
+        return await _matrix.fetchCurrentPresence(userId);
+      } catch (_) {
+        return null;
+      }
+    }();
+    final capabilityRequest = needsProfileResponse
+        ? _profileCapability()
+        : Future<ProfileFieldsCapability?>.value();
     final remoteProfile = needsProfileResponse
         ? await _matrix.getUserProfile(userId, maxCacheAge: Duration.zero)
         : null;
 
-    CachedPresence? presence;
-    if (previous == null || refreshStatus) {
-      try {
-        presence = await _matrix.fetchCurrentPresence(userId);
-      } catch (_) {
-        // Profiles remain useful on homeservers with presence disabled.
-      }
-    }
+    final presence = await presenceRequest;
 
     final old = previous?.profile;
     final avatarUri = remoteProfile?.avatarUrl ?? previous?.avatarUri;
@@ -202,27 +210,15 @@ extension _MatrixProfiles on MatrixBackend {
           '',
     );
     final avatarChanged = previous != null && previous.avatarUri != avatarUri;
-    final avatarBytes = refreshMedia || old == null || avatarChanged
-        ? avatarUri == null
-              ? null
-              : await _avatarMedia(
-                      avatarUri,
-                      AvatarMediaPool.profileDimension,
-                    ) ??
-                    old?.avatarBytes
-        : old.avatarBytes;
-    final bannerBytes = refreshMedia || old == null
-        ? bannerUri == null
-              ? null
-              : await _profileOriginalMedia(bannerUri) ?? old?.bannerBytes
-        : old.bannerBytes;
-    final voiceBackgroundBytes = refreshMedia || old == null
-        ? voiceBackgroundUri == null
-              ? null
-              : await _profileOriginalMedia(voiceBackgroundUri) ??
-                    old?.voiceBackgroundBytes
-        : old.voiceBackgroundBytes;
-    final capability = needsProfileResponse ? await _profileCapability() : null;
+    final avatarBytes = avatarChanged ? null : old?.avatarBytes;
+    final bannerBytes = refreshMedia && bannerUri?.isScheme('mxc') != true
+        ? null
+        : old?.bannerBytes;
+    final voiceBackgroundBytes =
+        refreshMedia && voiceBackgroundUri?.isScheme('mxc') != true
+        ? null
+        : old?.voiceBackgroundBytes;
+    final capability = await capabilityRequest;
     final properties = remoteProfile?.additionalProperties;
     final colorValue = properties?[_profileColorField];
     final now = DateTime.now();
@@ -277,6 +273,60 @@ extension _MatrixProfiles on MatrixBackend {
       lastAccessedAt: now,
     );
     _profileRevision++;
+    final entry = _profileCache[userId]!;
+    void publishMedia({
+      Uint8List? avatar,
+      Uint8List? banner,
+      Uint8List? voice,
+    }) {
+      // A refresh, eviction or logout invalidates this request's ownership.
+      if (!identical(_profileCache[userId], entry)) return;
+      entry.profile = entry.profile.withMedia(
+        avatar: avatar,
+        banner: banner,
+        voiceBackground: voice,
+      );
+      _trimProfileCache();
+      _profileRevision++;
+      _notifyBackendListeners();
+    }
+
+    if (refreshMedia || old == null || avatarChanged) {
+      unawaited(
+        _progressiveProfileMedia(
+          avatarUri,
+          128,
+          128,
+          (bytes) => publishMedia(avatar: bytes),
+          () => _avatarMedia(avatarUri, AvatarMediaPool.profileDimension),
+        ),
+      );
+    }
+    if (refreshMedia || old == null) {
+      unawaited(
+        _progressiveProfileMedia(
+          bannerUri,
+          384,
+          128,
+          (bytes) => publishMedia(banner: bytes),
+          () => _profileOriginalMedia(bannerUri),
+        ),
+      );
+      unawaited(
+        _progressiveProfileMedia(
+          voiceBackgroundUri,
+          192,
+          128,
+          (bytes) => publishMedia(voice: bytes),
+          () => _profileOriginalMedia(voiceBackgroundUri),
+        ),
+      );
+    }
+    _trimProfileCache();
+    return withSyncedPresence;
+  }
+
+  void _trimProfileCache() {
     var mediaBytes = _profileCache.values.fold<int>(
       0,
       (total, entry) =>
@@ -294,7 +344,37 @@ extension _MatrixProfiles on MatrixBackend {
           (removed?.profile.bannerBytes?.length ?? 0) +
           (removed?.profile.voiceBackgroundBytes?.length ?? 0);
     }
-    return withSyncedPresence;
+  }
+
+  Future<void> _progressiveProfileMedia(
+    Uri? uri,
+    int width,
+    int height,
+    void Function(Uint8List) publish,
+    Future<Uint8List?> Function() original,
+  ) async {
+    if (uri == null || !uri.isScheme('mxc')) return;
+    try {
+      final preview = await _matrix
+          .getContentThumbnail(
+            uri.host,
+            uri.pathSegments.join('/'),
+            width,
+            height,
+            method: Method.scale,
+            animated: false,
+          )
+          .timeout(const Duration(seconds: 4));
+      if (preview.data.isNotEmpty) publish(preview.data);
+    } catch (_) {
+      // An unavailable still preview must not prevent the original loading.
+    }
+    try {
+      final bytes = await original();
+      if (bytes != null && bytes.length <= 8 * 1024 * 1024) publish(bytes);
+    } catch (_) {
+      // Keep the still preview if the animated original is unavailable.
+    }
   }
 
   String? _normalizedProfileStatus(String? status) =>

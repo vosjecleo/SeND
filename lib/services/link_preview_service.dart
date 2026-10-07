@@ -90,6 +90,7 @@ LinkPreview parseHomeserverLinkPreview({
   required Uri url,
   required Map<String, Object?> properties,
   Uint8List? imageBytes,
+  bool mediaPending = false,
 }) {
   String? stringValue(List<String> keys, {int maximumLength = 4096}) {
     for (final key in keys) {
@@ -131,6 +132,7 @@ LinkPreview parseHomeserverLinkPreview({
       'site_name',
     ], maximumLength: 128),
     imageBytes: imageBytes,
+    mediaPending: mediaPending,
     // Remote video URLs are deliberately not passed to media_kit. Doing so
     // would bypass the direct-preview opt-in and the validated HTTP client.
     videoUrl: null,
@@ -277,6 +279,7 @@ class DirectLinkPreviewFetcher {
   Future<LinkPreview?> fetch(
     Uri initialUrl, {
     bool Function(Uri uri)? allowUrl,
+    void Function(LinkPreview)? onMetadata,
   }) async {
     _validateScheme(initialUrl);
     if (allowUrl != null && !allowUrl(initialUrl)) {
@@ -333,6 +336,17 @@ class DirectLinkPreviewFetcher {
         utf8.decode(bytes, allowMalformed: true),
       );
       final metadata = _metadataFromDocument(document, url);
+      onMetadata?.call(
+        LinkPreview(
+          url: initialUrl,
+          title: metadata.title,
+          description: metadata.description,
+          siteName: metadata.siteName,
+          width: metadata.width,
+          height: metadata.height,
+          mediaPending: metadata.imageUrl != null || metadata.videoUrl != null,
+        ),
+      );
       Uint8List? imageBytes;
       Uri? videoUrl;
       final imageUrl = metadata.imageUrl;

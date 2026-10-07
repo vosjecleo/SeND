@@ -195,10 +195,8 @@ extension _MatrixTimelineSupport on MatrixBackend {
       _hydrateSenderAvatars(timeline),
       _hydrateReplies(timeline),
       _hydratePollResponses(timeline),
+      _hydrateLinkPreviews(timeline),
     ]);
-    if (!identical(timeline, _timeline)) return;
-    _notifyBackendListeners();
-    await _hydrateLinkPreviews(timeline);
     if (!identical(timeline, _timeline)) return;
     _notifyBackendListeners();
   }

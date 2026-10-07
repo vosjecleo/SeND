@@ -503,6 +503,29 @@ class UserProfileSummary {
   final Uint8List? voiceBackgroundBytes;
   final bool extensibleFieldsSupported;
   final bool blocked;
+
+  UserProfileSummary withMedia({
+    Uint8List? avatar,
+    Uint8List? banner,
+    Uint8List? voiceBackground,
+  }) => UserProfileSummary(
+    userId: userId,
+    displayName: displayName,
+    avatarBytes: avatar ?? avatarBytes,
+    bannerBytes: banner ?? bannerBytes,
+    presence: presence,
+    bio: bio,
+    pronouns: pronouns,
+    timezone: timezone,
+    statusMessage: statusMessage,
+    profileColor: profileColor,
+    profileColorSecondary: profileColorSecondary,
+    voiceColor: voiceColor,
+    voiceBackgroundBytes: voiceBackground ?? voiceBackgroundBytes,
+    extensibleFieldsSupported: extensibleFieldsSupported,
+    blocked: blocked,
+    serverRoleNames: serverRoleNames,
+  );
 }
 
 class SpaceDirectoryEntry {
@@ -939,6 +962,7 @@ class LinkPreview {
     this.gifSource,
     this.width,
     this.height,
+    this.mediaPending = false,
   });
 
   final Uri url;
@@ -950,6 +974,7 @@ class LinkPreview {
   final Uri? gifSource;
   final int? width;
   final int? height;
+  final bool mediaPending;
 }
 
 enum AttachmentKind { image, video, audio, file }

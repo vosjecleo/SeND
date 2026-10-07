@@ -484,6 +484,7 @@ void main() {
     expect(invalid.statusCode, HttpStatus.requestedRangeNotSatisfiable);
 
     now = now.add(const Duration(milliseconds: 21));
+    expect(proxy.contains(local), isFalse);
     final expired = await (await client.getUrl(local)).close();
     expect(expired.statusCode, HttpStatus.notFound);
   });
@@ -516,6 +517,8 @@ void main() {
       expect(evicted.statusCode, HttpStatus.notFound);
       final retained = await (await client.openUrl('HEAD', uris.last)).close();
       expect(retained.statusCode, HttpStatus.ok);
+      expect(proxy.contains(uris.last), isTrue);
+      expect(proxy.contains(uris.last.replace(port: 9)), isFalse);
 
       proxy.unregister(uris.last);
       final removed = await (await client.openUrl('HEAD', uris.last)).close();
