@@ -962,9 +962,7 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<bool>('notifications_enabled') ?? true,
       notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
       optimizeVideos: content?.tryGet<bool>('optimize_videos') ?? true,
-      notificationVolume:
-          (content?['notification_volume'] as num?)?.toDouble().clamp(0, 1) ??
-          1,
+      notificationVolume: readNotificationVolume(content),
       callVolume:
           (content?['call_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
       notificationVibration:
@@ -1226,7 +1224,7 @@ extension _MatrixSession on MatrixBackend {
         'notifications_enabled': preferences.notificationsEnabled,
         'notification_sound': preferences.notificationSound,
         'optimize_videos': preferences.optimizeVideos,
-        'notification_volume': preferences.notificationVolume,
+        notificationVolumeSettingKey: preferences.notificationVolume,
         'call_volume': preferences.callVolume,
         'notification_vibration': preferences.notificationVibration,
         'notification_alert_cadence': preferences.notificationAlertCadence.name,

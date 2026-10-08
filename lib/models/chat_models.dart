@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:webrtc_interface/webrtc_interface.dart';
 
 import '../services/font_preferences.dart';
+import '../services/notification_volume.dart';
 import 'room_event_visibility.dart';
 import 'forum_post.dart';
 
@@ -69,7 +70,7 @@ class AppPreferences {
     this.animateTimelineAvatars = false,
     this.notificationsEnabled = true,
     this.notificationSound = true,
-    this.notificationVolume = 1,
+    this._notificationVolume,
     this.callVolume = 1,
     this.optimizeVideos = true,
     this.notificationVibration = true,
@@ -125,7 +126,9 @@ class AppPreferences {
   final bool animateTimelineAvatars;
   final bool notificationsEnabled;
   final bool notificationSound;
-  final double notificationVolume;
+  final double? _notificationVolume;
+  double get notificationVolume =>
+      _notificationVolume ?? defaultNotificationVolume;
   final double callVolume;
   final bool optimizeVideos;
   final bool notificationVibration;

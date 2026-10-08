@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:media_kit/media_kit.dart';
+import 'notification_volume.dart';
 
 /// Playback boundary for short in-app sounds.
 ///
@@ -71,7 +72,7 @@ final class MediaKitAppSoundPlayback implements AppSoundPlayback {
 }
 
 abstract final class AppSounds {
-  static double notificationVolume = 1;
+  static double notificationVolume = defaultNotificationVolume;
   static double callVolume = 1;
   static AppSoundPlayback _playback = MediaKitAppSoundPlayback();
   static Timer? _ringTimer;
