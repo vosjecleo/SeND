@@ -91,7 +91,8 @@ phone interface on iOS/Android and the desktop interface on desktop systems.
   are required for hosting. Web Push delivery on a real iPhone still needs
   device validation; desktop Chromium smoke tests do not establish iOS parity.
 
-For self-hosting/builds, see [Web deployment](docs/web-deployment.md).
+For a new server, use the [guided server installer](server/INSTALL.md).
+For existing PWA deployments, see [Web deployment](docs/web-deployment.md).
 
 ## Why SeND?
 

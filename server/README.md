@@ -1,7 +1,13 @@
 # SeND service helpers
 
 These helpers provide GIF search, Telegram pack imports and web previews.
+For a fresh server, use the [guided installer](INSTALL.md).
 For routing, TLS and PWA deployment, see [Web hosting](../docs/web-deployment.md).
+
+On other hosts, set `SEND_APP_ORIGIN` to the PWA's HTTPS origin and
+`WEB_PUSH_ISSUERS` to a JSON object mapping allowed Matrix server names to their
+HTTPS API origins. Install `hosting_config.py` alongside all helper modules.
+These are operator settings, never values supplied by incoming requests.
 
 ## GIF search and Telegram imports
 

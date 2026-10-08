@@ -4,6 +4,7 @@ No cookies, credentials, arbitrary headers, conversion, or private destinations.
 Connections are pinned to validated DNS answers; TLS still verifies the hostname.
 """
 import http.client
+from hosting_config import APP_ORIGIN
 import ipaddress
 import re
 import socket
@@ -139,7 +140,7 @@ def handle(handler, allowed, client):
         handler.send_response(response.status)
         handler.send_header('Content-Type', mime)
         handler.send_header('Content-Length', str(len(body)))
-        handler.send_header('Access-Control-Allow-Origin', 'https://chat.deltie.net')
+        handler.send_header('Access-Control-Allow-Origin', APP_ORIGIN)
         handler.send_header('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges')
         handler.send_header('Cross-Origin-Resource-Policy', 'cross-origin')
         handler.send_header('X-Content-Type-Options', 'nosniff')

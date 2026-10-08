@@ -24,6 +24,7 @@ from pywebpush import WebPushException, webpush
 from cryptography.hazmat.primitives import serialization
 
 from giphy_proxy import _allowed, _client_identity
+from hosting_config import APP_ORIGIN, openid_issuers
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024
@@ -31,8 +32,7 @@ STATE = os.environ.get('WEB_PUSH_STATE', '/var/lib/deltiecord-web-push')
 KEY = os.environ.get('WEB_PUSH_PRIVATE_KEY', STATE + '/vapid.pem')
 CONTACT = os.environ.get('WEB_PUSH_CONTACT', 'mailto:admin@deltie.net')
 # No dynamic discovery/redirects: an OpenID issuer must be deliberately enabled.
-ISSUERS = {'deltie.net': 'https://matrix.deltie.net',
-           'matrix.deltie.net': 'https://matrix.deltie.net'}
+ISSUERS = openid_issuers()
 PUSH_HOSTS = {'web.push.apple.com', 'fcm.googleapis.com',
               'updates.push.services.mozilla.com'}
 _lock = threading.Lock()
@@ -216,7 +216,7 @@ def declarative_payload(payload):
     is_test = payload.get('test') is True
     if not room and not is_test:
         raise ValueError('Missing notification room')
-    target = 'https://chat.deltie.net/'
+    target = APP_ORIGIN + '/'
     if room:
         target += '?' + urlencode({'room': room, 'event': event})
     data = {'room_id': room, 'event_id': event}
@@ -229,8 +229,8 @@ def declarative_payload(payload):
             'body': ('Test notification received. Web Push is working on this device.'
                      if is_test else 'New activity in a conversation'),
             'navigate': target,
-            'icon': 'https://chat.deltie.net/icons/Icon-192.png',
-            'badge': 'https://chat.deltie.net/icons/Icon-192.png',
+            'icon': APP_ORIGIN + '/icons/Icon-192.png',
+            'badge': APP_ORIGIN + '/icons/Icon-192.png',
             'tag': 'send-push-test' if is_test else room,
             'renotify': True,
             'silent': False,
