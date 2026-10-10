@@ -128,9 +128,10 @@ internal class VideoPreparationBridge(private val context: Context, messenger: B
             )
             // Failure to decode a poster must not discard valid dimensions.
             try {
+                val posterTimeUs = (duration / 10).coerceIn(0, 10000) * 1000
                 val frame = if (android.os.Build.VERSION.SDK_INT >= 27)
-                    retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 480)
-                    else null
+                    retriever.getScaledFrameAtTime(posterTimeUs, MediaMetadataRetriever.OPTION_CLOSEST, 480, 480)
+                    else retriever.getFrameAtTime(posterTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
                 if (frame != null) {
                     try {
                         val bytes = java.io.ByteArrayOutputStream()

@@ -36,7 +36,8 @@ internal object AndroidVideoThumbnail {
                 if (originalWidth == null || originalHeight == null ||
                     originalWidth <= 0 || originalHeight <= 0
                 ) return null
-                val frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                val posterTimeUs = ((duration ?: 0) / 10).coerceIn(0, 10000).toLong() * 1000
+                val frame = retriever.getFrameAtTime(posterTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
                     ?: retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST)
                     ?: return null
                 try {

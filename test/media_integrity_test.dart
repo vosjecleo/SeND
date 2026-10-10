@@ -1,10 +1,67 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:deltiecord/matrix/media_range_proxy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'preparation waits for verification and shares concurrent downloads',
+    () async {
+      final bytes = Uint8List.fromList(List.generate(129, (i) => i));
+      final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final started = Completer<void>(), finish = Completer<void>();
+      var downloads = 0, decryptions = 0;
+      upstream.listen((request) async {
+        downloads++;
+        if (!started.isCompleted) started.complete();
+        await finish.future;
+        request.response.contentLength = bytes.length;
+        request.response.add(bytes);
+        await request.response.close();
+      });
+      final proxy = MediaRangeProxy(
+        decryptor: (input, _, _, _) {
+          decryptions++;
+          return input;
+        },
+      );
+      final http = HttpClient();
+      addTearDown(() async {
+        if (!finish.isCompleted) finish.complete();
+        http.close(force: true);
+        await proxy.close();
+        await upstream.close(force: true);
+      });
+      final uri = await proxy.register(
+        upstream: Uri.parse('http://127.0.0.1:${upstream.port}/file'),
+        accessToken: 'test',
+        key: Uint8List(32),
+        iv: Uint8List(16),
+        size: bytes.length,
+        mimeType: 'video/mp4',
+        expectedSha256: Uint8List.fromList(sha256.convert(bytes).bytes),
+      );
+      var ready = false;
+      final first = proxy.prepare(uri).then((_) => ready = true);
+      await started.future;
+      final second = proxy.prepare(uri);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(ready, isFalse);
+      expect(downloads, 1);
+      expect(decryptions, 0);
+      finish.complete();
+      await Future.wait([first, second]);
+      expect(ready, isTrue);
+      final response = await (await http.getUrl(uri)).close();
+      await response.drain<void>();
+      expect(response.statusCode, 200);
+      expect(downloads, 1);
+      expect(decryptions, greaterThan(0));
+    },
+  );
+
   for (final valid in [true, false]) {
     test(
       'encrypted media ${valid ? 'verifies before decoding' : 'rejects incorrect hash before decoding'}',

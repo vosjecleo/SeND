@@ -797,28 +797,48 @@ class _MobilePlayerState extends State<_MobilePlayer>
   StreamSubscription<int?>? _heightSubscription;
   int? _naturalWidth;
   int? _naturalHeight;
+  Future<void>? _initialization;
+  bool _loading = false;
+  bool _backgrounded = false;
+  late final Future<Uint8List>? _thumbnail =
+      widget.message.attachment?.hasThumbnail == true
+      ? widget.backend.downloadAttachment(widget.message.id, thumbnail: true)
+      : null;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_initialize());
   }
 
-  Future<void> _initialize() async {
+  Future<void> _initialize({bool play = false}) {
+    final pending = _initialization;
+    if (pending != null) return pending;
+    final operation = _loadPlayer(play: play);
+    _initialization = operation.whenComplete(() => _initialization = null);
+    return _initialization!;
+  }
+
+  Future<void> _loadPlayer({required bool play}) async {
     final generation = ++_playerGeneration;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    Player? openingPlayer;
     try {
       final source = await widget.backend.getMediaPlaybackSource(
         widget.message.id,
       );
-      if (source == null) return;
+      if (source == null) throw StateError('Video playback is unavailable.');
       _sourceRetained = true;
-      if (!mounted) {
+      if (!mounted || _backgrounded || generation != _playerGeneration) {
         await widget.backend.releaseMediaPlaybackSource(widget.message.id);
         _sourceRetained = false;
         return;
       }
       final player = Player();
+      openingPlayer = player;
       final video = VideoController(player);
       _widthSubscription = player.stream.width.listen((value) {
         if (mounted && value != null && value > 0) {
@@ -832,10 +852,11 @@ class _MobilePlayerState extends State<_MobilePlayer>
       });
       await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
-        play: false,
+        play: play,
       );
       if (!mounted || generation != _playerGeneration) {
         await player.dispose();
+        openingPlayer = null;
         await widget.backend.releaseMediaPlaybackSource(widget.message.id);
         _sourceRetained = false;
         return;
@@ -853,16 +874,31 @@ class _MobilePlayerState extends State<_MobilePlayer>
         _player = player;
         _video = video;
       });
+      openingPlayer = null;
     } catch (error) {
-      if (mounted) setState(() => _error = error);
+      await openingPlayer?.dispose();
+      if (_sourceRetained) {
+        await widget.backend.releaseMediaPlaybackSource(widget.message.id);
+        _sourceRetained = false;
+      }
+      if (mounted && generation == _playerGeneration) {
+        setState(() => _error = error);
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
+      _backgrounded = true;
+      _playerGeneration++;
       final player = _player;
-      if (player == null) return;
+      if (player == null) {
+        _resumePlaying = _loading;
+        return;
+      }
       _resumePosition = player.state.position;
       _resumePlaying = player.state.playing;
       _player = null;
@@ -871,20 +907,31 @@ class _MobilePlayerState extends State<_MobilePlayer>
       _heightSubscription?.cancel();
       _widthSubscription = null;
       _heightSubscription = null;
-      _playerGeneration++;
       unawaited(player.pause().whenComplete(player.dispose));
       if (_sourceRetained) {
         _sourceRetained = false;
         unawaited(widget.backend.releaseMediaPlaybackSource(widget.message.id));
       }
-    } else if (state == AppLifecycleState.resumed && _player == null) {
+    } else if (state == AppLifecycleState.resumed) {
+      _backgrounded = false;
       // Android may retain a native decoder whose clock jumps to EOF while the
       // process is frozen. Always rebuild it from a fresh range source.
-      unawaited(_initialize());
+      if (_player == null &&
+          (_resumePlaying || _resumePosition > Duration.zero)) {
+        unawaited(_resumeAfterPreparation());
+      }
+    }
+  }
+
+  Future<void> _resumeAfterPreparation() async {
+    await _initialization;
+    if (mounted && !_backgrounded && _player == null) {
+      await _initialize();
     }
   }
 
   Future<void> showFullscreen({VoidCallback? onActions}) async {
+    if (_player == null) await _initialize(play: true);
     final player = _player;
     final video = _video;
     if (player == null || video == null || _fullscreenOpen || !mounted) return;
@@ -923,14 +970,7 @@ class _MobilePlayerState extends State<_MobilePlayer>
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return const Text('Could not play media');
     final player = _player;
-    if (player == null) {
-      return const SizedBox.square(
-        dimension: 44,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      );
-    }
     final screen = MediaQuery.sizeOf(context);
     final attachment = widget.message.attachment;
     final frame = mobileMediaFrameSize(
@@ -943,6 +983,53 @@ class _MobilePlayerState extends State<_MobilePlayer>
         attachment?.height,
       ),
     );
+    if (player == null) {
+      return SizedBox(
+        width: frame.width,
+        height: frame.height,
+        child: ClipRRect(
+          borderRadius: DeltiecordCorners.borderRadius,
+          child: ColoredBox(
+            color: Colors.black,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_thumbnail case final thumbnail?)
+                  FutureBuilder<Uint8List>(
+                    future: thumbnail,
+                    builder: (context, snapshot) => snapshot.data == null
+                        ? const SizedBox.shrink()
+                        : Image.memory(snapshot.data!, fit: BoxFit.contain),
+                  ),
+                Center(
+                  child: _loading
+                      ? const CircularProgressIndicator(strokeWidth: 2)
+                      : IconButton.filled(
+                          key: const ValueKey('mobile-media-play'),
+                          tooltip: _error == null
+                              ? 'Play video'
+                              : 'Retry video',
+                          onPressed: () => _initialize(play: true),
+                          icon: const _PlayGlyph(),
+                        ),
+                ),
+                if (_error != null)
+                  const Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: 8,
+                    child: Text(
+                      'Could not play video. Tap Play to retry.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return SizedBox(
       width: frame.width,
       height: frame.height,

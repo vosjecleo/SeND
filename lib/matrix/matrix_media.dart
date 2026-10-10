@@ -89,6 +89,9 @@ extension _MatrixMedia on MatrixBackend {
       final imageDimensions = attachment.mimeType.startsWith('image/')
           ? await readEncodedImageDimensions(attachment.bytes)
           : null;
+      final posterDimensions = attachment.videoThumbnail == null
+          ? null
+          : await readEncodedImageDimensions(attachment.videoThumbnail!);
       await _prepareEncryptedSend(room);
       final replyEvent = replyToMessageId == null
           ? null
@@ -162,6 +165,8 @@ extension _MatrixMedia on MatrixBackend {
                       bytes: attachment.videoThumbnail!,
                       name: 'thumbnail.jpg',
                       mimeType: 'image/jpeg',
+                      width: posterDimensions?.width,
+                      height: posterDimensions?.height,
                     ),
               threadRootEventId: threadRootEventId,
               threadLastEventId: threadRootEventId,
@@ -310,7 +315,7 @@ extension _MatrixMedia on MatrixBackend {
             cached.uri.host != '127.0.0.1' ||
             _mediaRangeProxy.contains(cached.uri))) {
       _mediaPlaybackReferences.update(messageId, (value) => value + 1);
-      return cached;
+      return _preparePlaybackSource(messageId, cached);
     }
     if (cached != null) {
       _mediaPlaybackSources.remove(messageId);
@@ -390,7 +395,7 @@ extension _MatrixMedia on MatrixBackend {
       _mediaPlaybackSources[messageId] = source;
       _mediaPlaybackReferences[messageId] =
           (_mediaPlaybackReferences[messageId] ?? 0) + 1;
-      return source;
+      return _preparePlaybackSource(messageId, source);
     }
     final uri = await event.getAttachmentUri(skipScanner: false);
     if (uri == null) return null;
@@ -418,6 +423,24 @@ extension _MatrixMedia on MatrixBackend {
     if (source != null) {
       releaseBrowserMediaUrl(source.uri);
       _mediaRangeProxy.unregister(source.uri);
+    }
+  }
+
+  Future<MediaPlaybackSource> _preparePlaybackSource(
+    String messageId,
+    MediaPlaybackSource source,
+  ) async {
+    try {
+      if (!kIsWeb && source.uri.host == '127.0.0.1') {
+        await _mediaRangeProxy.prepare(source.uri);
+      }
+      return source;
+    } catch (_) {
+      // A failed preparation owns one reference, just like a successful open.
+      if (identical(_mediaPlaybackSources[messageId], source)) {
+        _releaseMediaPlaybackSource(messageId);
+      }
+      rethrow;
     }
   }
 }

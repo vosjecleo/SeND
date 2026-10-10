@@ -49,9 +49,13 @@ These are code changes, not confirmations from the reporting devices.
   resume checks native IME visibility before clearing stale Flutter insets,
   including nested timeline layouts. Tests cover a visible keyboard and a hidden
   keyboard with stale insets. Older Android and PWA behaviour need device tests.
-- B03: Large-video startup gets a size-aware timeout, and canceled encrypted
-  downloads stop. Full integrity verification still precedes decoding. Missing
-  dimensions/posters and codec-specific playback failures remain open.
+- B03: Reproduced a five-second player timeout while the encrypted proxy waited
+  for a complete download. Downloads now finish verification before the player
+  opens. Both supplied clips play through the corrected path, including a
+  throttled download. Mobile displays the uploaded poster and downloads the
+  video on Play. Browser uploads now publish dimensions, duration and a poster;
+  posters use a later frame to avoid black openings. Old message metadata is
+  unchanged. Retest the installed app with both samples before closing B03.
 - B10: High desktop GPU usage remains open. No claim of a GPU performance fix.
 - B11: Missing RTC peers trigger periodic membership rescans; failed peer
   connections get ICE restarts. Multi-user join/leave churn needs a real call.
@@ -95,8 +99,10 @@ that a Matrix Space encrypts children or that existing encryption can be disable
 ## Validation
 
 - `flutter analyze --no-pub`: no issues.
-- `flutter test --no-pub`: 620 passed, 4 skipped.
-- Web Push gateway unit tests: 20 passed.
+- `flutter test --no-pub`: 623 passed, 4 skipped.
+- Chrome video-upload test: passed with real metadata and poster extraction.
+- Android `:app:compileDebugKotlin`: passed.
+- Web Push gateway unit tests: 20 passed in the preceding implementation pass.
 - `git diff --check`: clean.
 
 Automated checks cover formatting/escapes, role recipients, notification targets,

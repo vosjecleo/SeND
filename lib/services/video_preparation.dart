@@ -39,9 +39,10 @@ class VideoPreparation extends ChangeNotifier {
   }
 
   Future<AttachmentDraft> prepare(AttachmentDraft draft) async {
-    if (!_supported || !draft.mimeType.startsWith('video/')) {
+    if (!draft.mimeType.startsWith('video/')) {
       return draft;
     }
+    if (!_supported) return VideoPreparation.probe(draft);
     if (active) {
       throw StateError('Another video is being prepared. Please wait.');
     }

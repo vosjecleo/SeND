@@ -239,6 +239,8 @@ Future<AttachmentDraft> optimizeVideo(
         'error',
         '-protocol_whitelist',
         'file,pipe',
+        '-ss',
+        '${encodedDuration > 0 ? (encodedDuration / 10).clamp(0, 10) : 0}',
         '-i',
         media.path,
         '-frames:v',

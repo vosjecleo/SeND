@@ -1688,6 +1688,11 @@ class _LightboxVideoState extends State<_LightboxVideo> {
       );
       if (source == null) throw StateError('Video playback is unavailable.');
       _sourceRetained = true;
+      if (!mounted) {
+        await widget.backend.releaseMediaPlaybackSource(widget.messageId);
+        _sourceRetained = false;
+        return;
+      }
       await _player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,

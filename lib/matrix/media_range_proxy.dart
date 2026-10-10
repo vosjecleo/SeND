@@ -19,10 +19,9 @@ typedef MediaProxyClock = DateTime Function();
 
 /// Serves encrypted Matrix media to a local player using bounded HTTP ranges.
 ///
-/// Matrix attachments use AES-CTR, so an aligned ciphertext range can be
-/// decrypted independently by advancing the counter by its block offset. This
-/// keeps seeking and playback streaming without exposing credentials or keys
-/// in a URL visible outside the loopback interface.
+/// Attachments with a SHA-256 hash are downloaded and verified before decoding.
+/// AES-CTR ranges are then decrypted from the private cache by advancing the
+/// counter, keeping seeks bounded and credentials off the player URL.
 class MediaRangeProxy {
   MediaRangeProxy({
     RangeDecryptor? decryptor,
@@ -110,6 +109,56 @@ class MediaRangeProxy {
     _cleanupTimer = Timer.periodic(cleanupEvery, (_) => _removeExpired());
     unawaited(server.forEach(_handle));
     return server;
+  }
+
+  /// Finish the authenticated download before handing this URL to a player.
+  /// Native players have short HTTP read deadlines, which cannot cover a large
+  /// attachment's download and hash check before the first response byte.
+  Future<void> prepare(Uri uri) async {
+    final media = _entries[uri.pathSegments.last];
+    if (media == null || media.removed) {
+      throw const HttpException('Encrypted media entry expired');
+    }
+    if (media.expectedSha256 != null) {
+      await _ensureVerifiedCiphertext(media);
+    }
+  }
+
+  Future<File> _ensureVerifiedCiphertext(_EncryptedMedia media) async {
+    final cached = media.cachedCiphertext;
+    if (cached != null) return cached;
+    final pending = media.cacheFuture;
+    if (pending != null) return pending;
+    final operation = _downloadVerifiedCiphertext(media);
+    media.cacheFuture = operation;
+    try {
+      final file = await operation;
+      if (media.removed) {
+        await _deleteFile(file);
+        throw const HttpException('Encrypted media entry expired');
+      }
+      media.cachedCiphertext = file;
+      return file;
+    } finally {
+      media.cacheFuture = null;
+    }
+  }
+
+  Future<File> _downloadVerifiedCiphertext(_EncryptedMedia media) async {
+    final request = await _upstream
+        .getUrl(media.upstream)
+        .timeout(const Duration(seconds: 10));
+    request.followRedirects = false;
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Bearer ${media.accessToken}',
+    );
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    if (response.statusCode != HttpStatus.ok) {
+      await response.listen((_) {}).cancel();
+      throw HttpException('Media server returned ${response.statusCode}');
+    }
+    return _writeCiphertextCache(media, response);
   }
 
   Future<void> _handle(HttpRequest request) async {
@@ -315,6 +364,13 @@ class MediaRangeProxy {
     required int fetchStart,
     required int requestedEnd,
   }) async {
+    if (media.expectedSha256 != null) {
+      final file = await _ensureVerifiedCiphertext(media);
+      return _CipherSource(
+        file.openRead(fetchStart, requestedEnd + 1),
+        skip: 0,
+      );
+    }
     final cached = media.cachedCiphertext;
     if (cached != null) {
       return _CipherSource(

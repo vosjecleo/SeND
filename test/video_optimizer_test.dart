@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
+import 'package:image/image.dart' as image;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/video_optimizer_native.dart';
+import 'fixtures/video_leading_black.dart';
 
 bool get hasFfmpeg {
   try {
@@ -14,6 +17,29 @@ bool get hasFfmpeg {
 }
 
 void main() {
+  test(
+    'video poster skips a black opening and keeps the original video',
+    () async {
+      final bytes = base64Decode(leadingBlackVideoBase64);
+      final result = await probeVideo(
+        AttachmentDraft(
+          bytes: bytes,
+          name: 'fade.mp4',
+          mimeType: 'video/mp4',
+          spoiler: false,
+        ),
+      );
+      expect(result.bytes, same(bytes));
+      expect(result.videoWidth, 64);
+      expect(result.videoHeight, 48);
+      expect(result.videoThumbnail, isNotEmpty);
+      final poster = image.decodeJpg(result.videoThumbnail!)!;
+      final pixel = poster.getPixel(poster.width ~/ 2, poster.height ~/ 2);
+      expect(pixel.r, greaterThan(200));
+      expect(pixel.g, lessThan(30));
+    },
+    skip: !Platform.isLinux || !hasFfmpeg,
+  );
   test(
     'desktop optimization preserves aspect, caption and spoiler and creates a thumbnail',
     () async {
