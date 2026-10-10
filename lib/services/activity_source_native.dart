@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
 import '../models/user_activity.dart';
 import 'activity_candidate.dart';
 import 'activity_artwork_native.dart';
@@ -318,8 +319,7 @@ String _boundedText(String value, int maximum) => value
     .substring(0, value.length.clamp(0, maximum));
 
 Future<Uint8List?> _icon(String? path) async {
-  if (path == null ||
-      !(path.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(path))) {
+  if (path == null || !p.isAbsolute(path)) {
     return null;
   }
   try {
@@ -506,8 +506,10 @@ Future<List<ActivityCandidate>> loadLocalActivityCatalogue() async {
 /// icons only in their selected theme or in a Flatpak export directory.
 String? findLocalActivityIcon(String? name, List<String> roots) {
   if (name == null || name.isEmpty) return null;
-  if (name.startsWith('/')) return File(name).existsSync() ? name : null;
-  if (name.contains('/') || name.contains('..')) return null;
+  if (p.isAbsolute(name)) return File(name).existsSync() ? name : null;
+  if (name.contains('/') || name.contains('\\') || name.contains('..')) {
+    return null;
+  }
   for (final root in roots) {
     final themes = <String>{'hicolor'};
     final icons = Directory('$root/icons');
@@ -517,7 +519,7 @@ String? findLocalActivityIcon(String? name, List<String> roots) {
             .listSync(followLinks: false)
             .whereType<Directory>()
             .take(32)
-            .map((directory) => directory.path.split('/').last),
+            .map((directory) => p.basename(directory.path)),
       );
     }
     final filenames =
@@ -744,7 +746,7 @@ bool isMinecraftClientArguments(List<String> args) => args.any(
 );
 
 Future<Uint8List?> loadMinecraftActivityIcon(String assets) async {
-  if (!assets.startsWith('/')) return null;
+  if (!p.isAbsolute(assets)) return null;
   try {
     final indexes = Directory('$assets/indexes');
     if (!indexes.existsSync()) return null;
