@@ -1,7 +1,7 @@
 # Next bugfix pass
 
-Collected 2026-10-10. No version assigned. Implement and push without starting
-CI builds or deploying. Device reports remain separate from automated checks.
+Collected 2026-10-10. Release target: 0.9.39+126. CI and publication are now
+requested. Device reports remain separate from automated checks.
 
 ## Implemented, awaiting user testing
 

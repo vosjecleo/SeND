@@ -3,6 +3,60 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.39 build 126 (2026-10-10)
+
+- Prepare and verify encrypted video downloads before opening the native player,
+  preventing its five-second HTTP timeout from interrupting larger downloads.
+  Both reported clips passed playback checks, including a throttled transfer.
+- Show uploaded video posters immediately on mobile and download the full video
+  after Play. Browser uploads now include dimensions, duration and a small poster
+  while retaining the original video. Sample a later frame for posters to avoid
+  black openings. Existing message metadata is unchanged.
+- Preserve composer focus through keyboard-language picker transitions. Android
+  11+ checks native keyboard visibility on resume before clearing stale layout
+  insets. Older Android and PWA keyboard behaviour still need device checks.
+- Isolate circular avatar clips to contain frame fragments. The reported
+  long-session GPU flicker remains under investigation.
+- Retry missing RTC peers and restart failed peer connections. Request up to
+  1080p/30 and 6 Mbps for screen sharing. Hide connectivity indicators when fully
+  disconnected. Multi-peer churn and negotiated sharing quality need call tests.
+- Notify users of new room and server invitations. Put Mark as read first in
+  room/server menus and acknowledge forum unread state when its index opens.
+- Carry channel types in server child metadata so unjoined voice and forum
+  channels use the correct icons. Existing servers need an admin refresh.
+- Refresh decryption after key recovery. Collapse consecutive undecryptable
+  opening history into one notice and fetch older history when visible recent
+  events are empty or filtered out.
+- Expose server access/discovery settings and ask for an encryption default
+  when creating a server. Apply it to new channels and offer encryption choice
+  in mobile room creation. Existing encrypted rooms stay encrypted.
+- Page room search automatically, retain results and pagination tokens, and
+  discard responses from cancelled or replaced searches. Stop is available
+  during loading. Forum tags remain searchable without a crowded tag strip.
+- Keep the desktop composer editable during sends. Measure wrapping with its
+  actual text styles and whitespace; enlarge the mobile Send touch target.
+- Preview inline formatting in the composer while retaining muted delimiters.
+  A backslash cancels the matching formatting pair wherever it appears inside.
+- Add role mentions for assigned room members. Display Matrix user mentions as
+  short names with a light-blue highlight, preserving their full link targets.
+  Invitations without a homeserver suffix use the account's homeserver.
+- Load missing profile banners during preview refresh, hide offline profile
+  thought bubbles, show elapsed game/program activity time and add Set to current
+  for the profile timezone.
+- Improve Linux Minecraft detection and installed application icon lookup.
+  Wallpaper Engine defaults to an application; explicit activity overrides win.
+  Missing icons still use the fallback.
+- Reject author-avatar images as full-size media in direct text-only FxTwitter
+  previews. Homeserver-only images can still lack enough origin information.
+- Remove the bundled Aero theme. Existing selections fall back to built-in
+  appearance; imported JSON themes remain supported.
+- Default desktop notification volume to 20%, resetting existing desktop
+  accounts once while keeping later adjustments. Clarify Android notification
+  setup and add a Deltie gateway route for Mozilla's Sunup distributor.
+- Add a guided installer for fresh dedicated Linux servers, covering Matrix,
+  HTTPS, RTC, media imports, GIF search, Web Push and optional OIDC/email setup.
+  Existing servers require their own upgrade or migration procedure.
+
 ## SeND 0.9.38 build 125 (2026-10-08)
 
 - Display rooms within categories in their saved order on desktop, mobile and

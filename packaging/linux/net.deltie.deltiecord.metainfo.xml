@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.39+126" date="2026-10-10" type="development">
+      <description><p>Video startup and previews, chat history and search, keyboard recovery, invitations, role mentions, RTC reconnection and guided server setup.</p></description>
+    </release>
     <release version="0.9.38+123" date="2026-10-07" type="development">
       <description><p>Server invitations, mobile room menus and categories, drag-overlay cleanup, safer screen sharing and whole-emoji deletion.</p></description>
     </release>

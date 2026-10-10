@@ -11,10 +11,13 @@ test lists below do not mean those platforms have gone untested.
 
 ## Open investigations
 
-- **Animated banner colours:** a supplied GIF loses pink colours during banner
-  conversion in build 120. A local fix now passes all 121 frames of the supplied
-  sample; it is not released yet. Damaged uploads will need re-uploading after
-  the fix. See the [investigation](docs/gif-banner-investigation.md).
+- **Avatar flicker and GPU use:** extra clipping isolates avatar paints, but the
+  reported long-session frame fragments and high GPU use still need native
+  verification. See the [bugfix tracker](docs/next-bugfix-pass.md).
+- **Video playback:** the encrypted-download timeout was reproduced and corrected
+  for build 126. Retest the reporting devices with both supplied clips. Existing
+  messages retain their old metadata and posters. See the
+  [video investigation](docs/investigations/video-startup-2026-10-10.md).
 
 ## Validation backlog recorded at build 116
 
@@ -43,12 +46,15 @@ paths; an item still needs a matching device/test result before it can be closed
 
 ## Media, activity and packaging limitations
 
-- **Android video:** build 116 corrects cache staging; the reported failure still
-  needs confirmation on the reporting phone. Codec-specific encoding failures,
+- **Android video:** the reported sending failure was confirmed fixed after the
+  cache-staging correction. Compression can still be slow. Codec-specific failures,
   long clips and low storage are separate cases. Recovery offers an explicit
   original-quality upload, not an automatic compression bypass.
 - **Desktop video:** FFmpeg/ffprobe must be available for native compression;
   PWA sends originals and browser playback depends on codec and size limits.
+- **Animated banner colours:** build 121 fixes the supplied GIF's colour loss.
+  Uploads damaged by earlier conversions need re-uploading. See the
+  [investigation](docs/gif-banner-investigation.md).
 - **Linux packages:** AppImage deliberately uses host PipeWire/SVG-loader ABI
   components. Flatpak supplies a shared GNOME runtime but restricts host process
   discovery, Steam-library discovery and Discord IPC. See the installation guide.
