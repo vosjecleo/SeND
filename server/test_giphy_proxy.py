@@ -2,11 +2,14 @@ import importlib.util
 import gzip
 import json
 import pathlib
+import sys
 import unittest
 from unittest import mock
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("giphy_proxy.py")
+# Match script execution and unittest discovery when CI loads this file by path.
+sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("giphy_proxy", MODULE_PATH)
 PROXY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PROXY)

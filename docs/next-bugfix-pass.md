@@ -62,8 +62,9 @@ These are code changes, not confirmations from the reporting devices.
 - B20: Screen capture requests 1080p/30 and screen senders request up to 6 Mbps.
   Negotiation, network conditions and platform capture limits still apply.
 - B23: Sunup uses Mozilla Autopush, not ntfy. Its Matrix adapter is prepared in
-  Deltie's existing loopback Web Push worker. Deploy the worker before testing
-  the new client route. No server deployment was performed in this pass.
+  Deltie's existing loopback Web Push worker. The operator deployed it on
+  2026-10-10; source hashes, service health and the public route were verified.
+  Actual Sunup delivery still needs a distributor/device test.
 
 ## Requests
 
