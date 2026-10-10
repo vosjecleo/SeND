@@ -50,7 +50,7 @@ abstract final class InAppNotificationCenter {
 
 /// Safe, bounded navigation data carried by a desktop notification.
 class NotificationTarget {
-  const NotificationTarget({required this.roomId, required this.eventId});
+  const NotificationTarget({required this.roomId, this.eventId = ''});
 
   final String roomId;
   final String eventId;
@@ -69,7 +69,7 @@ NotificationTarget? decodeNotificationTarget(String? payload) {
     if (roomId is! String || roomId.isEmpty || roomId.length > 1024) {
       return null;
     }
-    if (eventId is! String || eventId.isEmpty || eventId.length > 1024) {
+    if (eventId is! String || eventId.length > 1024) {
       return null;
     }
     return NotificationTarget(roomId: roomId, eventId: eventId);

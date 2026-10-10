@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 
 import '../services/timezone_catalog.dart';
 
@@ -81,6 +82,28 @@ class _TimezonePickerDialogState extends State<TimezonePickerDialog> {
       ),
     ),
     actions: [
+      TextButton(
+        onPressed: () async {
+          try {
+            final zone = (await FlutterTimezone.getLocalTimezone()).identifier;
+            if (!context.mounted) return;
+            if (!TimezoneCatalog.names.contains(zone)) {
+              throw StateError('Unknown timezone');
+            }
+            Navigator.of(context).pop(zone);
+          } catch (_) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not detect your timezone. Choose it from the list.',
+                ),
+              ),
+            );
+          }
+        },
+        child: const Text('Set to current'),
+      ),
       TextButton(
         onPressed: () => Navigator.of(context).pop(''),
         child: const Text('Do not show a timezone'),

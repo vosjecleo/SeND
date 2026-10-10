@@ -48,6 +48,7 @@ import 'profile_dialog.dart';
 import 'profile_card.dart';
 import 'app_shortcuts.dart';
 import 'rich_message.dart';
+import 'inline_composer_preview.dart';
 import 'message_metadata.dart';
 import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
@@ -407,7 +408,8 @@ class _ChatShellState extends State<ChatShell> {
       '$mentionText ',
       TextSelection.collapsed(offset: start + mentionText.length + 1),
     );
-    if (suggestion.matrixId != '@everyone' && suggestion.matrixId != '@all') {
+    if (!suggestion.isRole &&
+        (suggestion.isRoom || suggestion.matrixId.contains(':'))) {
       _message.formatText(
         start,
         mentionText.length,

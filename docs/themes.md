@@ -1,11 +1,12 @@
 # JSON themes (schema 1)
 
-In Appearance, choose **Try Aero Glass** or **Import JSON theme**. Choosing a
+In Appearance, choose **Import JSON theme**. Choosing a
 built-in appearance clears the custom theme. Theme documents and their chosen
 settings follow the existing appearance-sync preference; disabling sync keeps
 them device-local. Copy JSON exports the current settings as theme defaults.
 
-See [the bundled Aero example](../assets/themes/aero.json) for a complete theme.
+The Aero Glass preset is no longer bundled. Existing selections fall back to
+the built-in appearance. Custom JSON themes remain supported.
 
 ```json
 {

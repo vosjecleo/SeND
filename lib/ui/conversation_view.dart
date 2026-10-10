@@ -1176,7 +1176,7 @@ class _ConversationState extends State<_Conversation> {
                       replyToMessageId: widget.replyingTo?.id,
                       // The editor remains live while this only gates attachment
                       // and submit controls for the in-flight request.
-                      enabled: !widget.sending,
+                      enabled: true,
                       sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
                       onSend: widget.onSend,
                       onRecord: widget.editingMessage == null

@@ -43,7 +43,7 @@ void main() {
       await tester.tap(find.text('Invite to server'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, '@user:homeserver.tld'),
+        find.widgetWithText(TextField, '@user or @user:homeserver.tld'),
         '@friend:test',
       );
       await tester.tap(find.text('Invite'));
@@ -4570,7 +4570,11 @@ class FakeBackend extends ChatBackend {
     bool encrypted = true,
   }) async {}
   @override
-  Future<void> createSpace({required String name, String topic = ''}) async {}
+  Future<void> createSpace({
+    required String name,
+    String topic = '',
+    bool encrypted = true,
+  }) async {}
   @override
   Future<void> renameRoom(String roomId, String name) async {}
   @override

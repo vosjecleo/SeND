@@ -6,6 +6,25 @@ import 'package:deltiecord/services/link_preview_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('text-only FxTwitter posts do not expand the author avatar', () async {
+    final transport = _FakeTransport({
+      'https://fxtwitter.com/alice/status/123': _response(
+        '<meta property="og:title" content="Alice">'
+        '<meta property="og:description" content="Just text">'
+        '<meta property="og:image" content="https://pbs.twimg.com/profile_images/avatar.png">',
+      ),
+    });
+    final fetcher = DirectLinkPreviewFetcher(
+      resolveHost: (_) async => [InternetAddress('93.184.216.34')],
+      transport: transport,
+    );
+    final preview = await fetcher.fetch(
+      Uri.parse('https://fxtwitter.com/alice/status/123'),
+    );
+    expect(preview?.description, 'Just text');
+    expect(preview?.imageBytes, isNull);
+    expect(preview?.suppressImage, isTrue);
+  });
   test('rewrites X and Twitter links while preserving other hosts', () {
     expect(
       rewriteTwitterLinks('See https://x.com/alice/status/123?s=20'),

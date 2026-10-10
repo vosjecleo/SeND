@@ -67,6 +67,7 @@ extension _MatrixEventMapping on MatrixBackend {
     Timeline timeline,
     Iterable<Event> events,
   ) {
+    events = events.toList(growable: false);
     final roles = _rolesForRoom(timeline.room);
     final threadEvents = <String, List<Event>>{};
     for (final event in timeline.events) {
@@ -75,126 +76,137 @@ extension _MatrixEventMapping on MatrixBackend {
         (threadEvents[event.relationshipEventId!] ??= []).add(event);
       }
     }
-    return events
-        .where((event) => !_dismissedLocalEchoIds.contains(event.eventId))
-        .where((event) => _isVisibleTimelineEvent(event))
-        .where(_isPersonallyVisibleEvent)
-        .where((event) => event.relationshipType != RelationshipTypes.edit)
-        .map((event) {
-          final replies = threadEvents[event.eventId] ?? const <Event>[];
-          final bundle = event.unsigned
-              ?.tryGetMap<String, dynamic>('m.relations')
-              ?.tryGetMap<String, dynamic>('m.thread');
-          final latest = bundle?.tryGetMap<String, dynamic>('latest_event');
-          var latestTime = latest?.tryGet<int>('origin_server_ts');
-          for (final reply in replies) {
-            latestTime = max(
-              latestTime ?? 0,
-              reply.originServerTs.millisecondsSinceEpoch,
-            );
-          }
-          final read =
-              event.room.receiptState.byThread[event.eventId]?.latestOwnReceipt;
-          final displayEvent = event.type == EventTypes.Message
-              ? event.getDisplayEvent(timeline)
-              : event;
-          final isMessage =
-              displayEvent.type == EventTypes.Message ||
-              displayEvent.type == EventTypes.Encrypted ||
-              displayEvent.type == EventTypes.Sticker ||
-              displayEvent.type == PollEventContent.startType;
-          final attachment = _attachmentFor(displayEvent);
-          final poll = _pollFor(displayEvent, timeline);
-          final blocked = _matrix.ignoredUsers.contains(event.senderId);
-          final body = blocked
-              ? 'Message from blocked user'
-              : event.redacted
-              ? 'Message deleted'
-              : displayEvent.type == EventTypes.Encrypted
-              ? 'Unable to decrypt this message'
-              : poll != null
-              ? poll.question
-              : !isMessage
-              ? _systemEventBody(displayEvent)
-              : attachment?.caption ??
-                    (attachment == null
-                        ? displayEvent.calcUnlocalizedBody(
-                            hideReply: true,
-                            hideEdit: true,
-                            plaintextBody: true,
-                          )
-                        : '');
-          return ChatMessage(
-            id: event.eventId,
-            forumPost: ForumPost.fromJson(
-              displayEvent.content[forumPostKey] ?? event.content[forumPostKey],
-            ),
-            threadReplyCount: max(
-              replies.length,
-              bundle?.tryGet<int>('count') ?? 0,
-            ),
-            threadLatestActivity: latestTime == null
-                ? null
-                : DateTime.fromMillisecondsSinceEpoch(latestTime),
-            threadUnread: latestTime != null && latestTime > (read?.ts ?? 0),
-            sender: event.senderFromMemoryOrFallback.calcDisplayname(),
-            senderColor: roles.colorFor(event.senderId),
-            threadRootId: event.relationshipType == RelationshipTypes.thread
-                ? event.relationshipEventId
-                : null,
-            body: body,
-            timestamp: event.originServerTs,
-            pending: event.status.isSending,
-            failed: event.status.isError,
-            transferStatus: switch (event.fileSendingStatus) {
-              FileSendingStatus.generatingThumbnail => 'Preparing preview…',
-              FileSendingStatus.encrypting => 'Encrypting…',
-              FileSendingStatus.uploading => 'Uploading…',
-              null => null,
-            },
-            system: !isMessage,
-            own: event.senderId == _matrix.userID,
-            canRedact: event.canRedact && !event.redacted,
-            edited: displayEvent.eventId != event.eventId,
-            redacted: event.redacted,
-            reactions: _reactionSummaries(event, timeline),
-            attachment: blocked ? null : attachment,
-            formattedBody:
-                !blocked &&
-                    displayEvent.isRichMessage &&
-                    (attachment == null || attachment.caption != null)
-                ? displayEvent.formattedText
-                : null,
-            reply: _colouredReply(event, roles),
-            avatarBytes: _senderAvatarBytes[event.senderId],
-            linkPreview: blocked
-                ? null
-                : _linkPreviews[event.eventId]?.firstOrNull,
-            additionalLinkPreviews: blocked
-                ? const []
-                : (_linkPreviews[event.eventId]
-                          ?.skip(1)
-                          .toList(growable: false) ??
-                      const []),
-            senderId: event.senderId,
-            readBy: _readersFor(event, timeline),
-            editReadBy: displayEvent.eventId == event.eventId
-                ? const []
-                : _readersFor(displayEvent, timeline),
-            blocked: blocked,
-            queued: _offlineSendRooms.containsKey(event.eventId),
-            poll: poll,
-            bookmarked: _bookmarkedEventIds.contains(event.eventId),
-            pinned: event.room.pinnedEventIds.contains(event.eventId),
-            pingedCurrentUser: _eventPingsCurrentUser(
-              event,
-              displayEvent,
-              timeline,
-            ),
-          );
-        })
-        .toList(growable: false)
-      ..sort(compareTimelineMessages);
+    final messages =
+        events
+            .where((event) => !_dismissedLocalEchoIds.contains(event.eventId))
+            .where((event) => _isVisibleTimelineEvent(event))
+            .where(_isPersonallyVisibleEvent)
+            .where((event) => event.relationshipType != RelationshipTypes.edit)
+            .map((event) {
+              final replies = threadEvents[event.eventId] ?? const <Event>[];
+              final bundle = event.unsigned
+                  ?.tryGetMap<String, dynamic>('m.relations')
+                  ?.tryGetMap<String, dynamic>('m.thread');
+              final latest = bundle?.tryGetMap<String, dynamic>('latest_event');
+              var latestTime = latest?.tryGet<int>('origin_server_ts');
+              for (final reply in replies) {
+                latestTime = max(
+                  latestTime ?? 0,
+                  reply.originServerTs.millisecondsSinceEpoch,
+                );
+              }
+              final read = event
+                  .room
+                  .receiptState
+                  .byThread[event.eventId]
+                  ?.latestOwnReceipt;
+              final displayEvent = event.type == EventTypes.Message
+                  ? event.getDisplayEvent(timeline)
+                  : event;
+              final isMessage =
+                  displayEvent.type == EventTypes.Message ||
+                  displayEvent.type == EventTypes.Encrypted ||
+                  displayEvent.type == EventTypes.Sticker ||
+                  displayEvent.type == PollEventContent.startType;
+              final attachment = _attachmentFor(displayEvent);
+              final poll = _pollFor(displayEvent, timeline);
+              final blocked = _matrix.ignoredUsers.contains(event.senderId);
+              final body = blocked
+                  ? 'Message from blocked user'
+                  : event.redacted
+                  ? 'Message deleted'
+                  : displayEvent.type == EventTypes.Encrypted
+                  ? 'Unable to decrypt this message'
+                  : poll != null
+                  ? poll.question
+                  : !isMessage
+                  ? _systemEventBody(displayEvent)
+                  : attachment?.caption ??
+                        (attachment == null
+                            ? displayEvent.calcUnlocalizedBody(
+                                hideReply: true,
+                                hideEdit: true,
+                                plaintextBody: true,
+                              )
+                            : '');
+              return ChatMessage(
+                id: event.eventId,
+                forumPost: ForumPost.fromJson(
+                  displayEvent.content[forumPostKey] ??
+                      event.content[forumPostKey],
+                ),
+                threadReplyCount: max(
+                  replies.length,
+                  bundle?.tryGet<int>('count') ?? 0,
+                ),
+                threadLatestActivity: latestTime == null
+                    ? null
+                    : DateTime.fromMillisecondsSinceEpoch(latestTime),
+                threadUnread:
+                    latestTime != null && latestTime > (read?.ts ?? 0),
+                sender: event.senderFromMemoryOrFallback.calcDisplayname(),
+                senderColor: roles.colorFor(event.senderId),
+                threadRootId: event.relationshipType == RelationshipTypes.thread
+                    ? event.relationshipEventId
+                    : null,
+                body: body,
+                timestamp: event.originServerTs,
+                pending: event.status.isSending,
+                failed: event.status.isError,
+                transferStatus: switch (event.fileSendingStatus) {
+                  FileSendingStatus.generatingThumbnail => 'Preparing preview…',
+                  FileSendingStatus.encrypting => 'Encrypting…',
+                  FileSendingStatus.uploading => 'Uploading…',
+                  null => null,
+                },
+                system: !isMessage,
+                own: event.senderId == _matrix.userID,
+                canRedact: event.canRedact && !event.redacted,
+                edited: displayEvent.eventId != event.eventId,
+                redacted: event.redacted,
+                reactions: _reactionSummaries(event, timeline),
+                attachment: blocked ? null : attachment,
+                formattedBody:
+                    !blocked &&
+                        displayEvent.isRichMessage &&
+                        (attachment == null || attachment.caption != null)
+                    ? displayEvent.formattedText
+                    : null,
+                reply: _colouredReply(event, roles),
+                avatarBytes: _senderAvatarBytes[event.senderId],
+                linkPreview: blocked
+                    ? null
+                    : _linkPreviews[event.eventId]?.firstOrNull,
+                additionalLinkPreviews: blocked
+                    ? const []
+                    : (_linkPreviews[event.eventId]
+                              ?.skip(1)
+                              .toList(growable: false) ??
+                          const []),
+                senderId: event.senderId,
+                readBy: _readersFor(event, timeline),
+                editReadBy: displayEvent.eventId == event.eventId
+                    ? const []
+                    : _readersFor(displayEvent, timeline),
+                blocked: blocked,
+                queued: _offlineSendRooms.containsKey(event.eventId),
+                poll: poll,
+                bookmarked: _bookmarkedEventIds.contains(event.eventId),
+                pinned: event.room.pinnedEventIds.contains(event.eventId),
+                pingedCurrentUser: _eventPingsCurrentUser(
+                  event,
+                  displayEvent,
+                  timeline,
+                ),
+              );
+            })
+            .toList(growable: false)
+          ..sort(compareTimelineMessages);
+    return collapseUnavailableHistory(messages, {
+      for (final event in events)
+        if (event.type == EventTypes.Encrypted && !event.redacted)
+          event.eventId,
+    });
   }
 
   bool _eventPingsCurrentUser(Event source, Event display, Timeline timeline) {

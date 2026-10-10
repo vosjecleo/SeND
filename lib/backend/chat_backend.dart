@@ -114,6 +114,7 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get timelineLoading;
   bool get historyLoading;
   bool get canLoadMoreHistory;
+  bool get canLoadMoreSearchResults => false;
   bool get canLoadMoreFuture;
   bool get atTimelinePresent;
   String? get firstUnreadMessageId;
@@ -213,7 +214,12 @@ abstract class ChatBackend extends ChangeNotifier {
     String topic,
     bool encrypted,
   });
-  Future<void> createSpace({required String name, String topic});
+  Future<void> createSpace({
+    required String name,
+    String topic,
+    bool encrypted = true,
+  });
+  bool get defaultChannelEncryption => true;
   Future<void> createChannelCategory(String name);
   Future<void> renameChannelCategory(String categoryId, String name);
   Future<void> deleteChannelCategory(String categoryId);

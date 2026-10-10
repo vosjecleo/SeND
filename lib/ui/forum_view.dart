@@ -23,6 +23,7 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
   bool _indexLoading = false;
   String? _indexRequestedFor;
   String? _indexError;
+  bool _markingRead = false;
 
   @override
   void initState() {
@@ -40,6 +41,18 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
       // Opening the index reads new posts, not replies in unopened threads.
       // Backend foreground/visibility gates still prevent background receipts.
       widget.backend.setConversationAtPresent(true);
+      if (!_markingRead &&
+          (widget.room.hasUnreadMessages ||
+              widget.room.unreadCount > 0 ||
+              widget.room.markedUnread)) {
+        _markingRead = true;
+        unawaited(
+          widget.backend
+              .markRoomUnread(widget.room.id, false)
+              .catchError((_) {})
+              .whenComplete(() => _markingRead = false),
+        );
+      }
     });
   }
 
@@ -185,9 +198,14 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
                 (!_unreadOnly || post.threadUnread) &&
                 (_tag == null ||
                     (post.forumPost?.tags.contains(_tag) ?? false)) &&
-                '${post.forumPost?.title ?? ''} ${post.body} ${post.sender}'
-                    .toLowerCase()
-                    .contains(_query),
+                (_query.startsWith('#')
+                    ? (post.forumPost?.tags ?? const <String>[]).any(
+                        (tag) =>
+                            tag.toLowerCase().contains(_query.substring(1)),
+                      )
+                    : '${post.forumPost?.title ?? ''} ${post.body} ${post.sender}'
+                          .toLowerCase()
+                          .contains(_query)),
           )
           .toList();
       posts.sort(
@@ -242,11 +260,13 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: TextField(
                 decoration: const InputDecoration(
-                  hintText: 'Search loaded posts',
+                  hintText: 'Search posts or #tags',
                   prefixIcon: Icon(Icons.search),
                 ),
-                onChanged: (value) =>
-                    setState(() => _query = value.trim().toLowerCase()),
+                onChanged: (value) => setState(() {
+                  _query = value.trim().toLowerCase();
+                  _tag = null;
+                }),
               ),
             ),
             Padding(
@@ -275,9 +295,13 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
                     selected: _unreadOnly,
                     onSelected: (value) => setState(() => _unreadOnly = value),
                   ),
-                  for (final tag in tags)
+                  for (final tag in tags.where(
+                    (tag) =>
+                        _query.startsWith('#') &&
+                        tag.toLowerCase().contains(_query.substring(1)),
+                  ))
                     FilterChip(
-                      label: Text(tag),
+                      label: Text('#$tag'),
                       selected: _tag == tag,
                       onSelected: (selected) =>
                           setState(() => _tag = selected ? tag : null),

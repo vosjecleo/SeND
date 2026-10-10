@@ -18,6 +18,35 @@ def subscription(endpoint='https://web.push.apple.com/test'):
 
 
 class WebPushTests(unittest.TestCase):
+    def test_sunup_forwards_only_identifiers_to_fixed_provider(self):
+        endpoint = 'https://updates.push.services.mozilla.com/wpush/v2/test'
+        with mock.patch.object(gateway.urllib.request, 'build_opener') as opener:
+            opener.return_value.open.return_value.__enter__.return_value.status = 201
+            response = gateway.app.test_client().post('/_matrix/push/v1/notify', json={
+                'notification': {'room_id': '!room:test', 'event_id': '$event',
+                                 'content': {'body': 'secret plaintext'},
+                                 'devices': [{'app_id': 'net.deltie.deltiecord', 'pushkey': endpoint}]}})
+            self.assertEqual(response.status_code, 200)
+            req = opener.return_value.open.call_args.args[0]
+            self.assertEqual(req.full_url, endpoint)
+            self.assertEqual(json.loads(req.data), {'notification': {
+                'room_id': '!room:test', 'event_id': '$event'}})
+            self.assertNotIn('secret', req.data.decode())
+
+    def test_sunup_refuses_arbitrary_urls_and_retries_transient_failure(self):
+        with mock.patch.object(gateway.urllib.request, 'build_opener') as opener:
+            for endpoint in ['http://127.0.0.1/x', 'https://evil.example/wpush/v2/x',
+                             'https://updates.push.services.mozilla.com.evil.example/wpush/v2/x',
+                             'https://updates.push.services.mozilla.com:444/wpush/v2/x']:
+                self.assertFalse(gateway.forward_sunup(endpoint, '!r', '$e'))
+            opener.assert_not_called()
+            opener.return_value.open.side_effect = OSError('offline')
+            response = gateway.app.test_client().post('/_matrix/push/v1/notify', json={
+                'notification': {'room_id': '!r', 'event_id': '$e', 'devices': [{
+                    'app_id': 'net.deltie.deltiecord',
+                    'pushkey': 'https://updates.push.services.mozilla.com/wpush/v2/x'}]}})
+            self.assertEqual(response.status_code, 503)
+
     def test_declarative_payload_has_private_fallback_and_safe_navigation(self):
         from urllib.parse import urlsplit, parse_qs
         room, event = '!room:example&x=1', '$event#fragment'

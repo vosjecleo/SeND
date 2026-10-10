@@ -285,7 +285,7 @@ void main() {
           result.stdout.toString().trim().split('\n').first;
       expect(url.startsWith('file:'), isTrue);
       expect(await ActivityArtworkCache().load(url), isNotNull);
-      final catalogue = loadLocalActivityCatalogue();
+      final catalogue = await loadLocalActivityCatalogue();
       for (final name in ['Stardew Valley', 'Counter-Strike: Source']) {
         final item = catalogue.firstWhere((e) => e.name == name);
         expect(item.id.endsWith('/'), isTrue);

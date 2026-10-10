@@ -170,6 +170,7 @@ class MatrixVoiceController extends ChangeNotifier {
   bool _updatingWebAudio = false;
   bool _webAudioDirty = false;
   Timer? _connectivityTimer;
+  DateTime? _lastPeerRecovery;
   bool _samplingConnectivity = false;
   RtcConnectivity _connectivity = const RtcConnectivity();
   RtcConnectivity get connectivity => _status == VoiceConnectionStatus.error
@@ -605,6 +606,51 @@ class MatrixVoiceController extends ChangeNotifier {
     var total = 0;
     int? ping;
     try {
+      if (_screenSharing) {
+        for (final session in _voip?.calls.values.toList() ?? <CallSession>[]) {
+          if (session.room.id != call.room.id ||
+              session.groupCallId != call.groupCallId) {
+            continue;
+          }
+          final tracks =
+              session.localScreenSharingStream?.stream
+                  ?.getVideoTracks()
+                  .map((track) => track.id)
+                  .toSet() ??
+              <String?>{};
+          final peer = session.pc;
+          if (peer == null || tracks.isEmpty) continue;
+          try {
+            for (final sender in await peer.getSenders().timeout(
+              const Duration(seconds: 2),
+            )) {
+              if (sender.track == null || !tracks.contains(sender.track!.id)) {
+                continue;
+              }
+              final parameters = sender.parameters;
+              final encodings = parameters.encodings;
+              if (encodings == null ||
+                  encodings.isEmpty ||
+                  encodings.every(
+                    (encoding) =>
+                        encoding.maxBitrate == 6000000 &&
+                        encoding.maxFramerate == 30,
+                  )) {
+                continue;
+              }
+              for (final encoding in encodings) {
+                encoding.maxBitrate = 6000000;
+                encoding.maxFramerate = 30;
+              }
+              await sender
+                  .setParameters(parameters)
+                  .timeout(const Duration(seconds: 2));
+            }
+          } catch (_) {
+            // Platforms that cannot tune RTP retain their negotiated settings.
+          }
+        }
+      }
       for (final peer in _peers.toList()) {
         try {
           final state = await peer.getConnectionState().timeout(
@@ -669,6 +715,39 @@ class MatrixVoiceController extends ChangeNotifier {
       notifyListeners();
     } finally {
       _samplingConnectivity = false;
+    }
+    if (!_disposed &&
+        identical(call, _activeCall) &&
+        connected < total &&
+        call.state == GroupCallState.entered &&
+        (_lastPeerRecovery == null ||
+            DateTime.now().difference(_lastPeerRecovery!) >
+                const Duration(seconds: 20))) {
+      _lastPeerRecovery = DateTime.now();
+      try {
+        for (final session in _voip?.calls.values.toList() ?? <CallSession>[]) {
+          if (session.room.id != call.room.id ||
+              session.groupCallId != call.groupCallId) {
+            continue;
+          }
+          final peer = session.pc;
+          if (peer == null) continue;
+          final state = await peer.getConnectionState().timeout(
+            const Duration(seconds: 2),
+          );
+          if (state ==
+              flutter_webrtc
+                  .RTCPeerConnectionState
+                  .RTCPeerConnectionStateFailed) {
+            await session.restartIce();
+          }
+        }
+        if (!_disposed && identical(call, _activeCall)) {
+          await call.onMemberStateChanged();
+        }
+      } catch (_) {
+        // Keep healthy peers connected; retry missing links at the next interval.
+      }
     }
   }
 

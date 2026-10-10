@@ -431,6 +431,9 @@ class MediaRangeProxy {
     final downloadTime = Stopwatch()..start();
     try {
       await for (final chunk in response.timeout(const Duration(seconds: 15))) {
+        if (media.removed) {
+          throw const HttpException('Encrypted media playback canceled');
+        }
         if (downloadTime.elapsed > const Duration(minutes: 5)) {
           throw const HttpException('Encrypted media download timed out');
         }

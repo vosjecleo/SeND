@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../activity_widgets.dart';
+import '../inline_composer_preview.dart';
 import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
@@ -1469,18 +1470,21 @@ class _CustomEmojiEditingController extends TextEditingController {
             )
             .toList(growable: false)
           ..sort((a, b) => a.start.compareTo(b.start));
-    if (valid.isEmpty) {
+    if (value.composing.isValid && !value.composing.isCollapsed) {
       return super.buildTextSpan(
         context: context,
         style: style,
         withComposing: withComposing,
       );
     }
+    if (valid.isEmpty) return inlineComposerPreview(source, style);
     final children = <InlineSpan>[];
     var cursor = 0;
     for (final span in valid) {
       if (span.start < cursor) continue;
-      children.add(TextSpan(text: source.substring(cursor, span.start)));
+      children.add(
+        inlineComposerPreview(source.substring(cursor, span.start), style),
+      );
       children.add(
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
@@ -1496,7 +1500,7 @@ class _CustomEmojiEditingController extends TextEditingController {
       }
       cursor = span.end;
     }
-    children.add(TextSpan(text: source.substring(cursor)));
+    children.add(inlineComposerPreview(source.substring(cursor), style));
     return TextSpan(style: style, children: children);
   }
 }
@@ -2450,10 +2454,10 @@ class _MobileComposerState extends State<_MobileComposer> {
                   IconButton(
                     onPressed: widget.onEmoji,
                     constraints: const BoxConstraints.tightFor(
-                      width: 42,
+                      width: 34,
                       height: 48,
                     ),
-                    padding: EdgeInsets.zero,
+                    padding: const EdgeInsets.only(left: 8),
                     icon: const Icon(Icons.emoji_emotions_outlined),
                   ),
                   Semantics(
@@ -2479,10 +2483,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                           : widget.onSchedule,
                       radius: 26,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 12,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(18, 12, 10, 12),
                         child: widget.sending
                             ? const SizedBox.square(
                                 dimension: 20,

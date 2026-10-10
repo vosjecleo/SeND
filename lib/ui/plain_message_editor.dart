@@ -7,6 +7,7 @@ import '../backend/chat_backend.dart';
 import '../services/custom_emoji.dart';
 import 'composer_emoji_span.dart';
 import 'rich_message.dart';
+import 'inline_composer_preview.dart';
 
 /// Plain text input. The legacy document is only a draft/emoji-offset codec;
 /// no rich editor, automatic formatting, HTML paste or formatting shortcuts.
@@ -261,12 +262,14 @@ class _PlainController extends TextEditingController {
       if (inserted is! String || offset >= text.length) continue;
       final end = (offset + inserted.length).clamp(0, text.length);
       children.add(
-        composerEmojiSpan(
-          backend: backend,
-          text: text.substring(offset, end),
-          link: (op['attributes'] as Map?)?['link'] as String?,
-          style: style,
-        ),
+        (op['attributes'] as Map?)?['link'] == null
+            ? inlineComposerPreview(text.substring(offset, end), style)
+            : composerEmojiSpan(
+                backend: backend,
+                text: text.substring(offset, end),
+                link: (op['attributes'] as Map?)?['link'] as String?,
+                style: style,
+              ),
       );
       offset = end;
     }

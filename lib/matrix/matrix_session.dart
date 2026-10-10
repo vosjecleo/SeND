@@ -318,6 +318,12 @@ extension _MatrixSession on MatrixBackend {
       _spaceRoomOrderOverrides.clear();
       _collapsedChannelCategories.clear();
       _roomMessageCache.clear();
+      _historySearchMessages.clear();
+      _historySearchRoom = null;
+      _historySearchQuery = null;
+      _historySearchCursor = null;
+      _historySearchComplete = false;
+      _historySearchGeneration++;
       _discoveredSpaceRooms.clear();
       _reviewedSpaceRoles.clear();
       _roleProfileSignature = null;
@@ -676,7 +682,15 @@ extension _MatrixSession on MatrixBackend {
         _presenceMode == PresenceMode.doNotDisturb) {
       return;
     }
-    final rooms = _joinedRooms.where((room) => !room.isSpace);
+    final rooms = _matrix.rooms
+        .where(
+          (room) =>
+              room.membership == Membership.invite ||
+              (room.membership == Membership.join && !room.isSpace),
+        )
+        .toList(growable: false);
+    final roomIds = rooms.map((room) => room.id).toSet();
+    _lastNotificationEventIds.removeWhere((id, _) => !roomIds.contains(id));
     final activeDesktopOwnsExternalNotifications =
         Platform.isAndroid &&
         !_applicationForeground &&
@@ -688,13 +702,66 @@ extension _MatrixSession on MatrixBackend {
         );
     if (!_notificationsPrimed) {
       for (final room in rooms) {
-        final eventId = room.lastEvent?.eventId;
+        final eventId = room.membership == Membership.invite
+            ? 'invite:${room.getState(EventTypes.RoomMember, _matrix.userID!)?.senderId}'
+            : room.lastEvent?.eventId;
         if (eventId != null) _lastNotificationEventIds[room.id] = eventId;
       }
       _notificationsPrimed = true;
       return;
     }
     for (final room in rooms) {
+      final invited = room.membership == Membership.invite;
+      if (invited) {
+        final senderId = room
+            .getState(EventTypes.RoomMember, _matrix.userID!)
+            ?.senderId;
+        // Stripped invite state has no event ID. Keep a local deduplication
+        // key, but never use that key as a timeline navigation target.
+        final key = 'invite:$senderId';
+        if (_lastNotificationEventIds[room.id] == key) continue;
+        _lastNotificationEventIds[room.id] = key;
+        if (activeDesktopOwnsExternalNotifications ||
+            room.pushRuleState == PushRuleState.dontNotify) {
+          continue;
+        }
+        final title = 'Invitation to ${room.getLocalizedDisplayname()}';
+        final body = senderId == null
+            ? 'You have a room invitation'
+            : 'From $senderId';
+        if (_applicationForeground && Platform.isAndroid) {
+          InAppNotificationCenter.show(
+            InAppChatNotification(
+              roomId: room.id,
+              title: title,
+              body: body,
+              onTap: () {
+                InAppNotificationCenter.dismiss();
+                unawaited(
+                  _openNotificationTarget(NotificationTarget(roomId: room.id)),
+                );
+              },
+            ),
+          );
+        } else {
+          try {
+            await _notifications.show(
+              title: title,
+              body: body,
+              roomId: room.id,
+              eventId: '',
+              sound: _preferences.notificationSound,
+              vibrate: _preferences.notificationVibration,
+              alertCadence: _preferences.notificationAlertCadence,
+            );
+          } catch (_) {
+            _notificationError =
+                'Could not show the room invitation notification.';
+            _notifyBackendListeners();
+          }
+        }
+        continue;
+      }
       final event = room.lastEvent;
       if (event == null ||
           _lastNotificationEventIds[room.id] == event.eventId) {
@@ -707,7 +774,8 @@ extension _MatrixSession on MatrixBackend {
               _conversationVisible) ||
           event.senderId == _matrix.userID ||
           room.pushRuleState == PushRuleState.dontNotify ||
-          (room.pushRuleState == PushRuleState.mentionsOnly &&
+          (!invited &&
+              room.pushRuleState == PushRuleState.mentionsOnly &&
               room.highlightCount == 0)) {
         continue;
       }
@@ -721,7 +789,9 @@ extension _MatrixSession on MatrixBackend {
         }
       }
       final sender = event.senderFromMemoryOrFallback.calcDisplayname();
-      final notificationBody = !_notificationPreviewsEnabled
+      final notificationBody = room.membership == Membership.invite
+          ? 'Invited you to ${room.getLocalizedDisplayname()}'
+          : !_notificationPreviewsEnabled
           ? 'New message'
           : displayEvent.type == EventTypes.Message
           ? displayEvent.calcUnlocalizedBody(
@@ -884,6 +954,7 @@ extension _MatrixSession on MatrixBackend {
     if (room == null || room.membership != Membership.join) return;
     try {
       await _selectRoom(target.roomId);
+      if (target.eventId.isEmpty) return;
       final event = await room.getEventById(target.eventId);
       final rootId = event?.relationshipType == RelationshipTypes.thread
           ? event?.relationshipEventId

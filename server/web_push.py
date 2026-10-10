@@ -7,6 +7,7 @@ Subscription endpoints and pushkeys are capabilities: do not log request bodies.
 """
 import base64
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import ipaddress
 import json
@@ -18,6 +19,7 @@ import threading
 import time
 from urllib.parse import urlencode, urlsplit
 import urllib.request
+import urllib.error
 
 from flask import Flask, jsonify, request
 from pywebpush import WebPushException, webpush
@@ -271,6 +273,21 @@ def notify():
             or len(event) > 1024 or not isinstance(devices, list) or len(devices) > 20):
         return jsonify(error='Invalid notification'), 400
     rejected = []
+    sunup_keys = list(dict.fromkeys(
+        device['pushkey'] for device in devices
+        if isinstance(device, dict) and device.get('app_id') == 'net.deltie.deltiecord'
+        and isinstance(device.get('pushkey'), str)))
+    if sunup_keys:
+        # At most twenty devices, four five-second requests at a time. Keep
+        # this below the worker's timeout even when Mozilla is unreachable.
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            try:
+                results = list(executor.map(
+                    lambda key: forward_sunup(key, room, event), sunup_keys))
+            except (OSError, ValueError):
+                # Keep pushers on temporary failure. Synapse retries 5xx.
+                return jsonify(error='Push service unavailable; retry later'), 503
+        rejected.extend(key for key, accepted in zip(sunup_keys, results) if not accepted)
     for device in devices:
         if not isinstance(device, dict) or device.get('app_id') != 'net.deltie.deltiecord.web':
             continue
@@ -301,6 +318,44 @@ def notify():
                        (key, room, event, time.time() + 3600))
     _wake.set()
     return jsonify(rejected=rejected)
+
+
+def forward_sunup(endpoint, room, event):
+    """Forward identifiers only to Sunup's fixed Mozilla service, not arbitrary URLs.
+
+    Sunup forwards the payload bytes unchanged. The aes128gcm header follows
+    UnifiedPush common-proxies' Autopush transport convention; these IDs are
+    TLS-protected, not end-to-end encrypted. Never include message plaintext.
+    """
+    if not isinstance(endpoint, str) or len(endpoint) > 4096:
+        return False
+    try:
+        url = urlsplit(endpoint)
+        valid = (url.scheme == 'https' and url.hostname == 'updates.push.services.mozilla.com'
+                 and url.port in (None, 443) and not url.username and not url.password
+                 and not url.fragment and not url.query
+                 and url.path.startswith(('/wpush/v1/', '/wpush/v2/')))
+    except ValueError:
+        return False
+    if not valid:
+        return False
+    if not room or not event:
+        return True
+    payload = json.dumps({'notification': {'room_id': room, 'event_id': event}},
+                         separators=(',', ':')).encode()
+    req = urllib.request.Request(endpoint, data=payload, method='POST', headers={
+        'Content-Type': 'application/octet-stream', 'Content-Encoding': 'aes128gcm',
+        'TTL': '300',
+    })
+    try:
+        with urllib.request.build_opener(NoRedirect).open(req, timeout=5) as response:
+            if not 200 <= response.status < 300:
+                raise OSError('Push delivery failed')
+    except urllib.error.HTTPError as error:
+        if error.code in (404, 410):
+            return False
+        raise OSError('Push delivery failed') from None
+    return True
 
 
 def drain_pending():

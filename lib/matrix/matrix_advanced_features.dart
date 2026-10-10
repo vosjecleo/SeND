@@ -212,9 +212,24 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) return;
     await room.markUnread(unread);
+    if (room.isSpace && !unread) {
+      for (final child in _joinedRooms.where(
+        (child) => !child.isSpace && _spaceForRoom(child)?.id == roomId,
+      )) {
+        await _markRoomUnread(child.id, false);
+      }
+    }
     if (unread && room.lastEvent != null) {
       _firstUnreadEventIds[room.id] = room.lastEvent!.eventId;
     } else if (!unread) {
+      final event = room.lastEvent;
+      if (event != null && event.status.isSynced) {
+        await room.setReadMarker(
+          event.eventId,
+          mRead: event.eventId,
+          public: _preferences.sendReadReceipts,
+        );
+      }
       _firstUnreadEventIds[room.id] = null;
     }
     _notifyBackendListeners();
@@ -1310,6 +1325,12 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     String? reason,
     String? roomId,
   }) async {
+    userId = userId.trim();
+    if (!userId.contains(':')) {
+      final ownId = _matrix.userID!;
+      userId =
+          '${userId.startsWith('@') ? userId : '@$userId'}${ownId.substring(ownId.indexOf(':'))}';
+    }
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('No room is selected.');
     if (!room.canInvite) {

@@ -495,6 +495,16 @@ extension _MatrixRoomOperations on MatrixBackend {
       );
       _timeline = timeline;
       _timelineDatabaseOffset = timeline.events.length;
+      if (!timeline.events.any(
+            (event) =>
+                _isVisibleTimelineEvent(event) &&
+                _isPersonallyVisibleEvent(event) &&
+                event.relationshipType != RelationshipTypes.edit,
+          ) &&
+          canLoadMoreHistory) {
+        await _loadMoreHistory();
+        if (!_isCurrentTimeline(timeline, generation)) return;
+      }
       _captureFirstUnread(room, timeline);
       // The SDK already decrypts locally-available events while constructing
       // the Timeline. Publish that usable snapshot immediately; any remaining
@@ -596,6 +606,27 @@ extension _MatrixRoomOperations on MatrixBackend {
         {'kind': presentation.name},
       );
       _roomPresentationOverrides[roomId] = presentation;
+      final parent = _spaceForRoom(room);
+      if (parent != null && parent.canChangeStateEvent(EventTypes.SpaceChild)) {
+        try {
+          final child = await _matrix.getRoomStateWithKey(
+            parent.id,
+            EventTypes.SpaceChild,
+            roomId,
+          );
+          // Do not restore a link removed by another administrator.
+          if (child['via'] is List && (child['via'] as List).isNotEmpty) {
+            await _matrix.setRoomStateWithKey(
+              parent.id,
+              EventTypes.SpaceChild,
+              roomId,
+              {...child, 'net.send.presentation': presentation.name},
+            );
+          }
+        } catch (_) {
+          // The room update succeeded. Discovery refresh retries the hint.
+        }
+      }
       if (roomId == _selectedRoomId) {
         await _closeTimeline();
         _selectedRoomId = null;
@@ -656,6 +687,7 @@ extension _MatrixRoomOperations on MatrixBackend {
   Future<void> _createSpace({
     required String name,
     required String topic,
+    bool encrypted = true,
   }) async {
     try {
       final roomId = await _matrix.createSpace(
@@ -663,6 +695,12 @@ extension _MatrixRoomOperations on MatrixBackend {
         topic: topic.trim().isEmpty ? null : topic.trim(),
         visibility: Visibility.private,
         waitForSync: true,
+      );
+      await _matrix.setRoomStateWithKey(
+        roomId,
+        'net.send.channel_encryption',
+        '',
+        {'enabled': encrypted},
       );
       _selectSpace(roomId);
       unawaited(_refreshRoomMetadata());

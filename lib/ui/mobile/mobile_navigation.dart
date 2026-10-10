@@ -327,6 +327,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
   Future<void> _createRoom(BuildContext context) async {
     final controller = TextEditingController();
     var presentation = RoomPresentation.text;
+    var encrypted = backend.defaultChannelEncryption;
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -340,6 +341,14 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                   controller: controller,
                   autofocus: true,
                   decoration: const InputDecoration(labelText: 'Room name'),
+                ),
+                SwitchListTile(
+                  title: const Text('End-to-end encryption'),
+                  subtitle: const Text(
+                    'When off, homeserver operators can read messages.',
+                  ),
+                  value: encrypted,
+                  onChanged: (value) => setDialogState(() => encrypted = value),
                 ),
                 DropdownButton<RoomPresentation>(
                   isExpanded: true,
@@ -386,7 +395,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
       await backend.createRoom(
         name: name,
         presentation: presentation,
-        encrypted: true,
+        encrypted: encrypted,
       );
     }
   }
@@ -473,7 +482,12 @@ class _SpaceRail extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (name != null && name.isNotEmpty) await backend.createSpace(name: name);
+    if (name != null && name.isNotEmpty && context.mounted) {
+      final encrypted = await chooseSpaceEncryption(context);
+      if (encrypted != null) {
+        await backend.createSpace(name: name, encrypted: encrypted);
+      }
+    }
   }
 
   Future<void> _showSpaceActions(
@@ -487,6 +501,11 @@ class _SpaceRail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.done_all),
+              title: const Text('Mark as read'),
+              onTap: () => Navigator.pop(sheetContext, 'read'),
+            ),
             if (backend.canInviteToRoom(space.id))
               ListTile(
                 leading: const Icon(Icons.person_add_alt_1_outlined),
@@ -538,6 +557,8 @@ class _SpaceRail extends StatelessWidget {
         );
       case 'mute':
         await backend.setRoomMuted(space.id, !space.muted);
+      case 'read':
+        await backend.markRoomUnread(space.id, false);
       case 'settings':
         await showSpaceSettings(context, backend, space, mobile: true);
       case 'server-profile':

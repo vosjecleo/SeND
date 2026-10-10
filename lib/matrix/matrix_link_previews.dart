@@ -281,6 +281,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
         description: preview.description,
         siteName: preview.siteName,
         imageBytes: preview.imageBytes,
+        suppressImage: preview.suppressImage,
         videoUrl: preview.videoUrl,
         gifSource: preview.gifSource,
         mediaPending: preview.mediaPending,
@@ -296,7 +297,10 @@ extension _MatrixLinkPreviews on MatrixBackend {
     title: homeserver.title ?? direct.title,
     description: homeserver.description ?? direct.description,
     siteName: homeserver.siteName ?? direct.siteName,
-    imageBytes: homeserver.imageBytes ?? direct.imageBytes,
+    imageBytes: direct.suppressImage
+        ? null
+        : homeserver.imageBytes ?? direct.imageBytes,
+    suppressImage: direct.suppressImage,
     videoUrl: homeserver.videoUrl ?? direct.videoUrl,
     gifSource: homeserver.gifSource ?? direct.gifSource,
     mediaPending: homeserver.imageBytes == null && direct.mediaPending,

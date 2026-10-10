@@ -75,6 +75,24 @@ Documents are limited to 1 MiB, images to 5 MiB, and video range responses to
 no-script CSP; SVG and generic files are not served. This does not add media
 conversion, arbitrary-site proxying, or support for every provider's player.
 
+## Sunup notifications
+
+The Web Push worker also forwards Android Sunup notifications at
+`/_matrix/push/v1/notify`. The existing service listens on `127.0.0.1:8141`,
+behind the PWA's HTTPS proxy. No new public port is needed. Updating the client
+alone is not enough: deploy the updated `web_push.py` and restart that worker
+before testing Sunup.
+
+Only `updates.push.services.mozilla.com` endpoints are accepted. The forwarded
+payload contains room and event IDs, not decrypted messages, tokens or keys.
+Mozilla receives those identifiers over HTTPS; this forwarding payload is not
+end-to-end encrypted. Expired endpoints are rejected; temporary failures ask
+the homeserver to retry. Other distributors still use their own Matrix gateway.
+
+Clients register the public HTTPS gateway address so federated homeservers can
+reach it. A local Synapse deployment may route that hostname internally, but
+do not replace the public client address with `127.0.0.1`.
+
 ## Authentication callback protection
 
 `chat-nginx.conf` contains an exact `/auth.html` rule with no access logging,

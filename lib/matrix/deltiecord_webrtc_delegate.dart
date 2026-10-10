@@ -87,6 +87,16 @@ final class _DeltiecordMediaDevices implements MediaDevices {
 
   @override
   Future<MediaStream> getDisplayMedia(Map<String, dynamic> constraints) async {
+    constraints = {
+      ...constraints,
+      'video': {
+        if (constraints['video'] is Map)
+          ...Map<String, dynamic>.from(constraints['video'] as Map),
+        'width': {'ideal': 1920},
+        'height': {'ideal': 1080},
+        'frameRate': {'ideal': 30, 'max': 60},
+      },
+    };
     final withAudio =
         _shareDesktopAudio() &&
         (kIsWeb ||

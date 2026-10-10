@@ -48,7 +48,14 @@ class _SpaceBar extends StatelessWidget {
     name.dispose();
     topic.dispose();
     if (create == true && spaceName.isNotEmpty) {
-      await backend.createSpace(name: spaceName, topic: spaceTopic);
+      if (!context.mounted) return;
+      final encrypted = await chooseSpaceEncryption(context);
+      if (encrypted == null) return;
+      await backend.createSpace(
+        name: spaceName,
+        topic: spaceTopic,
+        encrypted: encrypted,
+      );
     }
   }
 
@@ -406,6 +413,13 @@ class _SpaceBar extends StatelessWidget {
         Offset.zero & MediaQuery.sizeOf(context),
       ),
       items: [
+        const PopupMenuItem(
+          value: 'read',
+          child: _RoomContextMenuEntry(
+            icon: Icons.done_all,
+            label: 'Mark as read',
+          ),
+        ),
         if (backend.canInviteToRoom(space.id))
           const PopupMenuItem(
             value: 'invite',
@@ -464,6 +478,8 @@ class _SpaceBar extends StatelessWidget {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
+      case 'read':
+        await backend.markRoomUnread(space.id, false);
       case 'invite':
         await showInviteMember(
           context,
@@ -871,7 +887,7 @@ class _RoomPanelState extends State<_RoomPanel> {
     final name = TextEditingController();
     final topic = TextEditingController();
     var presentation = RoomPresentation.text;
-    var encrypted = true;
+    var encrypted = backend.defaultChannelEncryption;
     final create = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2060,6 +2076,13 @@ class _RoomListTile extends StatelessWidget {
         Offset.zero & screen,
       ),
       items: [
+        const PopupMenuItem(
+          value: 'read',
+          child: _RoomContextMenuEntry(
+            icon: Icons.done_all,
+            label: 'Mark as read',
+          ),
+        ),
         if (_canEditAny)
           PopupMenuItem(
             value: 'settings',
@@ -2133,6 +2156,8 @@ class _RoomListTile extends StatelessWidget {
     if (!context.mounted || action == null) return;
     try {
       switch (action) {
+        case 'read':
+          await backend.markRoomUnread(room.id, false);
         case 'settings':
           await _edit(context);
         case 'mute':

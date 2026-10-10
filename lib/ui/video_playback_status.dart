@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
+/// Encrypted attachments must finish integrity verification before decoding.
+/// Give larger files time to download instead of restarting them every minute.
+Duration videoStartupTimeout(int? size) =>
+    Duration(seconds: (60 + ((size ?? 0) ~/ (1024 * 1024)) * 2).clamp(60, 600));
+
 /// Some player backends retain `playing` at EOF. Completion wins for controls.
 class VideoPlaybackStatus extends StatelessWidget {
   const VideoPlaybackStatus({

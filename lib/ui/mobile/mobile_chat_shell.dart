@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
@@ -47,6 +49,10 @@ class _MobileChatShellState extends State<MobileChatShell>
   bool? _dragStartedWithNavigation;
   bool? _reportedConversationVisible;
   int _resumeGeneration = 0;
+  DateTime? _backgroundedAt;
+  bool _ignoreStaleKeyboardInsets = false;
+  int _keyboardResumeCheck = 0;
+  Timer? _keyboardResumeTimer;
   Timer? _timelineGestureReset;
   bool _suppressTimelineGestures = false;
   int _inboxRevision = 0;
@@ -124,6 +130,7 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void dispose() {
+    _keyboardResumeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     backend.setConversationVisible(false);
     backend.removeListener(_backendChanged);
@@ -134,7 +141,20 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _backgroundedAt ??= DateTime.now();
+    }
     if (state != AppLifecycleState.resumed) return;
+    final backgroundedAt = _backgroundedAt;
+    _backgroundedAt = null;
+    // IME pickers can produce inactive/resumed without pausing the app.
+    // Do not rebuild focus scopes or dismiss input for those transitions.
+    if (backgroundedAt == null) return;
+    final keyboardGeneration = ++_keyboardResumeCheck;
+    _keyboardResumeTimer?.cancel();
+    _keyboardResumeTimer = Timer(const Duration(milliseconds: 200), () {
+      unawaited(_checkResumedKeyboard(keyboardGeneration));
+    });
     // Pointer streams can be interrupted when Android freezes the activity.
     // Keep durable navigation state, but discard only transient gesture state
     // so an orphaned pointer cannot leave the Space rail non-interactive.
@@ -150,6 +170,36 @@ class _MobileChatShellState extends State<MobileChatShell>
     // Rebuilding the navigation subtree reconciles the rail and room card
     // after Android recreates its surface. Do not re-select the Space through
     // the backend here: Space selection intentionally clears the active room.
+  }
+
+  Future<void> _checkResumedKeyboard(int generation) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    // Let Android restore its window before comparing its actual IME state
+    // with Flutter's last insets. A language picker must retain focus.
+    if (!mounted || generation != _keyboardResumeCheck) return;
+    try {
+      final visible = await const MethodChannel(
+        'net.deltie.deltiecord/composer',
+      ).invokeMethod<bool>('keyboardVisible');
+      if (!mounted || generation != _keyboardResumeCheck || visible != false) {
+        return;
+      }
+      if (View.of(context).viewInsets.bottom <= 0) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      setState(() => _ignoreStaleKeyboardInsets = true);
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    } on PlatformException {
+      // Older Android versions may not expose reliable IME visibility.
+    } on MissingPluginException {
+      // Other platforms retain their own keyboard/inset lifecycle.
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (_ignoreStaleKeyboardInsets && mounted) {
+      setState(() => _ignoreStaleKeyboardInsets = false);
+    }
   }
 
   Future<void> _openRoom(RoomSummary room) async {
@@ -177,7 +227,7 @@ class _MobileChatShellState extends State<MobileChatShell>
           _navigationProgress <= 0.001,
     );
     final canSystemPop = _navigationVisible && !_detailsVisible;
-    return PopScope(
+    final shell = PopScope(
       canPop: canSystemPop,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
@@ -188,13 +238,19 @@ class _MobileChatShellState extends State<MobileChatShell>
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: !_ignoreStaleKeyboardInsets,
         body: Listener(
           behavior: HitTestBehavior.translucent,
           // Raw pointer tracking deliberately observes (but does not win) the
           // gesture arena. Message rows may still claim a left drag for reply,
           // while a right drag anywhere on the timeline reliably opens nav.
-          onPointerDown: (event) =>
-              _pointerStarts[event.pointer] = event.position,
+          onPointerDown: (event) {
+            _keyboardResumeCheck++;
+            if (_ignoreStaleKeyboardInsets) {
+              setState(() => _ignoreStaleKeyboardInsets = false);
+            }
+            _pointerStarts[event.pointer] = event.position;
+          },
           onPointerMove: (event) {
             final start = _pointerStarts[event.pointer];
             if (start == null || _detailsVisible || room == null) return;
@@ -438,6 +494,14 @@ class _MobileChatShellState extends State<MobileChatShell>
           ),
         ),
       ),
+    );
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        viewInsets: _ignoreStaleKeyboardInsets
+            ? EdgeInsets.zero
+            : MediaQuery.viewInsetsOf(context),
+      ),
+      child: shell,
     );
   }
 

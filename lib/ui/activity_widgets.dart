@@ -116,6 +116,58 @@ class ActivityStatus extends StatelessWidget {
   }
 }
 
+class _ActivityHeading extends StatefulWidget {
+  const _ActivityHeading({required this.activity});
+  final UserActivity activity;
+  @override
+  State<_ActivityHeading> createState() => _ActivityHeadingState();
+}
+
+class _ActivityHeadingState extends State<_ActivityHeading> {
+  Timer? _timer;
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && TickerMode.valuesOf(context).enabled) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activity = widget.activity;
+    final elapsed = activity.startedAt == null
+        ? null
+        : DateTime.now().difference(activity.startedAt!);
+    return DefaultTextStyle(
+      style: TextStyle(fontSize: 12, color: context.deltiecord.muted),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(switch (activity.kind) {
+              ActivityKind.game => 'Currently playing:',
+              ActivityKind.music => 'Currently listening to:',
+              ActivityKind.application => 'Currently using:',
+            }),
+          ),
+          if (elapsed != null &&
+              !elapsed.isNegative &&
+              activity.kind != ActivityKind.music)
+            Text(
+              '${elapsed.inHours.toString().padLeft(2, '0')}:${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class ActivityBlock extends StatelessWidget {
   const ActivityBlock({required this.userId, this.compact = false, super.key});
   final String? userId;
@@ -182,17 +234,7 @@ class ActivityBlock extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            switch (activity.kind) {
-                              ActivityKind.game => 'Currently playing:',
-                              ActivityKind.music => 'Currently listening to:',
-                              ActivityKind.application => 'Currently using:',
-                            },
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.deltiecord.muted,
-                            ),
-                          ),
+                          _ActivityHeading(activity: activity),
                           const SizedBox(height: 4),
                           Text(
                             activity.name,

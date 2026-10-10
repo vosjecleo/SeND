@@ -48,8 +48,8 @@ Future<void> showRoomSearchSheet(
   ),
 );
 
-/// Room search keeps pagination deliberately bounded: opening a panel must not
-/// turn into an unbounded history/media download.
+/// Opening search loads one page. A query continues through empty pages until
+/// it finds results or the user stops it; scrolling loads subsequent matches.
 class RoomSearchPanel extends StatefulWidget {
   const RoomSearchPanel({
     required this.backend,
@@ -68,8 +68,8 @@ class RoomSearchPanel extends StatefulWidget {
 
 class _RoomSearchPanelState extends State<RoomSearchPanel>
     with SingleTickerProviderStateMixin {
-  static const _maximumPaginationPasses = 3;
-  static const _maximumResults = 120;
+  final _resultsScroll = ScrollController();
+  int _queryGeneration = 0;
 
   final _query = TextEditingController();
   late final TabController _tabs;
@@ -78,11 +78,21 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   bool _searching = false;
   bool _loadingOlder = false;
   int _paginationPasses = 0;
+  bool _searchStopped = false;
+  bool get _canLoadOlder => _query.text.trim().isEmpty
+      ? widget.backend.canLoadMoreHistory
+      : widget.backend.canLoadMoreSearchResults;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _resultsScroll.addListener(() {
+      if (_resultsScroll.hasClients &&
+          _resultsScroll.position.extentAfter < 400) {
+        unawaited(_loadOlder());
+      }
+    });
     _tabs = TabController(
       length: RoomSearchSection.values.length,
       vsync: this,
@@ -103,16 +113,20 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   }
 
   void _queryChanged(String value) {
+    _searchStopped = false;
+    _queryGeneration++;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _search);
     setState(() {});
   }
 
   Future<void> _search() async {
+    final generation = ++_queryGeneration;
     final value = _query.text.trim();
     if (value.isEmpty) {
       setState(() {
         _serverResults = const [];
+        _searching = false;
         _error = null;
       });
       return;
@@ -123,24 +137,41 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     });
     try {
       final found = await widget.backend.searchRoomHistory(value);
-      if (mounted) setState(() => _serverResults = found);
+      if (mounted && generation == _queryGeneration) {
+        setState(() => _serverResults = found);
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Search failed. Try again.');
+      if (mounted && generation == _queryGeneration) {
+        setState(() => _error = 'Search failed. Try again.');
+      }
     } finally {
-      if (mounted) setState(() => _searching = false);
+      if (mounted && generation == _queryGeneration) {
+        setState(() => _searching = false);
+        if (!_searchStopped &&
+            _error == null &&
+            _serverResults.isEmpty &&
+            _canLoadOlder) {
+          _debounce = Timer(const Duration(milliseconds: 200), () {
+            if (mounted && generation == _queryGeneration) _loadOlder();
+          });
+        }
+      }
     }
   }
 
   Future<void> _loadOlder() async {
-    if (_loadingOlder ||
-        _paginationPasses >= _maximumPaginationPasses ||
-        !widget.backend.canLoadMoreHistory) {
+    if (_loadingOlder || _searching || !_canLoadOlder) {
       return;
     }
     setState(() => _loadingOlder = true);
     try {
-      await widget.backend.loadMoreHistory();
+      if (_query.text.trim().isEmpty) await widget.backend.loadMoreHistory();
       _paginationPasses++;
+      if (_query.text.trim().isNotEmpty) await _search();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not load older messages. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _loadingOlder = false);
     }
@@ -181,11 +212,12 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
               RegExp(r'https?://', caseSensitive: false).hasMatch(message.body),
       };
     }).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return results.take(_maximumResults).toList(growable: false);
+    return results;
   }
 
   @override
   void dispose() {
+    _resultsScroll.dispose();
     _debounce?.cancel();
     _tabs.dispose();
     _query.dispose();
@@ -263,6 +295,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                   )
                 : media
                 ? GridView.builder(
+                    controller: _resultsScroll,
                     padding: const EdgeInsets.all(12),
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -278,6 +311,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                     ),
                   )
                 : ListView.builder(
+                    controller: _resultsScroll,
                     itemCount: results.length,
                     itemBuilder: (context, index) {
                       final message = results[index];
@@ -298,8 +332,19 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                     },
                   ),
           ),
-          if (_paginationPasses < _maximumPaginationPasses &&
-              widget.backend.canLoadMoreHistory)
+          if (_searching ||
+              (_serverResults.isEmpty &&
+                  _canLoadOlder &&
+                  !_searchStopped &&
+                  _query.text.trim().isNotEmpty))
+            TextButton(
+              onPressed: () {
+                _debounce?.cancel();
+                setState(() => _searchStopped = true);
+              },
+              child: const Text('Stop searching older messages'),
+            ),
+          if (_canLoadOlder)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
               child: OutlinedButton.icon(
@@ -308,7 +353,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                 label: Text(
                   _paginationPasses == 0
                       ? 'Search older messages'
-                      : 'Search one more older page',
+                      : 'Load older results',
                 ),
               ),
             ),

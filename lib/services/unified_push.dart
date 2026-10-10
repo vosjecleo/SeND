@@ -334,11 +334,15 @@ String? normalizeUnifiedPushEndpoint(String value) {
 /// An ntfy capability is only meaningful to the ntfy server that issued it.
 /// Sending an `ntfy.sh` capability to SeND's private ntfy gateway makes
 /// the gateway reject the device and causes the homeserver to delete its
-/// pusher. Keep the opaque capability and its Matrix gateway on one origin.
+/// pusher. Keep ntfy endpoints on their own origin. Sunup uses Mozilla's push
+/// transport, which needs the separate Matrix adapter hosted by Deltie.
 Uri? matrixPushGatewayForUnifiedPushEndpoint(String value) {
   final normalized = normalizeUnifiedPushEndpoint(value);
   final endpoint = normalized == null ? null : Uri.tryParse(normalized);
   if (endpoint == null) return null;
+  if (endpoint.host == 'updates.push.services.mozilla.com') {
+    return Uri.parse('https://chat.deltie.net/_matrix/push/v1/notify');
+  }
   return Uri(
     scheme: endpoint.scheme,
     host: endpoint.host,

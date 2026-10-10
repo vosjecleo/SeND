@@ -1215,7 +1215,7 @@ class _InlineVideoState extends State<_InlineVideo> {
         return;
       }
       _startupTimer?.cancel();
-      _startupTimer = Timer(const Duration(seconds: 60), () {
+      _startupTimer = Timer(videoStartupTimeout(widget.attachment.size), () {
         if (mounted &&
             player.state.position == Duration.zero &&
             player.state.buffering) {

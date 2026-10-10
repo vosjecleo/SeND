@@ -102,6 +102,26 @@ extension _MatrixCrypto on MatrixBackend {
         );
       }
       await _recoveryPhase('Checking recovery result', refreshEncryptionSetup);
+      // A failed pre-recovery window is not authoritative once backup keys
+      // become available. Retry the live window without replacing its scroll state.
+      final timeline = _timeline;
+      final generation = _timelineGeneration;
+      if (timeline != null) {
+        try {
+          await _loadRoomBackupKeys(timeline.room, timeline);
+          if (_isCurrentTimeline(timeline, generation)) {
+            await _decryptTimelineEvents(timeline);
+            timeline.requestKeys(
+              tryOnlineBackup: true,
+              onlineKeyBackupOnly: false,
+            );
+            _roomMessageCache.remove(timeline.room.id);
+            _notifyBackendListeners();
+          }
+        } catch (_) {
+          // History may be unavailable without invalidating successful recovery.
+        }
+      }
       unawaited(_refreshRoomMetadata());
     } catch (exception) {
       _encryptionSetup = EncryptionSetupState(

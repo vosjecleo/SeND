@@ -98,12 +98,8 @@ class _JsonThemeSettingsState extends State<JsonThemeSettings> {
   Widget build(BuildContext context) {
     final preferences = widget.backend.preferences;
     JsonTheme? theme;
-    if (preferences.themeJson.isNotEmpty) {
-      try {
-        theme = JsonTheme.parse(preferences.themeJson);
-      } catch (_) {
-        /* Safe fallback remains selectable. */
-      }
+    if (JsonTheme.fromPreferences(preferences) != null) {
+      theme = JsonTheme.parse(preferences.themeJson);
     }
     final values =
         theme?.values(preferences.themeSettings) ?? const <String, Object?>{};
@@ -136,15 +132,6 @@ class _JsonThemeSettingsState extends State<JsonThemeSettings> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => _select(
-                      () => rootBundle.loadString('assets/themes/aero.json'),
-                    ),
-              icon: const Icon(Icons.blur_on),
-              label: const Text('Try Aero Glass'),
-            ),
             OutlinedButton.icon(
               onPressed: _busy ? null : () => _select(_import),
               icon: const Icon(Icons.file_open_outlined),

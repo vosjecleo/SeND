@@ -102,6 +102,29 @@ class SpaceRoles {
   /// the display order. IDs survive renames and moves.
   final List<SpaceRole> roles;
   final Map<String, Set<String>> members;
+  Set<String> mentionedMembers(
+    String text,
+    Set<String> roomMembers, {
+    String? exclude,
+  }) {
+    final result = <String>{};
+    for (final role in roles) {
+      if (!RegExp(
+        '(^|\\s)@${RegExp.escape(role.name)}(?=\\s|[,.!?]|\$)',
+      ).hasMatch(text)) {
+        continue;
+      }
+      for (final assignment in members.entries) {
+        if (assignment.value.contains(role.id) &&
+            roomMembers.contains(assignment.key) &&
+            assignment.key != exclude) {
+          result.add(assignment.key);
+        }
+      }
+    }
+    return result;
+  }
+
   bool equivalentTo(SpaceRoles other) {
     if (roles.length != other.roles.length ||
         members.length != other.members.length) {

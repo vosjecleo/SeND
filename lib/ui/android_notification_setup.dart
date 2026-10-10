@@ -100,7 +100,8 @@ class _AndroidNotificationSetupState extends State<AndroidNotificationSetup> {
         if (!mounted) return;
         if (distributors.isEmpty) {
           setState(
-            () => _message = 'Install and open ntfy first, then try again.',
+            () => _message =
+                'Install and open ntfy or Sunup first, then try again.',
           );
           return;
         }
@@ -180,9 +181,9 @@ class _AndroidNotificationSetupState extends State<AndroidNotificationSetup> {
               'Allow background battery use for reliable delivery. This may use more battery. '
               'Force-stopping SeND stops alerts until you reopen it.',
         'unified' =>
-          'Use a notification app such as ntfy. Install and open it, then select '
-              'https://push.deltie.net as its UnifiedPush server, or use a compatible server you trust. '
-              'Allow that app to run in the background.',
+          'Use ntfy or Sunup if you already have one installed. Allow it to run in the background. '
+              'Sunup uses Deltie’s gateway to forward room and event IDs to Mozilla, not message text. '
+              'ntfy uses its own server’s gateway.',
         _ =>
           'You may miss messages while SeND is closed. You can change this in Settings > Notifications.',
       }),

@@ -93,6 +93,13 @@ class MainActivity : FlutterActivity() {
                     imm.restartInput(view)
                 }
                 result.success(null)
+            } else if (call.method == "keyboardVisible") {
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    result.success(window.decorView.rootWindowInsets?.isVisible(
+                        android.view.WindowInsets.Type.ime()))
+                } else {
+                    result.success(null)
+                }
             } else result.notImplemented()
         }
         configuredEngine = flutterEngine

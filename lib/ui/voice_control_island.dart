@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/rtc_connectivity.dart';
+import '../models/chat_models.dart';
 import 'deltiecord_theme.dart';
 
 Future<void> toggleVoiceScreenSharing(
@@ -38,6 +39,9 @@ class RtcConnectivityIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (backend.voiceConnectionStatus == VoiceConnectionStatus.disconnected) {
+      return const SizedBox.shrink();
+    }
     final status = backend.rtcConnectivity;
     final (icon, color) = switch (status.state) {
       RtcConnectivityState.unavailable => (Icons.error, Colors.redAccent),

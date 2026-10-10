@@ -30,16 +30,34 @@ extension _MatrixMessages on MatrixBackend {
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (normalized.isEmpty || room == null) return const [];
     final roomId = room.id;
+    final generation = ++_historySearchGeneration;
+    if (_historySearchRoom != roomId || _historySearchQuery != normalized) {
+      _historySearchRoom = roomId;
+      _historySearchQuery = normalized;
+      _historySearchCursor = null;
+      _historySearchComplete = false;
+      _historySearchMessages.clear();
+    }
+    final previousCursor = _historySearchCursor;
     try {
       final parsed = MessageSearchQuery.parse(normalized);
-      final result = parsed.serverTerm.isEmpty
+      final result = _historySearchComplete
           ? null
           : await room.searchEvents(
               searchTerm: parsed.serverTerm,
+              nextBatch: previousCursor,
               limit: max(100, _preferences.timelineChunkSize),
             );
-      if (_selectedRoomId != roomId) return const [];
+      if (_selectedRoomId != roomId || generation != _historySearchGeneration) {
+        return const [];
+      }
+      if (result != null) {
+        _historySearchCursor = result.nextBatch;
+        _historySearchComplete =
+            result.nextBatch == null || result.nextBatch == previousCursor;
+      }
       final matches = <String, ChatMessage>{
+        ..._historySearchMessages,
         for (final message in searchMessages(normalized)) message.id: message,
       };
       for (var event in result?.events ?? const <Event>[]) {
@@ -65,8 +83,14 @@ extension _MatrixMessages on MatrixBackend {
         }
         matches[message.id] = message;
       }
+      if (_selectedRoomId != roomId || generation != _historySearchGeneration) {
+        return const [];
+      }
       final sorted = matches.values.toList(growable: false)
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      _historySearchMessages
+        ..clear()
+        ..addAll(matches);
       return sorted;
     } catch (exception) {
       if (_selectedRoomId == roomId) {
@@ -133,6 +157,7 @@ extension _MatrixMessages on MatrixBackend {
         visibleLoaded += timeline.events.where((event) {
           return !beforeIds.contains(event.eventId) &&
               _isVisibleTimelineEvent(event) &&
+              _isPersonallyVisibleEvent(event) &&
               event.relationshipType != RelationshipTypes.edit;
         }).length;
         if (pageLoaded == 0 && !canLoadMoreHistory) break;
@@ -392,6 +417,15 @@ extension _MatrixMessages on MatrixBackend {
         .map((match) => match.group(0)!)
         .where((userId) => userId != _matrix.userID)
         .toSet();
+    final roles = _rolesForRoom(room);
+    final joined = room
+        .getParticipants()
+        .where((member) => member.membership == Membership.join)
+        .map((member) => member.id)
+        .toSet();
+    userIds.addAll(
+      roles.mentionedMembers(text, joined, exclude: _matrix.userID),
+    );
     if (replyEvent != null && replyEvent.senderId != _matrix.userID) {
       userIds.add(replyEvent.senderId);
     }

@@ -317,7 +317,7 @@ String _boundedText(String value, int maximum) => value
     .replaceAll(RegExp(r'[\x00-\x1f]'), ' ')
     .substring(0, value.length.clamp(0, maximum));
 
-Uint8List? _icon(String? path) {
+Future<Uint8List?> _icon(String? path) async {
   if (path == null ||
       !(path.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(path))) {
     return null;
@@ -325,7 +325,38 @@ Uint8List? _icon(String? path) {
   try {
     final file = File(path);
     if (file.lengthSync() > 1024 * 1024) return null;
-    final bytes = file.readAsBytesSync();
+    var bytes = file.readAsBytesSync();
+    if (path.toLowerCase().endsWith('.svg')) {
+      // Stdin gives librsvg no filesystem base URL for linked resources. Only
+      // installed local icons are considered; never execute desktop commands.
+      final process = await Process.start('rsvg-convert', [
+        '-w',
+        '96',
+        '-h',
+        '96',
+        '--keep-aspect-ratio',
+      ]);
+      final timer = Timer(const Duration(seconds: 2), () => process.kill());
+      try {
+        final errors = process.stderr.drain<void>();
+        process.stdin.add(bytes);
+        unawaited(process.stdin.close().catchError((_) {}));
+        final output = BytesBuilder(copy: false);
+        await for (final chunk in process.stdout) {
+          if (output.length + chunk.length > 1024 * 1024) {
+            process.kill();
+            return null;
+          }
+          output.add(chunk);
+        }
+        await errors;
+        if (await process.exitCode != 0) return null;
+        bytes = output.takeBytes();
+      } finally {
+        timer.cancel();
+        process.kill();
+      }
+    }
     final decoder = img.findDecoderForData(bytes);
     final info = decoder?.startDecode(bytes);
     if (info == null || info.width > 2048 || info.height > 2048) return null;
@@ -343,7 +374,7 @@ Uint8List? _icon(String? path) {
   }
 }
 
-List<ActivityCandidate> loadLocalActivityCatalogue() {
+Future<List<ActivityCandidate>> loadLocalActivityCatalogue() async {
   final homeDir = Platform.environment['HOME'] ?? '';
   final data = Platform.environment['XDG_DATA_HOME'] ?? '$homeDir/.local/share';
   final roots = [
@@ -387,20 +418,12 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
         final executable = binary.group(1) ?? binary.group(2)!;
         if (['env', 'sh', 'bash'].contains(executable)) continue;
         final categories = (fields['Categories'] ?? '').split(';');
-        String? iconPath = fields['Icon'];
-        if (iconPath != null && !iconPath.startsWith('/')) {
-          iconPath = [
-            for (final r in roots)
-              for (final size in ['128x128', '96x96', '64x64', '48x48'])
-                '$r/icons/hicolor/$size/apps/$iconPath.png',
-            '/usr/share/pixmaps/$iconPath.png',
-          ].where((p) => File(p).existsSync()).firstOrNull;
-        }
+        final iconPath = findLocalActivityIcon(fields['Icon'], roots);
         final entry = ActivityCandidate(
           id: executable,
           name: fields['Name']!,
           kind: categories.contains('Game') ? ActivityKind.game : null,
-          iconBytes: _icon(iconPath),
+          iconBytes: await _icon(iconPath),
         );
         final steamId = steamShortcutAppId(exec);
         if (steamId != null) {
@@ -462,9 +485,12 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
               ActivityCandidate(
                 id: '${normalizeActivityPath(Directory('$library/steamapps/common/$install').resolveSymbolicLinksSync())}/',
                 name: name,
-                kind: ActivityKind.game,
+                kind: appId == '431960'
+                    ? ActivityKind.application
+                    : ActivityKind.game,
                 steamAppId: appId,
-                iconBytes: shortcut?.iconBytes ?? _steamIcon(steam, appId),
+                iconBytes:
+                    shortcut?.iconBytes ?? await _steamIcon(steam, appId),
               ),
             );
           }
@@ -473,6 +499,58 @@ List<ActivityCandidate> loadLocalActivityCatalogue() {
     }
   }
   return entries;
+}
+
+/// Resolve installed raster artwork without launching .desktop commands.
+/// Search common icon themes as well as hicolor; many distributions put app
+/// icons only in their selected theme or in a Flatpak export directory.
+String? findLocalActivityIcon(String? name, List<String> roots) {
+  if (name == null || name.isEmpty) return null;
+  if (name.startsWith('/')) return File(name).existsSync() ? name : null;
+  if (name.contains('/') || name.contains('..')) return null;
+  for (final root in roots) {
+    final themes = <String>{'hicolor'};
+    final icons = Directory('$root/icons');
+    if (icons.existsSync()) {
+      themes.addAll(
+        icons
+            .listSync(followLinks: false)
+            .whereType<Directory>()
+            .take(32)
+            .map((directory) => directory.path.split('/').last),
+      );
+    }
+    final filenames =
+        name.endsWith('.png') || name.endsWith('.svg') || name.endsWith('.webp')
+        ? [name]
+        : ['$name.png', '$name.webp', '$name.svg'];
+    for (final filename in filenames) {
+      for (final theme in themes) {
+        for (final size in [
+          '256x256',
+          '128x128',
+          '96x96',
+          '64x64',
+          '48x48',
+          '32x32',
+          'scalable',
+          'apps/48',
+          'apps/64',
+          'apps/128',
+        ]) {
+          for (final path in [
+            '$root/icons/$theme/$size/apps/$filename',
+            '$root/icons/$theme/$size/$filename',
+          ]) {
+            if (File(path).existsSync()) return path;
+          }
+        }
+      }
+      final pixmap = '$root/pixmaps/$filename';
+      if (File(pixmap).existsSync()) return pixmap;
+    }
+  }
+  return null;
 }
 
 List<String> _windowsSteamRoots() {
@@ -495,7 +573,7 @@ List<String> _windowsSteamRoots() {
   return roots.map(normalizeActivityPath).toList();
 }
 
-Uint8List? _steamIcon(String steam, String? id) {
+Future<Uint8List?> _steamIcon(String steam, String? id) async {
   if (id == null) return null;
   final cache = Directory('$steam/appcache/librarycache');
   if (!cache.existsSync()) return null;
@@ -527,7 +605,7 @@ Uint8List? _steamIcon(String steam, String? id) {
 
   paths.sort((a, b) => score(a).compareTo(score(b)));
   for (final path in paths) {
-    final bytes = _icon(path);
+    final bytes = await _icon(path);
     if (bytes != null) return bytes;
   }
   return null;
@@ -552,6 +630,33 @@ Future<List<ActivityCandidate>> _runningApplications(
     try {
       var executable = Link('${entry.path}/exe').resolveSymbolicLinksSync();
       var match = matchRunningActivity(executable, catalogue);
+      if (executable.split('/').last == 'java') {
+        final command = File('${entry.path}/cmdline').openSync();
+        List<String> args;
+        try {
+          args = utf8
+              .decode(command.readSync(65536), allowMalformed: true)
+              .split('\u0000');
+        } finally {
+          command.closeSync();
+        }
+        if (isMinecraftClientArguments(args)) {
+          final icon = catalogue
+              .where((item) => item.name.toLowerCase() == 'minecraft')
+              .firstOrNull
+              ?.iconBytes;
+          final assetIndex = args.indexOf('--assetsDir');
+          final assets = assetIndex >= 0 && assetIndex + 1 < args.length
+              ? args[assetIndex + 1]
+              : '${Platform.environment['HOME']}/.minecraft/assets';
+          match = ActivityCandidate(
+            id: executable,
+            name: 'Minecraft',
+            kind: ActivityKind.game,
+            iconBytes: icon ?? await loadMinecraftActivityIcon(assets),
+          );
+        }
+      }
       // Read only this user's process metadata, locally. Steam's identity also
       // distinguishes GoldSrc games sharing hl.exe (e.g. Opposing Force).
       String? steamId;
@@ -628,6 +733,56 @@ Future<List<ActivityCandidate>> _runningApplications(
     } catch (_) {}
   }
   return rankActivities(result.values);
+}
+
+bool isMinecraftClientArguments(List<String> args) => args.any(
+  {
+    'net.minecraft.client.main.Main',
+    'net.fabricmc.loader.impl.launch.knot.KnotClient',
+    'net.fabricmc.loader.launch.knot.KnotClient',
+  }.contains,
+);
+
+Future<Uint8List?> loadMinecraftActivityIcon(String assets) async {
+  if (!assets.startsWith('/')) return null;
+  try {
+    final indexes = Directory('$assets/indexes');
+    if (!indexes.existsSync()) return null;
+    final files =
+        indexes
+            .listSync(followLinks: false)
+            .whereType<File>()
+            .where((file) => file.path.endsWith('.json'))
+            .take(32)
+            .toList()
+          ..sort(
+            (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+          );
+    for (final file in files.take(4)) {
+      if (file.lengthSync() > 8 * 1024 * 1024) continue;
+      final index = jsonDecode(file.readAsStringSync());
+      final objects = index is Map ? index['objects'] : null;
+      if (objects is! Map) continue;
+      for (final name in [
+        'icons/icon_256x256.png',
+        'icons/icon_32x32.png',
+        'icons/icon_16x16.png',
+      ]) {
+        final entry = objects[name];
+        final hash = entry is Map ? entry['hash'] : null;
+        if (hash is! String || !RegExp(r'^[a-f0-9]{40}$').hasMatch(hash)) {
+          continue;
+        }
+        final bytes = await _icon(
+          '$assets/objects/${hash.substring(0, 2)}/$hash',
+        );
+        if (bytes != null) return bytes;
+      }
+    }
+  } catch (_) {
+    // Missing local artwork leaves the controller placeholder in place.
+  }
+  return null;
 }
 
 Future<List<ActivityCandidate>> _windowsApplications(

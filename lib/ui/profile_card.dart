@@ -462,7 +462,9 @@ class _ProfileHeader extends StatelessWidget {
                 right: 20,
                 left: 28 + avatarSize,
                 bottom: 34,
-                child: profile.statusMessage?.trim().isNotEmpty == true
+                child: profile.presence == UserPresence.offline
+                    ? const SizedBox.shrink()
+                    : profile.statusMessage?.trim().isNotEmpty == true
                     ? ProfileStatusBubble(
                         status: profile.statusMessage!,
                         accent: accent,

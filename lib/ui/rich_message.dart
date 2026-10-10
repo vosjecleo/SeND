@@ -150,8 +150,45 @@ void reconcileRichMessageDocument(
 }
 
 String? _typedMarkupToHtml(String text) {
-  if (!RegExp(r'[*_~]|\|\|').hasMatch(text)) return null;
+  if (!RegExp(r'[*_~]|\|\||@[A-Za-z0-9._=/-]+:').hasMatch(text)) return null;
 
+  var literalPrefix = 'SENDESCAPEDINLINE';
+  while (text.contains(literalPrefix)) {
+    literalPrefix += 'X';
+  }
+  final literals = <String>[];
+  final original = text;
+  text = text.replaceAllMapped(RegExp(r'\\(\*\*|__|~~|\|\||\*|_)([^\n]+?)\1'), (
+    match,
+  ) {
+    final token = '$literalPrefix${literals.length}END';
+    literals.add(
+      htmlEscape.convert('${match.group(1)}${match.group(2)}${match.group(1)}'),
+    );
+    return token;
+  });
+  text = text.replaceAllMapped(RegExp(r'(\*\*|__|~~|\|\||\*|_)([^\n]+?)\1'), (
+    match,
+  ) {
+    if (!match.group(2)!.contains('\\')) return match.group(0)!;
+    final token = '$literalPrefix${literals.length}END';
+    literals.add(htmlEscape.convert(match.group(0)!.replaceAll('\\', '')));
+    return token;
+  });
+
+  text = text.replaceAllMapped(
+    RegExp(
+      r'(?<![A-Za-z0-9_/])@[A-Za-z0-9._=/-]+:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]+)?',
+    ),
+    (match) {
+      final id = match.group(0)!;
+      final token = '$literalPrefix${literals.length}END';
+      literals.add(
+        '<a href="https://matrix.to/#/${htmlEscape.convert(id)}">${htmlEscape.convert(id)}</a>',
+      );
+      return token;
+    },
+  );
   var prefix = 'SENDINLINESPOILER';
   while (text.contains(prefix)) {
     prefix += 'X';
@@ -190,7 +227,10 @@ String? _typedMarkupToHtml(String text) {
       '<span data-mx-spoiler>${spoilers[index]}</span>',
     );
   }
-  return html == text ? null : html;
+  for (var index = 0; index < literals.length; index++) {
+    html = html.replaceAll('$literalPrefix${index}END', literals[index]);
+  }
+  return html == original ? null : html;
 }
 
 class _ComposerLineBreakSyntax extends markdown.InlineSyntax {

@@ -293,7 +293,9 @@ class JsonTheme {
   static ResolvedJsonTheme? fromPreferences(AppPreferences preferences) {
     if (preferences.themeJson.isEmpty) return null;
     try {
-      return JsonTheme.parse(preferences.themeJson).resolve(preferences);
+      final theme = JsonTheme.parse(preferences.themeJson);
+      if (theme.id == 'deltiecord.aero') return null;
+      return theme.resolve(preferences);
     } on FormatException {
       return null;
     } on TypeError {
@@ -474,11 +476,13 @@ class ThemeAvatar extends StatelessWidget {
       );
     }
     if (Theme.of(context).extension<ThemeChrome>()?.glassAvatars != true) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: backgroundImage,
-        backgroundColor: backgroundColor,
-        child: child,
+      return ThemeAvatarClip(
+        child: CircleAvatar(
+          radius: radius,
+          backgroundImage: backgroundImage,
+          backgroundColor: backgroundColor,
+          child: child,
+        ),
       );
     }
     return SizedBox.square(
@@ -511,7 +515,14 @@ class ThemeAvatarClip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (Theme.of(context).extension<ThemeChrome>()?.glassAvatars != true) {
-      return ClipOval(clipBehavior: clipBehavior, child: child);
+      return RepaintBoundary(
+        child: ClipOval(
+          clipBehavior: clipBehavior == Clip.antiAlias
+              ? Clip.antiAliasWithSaveLayer
+              : clipBehavior,
+          child: child,
+        ),
+      );
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(7),

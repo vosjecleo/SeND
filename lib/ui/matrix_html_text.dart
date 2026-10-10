@@ -133,7 +133,9 @@ class MatrixPlainText extends StatefulWidget {
 }
 
 class _MatrixPlainTextState extends State<MatrixPlainText> {
-  static final _urlPattern = RegExp(r'https?://[^\s<>]+');
+  static final _urlPattern = RegExp(
+    r'https?://[^\s<>]+|(?<![A-Za-z0-9_/])@[A-Za-z0-9._=/-]+:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]+)?',
+  );
   final List<TapGestureRecognizer> _recognizers = [];
 
   @override
@@ -146,6 +148,10 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
 
   @override
   Widget build(BuildContext context) {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
     final style = isUnicodeEmojiOnly(widget.text)
         ? (widget.style ?? const TextStyle()).copyWith(
             fontSize: _standaloneEmojiSize,
@@ -170,7 +176,10 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
       final linkText = trailing.isEmpty
           ? matched
           : matched.substring(0, matched.length - trailing.length);
-      final uri = Uri.tryParse(linkText);
+      final mention = linkText.startsWith('@');
+      final uri = Uri.tryParse(
+        mention ? 'https://matrix.to/#/$linkText' : linkText,
+      );
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
           if (uri != null) launchUrl(uri);
@@ -178,10 +187,17 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
       _recognizers.add(recognizer);
       spans.add(
         TextSpan(
-          text: linkText,
-          style: const TextStyle(
-            color: Color(0xffaeb7ff),
-            decoration: TextDecoration.underline,
+          text: mention ? linkText.split(':').first : linkText,
+          style: TextStyle(
+            color: mention
+                ? (Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xff80c7ff)
+                      : const Color(0xff12518a))
+                : const Color(0xffaeb7ff),
+            backgroundColor: mention ? const Color(0x403fa9f5) : null,
+            decoration: mention
+                ? TextDecoration.none
+                : TextDecoration.underline,
           ),
           recognizer: recognizer,
         ),
@@ -245,6 +261,10 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
 
   @override
   Widget build(BuildContext context) {
+    for (final recognizer in _linkRecognizers) {
+      recognizer.dispose();
+    }
+    _linkRecognizers.clear();
     final document = html_parser.parseFragment(widget.html);
     final emojiOnly = _emojiOnlyNodes(document.nodes);
     final standaloneEmoji = emojiOnly.valid && emojiOnly.found;
@@ -442,9 +462,19 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     );
     if (tag == 'a') {
       final href = node.attributes['href'];
-      final isMention =
-          href?.contains('/#/user/@') == true ||
-          node.text.trimLeft().startsWith('@');
+      final target = Uri.tryParse(href ?? '');
+      var fragment = target?.fragment ?? '';
+      try {
+        fragment = Uri.decodeComponent(fragment);
+      } on FormatException {
+        fragment = '';
+      }
+      final mentionId = target?.host == 'matrix.to'
+          ? RegExp(
+              r'^/(?:user/)?(@[^:/\s]+:[^/\s]+)$',
+            ).firstMatch(fragment)?.group(1)
+          : null;
+      final isMention = mentionId != null;
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
           final uri = href == null ? null : Uri.tryParse(href);
@@ -455,12 +485,18 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       _linkRecognizers.add(recognizer);
       return [
         TextSpan(
-          children: children
-              .map((span) => _linkedSpan(span, recognizer))
-              .toList(),
+          children:
+              (isMention
+                      ? [TextSpan(text: mentionId.split(':').first)]
+                      : children)
+                  .map((span) => _linkedSpan(span, recognizer))
+                  .toList(),
           style: isMention
               ? childStyle.copyWith(
-                  backgroundColor: const Color(0xff3f456c),
+                  backgroundColor: const Color(0x403fa9f5),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xff80c7ff)
+                      : const Color(0xff12518a),
                   decoration: TextDecoration.none,
                   fontWeight: FontWeight.w600,
                 )

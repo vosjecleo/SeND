@@ -65,6 +65,22 @@ extension _MatrixAdministration on MatrixBackend {
               lastMessage: 'Open to join channel',
               unreadCount: 0,
               usesChannelIcon: true,
+              presentation: client.getRoomById(room.roomId) != null
+                  ? _presentationFor(client.getRoomById(room.roomId)!)
+                  : RoomPresentation.values
+                            .where(
+                              (kind) =>
+                                  kind.name ==
+                                  client
+                                      .getRoomById(spaceId)
+                                      ?.getState(
+                                        EventTypes.SpaceChild,
+                                        room.roomId,
+                                      )
+                                      ?.content['net.send.presentation'],
+                            )
+                            .firstOrNull ??
+                        RoomPresentation.text,
               topic: room.topic ?? '',
             ),
           );
@@ -74,6 +90,50 @@ extension _MatrixAdministration on MatrixBackend {
       if (!identical(client, _client)) return;
       _discoveredSpaceRooms[spaceId] = found;
       _notifyBackendListeners();
+      final space = client.getRoomById(spaceId);
+      if (space != null && space.canChangeStateEvent(EventTypes.SpaceChild)) {
+        for (final child in space.spaceChildren) {
+          final childId = child.roomId;
+          if (childId == null) continue;
+          final room = client.getRoomById(childId);
+          if (room == null ||
+              room.membership != Membership.join ||
+              room.isSpace) {
+            continue;
+          }
+          final kind = _presentationFor(room);
+          if (kind == RoomPresentation.text &&
+              room.getState('net.deltiecord.room.presentation') == null) {
+            continue;
+          }
+          if (space
+                  .getState(EventTypes.SpaceChild, room.id)
+                  ?.content['net.send.presentation'] ==
+              kind.name) {
+            continue;
+          }
+          try {
+            final content = await client.getRoomStateWithKey(
+              spaceId,
+              EventTypes.SpaceChild,
+              room.id,
+            );
+            if (content['via'] is! List ||
+                (content['via'] as List).isEmpty ||
+                content['net.send.presentation'] == kind.name) {
+              continue;
+            }
+            await client.setRoomStateWithKey(
+              spaceId,
+              EventTypes.SpaceChild,
+              room.id,
+              {...content, 'net.send.presentation': kind.name},
+            );
+          } catch (_) {
+            // Listing channels must still work when metadata cannot be updated.
+          }
+        }
+      }
     } catch (_) {
       // Joined rooms remain usable offline; never wipe a successful listing.
     } finally {

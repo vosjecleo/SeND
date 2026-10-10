@@ -340,6 +340,7 @@ class DirectLinkPreviewFetcher {
         LinkPreview(
           url: initialUrl,
           title: metadata.title,
+          suppressImage: metadata.suppressImage,
           description: metadata.description,
           siteName: metadata.siteName,
           width: metadata.width,
@@ -370,6 +371,7 @@ class DirectLinkPreviewFetcher {
       final preview = LinkPreview(
         url: initialUrl,
         title: metadata.title,
+        suppressImage: metadata.suppressImage,
         description: metadata.description,
         siteName: metadata.siteName,
         imageBytes: imageBytes,
@@ -575,6 +577,7 @@ class _DocumentMetadata {
     this.description,
     this.siteName,
     this.imageUrl,
+    this.suppressImage = false,
     this.videoUrl,
     this.width,
     this.height,
@@ -583,6 +586,7 @@ class _DocumentMetadata {
   final String? description;
   final String? siteName;
   final Uri? imageUrl;
+  final bool suppressImage;
   final Uri? videoUrl;
   final int? width;
   final int? height;
@@ -648,7 +652,19 @@ _DocumentMetadata _metadataFromDocument(Document document, Uri baseUrl) {
       'description',
     ]),
     siteName: meta(const ['og:site_name'], maximumLength: 128) ?? baseUrl.host,
-    imageUrl: resolvedImage,
+    suppressImage:
+        resolvedVideo == null &&
+        (baseUrl.host == 'fxtwitter.com' ||
+            baseUrl.host.endsWith('.fxtwitter.com')) &&
+        resolvedImage?.path.contains('/profile_images/') == true,
+    imageUrl:
+        resolvedVideo == null &&
+            (baseUrl.host == 'fxtwitter.com' ||
+                baseUrl.host.endsWith('.fxtwitter.com')) &&
+            resolvedImage != null &&
+            resolvedImage.path.contains('/profile_images/')
+        ? null
+        : resolvedImage,
     videoUrl: resolvedVideo,
     width: resolvedVideo != null
         ? (hasVideoSize ? videoWidth : null)

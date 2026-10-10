@@ -961,6 +961,7 @@ class LinkPreview {
     this.description,
     this.siteName,
     this.imageBytes,
+    this.suppressImage = false,
     this.videoUrl,
     this.gifSource,
     this.width,
@@ -973,6 +974,7 @@ class LinkPreview {
   final String? description;
   final String? siteName;
   final Uint8List? imageBytes;
+  final bool suppressImage;
   final Uri? videoUrl;
   final Uri? gifSource;
   final int? width;
@@ -1077,12 +1079,14 @@ class MentionSuggestion {
     required this.matrixId,
     required this.displayName,
     this.isRoom = false,
+    this.isRole = false,
   });
 
   /// Matrix user ID or room ID targeted by the generated matrix.to link.
   final String matrixId;
   final String displayName;
   final bool isRoom;
+  final bool isRole;
 }
 
 class ReactionSummary {

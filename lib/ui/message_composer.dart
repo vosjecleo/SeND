@@ -578,11 +578,11 @@ class _MessageComposerState extends State<_MessageComposer> {
                                     builder: (context, constraints) {
                                       final painter =
                                           TextPainter(
-                                            text: TextSpan(
-                                              text: widget.controller.document
-                                                  .toPlainText()
-                                                  .trimRight(),
-                                              style: const TextStyle(
+                                            text: inlineComposerPreview(
+                                              '${widget.controller.document.toPlainText().replaceFirst(RegExp(r'\n$'), '')}\u200b',
+                                              DefaultTextStyle.of(
+                                                context,
+                                              ).style.copyWith(
                                                 fontSize:
                                                     DeltiecordTypeScale.normal,
                                                 height: 1.2,

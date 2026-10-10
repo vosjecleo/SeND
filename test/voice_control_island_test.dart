@@ -57,9 +57,18 @@ void main() {
       final backend = _VoiceBackend();
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: RtcConnectivityIcon(backend: backend)),
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: backend,
+              builder: (context, _) => RtcConnectivityIcon(backend: backend),
+            ),
+          ),
         ),
       );
+      expect(find.byIcon(Icons.help), findsNothing);
+      backend.currentVoiceStatus = VoiceConnectionStatus.connected;
+      backend.notifyListeners();
+      await tester.pump();
       expect(find.byIcon(Icons.help), findsOneWidget);
       await tester.tap(find.byIcon(Icons.help));
       await tester.pumpAndSettle();

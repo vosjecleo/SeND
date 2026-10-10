@@ -59,6 +59,7 @@ import '../services/secret_redaction.dart';
 import '../services/scheduled_message_store.dart';
 import '../services/timeline_window_policy.dart';
 import '../services/unified_push.dart';
+import '../services/unavailable_history.dart';
 import 'matrix_client_factory.dart';
 import 'sized_matrix_file.dart';
 import 'media_range_proxy.dart';
@@ -559,6 +560,13 @@ class MatrixBackend extends ChatBackend {
   final LinkedHashMap<String, List<ChatMessage>> _roomMessageCache =
       LinkedHashMap();
   final Map<String, String> _offlineSendRooms = {};
+  String? _historySearchRoom, _historySearchQuery, _historySearchCursor;
+  bool _historySearchComplete = false;
+  int _historySearchGeneration = 0;
+  final Map<String, ChatMessage> _historySearchMessages = {};
+  @override
+  bool get canLoadMoreSearchResults =>
+      _historySearchRoom == _selectedRoomId && !_historySearchComplete;
   final Set<String> _dismissedLocalEchoIds = {};
   final ScheduledMessageStore _scheduledMessageStore = ScheduledMessageStore();
   Timer? _scheduledMessageTimer;
@@ -774,6 +782,15 @@ class MatrixBackend extends ChatBackend {
       MentionSuggestion(matrixId: '@everyone', displayName: 'everyone'),
       MentionSuggestion(matrixId: '@all', displayName: 'all'),
     ]);
+    suggestions.addAll(
+      _rolesForRoom(room).roles.map(
+        (role) => MentionSuggestion(
+          matrixId: '@${role.name}',
+          displayName: '${role.name} (role)',
+          isRole: true,
+        ),
+      ),
+    );
     suggestions.addAll(
       _joinedRooms
           .where((room) => !room.isSpace)
@@ -1438,8 +1455,18 @@ class MatrixBackend extends ChatBackend {
   );
 
   @override
-  Future<void> createSpace({required String name, String topic = ''}) =>
-      _createSpace(name: name, topic: topic);
+  Future<void> createSpace({
+    required String name,
+    String topic = '',
+    bool encrypted = true,
+  }) => _createSpace(name: name, topic: topic, encrypted: encrypted);
+  @override
+  bool get defaultChannelEncryption =>
+      _matrix
+          .getRoomById(_selectedSpaceId ?? '')
+          ?.getState('net.send.channel_encryption')
+          ?.content['enabled'] !=
+      false;
   @override
   Future<void> createChannelCategory(String name) =>
       _createChannelCategory(name);

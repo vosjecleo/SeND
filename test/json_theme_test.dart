@@ -16,6 +16,10 @@ class _UnreadSpaceBackend extends FakeBackend {
   bool hasUnreadForSpace(String spaceId) => true;
 }
 
+String customGlassFixture() => File(
+  'assets/themes/aero.json',
+).readAsStringSync().replaceAll('deltiecord.aero', 'test.custom-glass');
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('custom icon packs reject remote, oversized and invalid images', () {
@@ -216,7 +220,7 @@ void main() {
   test(
     'Aero variants/settings are bounded; accessibility overrides effects',
     () async {
-      final source = await rootBundle.loadString('assets/themes/aero.json');
+      final source = customGlassFixture();
       final theme = JsonTheme.parse(source);
       final prefs = AppPreferences(
         themeJson: source,
@@ -238,7 +242,7 @@ void main() {
     'custom document and parameters survive device-local appearance roundtrip',
     () async {
       final prefs = AppPreferences(
-        themeJson: await rootBundle.loadString('assets/themes/aero.json'),
+        themeJson: customGlassFixture(),
         themeSettings: const {'accent1': '#123456', 'variant': 'Light'},
       );
       final restored = DeviceAppearanceSnapshot.fromJson(
@@ -269,14 +273,10 @@ void main() {
           ),
         ),
       );
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Try Aero Glass'));
-        // Asset I/O completes on the real event loop, not the fake frame clock.
-        for (var attempt = 0; attempt < 100; attempt++) {
-          if (backend.preferences.themeJson.isNotEmpty) break;
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
+      expect(find.text('Try Aero Glass'), findsNothing);
+      await backend.updatePreferences(
+        backend.preferences.copyWith(themeJson: customGlassFixture()),
+      );
       await tester.pumpAndSettle();
       expect(find.textContaining('Accent 1 — glass blue'), findsOneWidget);
       expect(find.text('Glass blur — 4.00'), findsOneWidget);
@@ -296,7 +296,7 @@ void main() {
     (tester) async {
       final backend = FakeBackend()..currentStatus = SessionStatus.signedOut;
       await tester.pumpWidget(DeltiecordApp(backend: backend));
-      final source = File('assets/themes/aero.json').readAsStringSync();
+      final source = customGlassFixture();
       await backend.updatePreferences(
         backend.preferences.copyWith(themeJson: source),
       );

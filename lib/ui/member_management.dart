@@ -271,7 +271,10 @@ Future<void> showInviteMember(
           TextField(
             onChanged: (value) => enteredId = value.trim(),
             autofocus: true,
-            decoration: const InputDecoration(hintText: '@user:homeserver.tld'),
+            decoration: const InputDecoration(
+              hintText: '@user or @user:homeserver.tld',
+              helperText: 'Without a server, your homeserver is used.',
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -293,9 +296,9 @@ Future<void> showInviteMember(
       ],
     ),
   );
-  if (userId?.startsWith('@') == true) {
+  if (userId != null && userId.trim().isNotEmpty) {
     try {
-      await backend.inviteMember(userId!, roomId: targetRoomId);
+      await backend.inviteMember(userId, roomId: targetRoomId);
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

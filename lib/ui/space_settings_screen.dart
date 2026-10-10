@@ -9,6 +9,30 @@ import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
 import 'settings_page_transition.dart';
 import 'space_administration_panel.dart';
+import 'room_access_dialog.dart';
+
+Future<bool?> chooseSpaceEncryption(BuildContext context) => showDialog<bool>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: const Text('Encrypt new channels?'),
+    content: const Text(
+      'Choose the default for channels created in this server. '
+      'Encrypted messages can only be read by participants with the keys. '
+      'Without encryption, homeserver operators can read messages. '
+      'Existing encrypted rooms cannot be made unencrypted.',
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context, false),
+        child: const Text('No encryption'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, true),
+        child: const Text('Enable encryption'),
+      ),
+    ],
+  ),
+);
 
 enum _SpaceSettingsPage { basic, channels, roles, pages, serverProfile }
 
@@ -284,6 +308,16 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
   );
 
   Widget _basic() => _section('Basic', [
+    OutlinedButton.icon(
+      onPressed: () => showRoomAccessDialog(
+        context,
+        backend,
+        widget.space.id,
+        isSpace: true,
+      ),
+      icon: const Icon(Icons.public),
+      label: const Text('Access and discovery'),
+    ),
     Center(
       child: CircleAvatar(
         key: const Key('space-settings-avatar-preview'),

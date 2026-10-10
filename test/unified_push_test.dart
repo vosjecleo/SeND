@@ -39,6 +39,12 @@ void main() {
   test('uses the Matrix gateway on the capability endpoint origin', () {
     expect(
       matrixPushGatewayForUnifiedPushEndpoint(
+        'https://updates.push.services.mozilla.com/wpush/v2/private-test',
+      ),
+      Uri.parse('https://chat.deltie.net/_matrix/push/v1/notify'),
+    );
+    expect(
+      matrixPushGatewayForUnifiedPushEndpoint(
         'https://ntfy.sh/up-high-entropy?up=1',
       ),
       Uri.parse('https://ntfy.sh/_matrix/push/v1/notify'),

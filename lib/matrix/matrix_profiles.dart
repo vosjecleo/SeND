@@ -318,7 +318,9 @@ extension _MatrixProfiles on MatrixBackend {
         ),
       );
     }
-    if (refreshMedia || old == null) {
+    if (refreshMedia ||
+        old == null ||
+        (needsProfileResponse && old.bannerBytes == null)) {
       unawaited(
         _progressiveProfileMedia(
           bannerUri,

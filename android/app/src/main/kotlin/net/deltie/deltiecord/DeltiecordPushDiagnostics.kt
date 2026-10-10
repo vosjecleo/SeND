@@ -41,7 +41,9 @@ object DeltiecordPushDiagnostics {
                 require(endpointUri.scheme.equals("https", ignoreCase = true)) {
                     "The UnifiedPush endpoint is not HTTPS."
                 }
-                val gateway = URI(
+                val gateway = if (endpointUri.host == "updates.push.services.mozilla.com") {
+                    "https://chat.deltie.net/_matrix/push/v1/notify"
+                } else URI(
                     endpointUri.scheme,
                     endpointUri.authority,
                     "/_matrix/push/v1/notify",

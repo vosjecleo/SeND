@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
   flutter_secure_storage_linux
+  flutter_timezone
   flutter_webrtc
   irondash_engine_context
   media_kit_libs_linux

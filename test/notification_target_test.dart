@@ -2,6 +2,12 @@ import 'package:deltiecord/services/chat_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('invitation opens a room without inventing an event ID', () {
+    const target = NotificationTarget(roomId: '!invitation:example.org');
+    final decoded = decodeNotificationTarget(encodeNotificationTarget(target));
+    expect(decoded?.roomId, target.roomId);
+    expect(decoded?.eventId, isEmpty);
+  });
   test('notification payload preserves room and event navigation target', () {
     const target = NotificationTarget(
       roomId: '!room:example.org',
