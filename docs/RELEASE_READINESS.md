@@ -87,3 +87,16 @@ Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
 packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
+
+## Recorded release: 0.9.39+126
+
+Published as Latest on 2026-10-10, with Deltie's PWA and download mirror updated.
+Linux, Windows, Android and Web/PWA CI passed on commit `437e0ac`; Flatpak's build,
+sandbox launch and publication also passed. Local preflight recorded 623 Flutter
+tests passing, four skips, 46 server tests and eight Linux packaging tests.
+
+The operator updated Deltie's existing push worker for Sunup. Deployed source
+hashes, service health and the public route were checked. Actual Sunup delivery
+still needs a distributor/device test. Video timeout reproduction passed with
+both reported clips, but B03 remains open for the installed-app retest. Avatar
+flicker and GPU usage remain open. See the [bugfix tracker](next-bugfix-pass.md).

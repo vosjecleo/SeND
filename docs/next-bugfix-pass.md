@@ -1,7 +1,7 @@
 # Next bugfix pass
 
-Collected 2026-10-10. Release target: 0.9.39+126. CI and publication are now
-requested. Device reports remain separate from automated checks.
+Collected 2026-10-10. Published as Latest in 0.9.39+126, with Deltie's PWA and
+download mirror updated. Device reports remain separate from automated checks.
 
 ## Implemented, awaiting user testing
 
@@ -61,7 +61,7 @@ These are code changes, not confirmations from the reporting devices.
   connections get ICE restarts. Multi-user join/leave churn needs a real call.
 - B20: Screen capture requests 1080p/30 and screen senders request up to 6 Mbps.
   Negotiation, network conditions and platform capture limits still apply.
-- B23: Sunup uses Mozilla Autopush, not ntfy. Its Matrix adapter is prepared in
+- B23: Sunup uses Mozilla Autopush, not ntfy. Its Matrix adapter is deployed in
   Deltie's existing loopback Web Push worker. The operator deployed it on
   2026-10-10; source hashes, service health and the public route were verified.
   Actual Sunup delivery still needs a distributor/device test.
@@ -103,8 +103,12 @@ that a Matrix Space encrypts children or that existing encryption can be disable
 - `flutter test --no-pub`: 623 passed, 4 skipped.
 - Chrome video-upload test: passed with real metadata and poster extraction.
 - Android `:app:compileDebugKotlin`: passed.
-- Web Push gateway unit tests: 20 passed in the preceding implementation pass.
+- Server helper tests: 46 passed, including 20 Web Push gateway tests.
+- Linux packaging tests: 8 passed.
 - `git diff --check`: clean.
+- Linux, Windows, Android and Web/PWA CI passed on commit `437e0ac`.
+- Flatpak build, sandbox launch and publication passed.
+- GitHub Latest, Deltie's release manifest and the live PWA report 0.9.39+126.
 
 Automated checks cover formatting/escapes, role recipients, notification targets,
 search pagination, keyboard lifecycle, icon lookup, missing-history grouping,
