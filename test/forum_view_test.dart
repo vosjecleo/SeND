@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _ForumBackend extends FakeBackend {
   @override

@@ -28,7 +28,7 @@ foregrounds SeND. Test cancellation, process interruption and recovery before
 relying on that flow.
 
 Android Media3 prepares videos locally. If preparation fails, the user can retry,
-send the original or cancel. See the [build 116 diagnosis and device checks](build-116-video.md)
+send the original or cancel. See the [build 116 diagnosis and device checks](archive/build-116-video.md)
 for the camera-clip cache-directory fix.
 
 Sound pack v3 includes nine cues. DM/group invitations ring for up to 30 seconds;
@@ -129,7 +129,7 @@ current plugin and begins only after explicit user action.
 Secure Matrix credentials use `flutter_secure_storage`; the Matrix SQLite store
 uses SQLCipher with a secure-storage key and verified migration of old databases.
 This does not claim every cache/file is encrypted. See the
-[security review](build-103-security-review.md). Media/file picking,
+[security review](archive/build-103-security-review.md). Media/file picking,
 clipboard access, external URLs, camera/microphone capture, media playback, and
 RTC continue through the existing cross-platform services and plugins.
 

@@ -2,7 +2,7 @@
 
 > Historical release/investigation record. Versions, observations and validation
 > below apply to that build, not necessarily the latest release. See the
-> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> [current guides](../README.md) and [changelog](../../CHANGELOG.md); later releases
 > do not automatically close unverified device tests.
 
 SeND is a recursive acronym: **SeND is Not Discord**. The GitHub repository is
@@ -106,7 +106,7 @@ is no general-purpose conversion endpoint.
 
 ## iOS Web Push
 
-See [ios-push-checklist.md](ios-push-checklist.md). The public push config endpoint
+See [ios-push-checklist.md](../ios-push-checklist.md). The public push config endpoint
 responds, but this host cannot verify receipt on a physical iPhone. A concrete
 foreground-lease race could previously ACK and permanently lose a message push.
 Additionally, the client used a non-standard `/api/push/_matrix/...` pusher URL;

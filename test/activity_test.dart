@@ -12,7 +12,7 @@ import 'package:deltiecord/services/activity_service_error.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
 import 'package:deltiecord/ui/navigation_polish.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class Source extends DesktopActivitySource {
   List<ActivityCandidate> values = [];

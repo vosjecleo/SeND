@@ -6,7 +6,7 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/room_read_marker.dart';
 import 'package:deltiecord/ui/inline_composer_preview.dart';
 import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _Client extends Fake implements Client {
   final markers = <Map<String, String?>>[];

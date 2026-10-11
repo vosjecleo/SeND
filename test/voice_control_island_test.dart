@@ -5,7 +5,7 @@ import 'package:deltiecord/ui/voice_control_island.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _VoiceBackend extends FakeBackend {
   bool left = false;

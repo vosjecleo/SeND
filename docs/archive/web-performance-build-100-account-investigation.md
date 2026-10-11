@@ -1,8 +1,8 @@
 # Build 100: browser and account-size investigation
 
 > Historical record: observations, plans and validation below apply to the named
-> build/date. For current guidance, see the [documentation index](README.md)
-> and [1.0 hardening checklist](RELEASE_READINESS.md). Open validation items are
+> build/date. For current guidance, see the [documentation index](../README.md)
+> and [1.0 hardening checklist](../RELEASE_READINESS.md). Open validation items are
 > not automatically resolved by a later release.
 
 Date: 2026-09-23. Baseline: `d0f99c8`, version 0.9.30+100.

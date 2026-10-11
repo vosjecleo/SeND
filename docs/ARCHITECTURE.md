@@ -67,7 +67,7 @@ notification navigation can reconstruct history around a target rather than
 paginating from the present. Preserve stable Matrix event identities and avoid
 changing scroll bookkeeping as a side effect of metadata or feature work.
 Unconfirmed causes of jitter are listed in the
-[scroll investigation](timeline-scroll-investigation-99.md).
+[scroll investigation](archive/timeline-scroll-investigation-99.md).
 
 ## Composition and audio
 

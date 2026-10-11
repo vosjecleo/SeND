@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart' as web;
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 @JS('Object.defineProperty')
 external JSObject _define(JSObject target, JSString key, JSAny descriptor);

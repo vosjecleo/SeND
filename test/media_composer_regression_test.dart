@@ -14,7 +14,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 void main() {
   for (final mobile in [false, true]) {

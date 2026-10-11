@@ -7,7 +7,7 @@ import 'package:deltiecord/services/settings_echo_guard.dart';
 import 'package:deltiecord/ui/theme_chooser.dart';
 import 'package:deltiecord/ui/message_metadata.dart';
 import 'package:deltiecord/ui/emoji_typography.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

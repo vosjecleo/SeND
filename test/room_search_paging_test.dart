@@ -4,7 +4,7 @@ import 'package:deltiecord/ui/room_search_panel.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _SearchBackend extends FakeBackend {
   int calls = 0;

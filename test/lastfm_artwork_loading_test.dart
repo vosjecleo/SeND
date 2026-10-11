@@ -5,7 +5,7 @@ import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 final _artwork = Uri.parse('https://lastfm-img.freetls.fastly.net/cover.png');
 

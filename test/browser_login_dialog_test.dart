@@ -2,7 +2,7 @@ import 'package:deltiecord/models/login_methods.dart';
 import 'package:deltiecord/ui/browser_login_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _DiscoveryBackend extends FakeBackend {
   bool offerOidc = false;

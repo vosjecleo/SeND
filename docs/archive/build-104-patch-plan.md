@@ -1,8 +1,8 @@
 # SeND 0.9.32+104 — proposed changelog and acceptance plan
 
 > Historical record: observations, plans and validation below apply to the named
-> build/date. For current guidance, see the [documentation index](README.md)
-> and [1.0 hardening checklist](RELEASE_READINESS.md). Open validation items are
+> build/date. For current guidance, see the [documentation index](../README.md)
+> and [1.0 hardening checklist](../RELEASE_READINESS.md). Open validation items are
 > not automatically resolved by a later release.
 
 Status: implementation and source push completed. The user subsequently approved

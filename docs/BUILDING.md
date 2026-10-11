@@ -17,7 +17,7 @@ Before packaging a change, run the same basic validation used by CI:
 ```sh
 dart format --output=none --set-exit-if-changed .
 flutter analyze
-flutter test --concurrency=1
+flutter test --concurrency=2
 ```
 
 ## Linux source build
@@ -61,7 +61,7 @@ development with C++** workload. Then run in PowerShell:
 flutter pub get
 dart format --output=none --set-exit-if-changed .
 flutter analyze
-flutter test --concurrency=1
+flutter test --concurrency=2
 flutter build windows --release
 ```
 

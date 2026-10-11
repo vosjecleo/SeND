@@ -33,7 +33,7 @@ paths; an item still needs a matching device/test result before it can be closed
   complete interactive verification coverage still needs validation.
 - **Collaboration:** encrypted threads/forums and administration need two-client
   and mixed-client validation, particularly historical pages, limited-sync resume,
-  receipts and shared-Space power propagation. See the [106 tracker](docs/build-106-plan.md).
+  receipts and shared-Space power propagation. See the [106 tracker](docs/archive/build-106-plan.md).
 - **Performance:** image-heavy scroll jitter and account/browser-dependent latency
   remain investigation areas; past hypotheses are not confirmed universal causes.
 - **Protocol/product limits:** threads inherit room access; Following does not
@@ -54,7 +54,7 @@ paths; an item still needs a matching device/test result before it can be closed
   PWA sends originals and browser playback depends on codec and size limits.
 - **Animated banner colours:** build 121 fixes the supplied GIF's colour loss.
   Uploads damaged by earlier conversions need re-uploading. See the
-  [investigation](docs/gif-banner-investigation.md).
+  [investigation](docs/archive/gif-banner-investigation.md).
 - **Linux packages:** AppImage deliberately uses host PipeWire/SVG-loader ABI
   components. Flatpak supplies a shared GNOME runtime but restricts host process
   discovery, Steam-library discovery and Discord IPC. See the installation guide.

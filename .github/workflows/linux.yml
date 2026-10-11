@@ -67,6 +67,7 @@ jobs:
             /opt/cargo/registry
             /opt/cargo/git
           key: linux-debian-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: linux-debian-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-
       - name: Restore Debian Matrix crypto build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -95,7 +96,7 @@ jobs:
           python3 -m unittest discover -s packaging/linux -p 'test_*.py'
           find packaging -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           flutter analyze
-          flutter test --concurrency=1
+          flutter test --concurrency=2
           python3 packaging/flutter-with-credentials.py build linux --release
           packaging/linux/verify-release.sh
           packaging/linux/build-deb.sh
@@ -220,6 +221,7 @@ jobs:
             /home/builder/.cargo/registry
             /home/builder/.cargo/git
           key: linux-arch-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: linux-arch-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-
       - name: Restore Arch Matrix crypto build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -234,7 +236,7 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
-          runuser -u builder -- env PATH="/opt/flutter/bin:$PATH" HOME=/home/builder bash -lc "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory /opt/flutter && git config --global --add safe.directory '$GITHUB_WORKSPACE' && flutter pub get --enforce-lockfile && dart format --output=none --set-exit-if-changed lib test && flutter analyze && flutter test --concurrency=1 && packaging/arch/build-package.sh"
+          runuser -u builder -- env PATH="/opt/flutter/bin:$PATH" HOME=/home/builder bash -lc "cd '$GITHUB_WORKSPACE' && git config --global --add safe.directory /opt/flutter && git config --global --add safe.directory '$GITHUB_WORKSPACE' && flutter pub get --enforce-lockfile && dart format --output=none --set-exit-if-changed lib test && flutter analyze && flutter test --concurrency=2 && packaging/arch/build-package.sh"
           release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
           package="$(find dist -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
           mv "$package" "dist/SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"

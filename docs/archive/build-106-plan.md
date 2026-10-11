@@ -2,14 +2,14 @@
 
 > Historical release/investigation record. Versions, observations and validation
 > below apply to that build, not necessarily the latest release. See the
-> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> [current guides](../README.md) and [changelog](../../CHANGELOG.md); later releases
 > do not automatically close unverified device tests.
 
 Released on 2026-09-24 as **0.9.34+106 Latest** on GitHub and deltie.net.
 All four CI targets passed. The verified Linux artifact was installed locally
 and chat.deltie.net was switched to build 106. Release tag: `v0.9.34-b106`;
 source commit: `b0ef233fa2106325b89fad3f683ed197f2cd388a`.
-This closes feature scope; see [1.0 hardening gates](RELEASE_READINESS.md).
+This closes feature scope; see [1.0 hardening gates](../RELEASE_READINESS.md).
 
 ## Scope audit
 

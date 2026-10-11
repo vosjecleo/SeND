@@ -6,7 +6,7 @@ import 'package:deltiecord/ui/gif_favourite_button.dart';
 import 'package:deltiecord/services/favourite_reactions_store.dart';
 import 'package:deltiecord/ui/advanced_chat_dialogs.dart';
 import 'package:deltiecord/models/chat_models.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class Favourites extends GifService {
   int toggles = 0;

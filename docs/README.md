@@ -21,20 +21,9 @@ Release changes are in the [changelog](../CHANGELOG.md).
 - [Credits](../CREDITS.md) · [Third-party notices](../THIRD-PARTY-NOTICES.md)
   · [Tango provenance](../assets/icons/tango/SOURCE.md)
 
-## Historical release and investigation records
+## Testing and records
 
-These records preserve earlier plans, observations and test results, including
-unimplemented proposals and unresolved issues. Use the guides above for setup.
-
-- [Animated banner colour investigation](gif-banner-investigation.md)
-- [116 Android video diagnosis and validation](build-116-video.md)
-- [111 reliability](build-111-reliability.md), [110 packs/activity/polish](build-110-polish.md)
-- [109 independent activities](build-109-activity.md), [108 rename and updates](build-108-send.md)
-- [Activity/media prototype](activity-local-preview.md)
-- [107 hardening](build-107-plan.md), [106 feature-scope milestone](build-106-plan.md)
-- [104 plan](build-104-patch-plan.md), [103 plan](build-103-patch-plan.md),
-  [103 security review](build-103-security-review.md), [101 plan](build-101-patch-plan.md)
-- [100 web performance](web-performance-build-100.md),
-  [100 browser/account investigation](web-performance-build-100-account-investigation.md)
-- [99 web follow-up](web-build-99-follow-up.md), [99 scrolling investigation](timeline-scroll-investigation-99.md)
+- [Test layout and commands](../test/README.md)
+- [CI timings](ci-performance.md) · [Current bugfix tracker](next-bugfix-pass.md)
+- [Archived plans and investigations](archive/README.md)
 - [Repository history and attribution](HISTORY.md)

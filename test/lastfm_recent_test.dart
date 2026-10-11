@@ -9,7 +9,7 @@ import 'package:deltiecord/services/activity_source.dart';
 import 'package:deltiecord/services/lastfm_activity.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 LastFmTrack track() => LastFmTrack(
   name: 'Track',

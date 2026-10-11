@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/mobile/mobile_media.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _Backend extends FakeBackend {
   final downloads = <bool>[];

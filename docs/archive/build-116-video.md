@@ -38,7 +38,7 @@ existing no-transcode policy; desktop compression still requires FFmpeg.
 - Android, Windows, Linux (including the AppImage launch smoke check), Web/PWA
   and Flatpak CI passed. GitHub published tag `v0.9.37-b116`; the primary artifact
   checksums passed and `chat.deltie.net/version.json` reports build 116.
-- The [screenshot gallery](screenshots.md) uses the test account and private
+- The [screenshot gallery](../screenshots.md) uses the test account and private
   showcase rooms, captured with `grim`. Screenshots are not Android device tests.
 - No Android device or exact failing clip was attached during investigation.
   The code-level defect is reproduced in regression coverage, not on hardware.

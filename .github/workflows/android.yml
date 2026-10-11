@@ -72,6 +72,7 @@ jobs:
             ~/.gradle/caches/jars-9
             ~/.gradle/wrapper
           key: android-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('pubspec.lock', 'android/**/*.gradle', 'android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: android-deps-${{ runner.arch }}-${{ env.FLUTTER_SHA256 }}-${{ env.RUST_TOOLCHAIN }}-
 
       - name: Restore Android Matrix crypto build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -89,7 +90,7 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test --concurrency=1
+        run: flutter test --concurrency=2
 
       - name: Build split Android APKs and app bundle
         shell: bash

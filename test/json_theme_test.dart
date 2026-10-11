@@ -9,7 +9,7 @@ import 'package:deltiecord/services/device_appearance_store.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/json_theme.dart';
 import 'package:deltiecord/ui/json_theme_settings.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _UnreadSpaceBackend extends FakeBackend {
   @override

@@ -7,7 +7,7 @@ import 'package:deltiecord/ui/advanced_chat_dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 Uint8List animation({int width = 200, int height = 100}) {
   final first = image.Image(width: width, height: height, numChannels: 4)

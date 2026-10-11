@@ -3,7 +3,7 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _ChannelBackend extends FakeBackend {
   bool editable = false;

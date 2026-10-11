@@ -63,8 +63,8 @@ Separate reproducible defects from unverified suspicions and intentional limits.
 Record validation evidence before closing an issue; a successful build alone
 does not prove a behavioural fix.
 
-See [known issues](../KNOWN_ISSUES.md), [build 106 scope](build-106-plan.md),
-[security review](build-103-security-review.md) and [platform guides](README.md).
+See [known issues](../KNOWN_ISSUES.md), [build 106 scope](archive/build-106-plan.md),
+[security review](archive/build-103-security-review.md) and [platform guides](README.md).
 
 ## Milestone: 0.9.34+106
 
@@ -81,7 +81,7 @@ Since the build 106 milestone, releases have addressed activity interoperability
 pack editing, notifications, platform packaging, RTC connectivity, sound cues,
 mute/deafen, and media preparation. Build 116 targets Android video staging and
 recovery options when preparation fails. See the
-[current changelog](../CHANGELOG.md) and [video acceptance checks](build-116-video.md).
+[current changelog](../CHANGELOG.md) and [video acceptance checks](archive/build-116-video.md).
 
 Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
 packaging/publication stage. Release automation verifies checksums before mirror

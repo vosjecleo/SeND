@@ -6,7 +6,7 @@ import 'package:deltiecord/services/spoiler_reveals.dart';
 import 'package:deltiecord/ui/message_metadata.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/mobile/mobile_media.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 const attachment = ChatAttachment(
   kind: AttachmentKind.image,

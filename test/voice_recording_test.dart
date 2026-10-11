@@ -6,7 +6,7 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/voice_message_composer.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class _SendBackend extends FakeBackend {
   bool fail = true;

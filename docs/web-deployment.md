@@ -143,7 +143,7 @@ These infrastructure checks do not establish end-to-end notification delivery
 on a real iPhone; the [device checklist](#validation-before-publication) remains required.
 
 Reported first-release issues are tracked in
-[the build 99 follow-up notes](web-build-99-follow-up.md). No fixes for those
+[the build 99 follow-up notes](archive/web-build-99-follow-up.md). No fixes for those
 reports are included in this deployment verification.
 
 **Historical pre-cutover installation:** inspection found Element already serving

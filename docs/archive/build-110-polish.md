@@ -2,7 +2,7 @@
 
 > Historical release/investigation record. Versions, observations and validation
 > below apply to that build, not necessarily the latest release. See the
-> [current guides](README.md) and [changelog](../CHANGELOG.md); later releases
+> [current guides](../README.md) and [changelog](../../CHANGELOG.md); later releases
 > do not automatically close unverified device tests.
 
 Released on 2026-09-26 as latest on GitHub and deltie.net/SeND.

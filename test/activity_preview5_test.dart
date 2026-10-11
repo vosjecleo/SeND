@@ -15,7 +15,7 @@ import 'package:deltiecord/ui/activity_settings.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/media_album.dart';
-import 'widget_test.dart' show FakeBackend;
+import 'support/fake_backend.dart';
 
 class NoDesktop extends DesktopActivitySource {
   @override

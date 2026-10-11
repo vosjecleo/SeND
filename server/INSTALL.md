@@ -105,7 +105,7 @@ on the receiving device. iOS requires a Home Screen installation and permission.
 Last.fm and Steam are client integrations, not homeserver services. Official
 SeND builds retain their existing provider configuration. For custom Last.fm
 builds, register your own application, obtain the necessary provider approval,
-and use the build credential mechanism in [BUILDING](../BUILDING.md). Do not
+and use the build credential mechanism in [BUILDING](../docs/BUILDING.md). Do not
 reuse SeND's private credentials. A client-embedded API secret is extractable.
 
 ## Your own endpoints
