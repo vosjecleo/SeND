@@ -58,6 +58,7 @@ class _MobileChatShellState extends State<MobileChatShell>
   FocusNode? _keyboardFocus;
   bool _restoringKeyboard = false;
   int _keyboardVisibilityRetries = 0;
+  StreamSubscription<bool>? _browserKeyboardVisibility;
   Timer? _timelineGestureReset;
   bool _suppressTimelineGestures = false;
   int _inboxRevision = 0;
@@ -70,6 +71,23 @@ class _MobileChatShellState extends State<MobileChatShell>
     _lastRoomId = backend.selectedRoom?.id;
     _lastSpaceId = backend.selectedSpaceId;
     WidgetsBinding.instance.addObserver(this);
+    if (kIsWeb) {
+      _browserKeyboardVisibility = browser.browserVisibilityChanges.listen((
+        visible,
+      ) {
+        if (!visible) {
+          _rememberKeyboard();
+          return;
+        }
+        final generation = ++_keyboardResumeCheck;
+        _keyboardResumeTimer?.cancel();
+        _restoringKeyboard = false;
+        _keyboardVisibilityRetries = 0;
+        _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
+          unawaited(_checkResumedKeyboard(generation));
+        });
+      });
+    }
     backend.addListener(_backendChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _backendChanged());
     unawaited(_restoreDrafts());
@@ -135,6 +153,7 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void dispose() {
+    _browserKeyboardVisibility?.cancel();
     _keyboardResumeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     backend.setConversationVisible(false);
@@ -188,7 +207,10 @@ class _MobileChatShellState extends State<MobileChatShell>
     // with Flutter's last insets. A language picker must retain focus.
     if (!mounted ||
         generation != _keyboardResumeCheck ||
-        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        (kIsWeb
+            ? !browser.browserApplicationVisible
+            : WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed)) {
       return;
     }
     try {
