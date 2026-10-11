@@ -137,3 +137,23 @@ video-probing tests passed, and the JavaScript notification tests passed.
 Linux, Windows, Android and Web/PWA CI passed on commit `ca2aff4`. Flatpak's
 sandbox launch and publication passed too. GitHub Latest, Deltie's download
 mirror and the live PWA now serve 0.9.39+127.
+
+## Build 128 follow-up (2026-10-11)
+
+- Short profile status bubbles fit their text; longer statuses remain bounded
+  and wrap. Width checks cover narrow and wide profile cards.
+- Simple Sight's Steam entry defaults to application rather than game.
+- Visible online DM rows stay subscribed to the existing activity poller even
+  with no current activity. Tests cover repeated empty reads without opening a
+  profile, viewport bounds, offline exclusion and subscription disposal.
+- The large widget suite is split into 15 feature files. Shared fixtures live
+  in `test/support/`; all 102 original registration blocks and the fake backend
+  were compared with their originals, allowing only helper-name changes.
+- Historical plans and investigations moved to `docs/archive/`; references
+  were repaired and all Markdown local links checked.
+
+Both one- and two-worker local runs passed 636 tests with four skips. Analysis,
+46 server tests, eight packaging tests and 17 JavaScript tests passed. All
+platform CI and Flatpak passed on `9160833`; GitHub Latest, Deltie's mirror and
+the PWA now serve 0.9.39+128. No local package was installed.
+Measured timings are in [CI performance](ci-performance.md).
