@@ -3,6 +3,7 @@ import 'services/desktop_idle_service.dart';
 import 'ui/video_preparation_overlay.dart';
 import 'services/app_sounds.dart';
 import 'services/application_visibility.dart';
+import 'services/browser_lifecycle.dart' as browser;
 import 'ui/activity_widgets.dart';
 import 'services/platform_io.dart';
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
@@ -54,6 +55,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _publishForeground(WidgetsBinding.instance.lifecycleState);
   }
 
   @override
@@ -64,6 +66,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _publishForeground(state);
     if (state != AppLifecycleState.resumed) return;
     // Reconstruct inherited theme/scale configuration after a suspended view,
     // without replacing Navigator, conversation state, drafts or the session.
@@ -71,6 +74,16 @@ class _DeltiecordAppState extends State<DeltiecordApp>
       _configuration = null;
       _cachedTheme = null;
     });
+  }
+
+  void _publishForeground(AppLifecycleState? state) {
+    // The signed-in scope also knows view focus and owns read acknowledgement.
+    if (backend.status == SessionStatus.signedIn) return;
+    backend.setApplicationForeground(
+      kIsWeb
+          ? browser.browserApplicationVisible
+          : applicationIsForeground(state, viewFocused: true),
+    );
   }
 
   @override
@@ -459,7 +472,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
               SessionStatus.signedIn =>
                 mobile
                     ? StartupUpdateGate(
-                        child: _ReadReceiptLifecycle(
+                        child: ApplicationLifecycle(
                           backend: backend,
                           child: _EncryptionRecoveryPrompt(
                             backend: backend,
@@ -471,7 +484,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                         ),
                       )
                     : StartupUpdateGate(
-                        child: _ReadReceiptLifecycle(
+                        child: ApplicationLifecycle(
                           backend: backend,
                           child: _EncryptionRecoveryPrompt(
                             backend: backend,
@@ -665,30 +678,40 @@ class _InAppNotificationOverlay extends StatelessWidget {
   );
 }
 
-class _ReadReceiptLifecycle extends StatefulWidget {
-  const _ReadReceiptLifecycle({required this.backend, required this.child});
+class ApplicationLifecycle extends StatefulWidget {
+  const ApplicationLifecycle({
+    required this.backend,
+    required this.child,
+    super.key,
+  });
 
   final ChatBackend backend;
   final Widget child;
 
   @override
-  State<_ReadReceiptLifecycle> createState() => _ReadReceiptLifecycleState();
+  State<ApplicationLifecycle> createState() => _ReadReceiptLifecycleState();
 }
 
-class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
+class _ReadReceiptLifecycleState extends State<ApplicationLifecycle>
     with WidgetsBindingObserver {
   AppLifecycleState? _lifecycleState;
   bool _viewFocused = true;
+  StreamSubscription<bool>? _browserVisibility;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (kIsWeb) {
+      _browserVisibility = browser.browserVisibilityChanges.listen(
+        (_) => _syncBackend(),
+      );
+    }
     _publish(WidgetsBinding.instance.lifecycleState);
   }
 
   @override
-  void didUpdateWidget(covariant _ReadReceiptLifecycle oldWidget) {
+  void didUpdateWidget(covariant ApplicationLifecycle oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.backend != widget.backend) {
       oldWidget.backend.setApplicationForeground(false);
@@ -741,13 +764,16 @@ class _ReadReceiptLifecycleState extends State<_ReadReceiptLifecycle>
   }
 
   void _syncBackend() => widget.backend.setApplicationForeground(
-    applicationIsForeground(_lifecycleState, viewFocused: _viewFocused),
+    kIsWeb
+        ? browser.browserApplicationVisible
+        : applicationIsForeground(_lifecycleState, viewFocused: _viewFocused),
   );
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.backend.setApplicationForeground(false);
+    _browserVisibility?.cancel();
     super.dispose();
   }
 

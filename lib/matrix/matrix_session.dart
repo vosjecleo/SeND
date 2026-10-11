@@ -22,7 +22,9 @@ extension _MatrixSession on MatrixBackend {
       _desktopIdle = true;
       await _disposeVoice();
       _client?.dispose();
+      _ownProfileHydrated = false;
       _client = await createMatrixClient();
+      _configureClientPresence();
       _settingsHydrated = false;
       _roomHeroUsersLoaded.clear();
       _profileFieldsCapability = null;
@@ -265,6 +267,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    if (kIsWeb) browser.configureBrowserPresence(null);
     final pushAccount = _matrix.userID;
     _error = null;
     if (kIsWeb) {
@@ -976,6 +979,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   void _loadSettings() {
+    final previousPresence = _effectiveClientPresence;
     final content =
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
     _notificationPreviewsEnabled =
@@ -1000,8 +1004,13 @@ extension _MatrixSession on MatrixBackend {
               ),
             ),
       );
-    if (_pendingPreferences != null) return;
-    if (!_settingsEchoGuard.accepts(content)) return;
+    if (_pendingPreferences != null || !_settingsEchoGuard.accepts(content)) {
+      _configureClientPresence();
+      if (previousPresence != _effectiveClientPresence) {
+        unawaited(_refreshDesktopPresence());
+      }
+      return;
+    }
     final accountPreferences = AppPreferences(
       density: content?.tryGet<String>('density') == 'cozy'
           ? InterfaceDensity.cozy
@@ -1125,6 +1134,11 @@ extension _MatrixSession on MatrixBackend {
     _accountPreferences = accountPreferences;
     _preferences =
         _deviceAppearance?.applyTo(accountPreferences) ?? accountPreferences;
+    _configureClientPresence();
+    _matrix.receiptsPublicByDefault = _preferences.sendReadReceipts;
+    if (previousPresence != _effectiveClientPresence) {
+      unawaited(_refreshDesktopPresence());
+    }
     _voice?.applyPreferences(_preferences);
   }
 
@@ -1188,20 +1202,16 @@ extension _MatrixSession on MatrixBackend {
       _linkPreviews.clear();
       _linkPreviewUrlCache.clear();
     }
-    if (preferences.sharePresence != _preferences.sharePresence) {
-      unawaited(
-        _matrix
-            .setPresence(
-              _matrix.userID!,
-              preferences.sharePresence
-                  ? PresenceType.online
-                  : PresenceType.offline,
-              statusMsg: _profileStatusMessage,
-            )
-            .catchError((_) {}),
-      );
-    }
+    final presencePrivacyChanged =
+        preferences.sharePresence != _preferences.sharePresence;
+    final receiptPrivacyChanged =
+        preferences.sendReadReceipts != _preferences.sendReadReceipts;
     _preferences = preferences;
+    _configureClientPresence();
+    _matrix.receiptsPublicByDefault = preferences.sendReadReceipts;
+    if (receiptPrivacyChanged) _lastMarkedReadEventIds.clear();
+    if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
+    if (presencePrivacyChanged) unawaited(_refreshDesktopPresence());
     if (activityPrivacyChanged) _activities?.refresh();
     if (preferences.syncAppearance) {
       if (_deviceAppearance != null) {
@@ -1354,6 +1364,7 @@ extension _MatrixSession on MatrixBackend {
   void _setDesktopIdle(bool idle) {
     if (Platform.isAndroid || _desktopIdle == idle) return;
     _desktopIdle = idle;
+    _configureClientPresence();
     if (_ownProfileHydrated) {
       _profilePresence =
           !_preferences.sharePresence || _presenceMode == PresenceMode.invisible
@@ -1389,20 +1400,18 @@ extension _MatrixSession on MatrixBackend {
       final idle = _desktopIdle;
       final mode = _presenceMode;
       final share = _preferences.sharePresence;
-      final presence = !_preferences.sharePresence
-          ? PresenceType.offline
-          : switch (_presenceMode) {
-              PresenceMode.online =>
-                idle ? PresenceType.unavailable : PresenceType.online,
-              PresenceMode.idle => PresenceType.unavailable,
-              PresenceMode.doNotDisturb => PresenceType.online,
-              PresenceMode.invisible => PresenceType.offline,
-            };
+      final foreground = _applicationForeground;
+      _configureClientPresence();
+      final presence = _effectiveClientPresence;
       _desktopPresencePublishing = true;
       try {
-        await client
-            .setPresence(userId, presence, statusMsg: _profileStatusMessage)
-            .timeout(const Duration(seconds: 10));
+        if (kIsWeb) {
+          await browser.publishBrowserPresence();
+        } else {
+          await client
+              .setPresence(userId, presence, statusMsg: _profileStatusMessage)
+              .timeout(const Duration(seconds: 10));
+        }
       } catch (_) {
         // The next transition/heartbeat retries without interrupting input.
       } finally {
@@ -1410,10 +1419,43 @@ extension _MatrixSession on MatrixBackend {
         if (identical(client, _client) &&
             (idle != _desktopIdle ||
                 mode != _presenceMode ||
-                share != _preferences.sharePresence)) {
+                share != _preferences.sharePresence ||
+                foreground != _applicationForeground)) {
           unawaited(_refreshDesktopPresence());
         }
       }
+    }
+  }
+
+  PresenceType get _effectiveClientPresence => clientPresence(
+    share: _preferences.sharePresence,
+    mode: _presenceMode,
+    idle: !_isMobilePlatform && _desktopIdle,
+    foreground:
+        _applicationForeground &&
+        (!kIsWeb || browser.browserApplicationVisible),
+    offlineInBackground: kIsWeb || _isMobilePlatform,
+  );
+
+  void _configureClientPresence() {
+    final client = _client;
+    if (client == null) return;
+    final presence = _ownProfileHydrated
+        ? _effectiveClientPresence
+        : PresenceType.offline;
+    client.syncPresence = presence;
+    if (kIsWeb) {
+      browser.configureBrowserPresence(
+        client.isLogged() && _ownProfileHydrated
+            ? jsonEncode({
+                'homeserver': client.homeserver.toString(),
+                'token': client.accessToken,
+                'userId': client.userID,
+                'presence': presence.name,
+                'status': _profileStatusMessage,
+              })
+            : null,
+      );
     }
   }
 

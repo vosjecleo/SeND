@@ -226,46 +226,12 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   ),
                 ),
               ),
-              body: mobile
-                  ? ClipRect(
-                      child: backend.preferences.reducedMotion
-                          ? (_mobilePageOpen
-                                ? _settingsPagePane(
-                                    key: ValueKey(
-                                      'mobile-settings-${_page.name}',
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      16,
-                                      14,
-                                      16,
-                                      20,
-                                    ),
-                                  )
-                                : _settingsNavigation(
-                                    key: const ValueKey(
-                                      'mobile-settings-navigation',
-                                    ),
-                                    mobile: true,
-                                  ))
-                          : TweenAnimationBuilder<double>(
-                              key: ValueKey(
-                                'mobile-settings-transition-$_mobilePageOpen-${_page.name}',
-                              ),
-                              tween: Tween(begin: 1, end: 0),
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, progress, child) =>
-                                  Transform.translate(
-                                    offset: Offset(
-                                      MediaQuery.sizeOf(context).width *
-                                          0.14 *
-                                          progress *
-                                          (_mobilePageOpen ? 1 : -1),
-                                      0,
-                                    ),
-                                    child: child,
-                                  ),
-                              child: _mobilePageOpen
+              body: SafeArea(
+                top: false,
+                child: mobile
+                    ? ClipRect(
+                        child: backend.preferences.reducedMotion
+                            ? (_mobilePageOpen
                                   ? _settingsPagePane(
                                       key: ValueKey(
                                         'mobile-settings-${_page.name}',
@@ -282,19 +248,56 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                                         'mobile-settings-navigation',
                                       ),
                                       mobile: true,
+                                    ))
+                            : TweenAnimationBuilder<double>(
+                                key: ValueKey(
+                                  'mobile-settings-transition-$_mobilePageOpen-${_page.name}',
+                                ),
+                                tween: Tween(begin: 1, end: 0),
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, progress, child) =>
+                                    Transform.translate(
+                                      offset: Offset(
+                                        MediaQuery.sizeOf(context).width *
+                                            0.14 *
+                                            progress *
+                                            (_mobilePageOpen ? 1 : -1),
+                                        0,
+                                      ),
+                                      child: child,
                                     ),
-                            ),
-                    )
-                  : Row(
-                      children: [
-                        SizedBox(
-                          width: 220,
-                          child: _settingsNavigation(mobile: false),
-                        ),
-                        const VerticalDivider(width: 1),
-                        Expanded(child: _settingsPagePane()),
-                      ],
-                    ),
+                                child: _mobilePageOpen
+                                    ? _settingsPagePane(
+                                        key: ValueKey(
+                                          'mobile-settings-${_page.name}',
+                                        ),
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          14,
+                                          16,
+                                          20,
+                                        ),
+                                      )
+                                    : _settingsNavigation(
+                                        key: const ValueKey(
+                                          'mobile-settings-navigation',
+                                        ),
+                                        mobile: true,
+                                      ),
+                              ),
+                      )
+                    : Row(
+                        children: [
+                          SizedBox(
+                            width: 220,
+                            child: _settingsNavigation(mobile: false),
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(child: _settingsPagePane()),
+                        ],
+                      ),
+              ),
             ),
           ),
         ),

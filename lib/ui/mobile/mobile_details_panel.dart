@@ -37,14 +37,7 @@ class MobileDetailsPanel extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Center(
-            child: MobileAvatar(
-              bytes: room.avatarBytes,
-              fallback: room.name,
-              presence: room.isDirect ? room.presence : null,
-              size: 92,
-            ),
-          ),
+          Center(child: MobileRoomAvatar(room: room, size: 92)),
           const SizedBox(height: 12),
           Text(
             room.name,

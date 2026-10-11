@@ -1191,11 +1191,8 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       PresenceMode.idle => UserPresence.away,
       PresenceMode.invisible => UserPresence.offline,
     };
-    await _matrix.setPresence(userId, switch (mode) {
-      PresenceMode.online || PresenceMode.doNotDisturb => PresenceType.online,
-      PresenceMode.idle => PresenceType.unavailable,
-      PresenceMode.invisible => PresenceType.offline,
-    }, statusMsg: _profileStatusMessage);
+    _configureClientPresence();
+    await _refreshDesktopPresence();
     await _persistAdvancedSettings();
     _notifyBackendListeners();
   }

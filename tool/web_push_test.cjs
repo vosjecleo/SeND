@@ -6,7 +6,10 @@ const vm = require('node:vm');
 function browser() {
   const listeners = {}, requests = [];
   const registration = {active: {}, pushManager: {getSubscription: async () => ({})}};
-  const document = {visibilityState: 'visible', addEventListener: (name, fn) => {listeners[name] = fn;}};
+  const document = {visibilityState: 'visible', addEventListener: (name, fn) => {
+    const previous = listeners[name];
+    listeners[name] = (...args) => {previous?.(...args); fn(...args);};
+  }};
   const window = {addEventListener: (name, fn) => {
     const previous = listeners[name];
     listeners[name] = (...args) => {previous?.(...args); fn(...args);};
@@ -14,11 +17,49 @@ function browser() {
   const context = {window, document, navigator: {userAgent: 'test', serviceWorker: {getRegistration: async () => registration, ready: Promise.resolve(registration)}},
     fetch: async (url, options) => {requests.push({url, ...options}); return {ok: true};},
     Notification: {permission: 'granted'}, matchMedia: () => ({matches: true}),
-    setInterval: () => 1, clearInterval: () => {}, Uint8Array, atob,
+    setInterval: () => 1, clearInterval: () => {}, Uint8Array, atob, URL, AbortController,
   };
   vm.runInNewContext(fs.readFileSync('web/browser_bridge.js', 'utf8'), context);
   return {window, document, listeners, requests, context, registration};
 }
+test('PWA publishes offline with keepalive on background and respects invisible on return', async () => {
+  const b = browser();
+  const config = {homeserver: 'https://matrix.example.org', userId: '@test:example.org',
+    token: 'test-token', presence: 'online', status: 'Hi'};
+  b.window.sendConfigurePresence(JSON.stringify(config));
+  await b.window.sendPublishPresence();
+  assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'online');
+  b.document.visibilityState = 'hidden'; b.listeners.visibilitychange({});
+  assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'offline');
+  assert.equal(b.requests.at(-1).keepalive, true);
+  assert.equal(b.requests.at(-1).headers.Authorization, 'Bearer test-token');
+  b.document.visibilityState = 'visible';
+  b.window.sendConfigurePresence(JSON.stringify({...config, presence: 'offline'}));
+  b.listeners.visibilitychange({});
+  assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'offline');
+  b.window.sendConfigurePresence(null);
+  const count = b.requests.length;
+  b.listeners.pagehide({persisted: false});
+  assert.equal(b.requests.length, count, 'Logout must clear presence credentials');
+});
+test('pagehide sends offline even before document visibility updates', () => {
+  const b = browser();
+  b.window.sendConfigurePresence(JSON.stringify({homeserver: 'https://matrix.example.org',
+    userId: '@test:example.org', token: 'test-token', presence: 'online', status: null}));
+  b.listeners.pagehide({persisted: false});
+  assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'offline');
+  b.listeners.visibilitychange({});
+  assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'online', 'Visible return clears the pagehide latch');
+});
+test('invalid presence configuration clears the previous session', async () => {
+  const b = browser();
+  b.window.sendConfigurePresence(JSON.stringify({homeserver: 'https://matrix.example.org',
+    userId: '@test:example.org', token: 'test-token', presence: 'online'}));
+  b.window.sendConfigurePresence(JSON.stringify({homeserver: 'http://invalid.example.org',
+    userId: '@other:example.org', token: 'other-test-token', presence: 'online'}));
+  await b.window.sendPublishPresence();
+  assert.equal(b.requests.length, 0);
+});
 test('pagehide clears foreground lease even before visibility changes', () => {
   const b = browser(); b.window.deltiePushLease('capability');
   assert.equal(JSON.parse(b.requests.at(-1).body).visible, true);

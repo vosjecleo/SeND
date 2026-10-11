@@ -872,11 +872,10 @@ class _RoomList extends StatelessWidget {
             horizontalTitleGap: 12,
             selected: backend.selectedRoom?.id == room.id,
             selectedColor: Theme.of(context).colorScheme.onSurface,
-            leading: MobileAvatar(
-              bytes: room.avatarBytes,
+            leading: MobileRoomAvatar(
+              room: room,
+              size: 44,
               autoplay: backend.selectedRoom?.id == room.id,
-              fallback: room.name,
-              presence: room.isDirect ? room.presence : null,
             ),
             title: Text(
               room.name,

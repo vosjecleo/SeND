@@ -3,6 +3,29 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.39 build 127 (2026-10-11)
+
+- Use channel-type icons for server rooms in mobile headers and details. Room
+  identity now follows server membership rather than the selected navigation
+  panel. DM and group-chat avatars remain available.
+- Keep mobile settings, including Log out, above system navigation buttons.
+- Continue clearing unread counts when public read receipts are disabled. Send
+  private read markers and keep public receipts off, including notification
+  actions and rooms with threads.
+- Remember focused input through keyboard-language and app-resume transitions.
+  Try to restore the keyboard before dismissing input; clear stale layout space
+  if restoration fails. Defer while the language chooser owns the window and
+  detect keyboard visibility on older Android versions too.
+- Render double-underscore text as underline in the composer, matching the
+  sent message. Keep delimiters visible and preserve plain-text editing.
+- Set headless Android notification sync to Offline before initialization,
+  preventing incoming notifications from briefly advertising user activity.
+- Publish Offline when the PWA backgrounds or closes, using a browser keepalive
+  request. Keep background sync from restoring Online and restore the selected
+  presence mode when the app returns. Other active devices can still keep the
+  account online; abrupt termination without a lifecycle event relies on the
+  homeserver timeout.
+
 ## SeND 0.9.39 build 126 (2026-10-10)
 
 - Prepare and verify encrypted video downloads before opening the native player,

@@ -38,7 +38,39 @@ class InvitedRoom extends Fake implements Room {
   // an invited member is not entitled to joined-room history.
 }
 
+class _HeadlessClient extends InviteClient {
+  _HeadlessClient() : super(InvitedRoom(Membership.invite));
+  PresenceType? _presence;
+  @override
+  PresenceType? get syncPresence => _presence;
+  @override
+  set syncPresence(PresenceType? value) => _presence = value;
+  final initializedWith = <PresenceType?>[];
+  @override
+  set backgroundSync(bool value) {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #init) {
+      initializedWith.add(syncPresence);
+      return Future<void>.value();
+    }
+    return super.noSuchMethod(invocation);
+  }
+}
+
 void main() {
+  test(
+    'headless notification client opts out of online presence before init',
+    () async {
+      final client = _HeadlessClient();
+      final resolver = HeadlessAndroidPushResolver(
+        createClient: () async => client,
+      );
+      await resolver.resolve('!invite:example.org', r'$event');
+      expect(client.initializedWith, [PresenceType.offline]);
+      expect(client.syncPresence, PresenceType.offline);
+    },
+  );
   test(
     'authenticated pending invite resolves without history or unread count',
     () async {

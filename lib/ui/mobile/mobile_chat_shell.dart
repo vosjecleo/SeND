@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
+import '../../services/browser_lifecycle.dart' as browser;
 import '../settings_screen.dart';
 import '../call_and_chat_layout.dart';
 import '../incoming_call_banner.dart';
@@ -53,6 +55,9 @@ class _MobileChatShellState extends State<MobileChatShell>
   bool _ignoreStaleKeyboardInsets = false;
   int _keyboardResumeCheck = 0;
   Timer? _keyboardResumeTimer;
+  FocusNode? _keyboardFocus;
+  bool _restoringKeyboard = false;
+  int _keyboardVisibilityRetries = 0;
   Timer? _timelineGestureReset;
   bool _suppressTimelineGestures = false;
   int _inboxRevision = 0;
@@ -141,6 +146,10 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _rememberKeyboard();
+    }
     if (state == AppLifecycleState.paused) {
       _backgroundedAt ??= DateTime.now();
     }
@@ -149,12 +158,14 @@ class _MobileChatShellState extends State<MobileChatShell>
     _backgroundedAt = null;
     // IME pickers can produce inactive/resumed without pausing the app.
     // Do not rebuild focus scopes or dismiss input for those transitions.
-    if (backgroundedAt == null) return;
     final keyboardGeneration = ++_keyboardResumeCheck;
     _keyboardResumeTimer?.cancel();
-    _keyboardResumeTimer = Timer(const Duration(milliseconds: 200), () {
+    _restoringKeyboard = false;
+    _keyboardVisibilityRetries = 0;
+    _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
       unawaited(_checkResumedKeyboard(keyboardGeneration));
     });
+    if (backgroundedAt == null) return;
     // Pointer streams can be interrupted when Android freezes the activity.
     // Keep durable navigation state, but discard only transient gesture state
     // so an orphaned pointer cannot leave the Space rail non-interactive.
@@ -173,20 +184,61 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   Future<void> _checkResumedKeyboard(int generation) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     // Let Android restore its window before comparing its actual IME state
     // with Flutter's last insets. A language picker must retain focus.
-    if (!mounted || generation != _keyboardResumeCheck) return;
+    if (!mounted ||
+        generation != _keyboardResumeCheck ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
     try {
-      final visible = await const MethodChannel(
-        'net.deltie.deltiecord/composer',
-      ).invokeMethod<bool>('keyboardVisible');
-      if (!mounted || generation != _keyboardResumeCheck || visible != false) {
+      final visible = await _keyboardVisible();
+      if (!mounted || generation != _keyboardResumeCheck) return;
+      if (visible == true) {
+        if (_ignoreStaleKeyboardInsets) {
+          setState(() => _ignoreStaleKeyboardInsets = false);
+        }
+        _keyboardFocus = null;
+        _restoringKeyboard = false;
         return;
       }
-      if (View.of(context).viewInsets.bottom <= 0) return;
-      FocusManager.instance.primaryFocus?.unfocus();
-      setState(() => _ignoreStaleKeyboardInsets = true);
+      // A system language chooser may still own the window. Unknown visibility
+      // is not a reason to discard its input connection.
+      if (visible == null) {
+        if (_keyboardVisibilityRetries++ < 8) {
+          _keyboardResumeTimer = Timer(const Duration(milliseconds: 250), () {
+            unawaited(_checkResumedKeyboard(generation));
+          });
+        }
+        return;
+      }
+      final focus = _keyboardFocus;
+      if (focus != null &&
+          focus.context != null &&
+          focus.hasFocus &&
+          !_restoringKeyboard) {
+        _restoringKeyboard = true;
+        final editor = focus.context!
+            .findAncestorStateOfType<EditableTextState>();
+        if (editor != null) {
+          editor.requestKeyboard();
+        } else {
+          await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+        }
+        if (!mounted || generation != _keyboardResumeCheck) return;
+        _keyboardResumeTimer = Timer(const Duration(milliseconds: 700), () {
+          unawaited(_checkResumedKeyboard(generation));
+        });
+        return;
+      }
+      // Restoration was declined or input was dismissed. Remove stale space
+      // throughout the nested layout instead of leaving the composer floating.
+      if (focus?.hasFocus == true) focus!.unfocus();
+      _keyboardFocus = null;
+      _restoringKeyboard = false;
+      if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+        setState(() => _ignoreStaleKeyboardInsets = true);
+      }
       await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     } on PlatformException {
       // Older Android versions may not expose reliable IME visibility.
@@ -195,10 +247,57 @@ class _MobileChatShellState extends State<MobileChatShell>
     }
   }
 
+  void _rememberKeyboard() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus?.hasFocus == true &&
+        MediaQuery.viewInsetsOf(context).bottom > 0) {
+      _keyboardFocus = focus;
+    }
+  }
+
+  Future<bool?> _keyboardVisible() async {
+    if (kIsWeb) return browser.browserKeyboardVisible;
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
+    return const MethodChannel(
+      'net.deltie.deltiecord/composer',
+    ).invokeMethod<bool>('keyboardVisible');
+  }
+
+  @override
+  void didChangeViewFocus(ViewFocusEvent event) {
+    if (event.state == ViewFocusState.unfocused) {
+      _rememberKeyboard();
+    } else if (_keyboardFocus != null || _ignoreStaleKeyboardInsets) {
+      final generation = ++_keyboardResumeCheck;
+      _keyboardResumeTimer?.cancel();
+      _restoringKeyboard = false;
+      _keyboardVisibilityRetries = 0;
+      _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
+        unawaited(_checkResumedKeyboard(generation));
+      });
+    }
+  }
+
   @override
   void didChangeMetrics() {
-    if (_ignoreStaleKeyboardInsets && mounted) {
+    if (!mounted || !_ignoreStaleKeyboardInsets) return;
+    if (View.of(context).viewInsets.bottom <= 0) {
       setState(() => _ignoreStaleKeyboardInsets = false);
+    } else {
+      unawaited(_clearOverrideWhenVisible());
+    }
+  }
+
+  Future<void> _clearOverrideWhenVisible() async {
+    try {
+      final visible = await _keyboardVisible();
+      if (mounted && visible == true && _ignoreStaleKeyboardInsets) {
+        setState(() => _ignoreStaleKeyboardInsets = false);
+      }
+    } on PlatformException {
+      // Keep the override until reliable geometry arrives.
+    } on MissingPluginException {
+      // Unsupported platforms retain their existing keyboard layout.
     }
   }
 
@@ -246,8 +345,15 @@ class _MobileChatShellState extends State<MobileChatShell>
           // while a right drag anywhere on the timeline reliably opens nav.
           onPointerDown: (event) {
             _keyboardResumeCheck++;
+            _keyboardResumeTimer?.cancel();
+            _keyboardFocus = null;
             if (_ignoreStaleKeyboardInsets) {
-              setState(() => _ignoreStaleKeyboardInsets = false);
+              _keyboardResumeTimer = Timer(
+                const Duration(milliseconds: 350),
+                () {
+                  unawaited(_clearOverrideWhenVisible());
+                },
+              );
             }
             _pointerStarts[event.pointer] = event.position;
           },

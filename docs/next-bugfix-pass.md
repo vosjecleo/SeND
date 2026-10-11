@@ -115,4 +115,23 @@ search pagination, keyboard lifecycle, icon lookup, missing-history grouping,
 FxTwitter avatar suppression and Sunup forwarding. Native RTC, GPU rendering,
 Sunup delivery and affected media files still need device testing.
 
-No version/build bump, CI build, release or deployment is part of this push.
+## Build 127 follow-up (2026-10-11)
+
+- B02/B31: Restore the existing input connection before dismissing it on resume.
+  Wait while the language chooser owns the window, and lower the entire layout
+  if restoration fails. Extend native visibility detection to older Android and
+  use browser viewport geometry for the PWA. Physical-device checks remain open.
+- B33: Double-underscore composer preview now matches sent underline formatting.
+- B34: Server-room headers/details use channel icons; channel picture controls
+  are hidden. Other clients' stored room avatars are retained.
+- B35: Settings respects the bottom system safe area, keeping Log out reachable.
+- B36: Public receipt privacy no longer disables private unread acknowledgement.
+- B37: Headless Android push clients request Offline before their first sync.
+- B38: The PWA publishes Offline on visibility/page-hide events and keeps sync
+  from advertising Online in the background. Return restores the chosen mode.
+  Another active device may keep the account online. Abrupt termination without
+  a lifecycle event still relies on the homeserver's timeout.
+
+Local checks: 632 Flutter tests passed with four skips, Chrome visibility and
+video-probing tests passed, and the JavaScript notification tests passed. Build
+127 is prepared for cross-platform CI and Latest publication.

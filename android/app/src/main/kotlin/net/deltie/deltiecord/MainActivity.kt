@@ -94,11 +94,19 @@ class MainActivity : FlutterActivity() {
                 }
                 result.success(null)
             } else if (call.method == "keyboardVisible") {
-                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                if (!window.decorView.hasWindowFocus()) {
+                    // The language picker owns the window until it closes.
+                    result.success(null)
+                } else if (android.os.Build.VERSION.SDK_INT >= 30) {
                     result.success(window.decorView.rootWindowInsets?.isVisible(
                         android.view.WindowInsets.Type.ime()))
                 } else {
-                    result.success(null)
+                    val visible = android.graphics.Rect()
+                    window.decorView.getWindowVisibleDisplayFrame(visible)
+                    val obscured = window.decorView.rootView.height - visible.bottom
+                    val legacyInsets = if (android.os.Build.VERSION.SDK_INT >= 23)
+                        window.decorView.rootWindowInsets?.systemWindowInsetBottom ?: 0 else 0
+                    result.success(maxOf(obscured, legacyInsets) > 100 * resources.displayMetrics.density)
                 }
             } else result.notImplemented()
         }

@@ -335,7 +335,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _markSelectedRoomRead() async {
-    if (!_preferences.sendReadReceipts || !_mayAdvanceReadMarker) return;
+    if (!_mayAdvanceReadMarker) return;
     final initialTimeline = _timeline;
     if (initialTimeline == null || initialTimeline.room.id != _selectedRoomId) {
       return;
@@ -364,25 +364,12 @@ extension _MatrixTimelineSupport on MatrixBackend {
         final hasThreads = initialTimeline.events.any(
           (event) => event.relationshipType == RelationshipTypes.thread,
         );
-        if (hasThreads) {
-          await _matrix.postReceipt(
-            roomId,
-            ReceiptType.mReadPrivate,
-            newestSyncedEventId,
-            threadId: 'main',
-          );
-          await _matrix.postReceipt(
-            roomId,
-            ReceiptType.mRead,
-            newestSyncedEventId,
-            threadId: 'main',
-          );
-        } else {
-          await initialTimeline.setReadMarker(
-            eventId: newestSyncedEventId,
-            public: true,
-          );
-        }
+        await acknowledgeRoom(
+          initialTimeline.room,
+          newestSyncedEventId,
+          sendPublicReceipts: _preferences.sendReadReceipts,
+          mainThreadOnly: hasThreads,
+        );
         _lastMarkedReadEventIds[roomId] = newestSyncedEventId;
       }
     } catch (_) {

@@ -25,6 +25,38 @@ class MobileAttentionBadge extends StatelessWidget {
   );
 }
 
+class MobileRoomAvatar extends StatelessWidget {
+  const MobileRoomAvatar({
+    required this.room,
+    this.size = 40,
+    this.autoplay = false,
+    super.key,
+  });
+  final RoomSummary room;
+  final double size;
+  final bool autoplay;
+  @override
+  Widget build(BuildContext context) => room.usesChannelIcon || room.isVoice
+      ? SizedBox.square(
+          dimension: size,
+          child: Icon(
+            room.isVoice
+                ? Icons.volume_up_outlined
+                : room.presentation == RoomPresentation.forum
+                ? Icons.forum_outlined
+                : Icons.tag,
+            size: size * .5,
+          ),
+        )
+      : MobileAvatar(
+          bytes: room.avatarBytes,
+          fallback: room.name,
+          presence: room.isDirect ? room.presence : null,
+          size: size,
+          autoplay: autoplay,
+        );
+}
+
 class MobileAvatar extends StatelessWidget {
   const MobileAvatar({
     required this.bytes,

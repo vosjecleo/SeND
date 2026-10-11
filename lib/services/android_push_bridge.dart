@@ -325,6 +325,9 @@ bool hasActiveDesktopLease(
 
 /// Entry-point state for Android workers that run without an Activity.
 final class HeadlessAndroidPushResolver {
+  HeadlessAndroidPushResolver({Future<Client> Function()? createClient})
+    : _createClient = createClient ?? createMatrixClient;
+  final Future<Client> Function() _createClient;
   Client? _client;
   final AvatarMediaPool _avatarPool = AvatarMediaPool();
 
@@ -361,7 +364,15 @@ final class HeadlessAndroidPushResolver {
             parseMarkdown: false,
           );
         case 'read':
-          await room.setReadMarker(eventId, mRead: eventId);
+          await room.setReadMarker(
+            eventId,
+            mRead: eventId,
+            public:
+                client
+                    .accountData['net.deltiecord.settings']
+                    ?.content['send_read_receipts'] !=
+                false,
+          );
         case 'mute':
           await room.setPushRuleState(PushRuleState.dontNotify);
         default:
@@ -382,7 +393,9 @@ final class HeadlessAndroidPushResolver {
   Future<Client?> _readyClient() async {
     var client = _client;
     if (client != null) return client;
-    client = await createMatrixClient();
+    client = await _createClient();
+    // Headless notification work must never advertise user activity.
+    client.syncPresence = PresenceType.offline;
     client.backgroundSync = false;
     await client.init();
     if (!client.isLogged()) {

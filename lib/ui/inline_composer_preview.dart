@@ -19,7 +19,8 @@ TextSpan inlineComposerPreview(String text, TextStyle? style) {
         color: (base.color ?? Colors.grey).withValues(alpha: .5),
       );
       final body = switch (delimiter) {
-        '**' || '__' => base.copyWith(fontWeight: FontWeight.bold),
+        '**' => base.copyWith(fontWeight: FontWeight.bold),
+        '__' => base.copyWith(decoration: TextDecoration.underline),
         '*' || '_' => base.copyWith(fontStyle: FontStyle.italic),
         '~~' => base.copyWith(decoration: TextDecoration.lineThrough),
         _ => base.copyWith(backgroundColor: const Color(0x40777777)),

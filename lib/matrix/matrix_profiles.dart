@@ -543,12 +543,15 @@ extension _MatrixProfiles on MatrixBackend {
   }
 
   void _applyOwnProfileSummary(UserProfileSummary profile) {
+    final firstHydration = !_ownProfileHydrated;
     _profileDisplayName = profile.displayName;
     _profileAvatarBytes = profile.avatarBytes;
     _profilePresence = profile.presence;
     _profileStatusMessage = profile.statusMessage;
     _profileColor = profile.profileColor;
     _ownProfileHydrated = true;
+    _configureClientPresence();
+    if (firstHydration) unawaited(_refreshDesktopPresence());
     final userId = _matrix.userID;
     final avatarUri = userId == null ? null : _profileCache[userId]?.avatarUri;
     final avatarBytes = profile.avatarBytes;
@@ -704,9 +707,7 @@ extension _MatrixProfiles on MatrixBackend {
         final normalizedStatus = statusMessage.trim();
         await _matrix.setPresence(
           userId,
-          _preferences.sharePresence
-              ? PresenceType.online
-              : PresenceType.offline,
+          _effectiveClientPresence,
           statusMsg: normalizedStatus,
         );
         _profileStatusMessage = normalizedStatus.isEmpty

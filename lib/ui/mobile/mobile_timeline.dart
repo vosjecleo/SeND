@@ -641,12 +641,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             onTap: widget.onOpenDetails,
             child: Row(
               children: [
-                MobileAvatar(
-                  bytes: widget.room.avatarBytes,
-                  fallback: widget.room.name,
-                  presence: widget.room.isDirect ? widget.room.presence : null,
-                  size: 40,
-                ),
+                MobileRoomAvatar(room: widget.room, size: 40),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(

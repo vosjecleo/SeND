@@ -69,7 +69,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
     lastActivityAt: room.lastEvent?.originServerTs,
     unreadCount: room.notificationCount,
     highlightCount: room.highlightCount,
-    usesChannelIcon: _selectedSpaceId != null,
+    usesChannelIcon: !room.isSpace && _spaceForRoom(room) != null,
     presentation: _presentationFor(room),
     voiceParticipants: _voiceParticipants(room),
     avatarBytes: _avatarBytes[room.id],

@@ -18,6 +18,50 @@ external JSPromise<JSString> _diagnostics();
 external JSPromise<JSAny?> _testPush();
 @JS('sendWritePushPreview')
 external JSPromise<JSAny?> _writePreview(JSString? json);
+@JS('sendConfigurePresence')
+external void _configurePresence(JSString? json);
+@JS('sendPublishPresence')
+external JSPromise<JSAny?> _publishPresence();
+@JS('sendKeyboardVisible')
+external JSBoolean? _keyboardVisible();
+
+void configureBrowserPresence(String? json) => _configurePresence(json?.toJS);
+Future<void> publishBrowserPresence() async {
+  await _publishPresence().toDart;
+}
+
+bool? get browserKeyboardVisible => _keyboardVisible()?.toDart;
+bool _pageHidden = false;
+bool get browserApplicationVisible => !_pageHidden && !web.document.hidden;
+Stream<bool> get browserVisibilityChanges {
+  late StreamController<bool> controller;
+  final changed = ((web.Event _) {
+    if (!web.document.hidden) _pageHidden = false;
+    controller.add(browserApplicationVisible);
+  }).toJS;
+  final hidden = ((web.Event _) {
+    _pageHidden = true;
+    controller.add(false);
+  }).toJS;
+  final shown = ((web.Event _) {
+    _pageHidden = false;
+    controller.add(browserApplicationVisible);
+  }).toJS;
+  controller = StreamController(
+    onListen: () {
+      _pageHidden = web.document.hidden;
+      web.document.addEventListener('visibilitychange', changed);
+      web.window.addEventListener('pagehide', hidden);
+      web.window.addEventListener('pageshow', shown);
+    },
+    onCancel: () {
+      web.document.removeEventListener('visibilitychange', changed);
+      web.window.removeEventListener('pagehide', hidden);
+      web.window.removeEventListener('pageshow', shown);
+    },
+  );
+  return controller.stream;
+}
 
 Future<void> writeBrowserPushPreview(String? json) async {
   await _writePreview(json?.toJS).toDart;

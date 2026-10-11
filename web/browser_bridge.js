@@ -5,6 +5,57 @@
   let releaseLock;
   let pushkey;
   let heartbeatTimer;
+  let presenceConfiguration;
+  let presenceRequest;
+  let pageHidden = false;
+  const publishPresence = () => {
+    if (!presenceConfiguration) return Promise.resolve();
+    presenceRequest?.abort();
+    const controller = new AbortController();
+    presenceRequest = controller;
+    const {homeserver, token, userId, presence, status} = presenceConfiguration;
+    const value = pageHidden || document.visibilityState !== 'visible' ? 'offline' : presence;
+    return fetch(`${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(userId)}/status`, {
+      method: 'PUT', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({presence: value, status_msg: status}),
+      keepalive: true, cache: 'no-store', signal: controller.signal,
+    }).catch(() => {});
+  };
+  window.sendConfigurePresence = json => {
+    if (!json) {
+      presenceRequest?.abort();
+      presenceConfiguration = undefined;
+      return;
+    }
+    try {
+      const value = JSON.parse(json);
+      const url = new URL(value.homeserver);
+      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
+          typeof value.token !== 'string' || typeof value.userId !== 'string' ||
+          !['online', 'unavailable', 'offline'].includes(value.presence)) throw new Error('Invalid presence configuration');
+      if (presenceConfiguration?.token !== value.token) presenceRequest?.abort();
+      presenceConfiguration = {...value, homeserver: url.href.replace(/\/$/, '')};
+    } catch {
+      presenceRequest?.abort();
+      presenceConfiguration = undefined;
+    }
+  };
+  window.sendPublishPresence = publishPresence;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pageHidden = false;
+    if (presenceConfiguration) publishPresence();
+  });
+  window.addEventListener('pagehide', () => {
+    pageHidden = true;
+    if (presenceConfiguration) publishPresence();
+  });
+  window.addEventListener('pageshow', () => { pageHidden = false; });
+  let keyboardBaseline = Math.max(window.innerHeight || 0, window.visualViewport?.height || 0);
+  window.sendKeyboardVisible = () => {
+    if (!window.visualViewport || Math.abs(window.visualViewport.scale - 1) > .01) return null;
+    keyboardBaseline = Math.max(keyboardBaseline, window.innerHeight || 0, window.visualViewport.height);
+    return keyboardBaseline - window.visualViewport.height > 100;
+  };
   // iOS can leave the layout viewport panned after dismissing its keyboard,
   // while Flutter still paints in layout-viewport coordinates. Restore only
   // after the keyboard closes, never while typing or pinch-zooming.

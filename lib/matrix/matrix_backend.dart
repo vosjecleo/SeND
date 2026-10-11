@@ -14,6 +14,9 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import '../services/platform_io.dart';
+import '../services/presence_policy.dart';
+import '../services/room_read_marker.dart';
+import '../services/browser_lifecycle.dart' as browser;
 import '../services/browser_media.dart';
 import '../services/browser_push.dart';
 import '../services/browser_push_previews.dart';
@@ -1049,7 +1052,12 @@ class MatrixBackend extends ChatBackend {
       if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
       return;
     }
+    final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    _configureClientPresence();
+    if (previousPresence != _effectiveClientPresence) {
+      unawaited(_refreshDesktopPresence());
+    }
     _activities?.visibilityChanged();
     if (foreground) _lastForegroundAlertAt.clear();
     // View focus can arrive after the lifecycle-resumed callback. Refresh on
@@ -1139,7 +1147,11 @@ class MatrixBackend extends ChatBackend {
           if (body.isEmpty) return false;
           await _sendMessage(body, roomId: roomId, replyToMessageId: eventId);
         case 'read':
-          await room.setReadMarker(eventId, mRead: eventId);
+          await room.setReadMarker(
+            eventId,
+            mRead: eventId,
+            public: _preferences.sendReadReceipts,
+          );
         case 'mute':
           await _setRoomNotificationMode(roomId, RoomNotificationMode.muted);
         default:
@@ -1870,6 +1882,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    if (kIsWeb) browser.configureBrowserPresence(null);
     _memberAvatarGeneration++;
     if (kIsWeb) BrowserPushPreviews.stop();
     unawaited(_stopActivities());

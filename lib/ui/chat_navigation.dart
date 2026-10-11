@@ -1960,40 +1960,42 @@ class _RoomListTile extends StatelessWidget {
                       ? null
                       : (value) => setDialogState(() => presentation = value!),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      icon: const ThemeIcon(Icons.image_outlined),
-                      label: const Text('Choose picture'),
-                      onPressed: !_canEdit('m.room.avatar')
-                          ? null
-                          : () async {
-                              final result = await FilePicker.pickFiles(
-                                type: FileType.image,
-                                withData: true,
-                              );
-                              final bytes = result?.files.single.bytes;
-                              if (bytes != null) {
-                                setDialogState(() {
-                                  avatar = bytes;
-                                  removeAvatar = false;
-                                });
-                              }
-                            },
-                    ),
-                    if (_canEdit('m.room.avatar') &&
-                        (room.avatarBytes != null || avatar != null))
-                      TextButton(
-                        onPressed: () => setDialogState(() {
-                          avatar = null;
-                          removeAvatar = true;
-                        }),
-                        child: const Text('Remove picture'),
+                if (!room.usesChannelIcon) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const ThemeIcon(Icons.image_outlined),
+                        label: const Text('Choose picture'),
+                        onPressed: !_canEdit('m.room.avatar')
+                            ? null
+                            : () async {
+                                final result = await FilePicker.pickFiles(
+                                  type: FileType.image,
+                                  withData: true,
+                                );
+                                final bytes = result?.files.single.bytes;
+                                if (bytes != null) {
+                                  setDialogState(() {
+                                    avatar = bytes;
+                                    removeAvatar = false;
+                                  });
+                                }
+                              },
                       ),
-                  ],
-                ),
+                      if (_canEdit('m.room.avatar') &&
+                          (room.avatarBytes != null || avatar != null))
+                        TextButton(
+                          onPressed: () => setDialogState(() {
+                            avatar = null;
+                            removeAvatar = true;
+                          }),
+                          child: const Text('Remove picture'),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

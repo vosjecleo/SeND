@@ -10,9 +10,10 @@ void main() {
     'mobile composer keeps focus and draft through IME lifecycle round trip',
     (tester) async {
       const channel = MethodChannel('net.deltie.deltiecord/composer');
+      var checks = 0;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         channel,
-        (_) async => true,
+        (_) async => ++checks > 1,
       );
       addTearDown(
         () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -48,6 +49,9 @@ void main() {
       await tester.enterText(composer, 'Keep this draft');
       final focus = tester.widget<TextField>(composer).focusNode!;
       expect(focus.hasFocus, isTrue);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
       for (final state in [
         AppLifecycleState.inactive,
         AppLifecycleState.hidden,
@@ -65,7 +69,10 @@ void main() {
         );
       }
       expect(find.text('Keep this draft'), findsOneWidget);
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      expect(checks, greaterThanOrEqualTo(2));
       expect(focus.hasFocus, isTrue);
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
@@ -133,7 +140,14 @@ void main() {
       ]) {
         tester.binding.handleAppLifecycleStateChanged(state);
       }
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      expect(
+        focus.hasFocus,
+        isTrue,
+        reason: 'Try to restore input before lowering the UI',
+      );
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.pump();
       expect(focus.hasFocus, isFalse);
       expect(find.text('Keep this draft'), findsOneWidget);
