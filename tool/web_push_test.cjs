@@ -48,6 +48,8 @@ test('pagehide sends offline even before document visibility updates', () => {
     userId: '@test:example.org', token: 'test-token', presence: 'online', status: null}));
   b.listeners.pagehide({persisted: false});
   assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'offline');
+  assert.equal('status_msg' in JSON.parse(b.requests.at(-1).body), false,
+    'Missing status text must not clear an existing Matrix status');
   b.listeners.visibilitychange({});
   assert.equal(JSON.parse(b.requests.at(-1).body).presence, 'online', 'Visible return clears the pagehide latch');
 });

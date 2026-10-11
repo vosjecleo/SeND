@@ -17,7 +17,7 @@
     const value = pageHidden || document.visibilityState !== 'visible' ? 'offline' : presence;
     return fetch(`${homeserver}/_matrix/client/v3/presence/${encodeURIComponent(userId)}/status`, {
       method: 'PUT', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
-      body: JSON.stringify({presence: value, status_msg: status}),
+      body: JSON.stringify({presence: value, ...(typeof status === 'string' ? {status_msg: status} : {})}),
       keepalive: true, cache: 'no-store', signal: controller.signal,
     }).catch(() => {});
   };
