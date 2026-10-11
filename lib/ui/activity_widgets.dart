@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
@@ -21,6 +22,83 @@ IconData activityIcon(ActivityKind kind) => switch (kind) {
   ActivityKind.music => Icons.music_note,
   ActivityKind.application => Icons.apps,
 };
+
+/// Keep visible DM rows subscribed even when their status is currently empty.
+class ActivityWatch extends StatefulWidget {
+  const ActivityWatch({
+    required this.backend,
+    required this.userId,
+    required this.presence,
+    required this.child,
+    super.key,
+  });
+  final ChatBackend backend;
+  final String? userId;
+  final UserPresence presence;
+  final Widget child;
+
+  @override
+  State<ActivityWatch> createState() => _ActivityWatchState();
+}
+
+class _ActivityWatchState extends State<ActivityWatch> {
+  VoidCallback? _stopWatching;
+  bool _enabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _enabled = TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
+  void didUpdateWidget(ActivityWatch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.backend != widget.backend ||
+        oldWidget.userId != widget.userId ||
+        oldWidget.presence != widget.presence) {
+      _stopWatching?.call();
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    _stopWatching =
+        widget.userId != null && widget.presence != UserPresence.offline
+        ? widget.backend.watchActivity(widget.userId!, isVisible: _isVisible)
+        : null;
+  }
+
+  bool _isVisible() {
+    if (!mounted || !_enabled) return false;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return false;
+    final bounds = box.localToGlobal(Offset.zero) & box.size;
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    if (viewport is RenderBox && (viewport as RenderBox).hasSize) {
+      final viewportBox = viewport as RenderBox;
+      return bounds.overlaps(
+        viewportBox.localToGlobal(Offset.zero) & viewportBox.size,
+      );
+    }
+    return bounds.overlaps(Offset.zero & MediaQuery.sizeOf(context));
+  }
+
+  @override
+  void dispose() {
+    _stopWatching?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 /// Compact activity in the timeline header only; other presence surfaces and
 /// full profile activity cards retain their own presentation.

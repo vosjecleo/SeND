@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.39+128" date="2026-10-11" type="development">
+      <description><p>Size status bubbles to their text, classify Simple Sight as an application, organise tests and archive historical documentation.</p></description>
+    </release>
     <release version="0.9.39+127" date="2026-10-11" type="development">
       <description><p>Restore mobile keyboard state, preserve private unread tracking, correct channel icons and underline previews, and keep background push and PWA presence offline.</p></description>
     </release>

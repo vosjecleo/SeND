@@ -859,75 +859,81 @@ class _RoomList extends StatelessWidget {
     itemBuilder: (context, index) {
       final room = rooms[index];
       final age = compactActivityAge(room.lastActivityAt);
-      return _SelectedRoomSurface(
+      return ActivityWatch(
         key: _RoomRowKey(room.id),
-        selected: backend.selectedRoom?.id == room.id,
-        child: Builder(
-          builder: (context) => ListTile(
-            key: ValueKey(room.id),
-            minTileHeight: 56,
-            minVerticalPadding: 6,
-            visualDensity: VisualDensity.standard,
-            contentPadding: const EdgeInsets.only(left: 4, right: 8),
-            horizontalTitleGap: 12,
-            selected: backend.selectedRoom?.id == room.id,
-            selectedColor: Theme.of(context).colorScheme.onSurface,
-            leading: MobileRoomAvatar(
-              room: room,
-              size: 44,
-              autoplay: backend.selectedRoom?.id == room.id,
-            ),
-            title: Text(
-              room.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: room.isDirect && ActivityStatus.hasContent(backend, room)
-                ? ActivityStatus(
-                    backend: backend,
-                    userId: room.directUserId,
-                    presence: room.presence,
-                    status: room.statusMessage,
-                  )
-                : null,
-            trailing: room.unreadCount == 0 && age.isEmpty
-                ? null
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (room.unreadCount > 0)
-                        Badge(
-                          largeSize: 16,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          label: Text(
-                            '${room.unreadCount}',
-                            style: const TextStyle(fontSize: 9),
+        backend: backend,
+        userId: room.isDirect ? room.directUserId : null,
+        presence: room.presence,
+        child: _SelectedRoomSurface(
+          selected: backend.selectedRoom?.id == room.id,
+          child: Builder(
+            builder: (context) => ListTile(
+              key: ValueKey(room.id),
+              minTileHeight: 56,
+              minVerticalPadding: 6,
+              visualDensity: VisualDensity.standard,
+              contentPadding: const EdgeInsets.only(left: 4, right: 8),
+              horizontalTitleGap: 12,
+              selected: backend.selectedRoom?.id == room.id,
+              selectedColor: Theme.of(context).colorScheme.onSurface,
+              leading: MobileRoomAvatar(
+                room: room,
+                size: 44,
+                autoplay: backend.selectedRoom?.id == room.id,
+              ),
+              title: Text(
+                room.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle:
+                  room.isDirect && ActivityStatus.hasContent(backend, room)
+                  ? ActivityStatus(
+                      backend: backend,
+                      userId: room.directUserId,
+                      presence: room.presence,
+                      status: room.statusMessage,
+                    )
+                  : null,
+              trailing: room.unreadCount == 0 && age.isEmpty
+                  ? null
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (room.unreadCount > 0)
+                          Badge(
+                            largeSize: 16,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            label: Text(
+                              '${room.unreadCount}',
+                              style: const TextStyle(fontSize: 9),
+                            ),
                           ),
-                        ),
-                      if (room.unreadCount > 0 && age.isNotEmpty)
-                        const SizedBox(height: 2),
-                      if (age.isNotEmpty)
-                        Text(
-                          age,
-                          style: TextStyle(
-                            color: context.deltiecord.muted,
-                            fontSize: DeltiecordTypeScale.small,
-                            height: 1.05,
+                        if (room.unreadCount > 0 && age.isNotEmpty)
+                          const SizedBox(height: 2),
+                        if (age.isNotEmpty)
+                          Text(
+                            age,
+                            style: TextStyle(
+                              color: context.deltiecord.muted,
+                              fontSize: DeltiecordTypeScale.small,
+                              height: 1.05,
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-            onTap: () => onOpenRoom(room),
-            onLongPress: () {
-              final box = context.findRenderObject() as RenderBox?;
-              showChannelActions(
-                context,
-                backend,
-                room,
-                box?.localToGlobal(Offset.zero) ?? Offset.zero,
-              );
-            },
+                      ],
+                    ),
+              onTap: () => onOpenRoom(room),
+              onLongPress: () {
+                final box = context.findRenderObject() as RenderBox?;
+                showChannelActions(
+                  context,
+                  backend,
+                  room,
+                  box?.localToGlobal(Offset.zero) ?? Offset.zero,
+                );
+              },
+            ),
           ),
         ),
       );
@@ -1048,11 +1054,7 @@ class _NavigationCardEdgePainter extends CustomPainter {
 }
 
 class _SelectedRoomSurface extends StatelessWidget {
-  const _SelectedRoomSurface({
-    required this.selected,
-    required this.child,
-    super.key,
-  });
+  const _SelectedRoomSurface({required this.selected, required this.child});
   final bool selected;
   final Widget child;
 

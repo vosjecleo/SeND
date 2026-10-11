@@ -485,9 +485,7 @@ Future<List<ActivityCandidate>> loadLocalActivityCatalogue() async {
               ActivityCandidate(
                 id: '${normalizeActivityPath(Directory('$library/steamapps/common/$install').resolveSymbolicLinksSync())}/',
                 name: name,
-                kind: appId == '431960'
-                    ? ActivityKind.application
-                    : ActivityKind.game,
+                kind: steamActivityKind(appId),
                 steamAppId: appId,
                 iconBytes:
                     shortcut?.iconBytes ?? await _steamIcon(steam, appId),

@@ -243,13 +243,11 @@ class ProfileStatusBubble extends StatelessWidget {
   const ProfileStatusBubble({
     required this.status,
     required this.accent,
-    this.expanded = false,
     super.key,
   });
 
   final String status;
   final Color accent;
-  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +260,6 @@ class ProfileStatusBubble extends StatelessWidget {
       child: CustomPaint(
         painter: _ThoughtBubblePainter(fill, accent.withValues(alpha: .3)),
         child: Container(
-          width: expanded ? double.infinity : null,
           constraints: const BoxConstraints(maxWidth: 360),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Text(
@@ -465,10 +462,12 @@ class _ProfileHeader extends StatelessWidget {
                 child: profile.presence == UserPresence.offline
                     ? const SizedBox.shrink()
                     : profile.statusMessage?.trim().isNotEmpty == true
-                    ? ProfileStatusBubble(
-                        status: profile.statusMessage!,
-                        accent: accent,
-                        expanded: true,
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: ProfileStatusBubble(
+                          status: profile.statusMessage!,
+                          accent: accent,
+                        ),
                       )
                     : Align(
                         alignment: Alignment.centerRight,

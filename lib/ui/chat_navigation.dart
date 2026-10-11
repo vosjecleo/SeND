@@ -2369,127 +2369,134 @@ class _HomeRoomListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = backend.selectedRoom?.id == room.id;
     final age = compactActivityAge(room.lastActivityAt);
-    return NavigationHover(
-      builder: (hovered) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: onSecondaryTapDown,
-        child: Material(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: selected
-                  ? Theme.of(
-                          context,
-                        ).extension<ThemeChrome>()?.selectionBorder ??
-                        Colors.transparent
-                  : Colors.transparent,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          color: selected
-              ? Theme.of(context).extension<ThemeChrome>()?.selection ??
-                    Theme.of(context).colorScheme.primary.withValues(alpha: .13)
-              : Colors.transparent,
-          child: InkWell(
-            onTap: () => backend.selectRoom(room.id),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: _densityBetween(
-                  backend.preferences.compactness,
-                  roomy: 50,
-                  compact: 42,
-                ),
+    return ActivityWatch(
+      backend: backend,
+      userId: room.isDirect ? room.directUserId : null,
+      presence: room.presence,
+      child: NavigationHover(
+        builder: (hovered) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onSecondaryTapDown: onSecondaryTapDown,
+          child: Material(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: selected
+                    ? Theme.of(
+                            context,
+                          ).extension<ThemeChrome>()?.selectionBorder ??
+                          Colors.transparent
+                    : Colors.transparent,
               ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  8,
-                  _densityBetween(
+            ),
+            clipBehavior: Clip.antiAlias,
+            color: selected
+                ? Theme.of(context).extension<ThemeChrome>()?.selection ??
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: .13)
+                : Colors.transparent,
+            child: InkWell(
+              onTap: () => backend.selectRoom(room.id),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: _densityBetween(
                     backend.preferences.compactness,
-                    roomy: 4,
-                    compact: 2,
-                  ),
-                  10,
-                  _densityBetween(
-                    backend.preferences.compactness,
-                    roomy: 4,
-                    compact: 2,
+                    roomy: 50,
+                    compact: 42,
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _RoomIcon(
-                      room: room,
-                      size: 34,
-                      showPresence: room.isDirect,
-                      autoplay: selected || hovered,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    8,
+                    _densityBetween(
+                      backend.preferences.compactness,
+                      roomy: 4,
+                      compact: 2,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            room.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: DeltiecordTypeScale.bigChat,
-                              color: hovered || selected
-                                  ? Theme.of(context).colorScheme.onSurface
-                                  : context.deltiecord.muted,
-                              fontWeight:
-                                  room.unreadCount > 0 ||
-                                      room.markedUnread ||
-                                      room.hasUnreadMessages
-                                  ? FontWeight.w700
-                                  : FontWeight.w400,
-                              height: 1.1,
-                            ),
-                          ),
-                          if (room.isDirect)
-                            ActivityStatus(
-                              backend: backend,
-                              userId: room.directUserId,
-                              presence: room.presence,
-                              status: room.statusMessage,
-                            ),
-                        ],
+                    10,
+                    _densityBetween(
+                      backend.preferences.compactness,
+                      roomy: 4,
+                      compact: 2,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _RoomIcon(
+                        room: room,
+                        size: 34,
+                        showPresence: room.isDirect,
+                        autoplay: selected || hovered,
                       ),
-                    ),
-                    if (room.unreadCount > 0 || age.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (room.unreadCount > 0)
-                            Badge(
-                              largeSize: 16,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              label: Text(
-                                '${room.unreadCount}',
-                                style: const TextStyle(fontSize: 9),
-                              ),
-                            ),
-                          if (room.unreadCount > 0 && age.isNotEmpty)
-                            const SizedBox(height: 2),
-                          if (age.isNotEmpty)
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              age,
+                              room.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: context.deltiecord.muted,
-                                fontSize: DeltiecordTypeScale.small,
-                                height: 1.05,
+                                fontSize: DeltiecordTypeScale.bigChat,
+                                color: hovered || selected
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : context.deltiecord.muted,
+                                fontWeight:
+                                    room.unreadCount > 0 ||
+                                        room.markedUnread ||
+                                        room.hasUnreadMessages
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                                height: 1.1,
                               ),
                             ),
-                        ],
+                            if (room.isDirect)
+                              ActivityStatus(
+                                backend: backend,
+                                userId: room.directUserId,
+                                presence: room.presence,
+                                status: room.statusMessage,
+                              ),
+                          ],
+                        ),
                       ),
+                      if (room.unreadCount > 0 || age.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (room.unreadCount > 0)
+                              Badge(
+                                largeSize: 16,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                label: Text(
+                                  '${room.unreadCount}',
+                                  style: const TextStyle(fontSize: 9),
+                                ),
+                              ),
+                            if (room.unreadCount > 0 && age.isNotEmpty)
+                              const SizedBox(height: 2),
+                            if (age.isNotEmpty)
+                              Text(
+                                age,
+                                style: TextStyle(
+                                  color: context.deltiecord.muted,
+                                  fontSize: DeltiecordTypeScale.small,
+                                  height: 1.05,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

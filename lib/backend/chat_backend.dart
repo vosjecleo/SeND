@@ -19,6 +19,10 @@ abstract class ChatBackend extends ChangeNotifier {
   String? get activityWarning => null;
   bool get supportsActivityDetection => false;
   UserActivity? activityFor(String userId) => null;
+  VoidCallback watchActivity(
+    String userId, {
+    required bool Function() isVisible,
+  }) => () {};
   List<UserActivity> activitiesFor(String userId) => [?activityFor(userId)];
   LastFmTrack? lastFmRecentFor(String userId) => null;
   Future<Uint8List?> loadActivityIcon(Uri uri) async => null;

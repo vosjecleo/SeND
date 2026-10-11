@@ -125,6 +125,11 @@ class MatrixBackend extends ChatBackend {
   @override
   UserActivity? activityFor(String userId) => _activities?.activityFor(userId);
   @override
+  void Function() watchActivity(
+    String userId, {
+    required bool Function() isVisible,
+  }) => _activities?.watchUser(userId, isVisible) ?? () {};
+  @override
   List<UserActivity> activitiesFor(String userId) =>
       _activities?.activitiesFor(userId).live ?? const [];
   @override

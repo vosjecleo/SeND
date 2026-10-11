@@ -13,6 +13,14 @@ import 'package:deltiecord/services/activity_source_native.dart';
 import 'package:deltiecord/services/lastfm_auth.dart';
 
 void main() {
+  test(
+    'Steam utilities are applications, with games still classified as games',
+    () {
+      expect(steamActivityKind('3256420'), ActivityKind.application);
+      expect(steamActivityKind('431960'), ActivityKind.application);
+      expect(steamActivityKind('240'), ActivityKind.game);
+    },
+  );
   test('Windows installation matching is separator and case insensitive', () {
     const catalogue = [
       ActivityCandidate(

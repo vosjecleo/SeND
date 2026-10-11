@@ -3,6 +3,21 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.39 build 128 (2026-10-11)
+
+- Size profile status thought bubbles to their text instead of stretching short
+  statuses across the remaining header width. Longer statuses still wrap.
+- Classify Simple Sight's Steam entry as an application, not a game. Manual
+  activity overrides remain available.
+- Keep visible online DM rows subscribed to activity refreshes, including rows
+  with no current activity. Opening the DM is no longer needed to keep polling.
+- Split the large widget test file by feature and move shared fixtures into
+  `test/support/`, retaining existing test bodies and assertions.
+- Run native CI tests with two workers and reuse compatible dependency caches
+  after lockfile changes. Keep platform build and packaging checks.
+- Move old build plans and investigations to `docs/archive/`, repair references
+  and add test-layout and CI-timing guides.
+
 ## SeND 0.9.39 build 127 (2026-10-11)
 
 - Use channel-type icons for server rooms in mobile headers and details. Room
@@ -417,7 +432,7 @@ its known limitations at the time. For current issues, see [Known issues](KNOWN_
   Matrix `m.direct`; it does not change membership, permissions or encryption.
 - Add spacing between the administration Rules description and channel selector.
 
-See [build 111 validation and limitations](docs/build-111-reliability.md).
+See [build 111 validation and limitations](docs/archive/build-111-reliability.md).
 
 ## SeND 0.9.35 build 110 (2026-09-26)
 
@@ -475,7 +490,7 @@ See [build 111 validation and limitations](docs/build-111-reliability.md).
   autoplay/reduced-motion controls. Visible web focus changes and identical
   byte copies no longer stop/restart animations.
 
-Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.md).
+Protocol, validation and limitations: [build 109 notes](docs/archive/build-109-activity.md).
 
 ## SeND 0.9.35 build 108 (2026-09-25)
 
@@ -501,7 +516,7 @@ Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.
   music covers, media-album padding and duplicate local-time text.
 - Desktop video optimization preserves media metadata and encrypted uploads.
   Android encoding, Windows Discord IPC and Steam library linking remain pending;
-  see `docs/activity-local-preview.md` for implementation limits and test status.
+  see `docs/archive/activity-local-preview.md` for implementation limits and test status.
 - Replace pack re-import editing with a dedicated editor: add/remove items,
   rename aliases, select individual or multiple items for crop/resize, preview,
   and undo removal/crop operations. Unchanged items retain their MXC URLs.
@@ -535,7 +550,7 @@ Protocol, validation and limitations: [build 109 notes](docs/build-109-activity.
   including high-contrast themes.
 - Check the Latest release channel at startup and retry failed discovery.
 
-Validation and remaining device checks: `docs/build-107-plan.md`.
+Validation and remaining device checks: `docs/archive/build-107-plan.md`.
 
 ## SeND 0.9.34 build 106 (2026-09-24)
 
@@ -591,7 +606,7 @@ this milestone, with current guides separated from historical investigations.
 
 Hardware/cross-client authentication validation remains outstanding. Hosted
 browser SSO requires the narrowly scoped auth callback hosting rule.
-See `docs/build-106-plan.md` for details and implementation boundaries.
+See `docs/archive/build-106-plan.md` for details and implementation boundaries.
 
 ## SeND 0.9.33 build 105 (2026-09-24)
 

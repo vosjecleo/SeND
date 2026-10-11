@@ -1,4 +1,11 @@
 import 'activity_candidate.dart';
+import '../models/user_activity.dart';
+
+// Steam also distributes utilities, not just games.
+ActivityKind steamActivityKind(String? appId) =>
+    const {'431960', '3256420'}.contains(appId)
+    ? ActivityKind.application
+    : ActivityKind.game;
 
 String normalizeActivityPath(String path) => path.replaceAll('\\', '/');
 

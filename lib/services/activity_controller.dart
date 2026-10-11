@@ -49,6 +49,7 @@ class ActivityController extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   final Duration pollInterval, heartbeat, readInterval;
   final _seen = <String, DateTime>{};
+  final _watchers = <String, Set<bool Function()>>{};
   final _historyWatch = <String>{};
   final _fetched = <String, DateTime>{};
   final _observedOnline = <String, bool>{};
@@ -143,6 +144,20 @@ class ActivityController extends ChangeNotifier {
   }
 
   UserActivity? activityFor(String id) => activitiesFor(id).primary;
+  VoidCallback watchUser(String id, bool Function() isVisible) {
+    (_watchers[id] ??= {}).add(isVisible);
+    return () {
+      final watchers = _watchers[id];
+      watchers?.remove(isVisible);
+      if (watchers?.isEmpty == true) {
+        _watchers.remove(id);
+        _seen.remove(id);
+      }
+    };
+  }
+
+  bool _watchedVisible(String id) =>
+      _watchers[id]?.any((visible) => visible()) ?? false;
   LastFmTrack? lastFmRecentFor(String id) {
     _historyWatch.add(id);
     _observe(id);
@@ -429,11 +444,17 @@ class ActivityController extends ChangeNotifier {
       _seen.removeWhere(
         (_, at) => now.difference(at) > const Duration(minutes: 2),
       );
+      if (_foreground) {
+        for (final id in _watchers.keys) {
+          if (_visible(id) && _watchedVisible(id)) _observe(id);
+        }
+      }
       _historyWatch.removeWhere((id) => !_seen.containsKey(id));
       final users = _seen.keys
           .where(
             (id) =>
                 _foreground &&
+                (!_watchers.containsKey(id) || _watchedVisible(id)) &&
                 (_visible(id) || _historyWatch.contains(id)) &&
                 !now.isBefore(_readAfter) &&
                 (_fetched[id] == null ||
@@ -447,6 +468,7 @@ class ActivityController extends ChangeNotifier {
       );
       for (final id in users.take(8)) {
         if (_dead || !_foreground) break;
+        if (_watchers.containsKey(id) && !_watchedVisible(id)) continue;
         if (!_visible(id) && !_historyWatch.contains(id)) continue;
         _fetched[id] = DateTime.now();
         try {
@@ -524,6 +546,7 @@ class ActivityController extends ChangeNotifier {
     _dead = true;
     _timer?.cancel();
     _initialRead?.cancel();
+    _watchers.clear();
     await _source.dispose();
     if (_busy) await _tickDone?.future;
     if (clear && _published) {
