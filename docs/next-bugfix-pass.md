@@ -133,5 +133,7 @@ Sunup delivery and affected media files still need device testing.
   a lifecycle event still relies on the homeserver's timeout.
 
 Local checks: 632 Flutter tests passed with four skips, Chrome visibility and
-video-probing tests passed, and the JavaScript notification tests passed. Build
-127 is prepared for cross-platform CI and Latest publication.
+video-probing tests passed, and the JavaScript notification tests passed.
+Linux, Windows, Android and Web/PWA CI passed on commit `ca2aff4`. Flatpak's
+sandbox launch and publication passed too. GitHub Latest, Deltie's download
+mirror and the live PWA now serve 0.9.39+127.
