@@ -338,9 +338,11 @@ class ActivityBlock extends StatelessWidget {
                                 activity.lastFmUrl!,
                                 mode: LaunchMode.externalApplication,
                               ),
-                              child: const Text(
-                                'Powered by Last.fm / AudioScrobbler',
-                                style: TextStyle(fontSize: 11),
+                              child: Text(
+                                activity.lastFmUrl?.host == 'libre.fm'
+                                    ? 'Libre.fm'
+                                    : 'Powered by Last.fm / AudioScrobbler',
+                                style: const TextStyle(fontSize: 11),
                               ),
                             ),
                         ],
@@ -419,7 +421,7 @@ class LastFmRecentBar extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Last.fm · Last listened to',
+                                '${listeningProvider(track.url)} · Last listened to',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: palette.muted,
@@ -449,7 +451,9 @@ class LastFmRecentBar extends StatelessWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Powered by AudioScrobbler',
+                                track.url.host == 'libre.fm'
+                                    ? 'Libre.fm'
+                                    : 'Powered by AudioScrobbler',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: palette.muted,

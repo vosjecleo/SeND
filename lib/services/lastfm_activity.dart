@@ -5,14 +5,17 @@ import 'platform_io.dart';
 
 /// Foreground-only public now-playing reader shared by native and web clients.
 /// The controller owns lifecycle/consent; this class owns rate/cache bounds.
+/// Libre.fm uses the compatible read endpoint, without Last.fm credentials.
 class LastFmActivitySource {
   LastFmActivitySource({
     HttpClient Function()? clientFactory,
     DateTime Function()? now,
+    this.libreFm = false,
   }) : _clientFactory = clientFactory ?? HttpClient.new,
        _now = now ?? DateTime.now;
   final HttpClient Function() _clientFactory;
   final DateTime Function() _now;
+  final bool libreFm;
   DateTime? _after;
   String? _identity;
   ActivityCandidate? _cached;
@@ -32,12 +35,13 @@ class LastFmActivitySource {
   }
 
   Future<ActivityCandidate?> scan(ActivitySettings settings) async {
-    if (settings.lastFmUser.isEmpty || settings.lastFmKey.isEmpty) {
+    final user = libreFm ? settings.libreFmUser : settings.lastFmUser;
+    if (user.isEmpty || (!libreFm && settings.lastFmKey.isEmpty)) {
       _cached = null;
       recent = null;
       return null;
     }
-    final identity = '${settings.lastFmUser}:${settings.lastFmKey}';
+    final identity = '$user:${libreFm ? "librefm" : settings.lastFmKey}';
     if (_identity != identity) {
       _cached = null;
       recent = null;
@@ -52,10 +56,10 @@ class LastFmActivitySource {
       ..connectionTimeout = const Duration(seconds: 5);
     try {
       final request = await client.getUrl(
-        Uri.https('ws.audioscrobbler.com', '/2.0/', {
+        Uri.https(libreFm ? 'libre.fm' : 'ws.audioscrobbler.com', '/2.0/', {
           'method': 'user.getrecenttracks',
-          'user': settings.lastFmUser,
-          'api_key': settings.lastFmKey,
+          'user': user,
+          if (!libreFm) 'api_key': settings.lastFmKey,
           'format': 'json',
           'limit': '2',
         }),
@@ -99,8 +103,8 @@ class LastFmActivitySource {
               : seconds.clamp(0, 3600),
         ),
       );
-      final activity = lastFmNowPlaying(data, settings.lastFmUser);
-      recent = lastFmRecentlyPlayed(data, settings.lastFmUser);
+      final activity = lastFmNowPlaying(data, user, libreFm: libreFm);
+      recent = lastFmRecentlyPlayed(data, user, libreFm: libreFm);
       if (!cache.contains('no-store') && !cache.contains('no-cache')) {
         _cached = activity;
       }
@@ -113,7 +117,11 @@ class LastFmActivitySource {
   }
 }
 
-LastFmTrack? lastFmRecentlyPlayed(Map data, String user) {
+LastFmTrack? lastFmRecentlyPlayed(
+  Map data,
+  String user, {
+  bool libreFm = false,
+}) {
   final recent = data['recenttracks'];
   final tracks = recent is Map ? recent['track'] : null;
   if (tracks is! List) return null;
@@ -134,18 +142,29 @@ LastFmTrack? lastFmRecentlyPlayed(Map data, String user) {
       'artist': bounded(artist is Map ? artist['#text'] : artist, 256),
       'album': bounded(album is Map ? album['#text'] : album, 256),
       'url':
-          (validLastFmUrl(track['url']) ??
-                  Uri.https('www.last.fm', '/user/$user'))
+          ((libreFm
+                      ? _libreFmUrl(track['url'])
+                      : validLastFmUrl(track['url'])) ??
+                  Uri.https(
+                    libreFm ? 'libre.fm' : 'www.last.fm',
+                    '/user/$user',
+                  ))
               .toString(),
       'played_at': seconds * 1000,
-      'artwork': lastFmArtworkFromImages(track['image'])?.toString(),
+      'artwork': libreFm
+          ? null
+          : lastFmArtworkFromImages(track['image'])?.toString(),
     });
     if (value != null) return value;
   }
   return null;
 }
 
-ActivityCandidate? lastFmNowPlaying(Map data, String user) {
+ActivityCandidate? lastFmNowPlaying(
+  Map data,
+  String user, {
+  bool libreFm = false,
+}) {
   final recent = data['recenttracks'];
   final tracks = recent is Map ? recent['track'] : null;
   if (tracks is! List || tracks.isEmpty || tracks.first is! Map) return null;
@@ -162,16 +181,22 @@ ActivityCandidate? lastFmNowPlaying(Map data, String user) {
   }
 
   final artist = track['artist'];
-  final artwork = lastFmArtworkFromImages(track['image']);
+  final artwork = libreFm ? null : lastFmArtworkFromImages(track['image']);
   return ActivityCandidate(
-    id: 'lastfm',
+    id: libreFm ? 'librefm' : 'lastfm',
     name: bounded(track['name'], 128),
     kind: ActivityKind.music,
     details: bounded(artist is Map ? artist['#text'] : null, 256),
     lastFmArtwork: artwork,
     lastFmUrl:
-        validLastFmUrl(track['url']) ?? Uri.https('www.last.fm', '/user/$user'),
+        (libreFm ? _libreFmUrl(track['url']) : validLastFmUrl(track['url'])) ??
+        Uri.https(libreFm ? 'libre.fm' : 'www.last.fm', '/user/$user'),
   );
+}
+
+Uri? _libreFmUrl(Object? value) {
+  final url = validListeningUrl(value);
+  return url?.host == 'libre.fm' ? url : null;
 }
 
 Uri? lastFmArtworkFromImages(Object? images) {

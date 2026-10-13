@@ -6,13 +6,15 @@ enum ActivityKind { game, music, application }
 const activityProfileField = 'net.deltiecord.activity';
 const activityDevicePrefix = 'net.deltiecord.activity.device.';
 const lastFmHistoryPrefix = 'net.deltiecord.lastfm_recent.device.';
+// Keep the existing device field namespace for upgrades. Its track URL now
+// identifies Last.fm or Libre.fm; no credentials are included in these records.
 String lastFmHistoryField(String deviceId) =>
     '$lastFmHistoryPrefix${sha256.convert(utf8.encode(deviceId))}';
 String activityDeviceField(String deviceId) =>
     '$activityDevicePrefix${sha256.convert(utf8.encode(deviceId))}';
 
 /// Independently selected slots from unexpired device-owned profile fields.
-/// Native music wins over Last.fm now-playing; completed scrobbles never become
+/// Native music wins over cloud now-playing; completed scrobbles never become
 /// a live activity. Selection is deterministic on every receiving client.
 class UserActivities {
   const UserActivities({this.program, this.music, this.recent});
@@ -53,7 +55,9 @@ class UserActivities {
           (music == null || (music.lastFmUrl != null && m.lastFmUrl == null))) {
         music = m;
       }
-      final track = LastFmTrack.fromJson(record['lastfm_recent']);
+      final track = LastFmTrack.fromJson(
+        record['listening_recent'] ?? record['lastfm_recent'],
+      );
       if (track != null &&
           (recent == null || track.playedAt.isAfter(recent.playedAt))) {
         recent = track;
@@ -83,6 +87,7 @@ const lastFmPublicDisplayApproved = bool.fromEnvironment(
 
 /// A completed scrobble, not live presence. Stored in durable device-owned
 /// history, and included in the expiring activity record for older clients.
+/// The legacy type name is retained; Libre.fm tracks use the same bounded data.
 class LastFmTrack {
   const LastFmTrack({
     required this.name,
@@ -109,7 +114,7 @@ class LastFmTrack {
     final name = value['name'],
         artist = value['artist'],
         album = value['album'];
-    final played = value['played_at'], url = validLastFmUrl(value['url']);
+    final played = value['played_at'], url = validListeningUrl(value['url']);
     if (name is! String ||
         name.trim().isEmpty ||
         name.length > 128 ||
@@ -132,7 +137,9 @@ class LastFmTrack {
       album: album,
       url: url,
       playedAt: DateTime.fromMillisecondsSinceEpoch(played),
-      artwork: validLastFmArtwork(value['artwork']),
+      artwork: url.host == 'libre.fm'
+          ? null
+          : validLastFmArtwork(value['artwork']),
     );
   }
 }
@@ -217,6 +224,27 @@ Uri? validLastFmUrl(Object? value) {
       : null;
 }
 
+/// Read-only listening links. Never accept arbitrary feed or artwork hosts.
+Uri? validListeningUrl(Object? value) {
+  final lastFm = validLastFmUrl(value);
+  if (lastFm != null) return lastFm;
+  if (value is! String || value.length > 2048) return null;
+  final uri = Uri.tryParse(value);
+  return uri != null &&
+          uri.scheme == 'https' &&
+          uri.host == 'libre.fm' &&
+          uri.userInfo.isEmpty &&
+          !uri.hasPort &&
+          !uri.hasQuery &&
+          !uri.hasFragment &&
+          (uri.path.startsWith('/artist/') || uri.path.startsWith('/user/'))
+      ? uri
+      : null;
+}
+
+String listeningProvider(Uri? url) =>
+    url?.host == 'libre.fm' ? 'Libre.fm' : 'Last.fm';
+
 /// Only API-provided HTTPS Last.fm CDN artwork, never arbitrary profile URLs.
 Uri? validLastFmArtwork(Object? value) {
   if (value is! String || value.length > 2048) return null;
@@ -272,7 +300,9 @@ class UserActivity {
     if (icon != null) 'icon': icon.toString(),
     if (startedAt != null) 'started_at': startedAt!.millisecondsSinceEpoch,
     if (playback != null) 'playback': playback!.toJson(),
-    if (lastFmUrl != null) 'lastfm_url': lastFmUrl.toString(),
+    if (lastFmUrl != null)
+      (lastFmUrl!.host == 'libre.fm' ? 'listening_url' : 'lastfm_url'):
+          lastFmUrl.toString(),
     if (lastFmUrl != null && lastFmArtwork != null)
       'lastfm_artwork': lastFmArtwork.toString(),
     'expires_at': expiresAt.millisecondsSinceEpoch,
@@ -314,7 +344,9 @@ class UserActivity {
       playback: kind == ActivityKind.music
           ? ActivityPlayback.fromJson(value['playback'], now: current)
           : null,
-      lastFmUrl: validLastFmUrl(value['lastfm_url']),
+      lastFmUrl:
+          validListeningUrl(value['listening_url']) ??
+          validLastFmUrl(value['lastfm_url']),
       lastFmArtwork: validLastFmUrl(value['lastfm_url']) == null
           ? null
           : validLastFmArtwork(value['lastfm_artwork']),
@@ -352,11 +384,17 @@ class ActivitySettings {
     this.lastFmUser = '',
     this.lastFmKey = '',
     this.showLastFmRecent = false,
+    this.libreFmUser = '',
+    this.useLibreFm = false,
   });
   final bool detect, share, rpc;
   final bool showLastFmRecent;
   final Map<String, ActivityRule> rules;
   final String lastFmUser, lastFmKey;
+  final String libreFmUser;
+  final bool useLibreFm;
+  String get listeningUser => useLibreFm ? libreFmUser : lastFmUser;
+  String get listeningProviderName => useLibreFm ? 'Libre.fm' : 'Last.fm';
   ActivitySettings copyWith({
     bool? detect,
     bool? share,
@@ -365,6 +403,8 @@ class ActivitySettings {
     String? lastFmUser,
     String? lastFmKey,
     bool? showLastFmRecent,
+    String? libreFmUser,
+    bool? useLibreFm,
   }) => ActivitySettings(
     detect: detect ?? this.detect,
     share: share ?? this.share,
@@ -373,6 +413,8 @@ class ActivitySettings {
     lastFmUser: lastFmUser ?? this.lastFmUser,
     lastFmKey: lastFmKey ?? this.lastFmKey,
     showLastFmRecent: showLastFmRecent ?? this.showLastFmRecent,
+    libreFmUser: libreFmUser ?? this.libreFmUser,
+    useLibreFm: useLibreFm ?? this.useLibreFm,
   );
   Map<String, Object?> toJson() => {
     'detect': detect,
@@ -382,6 +424,8 @@ class ActivitySettings {
     'lastfm_user': lastFmUser,
     'lastfm_key': lastFmKey,
     'lastfm_recent': showLastFmRecent,
+    'librefm_user': libreFmUser,
+    'use_librefm': useLibreFm,
   };
   factory ActivitySettings.fromJson(Object? value) {
     if (value is! Map) return const ActivitySettings();
@@ -412,6 +456,8 @@ class ActivitySettings {
       lastFmUser: value['lastfm_user'] is String ? value['lastfm_user'] : '',
       lastFmKey: value['lastfm_key'] is String ? value['lastfm_key'] : '',
       showLastFmRecent: value['lastfm_recent'] == true,
+      libreFmUser: value['librefm_user'] is String ? value['librefm_user'] : '',
+      useLibreFm: value['use_librefm'] == true,
     );
   }
 }

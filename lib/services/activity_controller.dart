@@ -24,6 +24,7 @@ class ActivityController extends ChangeNotifier {
     this.isForeground,
     this.publicLastFmApproved = lastFmPublicDisplayApproved,
     LastFmActivitySource? lastFm,
+    LastFmActivitySource? libreFm,
     DesktopActivitySource? source,
     FlutterSecureStorage? storage,
     this.pollInterval = const Duration(seconds: 5),
@@ -32,6 +33,7 @@ class ActivityController extends ChangeNotifier {
     Duration readStartDelay = const Duration(seconds: 15),
   }) : _source = source ?? DesktopActivitySource(),
        _lastFm = lastFm ?? LastFmActivitySource(),
+       _libreFm = libreFm ?? LastFmActivitySource(libreFm: true),
        _readAfter = DateTime.now().add(readStartDelay),
        _storage = storage ?? const FlutterSecureStorage();
   final String userId, deviceId;
@@ -45,6 +47,10 @@ class ActivityController extends ChangeNotifier {
   final bool Function()? isForeground;
   final bool publicLastFmApproved;
   final LastFmActivitySource _lastFm;
+  final LastFmActivitySource _libreFm;
+  LastFmActivitySource get _listeningSource =>
+      settings.useLibreFm ? _libreFm : _lastFm;
+  bool get _listeningApproved => settings.useLibreFm || publicLastFmApproved;
   final DesktopActivitySource _source;
   final FlutterSecureStorage _storage;
   final Duration pollInterval, heartbeat, readInterval;
@@ -59,6 +65,7 @@ class ActivityController extends ChangeNotifier {
   bool _localOwned = false;
   Map<String, Object?>? _localHistory;
   bool _historyOwned = false;
+  bool _historyNeedsClear = false;
   String? _historyFingerprint;
   DateTime? _historyAfter;
   String? _historyWarning;
@@ -134,7 +141,7 @@ class ActivityController extends ChangeNotifier {
         writeHistory != null &&
         (!settings.share ||
             !settings.showLastFmRecent ||
-            settings.lastFmUser.isEmpty)) {
+            settings.listeningUser.isEmpty)) {
       records.remove(lastFmHistoryField(deviceId));
     }
     if (!_visible(id)) {
@@ -165,9 +172,17 @@ class ActivityController extends ChangeNotifier {
   }
 
   Future<void> update(ActivitySettings value) async {
+    if (value.useLibreFm != settings.useLibreFm ||
+        value.listeningUser != settings.listeningUser) {
+      _historyNeedsClear = true;
+      _historyAfter = null;
+      _historyFingerprint = null;
+      _localHistory = null;
+      _historyOwned = true;
+    }
     // Revocations take effect even if secure storage fails, and during uploads.
     if (!value.share ||
-        (!value.detect && value.lastFmUser.isEmpty) ||
+        (!value.detect && value.listeningUser.isEmpty) ||
         (!value.showLastFmRecent && settings.showLastFmRecent)) {
       settings = value;
       _local = null;
@@ -198,7 +213,10 @@ class ActivityController extends ChangeNotifier {
         );
       }
     }
-    if (!_foreground) _lastFm.suspend();
+    if (!_foreground) {
+      _lastFm.suspend();
+      _libreFm.suspend();
+    }
     if (refresh || !canShare()) this.refresh();
   }
 
@@ -207,7 +225,7 @@ class ActivityController extends ChangeNotifier {
       (c.lastFmUrl == null
           ? settings.detect
           : _foreground &&
-                (settings.detect || settings.lastFmUser.isNotEmpty)) &&
+                (settings.detect || settings.listeningUser.isNotEmpty)) &&
       (settings.rules[c.id]?.allowed ?? (c.kind != null));
 
   Future<UserActivity> _materialize(
@@ -272,7 +290,7 @@ class ActivityController extends ChangeNotifier {
       if (_foreground &&
           canShare() &&
           settings.share &&
-          settings.lastFmUser.isNotEmpty &&
+          settings.listeningUser.isNotEmpty &&
           (settings.showLastFmRecent ||
               !candidates.any(
                 (c) =>
@@ -280,15 +298,18 @@ class ActivityController extends ChangeNotifier {
                     (settings.rules[c.id]?.kind ?? c.kind) ==
                         ActivityKind.music,
               ))) {
-        final requestedUser = settings.lastFmUser;
-        final lastFm = await _lastFm.scan(settings);
+        final requestedUser = settings.listeningUser;
+        final requestedProvider = settings.useLibreFm;
+        final source = _listeningSource;
+        final lastFm = await source.scan(settings);
         if (_foreground &&
             canShare() &&
             settings.share &&
-            requestedUser == settings.lastFmUser) {
+            requestedUser == settings.listeningUser &&
+            requestedProvider == settings.useLibreFm) {
           if (lastFm != null) candidates = [...candidates, lastFm];
-          if (settings.showLastFmRecent && publicLastFmApproved) {
-            recent = _lastFm.recent;
+          if (settings.showLastFmRecent && _listeningApproved) {
+            recent = source.recent;
           }
         }
       }
@@ -301,8 +322,8 @@ class ActivityController extends ChangeNotifier {
         final enabled =
             settings.share &&
             settings.showLastFmRecent &&
-            settings.lastFmUser.isNotEmpty &&
-            publicLastFmApproved;
+            settings.listeningUser.isNotEmpty &&
+            _listeningApproved;
         final nextHistory = enabled && recent != null
             ? <String, Object?>{'version': 1, 'track': recent.toJson()}
             : null;
@@ -310,6 +331,7 @@ class ActivityController extends ChangeNotifier {
             ? null
             : jsonEncode(nextHistory);
         if ((!enabled && (!_historyOwned || _localHistory != null)) ||
+            _historyNeedsClear ||
             (nextHistory != null && fingerprint != _historyFingerprint)) {
           try {
             await writeHistory!(
@@ -317,6 +339,7 @@ class ActivityController extends ChangeNotifier {
             ).timeout(const Duration(seconds: 10));
             _localHistory = nextHistory;
             _historyOwned = true;
+            _historyNeedsClear = false;
             _historyFingerprint = fingerprint;
             _historyAfter = null;
             _historyWarning = null;
@@ -327,7 +350,7 @@ class ActivityController extends ChangeNotifier {
                   : const Duration(seconds: 30),
             );
             _historyWarning =
-                'Last.fm history could not be ${enabled ? 'saved' : 'removed'}; retrying automatically.';
+                'Listening history could not be ${enabled ? 'saved' : 'removed'}; retrying automatically.';
             // A history outage must not block live publishing or viewing.
           }
         }
@@ -403,7 +426,7 @@ class ActivityController extends ChangeNotifier {
               !settings.share) {
             recent = null;
           }
-          final publicMusic = m?.lastFmUrl != null && !publicLastFmApproved
+          final publicMusic = m?.lastFmUrl != null && !_listeningApproved
               ? null
               : m;
           final primary = p ?? publicMusic;
@@ -419,7 +442,11 @@ class ActivityController extends ChangeNotifier {
                     'program': p?.toJson(),
                     'music': publicMusic?.toJson(),
                   },
-                  if (recent != null) 'lastfm_recent': recent.toJson(),
+                  if (recent != null)
+                    (recent.url.host == 'libre.fm'
+                        ? 'listening_recent'
+                        : 'lastfm_recent'): recent
+                        .toJson(),
                 };
           stage = 'Activity publication';
           if (record != null || _published) await _publish(record);
@@ -537,7 +564,7 @@ class ActivityController extends ChangeNotifier {
         (_publishAfter == null || !DateTime.now().isBefore(_publishAfter!)) &&
         (!settings.share ||
             !canShare() ||
-            (!settings.detect && settings.lastFmUser.isEmpty))) {
+            (!settings.detect && settings.listeningUser.isEmpty))) {
       unawaited(_tick());
     }
   }

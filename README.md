@@ -177,6 +177,8 @@ Notable features include:
 - Platform-native text and colour emoji fonts
 - Opt-in native desktop game/program detection, Discord IPC and music activity
 - Last.fm account linking, current listening and optional persistent listening history
+- Libre.fm username linking for current listening and persistent listening history,
+  without login or scrobbling. Choose either service in Activity settings.
 - Independent game/music activity slots, viewable across platforms
 - Local video optimization on supported native platforms; explicit recovery on failure
 - Custom profile theming
@@ -200,6 +202,7 @@ Normal network activity may include:
 - SeND's GIF search proxy / KLIPY when using GIF search (older saved GIPHY
   media still connects to GIPHY when opened)
 - services required for supported link-preview integrations
+- Last.fm or Libre.fm when you enable sharing from a linked listening account
 - external websites when explicitly opened by the user
 - external websites for link previews only if the user explicitly enables the
   direct-preview fallback in Privacy settings

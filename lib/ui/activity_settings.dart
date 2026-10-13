@@ -106,6 +106,59 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
         widget.backend.activitySettings.copyWith(
           lastFmUser: username,
           lastFmKey: auth.apiKey,
+          useLibreFm: false,
+        ),
+      );
+    }
+  }
+
+  Future<void> libreFm() async {
+    final controller = TextEditingController(
+      text: widget.backend.activitySettings.libreFmUser,
+    );
+    final username = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Link Libre.fm'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your Libre.fm username. SeND reads your public listening history without logging in or submitting scrobbles. Account ownership is not verified.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 64,
+              autocorrect: false,
+              decoration: const InputDecoration(labelText: 'Libre.fm username'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final user = controller.text.trim();
+              if (user.isNotEmpty) Navigator.pop(context, user);
+            },
+            child: const Text('Link'),
+          ),
+        ],
+      ),
+    );
+    // The closing dialog can still be painting the field during its animation.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    controller.dispose();
+    if (mounted && username != null) {
+      await save(
+        widget.backend.activitySettings.copyWith(
+          libreFmUser: username,
+          useLibreFm: true,
         ),
       );
     }
@@ -139,7 +192,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           'Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.',
         ),
         const Text(
-          'Your profile combines game/program activity, music and Last.fm history from your devices. Last.fm refreshes while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.',
+          'Your profile combines game/program activity, music and listening history from your devices. Linked services refresh while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.',
         ),
         if (backend.supportsActivityDetection)
           SwitchListTile(
@@ -158,15 +211,44 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Show Last.fm last listened track on my profile'),
+          title: Text(
+            'Show ${settings.listeningProviderName} last listened track on my profile',
+          ),
           subtitle: const Text(
-            'Publish the last completed track, album and artwork from this device. It stays visible after closing SeND and while offline. Turn this off to remove this device’s contribution; other linked devices may still contribute.',
+            'Share the last completed track and album, with artwork when available. It stays visible while offline. Turning this off removes this device’s contribution, not tracks shared by other devices.',
           ),
           value: settings.showLastFmRecent,
           onChanged: _saving
               ? null
               : (v) => save(settings.copyWith(showLastFmRecent: v)),
         ),
+        if (settings.lastFmUser.isNotEmpty || settings.libreFmUser.isNotEmpty)
+          DropdownButtonFormField<bool>(
+            key: ValueKey(settings.useLibreFm),
+            initialValue: settings.useLibreFm,
+            decoration: const InputDecoration(
+              labelText: 'Listening history source',
+            ),
+            items: [
+              DropdownMenuItem(
+                value: false,
+                enabled: settings.lastFmUser.isNotEmpty,
+                child: const Text('Last.fm'),
+              ),
+              DropdownMenuItem(
+                value: true,
+                enabled: settings.libreFmUser.isNotEmpty,
+                child: const Text('Libre.fm'),
+              ),
+            ],
+            onChanged: _saving
+                ? null
+                : (value) {
+                    if (value != null) {
+                      save(settings.copyWith(useLibreFm: value));
+                    }
+                  },
+          ),
         if (backend.supportsActivityDetection)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -273,6 +355,24 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
                         settings.copyWith(lastFmUser: '', lastFmKey: ''),
                       ),
                 child: const Text('Disconnect Last.fm'),
+              ),
+            TextButton.icon(
+              icon: const Icon(Icons.music_note),
+              label: Text(
+                settings.libreFmUser.isEmpty
+                    ? 'Link Libre.fm'
+                    : 'Change Libre.fm (${settings.libreFmUser})',
+              ),
+              onPressed: _saving ? null : libreFm,
+            ),
+            if (settings.libreFmUser.isNotEmpty)
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => save(
+                        settings.copyWith(libreFmUser: '', useLibreFm: false),
+                      ),
+                child: const Text('Unlink Libre.fm'),
               ),
           ],
         ),
