@@ -3,13 +3,13 @@ import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
 import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
 import '../../services/browser_lifecycle.dart' as browser;
+import '../../services/keyboard_geometry.dart';
 import '../settings_screen.dart';
 import '../call_and_chat_layout.dart';
 import '../incoming_call_banner.dart';
@@ -52,12 +52,14 @@ class _MobileChatShellState extends State<MobileChatShell>
   bool? _reportedConversationVisible;
   int _resumeGeneration = 0;
   DateTime? _backgroundedAt;
-  bool _ignoreStaleKeyboardInsets = false;
-  int _keyboardResumeCheck = 0;
-  Timer? _keyboardResumeTimer;
-  FocusNode? _keyboardFocus;
-  bool _restoringKeyboard = false;
-  int _keyboardVisibilityRetries = 0;
+  KeyboardGeometry? _keyboardGeometry;
+  FocusNode? _focusedWithKeyboard;
+  FocusNode? _keyboardToRestore;
+  bool _restoreOnResume = false;
+  bool _keyboardBackgrounded = false;
+  bool _windowFocused = true;
+  int _keyboardGeneration = 0;
+  StreamSubscription<KeyboardGeometry>? _keyboardGeometrySubscription;
   StreamSubscription<bool>? _browserKeyboardVisibility;
   Timer? _timelineGestureReset;
   bool _suppressTimelineGestures = false;
@@ -71,25 +73,29 @@ class _MobileChatShellState extends State<MobileChatShell>
     _lastRoomId = backend.selectedRoom?.id;
     _lastSpaceId = backend.selectedSpaceId;
     WidgetsBinding.instance.addObserver(this);
+    FocusManager.instance.addListener(_rememberKeyboard);
+    _keyboardGeometrySubscription = MobileKeyboardGeometry.changes.listen(
+      _acceptKeyboardGeometry,
+      onError: (Object error) {
+        // Tests and unsupported hosts retain Flutter's normal inset handling.
+      },
+    );
     if (kIsWeb) {
       _browserKeyboardVisibility = browser.browserVisibilityChanges.listen((
         visible,
       ) {
         if (!visible) {
-          _rememberKeyboard();
+          _backgroundKeyboard();
           return;
         }
-        final generation = ++_keyboardResumeCheck;
-        _keyboardResumeTimer?.cancel();
-        _restoringKeyboard = false;
-        _keyboardVisibilityRetries = 0;
-        _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
-          unawaited(_checkResumedKeyboard(generation));
-        });
+        _resumeKeyboard();
       });
     }
     backend.addListener(_backendChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _backendChanged());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _backendChanged();
+      unawaited(_refreshKeyboardGeometry());
+    });
     unawaited(_restoreDrafts());
   }
 
@@ -154,7 +160,8 @@ class _MobileChatShellState extends State<MobileChatShell>
   @override
   void dispose() {
     _browserKeyboardVisibility?.cancel();
-    _keyboardResumeTimer?.cancel();
+    _keyboardGeometrySubscription?.cancel();
+    FocusManager.instance.removeListener(_rememberKeyboard);
     WidgetsBinding.instance.removeObserver(this);
     backend.setConversationVisible(false);
     backend.removeListener(_backendChanged);
@@ -165,162 +172,148 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
+    if (state == AppLifecycleState.inactive) _rememberKeyboard();
+    if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
-      _rememberKeyboard();
+      _backgroundKeyboard();
     }
     if (state == AppLifecycleState.paused) {
       _backgroundedAt ??= DateTime.now();
     }
     if (state != AppLifecycleState.resumed) return;
+    _resumeKeyboard();
     final backgroundedAt = _backgroundedAt;
     _backgroundedAt = null;
-    // IME pickers can produce inactive/resumed without pausing the app.
-    // Do not rebuild focus scopes or dismiss input for those transitions.
-    final keyboardGeneration = ++_keyboardResumeCheck;
-    _keyboardResumeTimer?.cancel();
-    _restoringKeyboard = false;
-    _keyboardVisibilityRetries = 0;
-    _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
-      unawaited(_checkResumedKeyboard(keyboardGeneration));
-    });
+    // Focus-only transitions, including an IME language chooser, do not replace
+    // navigation/focus state or open/close the input connection.
     if (backgroundedAt == null) return;
-    // Pointer streams can be interrupted when Android freezes the activity.
-    // Keep durable navigation state, but discard only transient gesture state
-    // so an orphaned pointer cannot leave the Space rail non-interactive.
     _pointerStarts.clear();
     setState(() {
       _resumeGeneration++;
       _roomOpenGeneration++;
-      // A suspended room-open future must not suppress subsequent backend
-      // selection notifications after Android thaws the activity.
       _navigationDragProgress = null;
       _dragStartedWithNavigation = null;
     });
-    // Rebuilding the navigation subtree reconciles the rail and room card
-    // after Android recreates its surface. Do not re-select the Space through
-    // the backend here: Space selection intentionally clears the active room.
   }
 
-  Future<void> _checkResumedKeyboard(int generation) async {
-    // Let Android restore its window before comparing its actual IME state
-    // with Flutter's last insets. A language picker must retain focus.
-    if (!mounted ||
-        generation != _keyboardResumeCheck ||
-        (kIsWeb
-            ? !browser.browserApplicationVisible
-            : WidgetsBinding.instance.lifecycleState !=
-                  AppLifecycleState.resumed)) {
-      return;
-    }
-    try {
-      final visible = await _keyboardVisible();
-      if (!mounted || generation != _keyboardResumeCheck) return;
-      if (visible == true) {
-        if (_ignoreStaleKeyboardInsets) {
-          setState(() => _ignoreStaleKeyboardInsets = false);
-        }
-        _keyboardFocus = null;
-        _restoringKeyboard = false;
-        return;
-      }
-      // A system language chooser may still own the window. Unknown visibility
-      // is not a reason to discard its input connection.
-      if (visible == null) {
-        if (_keyboardVisibilityRetries++ < 8) {
-          _keyboardResumeTimer = Timer(const Duration(milliseconds: 250), () {
-            unawaited(_checkResumedKeyboard(generation));
-          });
-        }
-        return;
-      }
-      final focus = _keyboardFocus;
-      if (focus != null &&
-          focus.context != null &&
-          focus.hasFocus &&
-          !_restoringKeyboard) {
-        _restoringKeyboard = true;
-        final editor = focus.context!
-            .findAncestorStateOfType<EditableTextState>();
-        if (editor != null) {
-          editor.requestKeyboard();
-        } else {
-          await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
-        }
-        if (!mounted || generation != _keyboardResumeCheck) return;
-        _keyboardResumeTimer = Timer(const Duration(milliseconds: 700), () {
-          unawaited(_checkResumedKeyboard(generation));
-        });
-        return;
-      }
-      // Restoration was declined or input was dismissed. Remove stale space
-      // throughout the nested layout instead of leaving the composer floating.
-      if (focus?.hasFocus == true) focus!.unfocus();
-      _keyboardFocus = null;
-      _restoringKeyboard = false;
-      if (MediaQuery.viewInsetsOf(context).bottom > 0) {
-        setState(() => _ignoreStaleKeyboardInsets = true);
-      }
-      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
-    } on PlatformException {
-      // Older Android versions may not expose reliable IME visibility.
-    } on MissingPluginException {
-      // Other platforms retain their own keyboard/inset lifecycle.
-    }
+  bool get _keyboardIsForeground => kIsWeb
+      ? browser.browserApplicationVisible
+      : WidgetsBinding.instance.lifecycleState == null ||
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  void _backgroundKeyboard() {
+    if (_keyboardBackgrounded) return;
+    _rememberKeyboard();
+    _keyboardToRestore = _focusedWithKeyboard;
+    _keyboardBackgrounded = true;
+    _restoreOnResume = false;
+    _keyboardGeneration++;
+  }
+
+  void _resumeKeyboard() {
+    if (!_keyboardBackgrounded) return;
+    _keyboardBackgrounded = false;
+    _restoreOnResume = _keyboardToRestore != null;
+    _keyboardGeometry = null;
+    _queueKeyboardRefresh();
   }
 
   void _rememberKeyboard() {
+    if (!mounted) return;
     final focus = FocusManager.instance.primaryFocus;
-    if (focus?.hasFocus == true &&
-        MediaQuery.viewInsetsOf(context).bottom > 0) {
-      _keyboardFocus = focus;
+    if (focus?.hasFocus != true ||
+        focus?.context?.findAncestorStateOfType<EditableTextState>() == null) {
+      // The browser/OS can park focus before its background event reaches this
+      // observer. Keep the last editor then; explicit foreground focus changes
+      // still clear it normally.
+      if (_keyboardIsForeground && _windowFocused) {
+        _focusedWithKeyboard = null;
+      }
+      return;
+    }
+    final geometry = _keyboardGeometry;
+    final keyboardOpen = geometry?.settled == true
+        ? geometry!.visible == true
+        : MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardOpen) {
+      _focusedWithKeyboard = focus;
+    } else if (_keyboardIsForeground &&
+        _windowFocused &&
+        _keyboardGeometry?.settled == true) {
+      _focusedWithKeyboard = null;
     }
   }
 
-  Future<bool?> _keyboardVisible() async {
-    if (kIsWeb) return browser.browserKeyboardVisible;
-    if (defaultTargetPlatform != TargetPlatform.android) return null;
-    return const MethodChannel(
-      'net.deltie.deltiecord/composer',
-    ).invokeMethod<bool>('keyboardVisible');
+  void _acceptKeyboardGeometry(KeyboardGeometry geometry) {
+    if (!mounted) return;
+    setState(() => _keyboardGeometry = geometry);
+    _rememberKeyboard();
+    if (!_restoreOnResume ||
+        !_keyboardIsForeground ||
+        !_windowFocused ||
+        !geometry.settled) {
+      return;
+    }
+    // This flag is consumed once. Declined restoration never discards focus,
+    // sends TextInput.hide or leaves the layout dependent on a timeout.
+    _restoreOnResume = false;
+    final focus = _keyboardToRestore;
+    _keyboardToRestore = null;
+    if (focus?.context == null) return;
+    if (geometry.visible == true && focus!.hasFocus) return;
+    final generation = _keyboardGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _keyboardGeneration ||
+          !_keyboardIsForeground ||
+          !_windowFocused ||
+          focus?.context == null) {
+        return;
+      }
+      if (geometry.visible == true) {
+        focus!.requestFocus();
+      } else {
+        focus!.context!
+            .findAncestorStateOfType<EditableTextState>()
+            ?.requestKeyboard();
+      }
+    });
+  }
+
+  bool _keyboardRefreshQueued = false;
+  void _queueKeyboardRefresh() {
+    if (_keyboardRefreshQueued || !mounted) return;
+    _keyboardRefreshQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _keyboardRefreshQueued = false;
+      if (mounted) unawaited(_refreshKeyboardGeometry());
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  Future<void> _refreshKeyboardGeometry() async {
+    final generation = _keyboardGeneration;
+    final geometry = await MobileKeyboardGeometry.refresh();
+    if (mounted && generation == _keyboardGeneration && geometry != null) {
+      _acceptKeyboardGeometry(geometry);
+    }
   }
 
   @override
   void didChangeViewFocus(ViewFocusEvent event) {
-    if (event.state == ViewFocusState.unfocused) {
+    _windowFocused = event.state == ViewFocusState.focused;
+    if (!_windowFocused) {
       _rememberKeyboard();
-    } else if (_keyboardFocus != null || _ignoreStaleKeyboardInsets) {
-      final generation = ++_keyboardResumeCheck;
-      _keyboardResumeTimer?.cancel();
-      _restoringKeyboard = false;
-      _keyboardVisibilityRetries = 0;
-      _keyboardResumeTimer = Timer(const Duration(milliseconds: 350), () {
-        unawaited(_checkResumedKeyboard(generation));
-      });
+    } else {
+      // A refreshed measurement is safe on focus regain; reopening IME is only
+      // permitted by the separate real-background flag.
+      _queueKeyboardRefresh();
     }
   }
 
   @override
   void didChangeMetrics() {
-    if (!mounted || !_ignoreStaleKeyboardInsets) return;
-    if (View.of(context).viewInsets.bottom <= 0) {
-      setState(() => _ignoreStaleKeyboardInsets = false);
-    } else {
-      unawaited(_clearOverrideWhenVisible());
-    }
-  }
-
-  Future<void> _clearOverrideWhenVisible() async {
-    try {
-      final visible = await _keyboardVisible();
-      if (mounted && visible == true && _ignoreStaleKeyboardInsets) {
-        setState(() => _ignoreStaleKeyboardInsets = false);
-      }
-    } on PlatformException {
-      // Keep the override until reliable geometry arrives.
-    } on MissingPluginException {
-      // Unsupported platforms retain their existing keyboard layout.
-    }
+    _queueKeyboardRefresh();
   }
 
   Future<void> _openRoom(RoomSummary room) async {
@@ -359,24 +352,16 @@ class _MobileChatShellState extends State<MobileChatShell>
         }
       },
       child: Scaffold(
-        resizeToAvoidBottomInset: !_ignoreStaleKeyboardInsets,
         body: Listener(
           behavior: HitTestBehavior.translucent,
           // Raw pointer tracking deliberately observes (but does not win) the
           // gesture arena. Message rows may still claim a left drag for reply,
           // while a right drag anywhere on the timeline reliably opens nav.
           onPointerDown: (event) {
-            _keyboardResumeCheck++;
-            _keyboardResumeTimer?.cancel();
-            _keyboardFocus = null;
-            if (_ignoreStaleKeyboardInsets) {
-              _keyboardResumeTimer = Timer(
-                const Duration(milliseconds: 350),
-                () {
-                  unawaited(_clearOverrideWhenVisible());
-                },
-              );
-            }
+            _keyboardGeneration++;
+            _restoreOnResume = false;
+            _keyboardToRestore = null;
+            _queueKeyboardRefresh();
             _pointerStarts[event.pointer] = event.position;
           },
           onPointerMove: (event) {
@@ -623,14 +608,28 @@ class _MobileChatShellState extends State<MobileChatShell>
         ),
       ),
     );
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-        viewInsets: _ignoreStaleKeyboardInsets
-            ? EdgeInsets.zero
-            : MediaQuery.viewInsetsOf(context),
-      ),
-      child: shell,
-    );
+    final media = MediaQuery.of(context);
+    final geometry = _keyboardGeometry;
+    var keyboardMedia = media;
+    final physicalHeight = View.of(context).physicalSize.height;
+    if (_keyboardIsForeground &&
+        _windowFocused &&
+        geometry?.settled == true &&
+        physicalHeight > 0) {
+      final bottom = geometry!.bottomForView(physicalHeight, media.size.height);
+      keyboardMedia = media.copyWith(
+        viewInsets: media.viewInsets.copyWith(bottom: bottom),
+        padding: media.padding.copyWith(
+          bottom: (media.viewPadding.bottom - bottom).clamp(
+            0.0,
+            double.infinity,
+          ),
+        ),
+      );
+    }
+    // Keep this wrapper present even while geometry is unknown. Changing the
+    // subtree shape would dispose the composer and its input connection.
+    return MediaQuery(data: keyboardMedia, child: shell);
   }
 
   void _releaseTimelineGesturesLater() {

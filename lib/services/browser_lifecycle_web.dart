@@ -24,6 +24,8 @@ external void _configurePresence(JSString? json);
 external JSPromise<JSAny?> _publishPresence();
 @JS('sendKeyboardVisible')
 external JSBoolean? _keyboardVisible();
+@JS('sendKeyboardGeometry')
+external JSFunction? get _keyboardGeometryFunction;
 
 void configureBrowserPresence(String? json) => _configurePresence(json?.toJS);
 Future<void> publishBrowserPresence() async {
@@ -31,6 +33,26 @@ Future<void> publishBrowserPresence() async {
 }
 
 bool? get browserKeyboardVisible => _keyboardVisible()?.toDart;
+Map<String, Object?>? get browserKeyboardGeometry {
+  final value = _keyboardGeometryFunction?.callAsFunction()?.dartify();
+  return value is Map ? Map<String, Object?>.from(value) : null;
+}
+
+Stream<Map<String, Object?>> get browserKeyboardGeometryChanges {
+  late StreamController<Map<String, Object?>> controller;
+  final changed = ((web.Event _) {
+    final geometry = browserKeyboardGeometry;
+    if (geometry != null) controller.add(geometry);
+  }).toJS;
+  controller = StreamController(
+    onListen: () =>
+        web.window.addEventListener('send-keyboard-geometry', changed),
+    onCancel: () =>
+        web.window.removeEventListener('send-keyboard-geometry', changed),
+  );
+  return controller.stream;
+}
+
 bool _pageHidden = false;
 bool get browserApplicationVisible => !_pageHidden && !web.document.hidden;
 Stream<bool> get browserVisibilityChanges {

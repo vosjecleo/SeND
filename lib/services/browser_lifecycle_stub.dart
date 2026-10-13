@@ -15,3 +15,6 @@ Future<void> publishBrowserPresence() async {}
 bool get browserApplicationVisible => true;
 Stream<bool> get browserVisibilityChanges => const Stream.empty();
 bool? get browserKeyboardVisible => null;
+Map<String, Object?>? get browserKeyboardGeometry => null;
+Stream<Map<String, Object?>> get browserKeyboardGeometryChanges =>
+    const Stream.empty();

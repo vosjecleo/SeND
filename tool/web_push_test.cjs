@@ -3,14 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function browser() {
+function browser(viewport = null) {
   const listeners = {}, requests = [];
   const registration = {active: {}, pushManager: {getSubscription: async () => ({})}};
-  const document = {visibilityState: 'visible', addEventListener: (name, fn) => {
+  const document = {visibilityState: 'visible', hasFocus: () => true, addEventListener: (name, fn) => {
     const previous = listeners[name];
     listeners[name] = (...args) => {previous?.(...args); fn(...args);};
   }};
-  const window = {addEventListener: (name, fn) => {
+  const window = {innerHeight: 800, devicePixelRatio: 2, visualViewport: viewport,
+    dispatchEvent: event => {listeners[event.type]?.(event); return true;}, addEventListener: (name, fn) => {
     const previous = listeners[name];
     listeners[name] = (...args) => {previous?.(...args); fn(...args);};
   }, Notification: {}, PushManager: {}};
@@ -18,10 +19,42 @@ function browser() {
     fetch: async (url, options) => {requests.push({url, ...options}); return {ok: true};},
     Notification: {permission: 'granted'}, matchMedia: () => ({matches: true}),
     setInterval: () => 1, clearInterval: () => {}, Uint8Array, atob, URL, AbortController,
+    Event: class Event {constructor(type) {this.type = type;}},
   };
   vm.runInNewContext(fs.readFileSync('web/browser_bridge.js', 'utf8'), context);
   return {window, document, listeners, requests, context, registration};
 }
+test('keyboard geometry reports physical viewport size and tolerates unknown/zoomed state', () => {
+  const viewport = {height: 800, scale: 1, addEventListener: () => {}};
+  const b = browser(viewport);
+  assert.equal(b.window.sendKeyboardGeometry().visible, false);
+  viewport.height = 500;
+  const keyboard = b.window.sendKeyboardGeometry();
+  assert.equal(keyboard.visible, true);
+  assert.equal(keyboard.physicalBottom, 600);
+  assert.equal(keyboard.physicalViewportHeight, 1000);
+  viewport.scale = 1.5;
+  assert.equal(b.window.sendKeyboardGeometry().visible, null);
+  assert.equal(browser().window.sendKeyboardGeometry().visible, null);
+});
+test('orientation changes reset the keyboard baseline', () => {
+  const viewport = {height: 800, scale: 1, addEventListener: () => {}};
+  const b = browser(viewport);
+  viewport.height = 500;
+  assert.equal(b.window.sendKeyboardVisible(), true);
+  b.window.innerHeight = 400; viewport.height = 400;
+  b.listeners.orientationchange({});
+  assert.equal(b.window.sendKeyboardVisible(), false);
+});
+test('visible PWA return refreshes canvas geometry without focus or input commands', () => {
+  const b = browser(); let resized = 0;
+  const resize = b.listeners.resize;
+  b.listeners.resize = event => {resized++; resize(event);};
+  b.document.visibilityState = 'hidden'; b.listeners.visibilitychange({});
+  assert.equal(resized, 0);
+  b.document.visibilityState = 'visible'; b.listeners.visibilitychange({});
+  assert.equal(resized, 1);
+});
 test('PWA publishes offline with keepalive on background and respects invisible on return', async () => {
   const b = browser();
   const config = {homeserver: 'https://matrix.example.org', userId: '@test:example.org',

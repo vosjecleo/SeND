@@ -157,3 +157,29 @@ Both one- and two-worker local runs passed 636 tests with four skips. Analysis,
 platform CI and Flatpak passed on `9160833`; GitHub Latest, Deltie's mirror and
 the PWA now serve 0.9.39+128. No local package was installed.
 Measured timings are in [CI performance](ci-performance.md).
+
+## Keyboard follow-up (2026-10-13, unreleased)
+
+B02/B31 remain open for a physical-device retest. Gboard's space-hold language
+picker still caused keyboard flashing, and stale composer space persisted on
+resume after build 128.
+
+- Focus-only transitions no longer run keyboard recovery or send show/hide
+  commands. The composer, draft and input connection stay mounted.
+- Real background/resume remembers the last editor even if the OS parks focus
+  before the background callback. Restoration is attempted once, without a
+  timed hide/unfocus fallback. User interaction cancels reopening, not layout
+  repair.
+- Android observes current IME geometry and animations through an owned view,
+  without replacing Flutter's inset handlers. Resume requests fresh insets and
+  layout. Stable measurements correct stale keyboard space and retain system
+  navigation padding and interface scaling.
+- PWA geometry follows the visual viewport and refreshes canvas measurements
+  on return. Already-resized canvases do not lose keyboard space twice. If the
+  browser declines reopening, the same editor/draft remains and layout lowers.
+
+Local checks: 645 Flutter tests passed with four skips, five Chrome tests and
+20 JavaScript tests passed, analysis/formatting were clean, and Android debug
+Kotlin compilation passed. No phone was attached. Gboard, other Android IMEs
+and installed iOS/Android PWAs still need repeated language-switch and resume
+checks. No version/build change, push or release was made for this pass.

@@ -56,6 +56,39 @@
     keyboardBaseline = Math.max(keyboardBaseline, window.innerHeight || 0, window.visualViewport.height);
     return keyboardBaseline - window.visualViewport.height > 100;
   };
+  window.sendKeyboardGeometry = () => {
+    const visible = window.sendKeyboardVisible();
+    return {
+      visible,
+      physicalBottom: visible === true
+        ? Math.max(0, keyboardBaseline - window.visualViewport.height) * (window.devicePixelRatio || 1)
+        : 0,
+      physicalViewportHeight: window.visualViewport
+        ? window.visualViewport.height * (window.devicePixelRatio || 1) : null,
+      focused: document.hasFocus?.() ?? true,
+      animating: false,
+    };
+  };
+  const keyboardGeometryChanged = () => {
+    window.dispatchEvent(new Event('send-keyboard-geometry'));
+  };
+  window.visualViewport?.addEventListener('resize', keyboardGeometryChanged);
+  window.visualViewport?.addEventListener('scroll', keyboardGeometryChanged);
+  window.addEventListener('resize', keyboardGeometryChanged);
+  window.addEventListener('focus', keyboardGeometryChanged);
+  const refreshKeyboardViewport = () => {
+    // A suspended PWA may return without a browser resize notification. Ask
+    // Flutter to remeasure its canvas; this does not focus or dismiss input.
+    window.dispatchEvent(new Event('resize'));
+  };
+  window.addEventListener('pageshow', refreshKeyboardViewport);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshKeyboardViewport();
+  });
+  window.addEventListener('orientationchange', () => {
+    keyboardBaseline = Math.max(window.innerHeight || 0, window.visualViewport?.height || 0);
+    keyboardGeometryChanged();
+  });
   // iOS can leave the layout viewport panned after dismissing its keyboard,
   // while Flutter still paints in layout-viewport coordinates. Restore only
   // after the keyboard closes, never while typing or pinch-zooming.

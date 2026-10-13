@@ -39,6 +39,7 @@ class MainActivity : FlutterActivity() {
     private var configuredEngine: FlutterEngine? = null
     private var sharedContentChannel: MethodChannel? = null
     private var videoPreparation: VideoPreparationBridge? = null
+    private var keyboardGeometry: ComposerKeyboardBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -83,6 +84,8 @@ class MainActivity : FlutterActivity() {
         }
         videoPreparation?.dispose()
         videoPreparation = VideoPreparationBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        keyboardGeometry?.dispose()
+        keyboardGeometry = ComposerKeyboardBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "net.deltie.deltiecord/composer").setMethodCallHandler { call, result ->
             if (call.method == "newDraft") {
@@ -93,6 +96,9 @@ class MainActivity : FlutterActivity() {
                     imm.restartInput(view)
                 }
                 result.success(null)
+            } else if (call.method == "keyboardGeometry") {
+                keyboardGeometry?.refresh()
+                result.success(keyboardGeometry?.snapshot())
             } else if (call.method == "keyboardVisible") {
                 if (!window.decorView.hasWindowFocus()) {
                     // The language picker owns the window until it closes.
@@ -489,6 +495,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        keyboardGeometry?.refresh(resetAnimation = true)
         DeltiecordEngineRegistry.appInForeground = true
         // Opening the app ends every prior notification burst. A later push
         // must be allowed to alert immediately after the app is backgrounded,
@@ -503,6 +510,11 @@ class MainActivity : FlutterActivity() {
     override fun onPause() {
         DeltiecordEngineRegistry.appInForeground = false
         super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        keyboardGeometry?.refresh()
     }
 
     private fun notificationTarget(intent: Intent?, clear: Boolean): Map<String, String>? {
@@ -586,6 +598,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        keyboardGeometry?.dispose()
+        keyboardGeometry = null
         videoPreparation?.dispose()
         videoPreparation = null
         DeltiecordEngineRegistry.appInForeground = false
