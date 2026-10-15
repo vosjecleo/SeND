@@ -86,7 +86,9 @@ export PATH="$tools_dir:$PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
 # mpv and its media dependencies are now bundled with private RUNPATHs. The host
 # GTK, graphics drivers, libc and session stack deliberately remain untouched.
-"$plugin" --appimage-extract-and-run --appdir "$appdir"
+# appimagetool's zsyncmake invocation writes the sidecar in its working
+# directory, even when the AppImage output is an absolute path elsewhere.
+(cd -- "$repo_root/dist" && "$plugin" --appimage-extract-and-run --appdir "$appdir")
 test -x "$OUTPUT"
 python3 "$repo_root/packaging/linux/prepare-appimage-zsync.py" \
   "$OUTPUT.zsync" "SeND-${release_id}-linux-appimage-x86_64.AppImage"
