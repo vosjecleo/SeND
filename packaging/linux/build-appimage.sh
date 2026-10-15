@@ -52,6 +52,17 @@ else
   "$repo_root/packaging/linux/build-appdir.sh" "$appdir"
   python3 "$repo_root/packaging/linux/bundle-mpv.py" "$appdir" "$sources"
 fi
+# The small C zsync client only needs libc/zlib. HTTPS and proxy routing stay in
+# SeND's bounded loopback transport, not in the helper. Keep exact sources and
+# notices with the other bundled native dependencies.
+if [[ ! -x "$appdir/usr/lib/deltiecord/data/updater/zsync" ]]; then
+  command -v zsync >/dev/null || { echo 'Install zsync to build the AppImage updater.' >&2; exit 1; }
+  install -Dm755 "$(command -v zsync)" "$appdir/usr/lib/deltiecord/data/updater/zsync"
+  install -Dm644 /usr/share/doc/zsync/copyright "$appdir/usr/share/doc/deltiecord/zsync.copyright"
+  mkdir -p "$sources"
+  zsync_source_version="$(dpkg-query -W '-f=${source:Version}' zsync)"
+  (cd "$sources" && apt-get source --download-only --only-source "zsync=$zsync_source_version")
+fi
 python3 "$repo_root/packaging/linux/bundle-application.py" "$appdir" "$sources"
 source_asset="SeND-${release_id}-appimage-sources.tar.gz"
 cp "$repo_root/packaging/linux/APPIMAGE-SOURCES.txt" "$sources/README.txt"
@@ -70,12 +81,15 @@ export VERSION="$version"
 export OUTPUT="$repo_root/dist/SeND-${version}-x86_64.AppImage"
 export LDAI_OUTPUT="$OUTPUT"
 export LDAI_RUNTIME_FILE="$runtime"
+export LDAI_UPDATE_INFORMATION='zsync|https://deltie.net/SeND/SeND-latest-x86_64.AppImage.zsync'
 export PATH="$tools_dir:$PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
 # mpv and its media dependencies are now bundled with private RUNPATHs. The host
 # GTK, graphics drivers, libc and session stack deliberately remain untouched.
 "$plugin" --appimage-extract-and-run --appdir "$appdir"
 test -x "$OUTPUT"
+python3 "$repo_root/packaging/linux/prepare-appimage-zsync.py" \
+  "$OUTPUT.zsync" "SeND-${release_id}-linux-appimage-x86_64.AppImage"
 # Source archives previously inflated this to 660 MiB. Fail before publication.
 [[ "$(stat -c '%s' "$OUTPUT")" -le $((160 * 1024 * 1024)) ]] || {
   echo 'AppImage exceeds the 160 MiB runtime size budget' >&2

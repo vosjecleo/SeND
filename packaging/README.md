@@ -88,6 +88,24 @@ including `wayland-scanner`) and XScreenSaver (`libxss-dev`). `appstreamcli vali
 packaging/linux/net.deltie.deltiecord.metainfo.xml` validates the desktop
 metadata before packaging.
 
+AppImage packaging also needs Debian's `zsync` package. The client is bundled
+under `data/updater/zsync`, with its copyright notice and exact corresponding
+source package in the separate source archive. Its HTTP connections go through
+SeND's loopback HTTPS/SOCKS relay; it does not fetch remote URLs directly.
+The build embeds a latest-channel update URL and generates a versioned `.zsync`
+sidecar. CI publishes and hashes both files. The mirror updates its latest/stable
+sidecar pointers when publishing the corresponding channel. The sidecar's data
+URL must point to the final versioned filename, not the intermediate build name.
+
+In-app AppImage updates check the reconstructed file's SHA-256 against the
+selected release manifest before activation, not only zsync's SHA-1. A failed
+delta falls back to a verified full download. The current image is atomically
+replaced on restart, with one previous image retained for rollback. Debian and
+Arch use `pkexec` with APT/pacman instead; no passwordless polkit rule is installed.
+Test these paths with `flutter test test/linux_update_test.dart`; installing
+`zsync` enables the real delta integration test. Package-manager authentication
+and cancellation tests use a fake command runner and do not install packages.
+
 Flutter 3.47.0, rustup 1.29.0, and Rust 1.97.1 are pinned in CI. Downloaded
 Flutter/rustup/AppImage executables are verified against committed SHA-256
 values before execution. Cargokit's `stable` toolchain name is locally aliased

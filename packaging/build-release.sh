@@ -52,6 +52,6 @@ commit="$(git rev-parse HEAD)"
 cp packaging/README.md dist/README.txt
 (
   cd dist
-  find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.pkg.tar.zst' \) \
+  find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.AppImage.zsync' -o -name '*.pkg.tar.zst' \) \
     -printf '%f\n' | sort | xargs -r sha256sum -- >SHA256SUMS
 )

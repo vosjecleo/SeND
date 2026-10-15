@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'update_checker.dart';
+export 'linux_update.dart';
 
 Future<String?> installedArtifactSuffix() async {
   if (Platform.isAndroid) {

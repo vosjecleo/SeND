@@ -190,6 +190,7 @@ artifacts=(
   "SeND-${release_id}-windows-x64-portable.zip"
   "SeND-${release_id}-windows-x64-setup.exe"
   "SeND-${release_id}-linux-appimage-x86_64.AppImage"
+  "SeND-${release_id}-linux-appimage-x86_64.AppImage.zsync"
   "SeND-${release_id}-appimage-sources.tar.gz"
   "SeND-${release_id}-linux-arch-x86_64.pkg.tar.zst"
   "SeND-${release_id}-linux-debian-amd64.deb"
@@ -297,13 +298,15 @@ scp -q -- "$temporary/SHA256SUMS" "$temporary/releases.json" \
   "packaging/deploy-web.py" "${artifacts[@]/#/$temporary/}" "deltie:$remote_stage/"
 
 ssh -o BatchMode=yes deltie "bash -s" -- \
-  "$remote_root" "$remote_stage" "$version" "$build" "${artifacts[@]}" <<'REMOTE'
+  "$remote_root" "$remote_stage" "$version" "$build" "$channel" "$web_only" "${artifacts[@]}" <<'REMOTE'
 set -euo pipefail
 remote_root="$1"
 stage="$2"
 version="$3"
 build="$4"
-shift 4
+channel="$5"
+web_only="$6"
+shift 6
 python3 "$stage/deploy-web.py" \
   "$stage/SeND-${version}+${build}-web.tar.gz" \
   /srv/storage/www/deltiecord-web "${version}+${build}"
@@ -318,6 +321,16 @@ fi
 for artifact in "$@"; do
   install -m 0644 -- "$stage/$artifact" "$remote_root/$artifact"
 done
+if [[ "$web_only" == false ]]; then
+  for name in latest stable; do
+    if [[ "$channel" == "$name" || "$channel" == both ]]; then
+      install -m 0644 -- "$stage/SeND-${version}+${build}-linux-appimage-x86_64.AppImage.zsync" \
+        "$remote_root/.SeND-$name-x86_64.AppImage.zsync.new"
+      mv -- "$remote_root/.SeND-$name-x86_64.AppImage.zsync.new" \
+        "$remote_root/SeND-$name-x86_64.AppImage.zsync"
+    fi
+  done
+fi
 install -m 0644 -- "$stage/SHA256SUMS" "$remote_root/SHA256SUMS"
 install -m 0644 -- "$stage/releases.json" "$remote_root/releases.json"
 rm -rf -- "$stage"

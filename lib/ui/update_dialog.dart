@@ -7,9 +7,10 @@ import '../services/browser_reload.dart';
 
 Future<void> showReleaseUpdate(
   BuildContext context,
-  ReleaseCheckResult result,
-) async {
-  final suffix = await installedArtifactSuffix();
+  ReleaseCheckResult result, {
+  Future<String?> Function()? detectPackage,
+}) async {
+  final suffix = await (detectPackage ?? installedArtifactSuffix)();
   if (!context.mounted) return;
   final artifact = result.artifactFor(suffix);
   final canInstall =
@@ -17,7 +18,19 @@ Future<void> showReleaseUpdate(
       defaultTargetPlatform == TargetPlatform.windows &&
       suffix == '-windows-x64-setup.exe' &&
       artifact != null;
+  final canInstallLinux =
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.linux &&
+      artifact != null &&
+      const [
+        '-linux-appimage-x86_64.AppImage',
+        '-linux-debian-amd64.deb',
+        '-linux-arch-x86_64.pkg.tar.zst',
+      ].contains(suffix);
   var busy = false;
+  var installed = false;
+  PreparedLinuxUpdate? prepared;
+  UpdateProgress? progress;
   String? error;
   await showDialog<void>(
     context: context,
@@ -45,11 +58,29 @@ Future<void> showReleaseUpdate(
                     'Finish recordings and uploads first. SeND will download and verify the installer, then open Windows setup. Setup may ask you to close SeND; it keeps your account data.',
                   ),
                 ),
-              if (busy)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: LinearProgressIndicator(),
+              if (canInstallLinux)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    suffix == '-linux-appimage-x86_64.AppImage'
+                        ? 'Download and verify the update, then restart when ready. SeND keeps one previous AppImage for rollback. Finish calls, recordings and uploads, and save unsent drafts before restarting.'
+                        : 'SeND will download and verify the package. Your desktop will ask for administrator authentication. The package manager may download dependencies outside your SOCKS proxy. Finish calls, recordings and uploads, and save unsent drafts before restarting.',
+                  ),
                 ),
+              if (busy)
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      LinearProgressIndicator(value: progress?.fraction),
+                      if (progress != null) Text(progress!.message),
+                    ],
+                  ),
+                ),
+              if (installed)
+                const Text('Update installed. Restart SeND to use it.'),
+              if (prepared?.isAppImage == true && !installed)
+                const Text('Update verified and ready to install.'),
               if (error != null) Text(error!),
             ],
           ),
@@ -117,9 +148,69 @@ Future<void> showReleaseUpdate(
                       },
                 child: const Text('Download and install'),
               ),
+            if (canInstallLinux)
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setState(() {
+                          busy = true;
+                          error = null;
+                        });
+                        try {
+                          if (prepared != null) {
+                            await prepared!.restart();
+                            return;
+                          }
+                          prepared = await prepareLinuxUpdate(
+                            artifact,
+                            installedSuffix: suffix!,
+                            control: result.artifactFor('$suffix.zsync'),
+                            progress: (value) {
+                              if (context.mounted) {
+                                setState(() => progress = value);
+                              }
+                            },
+                          );
+                          if (!prepared!.isAppImage) {
+                            setState(
+                              () => progress = const UpdateProgress(
+                                'Waiting for the package manager',
+                              ),
+                            );
+                            await prepared!.install();
+                            installed = true;
+                          }
+                          if (context.mounted) setState(() => busy = false);
+                        } catch (exception) {
+                          if (prepared?.installed == true) {
+                            installed = true;
+                          } else {
+                            await prepared?.discard();
+                            prepared = null;
+                          }
+                          if (context.mounted) {
+                            setState(() {
+                              busy = false;
+                              error = exception is StateError
+                                  ? exception.message.toString()
+                                  : 'Could not download, verify or install the update. Try the direct download or your package manager.';
+                            });
+                          }
+                        }
+                      },
+                child: Text(
+                  prepared != null
+                      ? 'Restart SeND'
+                      : suffix == '-linux-appimage-x86_64.AppImage'
+                      ? 'Download update'
+                      : 'Download and install',
+                ),
+              ),
           ],
         ),
       ),
     ),
   );
+  await prepared?.discard();
 }

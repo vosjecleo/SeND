@@ -199,6 +199,23 @@ use the download page. Copies installed with the Windows installer also offer a
 download-and-run option that checks manifest size and SHA-256 before launching
 the interactive installer. It does not silently elevate or force an exit.
 
+Linux AppImage, Debian and Arch builds also offer user-initiated updates. SeND
+downloads from the fixed release mirror and checks the selected manifest's size
+and SHA-256 before installing. This provides transfer integrity, not independent
+publisher signing. AppImage delta metadata is checked against its own manifest
+entry, and all URLs in it are replaced by a capability-protected loopback relay.
+That relay fetches only the selected artifact through Dart HTTP, including the
+configured SOCKS proxy. The delta helper cannot select another remote host.
+A failed delta falls back to a verified full download. Activation replaces the
+original image atomically and keeps one previous image beside it.
+
+Debian and Arch updates invoke fixed APT/pacman commands through `pkexec`.
+Passwords are handled by the desktop's polkit agent, never SeND. Dependencies
+may be downloaded directly by the package manager, so strict proxy mode blocks
+this installation path. Package signature policy is not overridden. No whole
+system upgrade or passwordless polkit authorization is added. Restarting after
+an update is an explicit user action.
+
 ## Current activity and media boundaries
 
 Opt-in activity is published as public, device-owned Matrix profile fields;

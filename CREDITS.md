@@ -122,6 +122,9 @@ their upstream copyright notices and licenses.
   output plugin assemble the portable Linux bundle. Licensed under MIT.
 - [AppImage](https://github.com/AppImage/appimagetool) supplies the AppImage
   runtime and final packaging tooling. Licensed under MIT.
+- [zsync](http://zsync.moria.org.uk/), by Colin Phipps, supplies the small delta
+  updater bundled in AppImages under the Artistic License. Its complete Debian
+  copyright notice and corresponding sources accompany the package/source archive.
 
 Thanks to the Matrix specification authors, SDK maintainers, client developers,
 package maintainers, and SeND's hands-on testers:

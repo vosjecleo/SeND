@@ -192,15 +192,33 @@ IDs still use `deltiecord` for compatibility. Linux packages also provide a
   uninstall before installing a current APK. Before uninstalling, save your
   recovery key and confirm that your encrypted history can be restored.
 - **Windows:** rerun the installer, or replace the complete portable directory.
-- **Linux:** install the newer package using the same package manager. For a
-  downloaded AppImage, replace the AppImage file. The direct-download Flatpak
-  has no automatic SeND update repository; install the new bundle.
+- **Debian/Arch:** choose **Download and install** in the update dialog, or
+  install the new package with APT/pacman. The in-app option verifies the download
+  before opening your desktop's administrator prompt. It needs `pkexec` and a
+  running polkit authentication agent. SeND never asks for your password itself.
+  Your package manager may fetch dependencies directly, outside SeND's proxy.
+- **AppImage:** choose **Download update**, then **Restart SeND** when ready.
+  Delta updates reuse existing data, with a full-download fallback. The AppImage
+  must be in a writable directory and launched normally, not from an extracted
+  copy. One previous image is kept beside it as
+  `.<original filename>.send-previous`; make a copy of that file to roll back.
+  Older builds need one manual upgrade to gain the updater. External
+  AppImageUpdate tools can also use the embedded update information, which tracks
+  the latest channel. SeND's own updater follows the selected release channel.
+- **Flatpak:** the direct-download bundle has no automatic SeND update
+  repository; install the new bundle.
 - **PWA:** choose **Reload app** when prompted. Finish uploads and recordings,
   and save unsent drafts before reloading.
 
 For older clients sharing activity: both ends need build 109 or newer for
 independent game/music/history slots, and build 110 or newer for persistent
 Last.fm history and artwork.
+
+Finish calls, recordings and uploads, and save unsent drafts before restarting.
+Update downloads are checked against the HTTPS release manifest's size and
+SHA-256. This detects corrupted or mismatched downloads, not a compromised
+release server. Native package signature checks remain under your package
+manager's policy; SeND does not disable them. Application data is not replaced.
 
 ## Media requirements
 

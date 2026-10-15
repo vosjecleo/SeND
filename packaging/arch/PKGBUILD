@@ -8,6 +8,7 @@ license=('AGPL-3.0-or-later')
 options=('!debug' '!lto')
 depends=('gtk3' 'wayland' 'libxss' 'libsecret' 'libpulse' 'alsa-lib' 'libv4l' 'mpv' 'ffmpeg' 'pipewire' 'xdg-desktop-portal')
 makedepends=('flutter' 'cmake' 'clang' 'ninja' 'python')
+optdepends=('polkit: desktop authentication for in-app package updates')
 source=()
 sha256sums=()
 

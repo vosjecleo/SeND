@@ -15,11 +15,12 @@ class ApplicationRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             (root / 'lib').mkdir()
-            for name in ('app', 'lib/libflutter.so', 'lib/plugin.so', 'lib/mpv.so'):
+            (root / 'data/updater').mkdir(parents=True)
+            for name in ('app', 'lib/libflutter.so', 'lib/plugin.so', 'lib/mpv.so', 'data/updater/zsync'):
                 (root / name).write_bytes(b'\x7fELFtest')
             (root / 'image.png').write_bytes(b'\x89PNG')
             self.assertEqual({str(p.relative_to(root)) for p in application.elf_files(root)},
-                             {'app', 'lib/libflutter.so', 'lib/plugin.so', 'lib/mpv.so'})
+                             {'app', 'lib/libflutter.so', 'lib/plugin.so', 'lib/mpv.so', 'data/updater/zsync'})
 
     def test_embedded_sources_rejected(self):
         with self.assertRaisesRegex(RuntimeError, 'outside the AppImage'):
