@@ -3,6 +3,7 @@ import 'package:deltiecord/ui/plain_message_editor.dart';
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/voice_control_island.dart';
+import 'package:deltiecord/ui/mobile/mobile_voice_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,60 @@ import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
 void main() {
+  testWidgets(
+    'mobile voice join failures remain visible after the call clears',
+    (tester) async {
+      final backend = _FailedJoinBackend();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MobileVoiceView(
+            backend: backend,
+            room: const RoomSummary(
+              id: '!voice:example.org',
+              name: 'Lounge',
+              lastMessage: '',
+              unreadCount: 0,
+              usesChannelIcon: true,
+              presentation: RoomPresentation.voice,
+            ),
+            onOpenNavigation: () {},
+            onOpenDetails: () {},
+          ),
+        ),
+      );
+      expect(find.text('Could not secure call diagnostics.'), findsNothing);
+      await tester.tap(find.text('Join voice'));
+      await tester.pumpAndSettle();
+      expect(backend.activeVoiceRoomId, isNull);
+      expect(find.text('Could not secure call diagnostics.'), findsOneWidget);
+      expect(find.text('Join voice'), findsOneWidget);
+    },
+  );
+
+  testWidgets('mobile voice shows progress while connecting', (tester) async {
+    final backend = FakeBackend()
+      ..currentVoiceStatus = VoiceConnectionStatus.connecting;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MobileVoiceView(
+          backend: backend,
+          room: const RoomSummary(
+            id: '!voice:example.org',
+            name: 'Lounge',
+            lastMessage: '',
+            unreadCount: 0,
+            usesChannelIcon: true,
+            presentation: RoomPresentation.voice,
+          ),
+          onOpenNavigation: () {},
+          onOpenDetails: () {},
+        ),
+      ),
+    );
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('connected SFU screen sharing does not require another peer', (
     tester,
   ) async {
@@ -181,6 +236,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('mobile-call-island')), findsOneWidget);
   });
+}
+
+class _FailedJoinBackend extends FakeBackend {
+  @override
+  String? get voiceError => currentVoiceStatus == VoiceConnectionStatus.error
+      ? 'Could not secure call diagnostics.'
+      : null;
+  @override
+  Future<void> joinVoiceRoom(String roomId) async {
+    currentVoiceStatus = VoiceConnectionStatus.error;
+    notifyListeners();
+  }
 }
 
 class _ScreenShareBackend extends FakeBackend {

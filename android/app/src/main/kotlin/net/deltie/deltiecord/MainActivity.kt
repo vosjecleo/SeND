@@ -59,15 +59,10 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             } else {
                 try {
-                    // Dart initializes WebRTC first. Disable its native debug
-                    // sink too: the injectable logger alone does not control it.
-                    // flutter_webrtc owns this runtime dependency rather than
-                    // exporting it to the app's Kotlin compile classpath. Its
-                    // consumer ProGuard rules retain all org.webrtc classes.
-                    val logging = Class.forName("org.webrtc.Logging")
-                    val severity = Class.forName("org.webrtc.Logging\$Severity")
-                    val none = severity.getField("LS_NONE").get(null)
-                    logging.getMethod("enableLogToDebugOutput", severity).invoke(null, none)
+                    // Dart initializes the plugin's silent logger first. Its
+                    // pinned JNI setter disables the independent debug sink
+                    // without calling the incompatible public logging wrapper.
+                    RtcLogSecurity.silence()
                     result.success(null)
                 } catch (_: Exception) {
                     result.error("rtc_log_security", "Could not secure call diagnostics.", null)

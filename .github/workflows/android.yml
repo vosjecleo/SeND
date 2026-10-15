@@ -134,6 +134,10 @@ jobs:
           python3 packaging/flutter-with-credentials.py build apk --release --split-per-abi
           python3 packaging/flutter-with-credentials.py build appbundle --release
 
+      - name: Test Android RTC logging contract
+        shell: bash
+        run: bash packaging/android/test-rtc-logging.sh
+
       - name: Package Android releases
         shell: bash
         run: |

@@ -147,8 +147,29 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
       ),
       body: Column(
         children: [
+          if (backend.voiceError case final error? when error.isNotEmpty)
+            Semantics(
+              liveRegion: true,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  error,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ),
           if (backend.voiceConnectionStatus ==
-              VoiceConnectionStatus.reconnecting)
+                  VoiceConnectionStatus.connecting ||
+              backend.voiceConnectionStatus ==
+                  VoiceConnectionStatus.reconnecting)
             const LinearProgressIndicator(),
           Expanded(
             child: users.isEmpty

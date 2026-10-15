@@ -3,6 +3,21 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.40 build 130 (2026-10-15)
+
+- Fix Android calls failing before connection. WebRTC's public debug-logging
+  setter rejects the logger already installed by its Flutter plugin. Disable
+  the native debug sink through the pinned JNI setter instead, preserving the
+  injected silent logger and failing closed if suppression cannot be applied.
+- Show call errors on the mobile voice-channel page instead of silently
+  returning to Join voice. Show progress during the initial connection too.
+- Add a host-JVM Android regression check for the installed-logger conflict,
+  the pinned native API, silent severity and failure handling. Run it in Android
+  CI before publishing packages. No media keys or microphone access are needed.
+- Correct the release version to 0.9.40. Build 129's MatrixRTC, keyboard,
+  Libre.fm, proxy and Linux updater changes are included; the published
+  0.9.39+129 release remains unchanged.
+
 ## SeND 0.9.39 build 129 (2026-10-15)
 
 - Replace peer-to-peer calls with encrypted MatrixRTC calls through LiveKit
