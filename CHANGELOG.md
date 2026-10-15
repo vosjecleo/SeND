@@ -3,6 +3,34 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.39 build 129 (2026-10-15)
+
+- Replace peer-to-peer calls with encrypted MatrixRTC calls through LiveKit
+  SFUs. Discover call services through the homeserver, renew membership during
+  long calls, reconnect after transport failures and rotate device-owned media
+  keys as membership changes. There is no plaintext media fallback. Callers
+  need SFU-capable clients and configured MatrixRTC infrastructure; old SeND
+  mesh clients cannot join the same call.
+- Pin the desktop WebRTC runtime with its media-key logging fix and bundle a
+  patched browser encryption worker. Preserve existing sessions and call UI.
+- Preserve the mobile composer through keyboard-language focus changes without
+  repeated show/hide commands. Refresh Android IME and PWA viewport geometry on
+  resume so a missing keyboard does not leave a floating composer. Repeated
+  physical-device language-switching and resume checks remain necessary.
+- Add optional username-based Libre.fm activity sharing alongside Last.fm.
+- Add device-local SOCKS5 settings in Privacy and before login, including
+  optional authentication, secure password storage and proxy-side target DNS.
+  Messaging and media downloads do not fall back directly if the proxy fails.
+  Unsupported traffic is allowed directly with a warning by default; a stricter
+  mode blocks it. Changes require restart. PWAs use browser/system proxy settings.
+- Add in-app AppImage delta updates, verified full-download fallback, explicit
+  restart and a previous-image rollback copy. Publish zsync metadata on GitHub
+  and the download mirror. Downloads use SeND's SOCKS-aware HTTP transport.
+- Offer verified Debian and Arch package downloads followed by the desktop's
+  administrator prompt through pkexec. APT/pacman retain their signature policy;
+  no whole-system upgrade or passwordless authorization is added. Dependencies
+  may use direct connections, so strict proxy mode blocks package installation.
+
 ## SeND 0.9.39 build 128 (2026-10-11)
 
 - Size profile status thought bubbles to their text instead of stretching short
