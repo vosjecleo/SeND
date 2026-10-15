@@ -90,6 +90,10 @@ class BuiltInPushService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (NetworkProxyPolicy.blocked(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (activeInstance(this) == null) {
             stopSelf()
             return START_NOT_STICKY
@@ -247,6 +251,9 @@ class BuiltInPushService : Service() {
         }
 
         fun enable(context: Context, instance: String) {
+            check(!NetworkProxyPolicy.blocked(context)) {
+                "Built-in notifications cannot use the SOCKS proxy. Use a system VPN or allow direct traffic."
+            }
             if (activeInstance(context) != instance) {
                 val random = ByteArray(32).also { SecureRandom().nextBytes(it) }
                 val topic =
@@ -278,6 +285,7 @@ class BuiltInPushService : Service() {
         }
 
         fun resume(context: Context) {
+            if (NetworkProxyPolicy.blocked(context)) return
             val instance = activeInstance(context) ?: return
             runCatching { enable(context, instance) }
         }

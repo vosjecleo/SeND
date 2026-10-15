@@ -4,6 +4,34 @@ This guide describes where SeND connects, what triggers each connection and
 which data it sends. It documents the implementation, not an independent
 security audit. Validation requirements are in the [release checklist](RELEASE_READINESS.md).
 
+## SOCKS5 proxy
+
+Native apps offer device-only SOCKS5 settings under Privacy, on the login screen,
+and during startup. Fully close and reopen SeND after changing them. Browsers
+and PWAs must use browser or system proxy settings instead.
+
+Matrix sync, media downloads and other Dart HTTP requests use the configured
+proxy, apart from the unsupported paths listed below. Target hostnames are
+resolved by the proxy; the proxy's
+own hostname may require local DNS. A failed proxy connection does not retry
+directly. HTTPS still validates certificates and hostnames. HTTPS connections
+use a temporary loopback relay to keep stalled TLS negotiation cancellable;
+the relay carries encrypted TLS bytes, not decrypted application content.
+
+Unsupported traffic is allowed directly by default, with a warning. This
+includes WebRTC media, DNS-pinned direct previews/artwork, native network
+playback and Android's built-in notification listener. Turning off
+`Allow unsupported traffic directly` blocks these paths. Encrypted Matrix media
+can still play through the existing local media proxy, whose HTTP upstream uses
+SOCKS. External browsers, other apps and OS/distributor push delivery are not
+controlled by this setting. Use a system VPN when all traffic must be covered.
+
+Settings are local to each device and are not published or synced through
+Matrix. Passwords use OS secure storage; routing metadata uses a private local
+file. SOCKS username/password authentication itself is not encrypted between
+the device and proxy. Use a trusted local tunnel or VPN for a remote proxy.
+Unreadable saved settings block HTTP connections until corrected or reset.
+
 ## Configured Matrix homeserver
 
 Automatic after login. Sync, authentication, room state, profile data, search,
@@ -31,8 +59,26 @@ Matrix tokens and headers are never sent to a preview site.
 ## MatrixRTC and WebRTC infrastructure
 
 User-triggered when joining a voice room/call or enabling camera/screen share.
-MatrixRTC state is exchanged through Matrix. Media may connect to ICE, STUN,
-TURN, and MatrixRTC infrastructure advertised by the homeserver/RTC setup.
+MatrixRTC membership and media keys are exchanged through Matrix. LiveKit SFUs
+relay media; SeND no longer establishes a mesh of direct participant-to-participant
+connections. Calls can connect to multiple SFUs when participants use different
+homeservers, along with their advertised ICE/STUN/TURN infrastructure. Call servers
+see connection addresses and routing metadata, but do not receive media keys.
+
+Transport discovery uses the homeserver's RTC registry, with its Matrix
+well-known configuration as a compatibility fallback. New authorization endpoints
+keep authentication on the homeserver. Older standalone authorization services
+receive a short-lived Matrix OpenID proof, never the Matrix session token. Joining
+a federated call can contact other participants' advertised call services.
+
+Media encryption uses per-device keys distributed over encrypted to-device
+messages. Keys rotate when call membership changes. There is no plaintext media
+fallback, including server-injected frames. Membership uses MSC4354 sticky
+events where supported, or Element Call's
+compatibility state format otherwise. Existing room permissions are not silently
+rewritten; room administrators can configure call membership under Administration.
+Call participants need SFU-capable clients. Older SeND mesh calls cannot join
+the same call; update those clients before switching a room to the new transport.
 Linux screen sharing uses standard desktop portals and PipeWire where required.
 
 ## KLIPY proxy and legacy GIF media

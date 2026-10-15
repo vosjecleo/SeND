@@ -8,6 +8,7 @@ import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
 import '../services/activity_controller.dart';
 import '../services/pack_reorganization.dart';
+import '../services/socks_proxy.dart';
 import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
 import 'dart:collection';

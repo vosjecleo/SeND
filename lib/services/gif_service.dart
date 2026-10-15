@@ -10,6 +10,7 @@ import '../version.dart';
 import 'bounded_http.dart';
 import 'public_network_address.dart';
 import 'private_file_store.dart';
+import 'socks_proxy.dart';
 import 'browser_private_store.dart';
 
 class GifSearchResult {
@@ -347,7 +348,7 @@ class GifService {
       if (!_isGiphyMediaUri(uri)) {
         throw const HttpException('GIPHY redirected to an untrusted host.');
       }
-      final addresses = kIsWeb
+      final addresses = kIsWeb || SocksProxy.enabled
           ? null
           : await InternetAddress.lookup(uri.host).timeout(_requestTimeout);
       if (addresses != null &&

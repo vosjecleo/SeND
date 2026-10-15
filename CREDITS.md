@@ -43,8 +43,18 @@ separately; no third-party client repository is vendored here.
 - [Flutter](https://github.com/flutter/flutter) and Dart provide the application
   framework and Linux desktop runtime. Flutter is BSD-3-Clause licensed.
 - [flutter-webrtc](https://github.com/flutter-webrtc/flutter-webrtc) provides
-  native WebRTC bindings used with matrix-dart-sdk's MatrixRTC implementation.
+  the native WebRTC bindings used by SeND's MatrixRTC media transport.
   Licensed under MIT.
+- [LiveKit's Flutter SDK](https://github.com/livekit/client-sdk-flutter) provides
+  SFU media transport, track publication, subscriptions and frame encryption
+  under Apache-2.0. Its pinned E2EE worker is included in
+  `third_party/livekit_e2ee`, with a small HKDF/key-ring compatibility patch;
+  that directory retains its license and modification notice.
+- [Element Call](https://github.com/element-hq/element-call) and
+  [matrix-js-sdk](https://github.com/matrix-org/matrix-js-sdk) informed the
+  MatrixRTC membership, multi-SFU and media-key exchange implementation.
+  SeND's Dart session code is independently written against the protocol and
+  deployed compatibility formats.
 - Wayland's `ext-idle-notify-v1` protocol (Martin Gräßlin and Simon Ser)
   supplies session-wide desktop idle notifications. Its MIT-style copyright
   and permission notice are retained in `linux/runner/ext-idle-notify-v1.xml`.
@@ -70,6 +80,9 @@ separately; no third-party client repository is vendored here.
   provide the cryptographic implementation used through the Matrix SDK.
 - [flutter_secure_storage](https://github.com/juliansteenbakker/flutter_secure_storage)
   provides OS-keyring-backed storage for sessions and private configuration.
+- [socks5_proxy](https://pub.dev/packages/socks5_proxy) supplies the pinned
+  socket adapter for native SOCKS5 connections (MIT). SeND implements its own
+  handshake, authentication checks, remote DNS routing and cancellation.
 - [UnifiedPush Android connector](https://codeberg.org/UnifiedPush/android-connector)
   provides the standard distributor integration used for private Android push.
   The connector and its optional embedded FCM distributor are Apache-2.0

@@ -9,6 +9,7 @@ environment:
 dependencies:
   archive: ^4.0.9
   characters: ^1.4.1
+  collection: ^1.19.1
   crypto: ^3.0.7
   file_picker: ^11.0.2
   ffi: ^2.2.0
@@ -21,6 +22,8 @@ dependencies:
   flutter_quill: ^11.5.1
   flutter_vodozemac: ^0.7.1
   html: ^0.15.6
+  http: ^1.6.0
+  socks5_proxy: 2.1.1
   image: ^4.9.1
   image_picker: ^1.2.1
   photo_manager: ^3.12.0
@@ -42,6 +45,8 @@ dependencies:
   universal_io: ^2.3.1
   web: ^1.1.1
   flutter_webrtc: ^1.6.0
+  livekit_client: 2.13.1
+  logging: ^1.3.0
   webrtc_interface: ^1.5.1
   flutter_secure_storage: ^10.3.1
   super_clipboard: ^0.9.1
@@ -49,6 +54,12 @@ dependencies:
   timezone: ^0.11.1
   youtube_explode_dart: ^3.1.0
   flutter_timezone: ^5.1.1
+
+dependency_overrides:
+  # super_native_extensions 0.9.1 caps this below 12, but uses only deviceInfo
+  # and AndroidDeviceInfo.version.sdkInt, both unchanged in 12.3.0. Pin the
+  # shared version required by LiveKit and cover drag/clipboard regressions.
+  device_info_plus: 12.3.0
 
 dev_dependencies:
   flutter_test:

@@ -5,6 +5,7 @@ import 'platform_io.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'web_preview_proxy.dart';
+import 'socks_proxy.dart';
 
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -265,6 +266,9 @@ class DirectLinkPreviewFetcher {
         client.close(force: true);
         rethrow;
       }
+    }
+    if (SocksProxy.blockDirectTraffic) {
+      throw StateError('Direct previews are blocked by your proxy settings.');
     }
     final addresses = await _resolveHost(url.host).timeout(requestTimeout);
     if (addresses.isEmpty ||
@@ -711,6 +715,9 @@ class PinnedDirectPreviewTransport implements DirectPreviewTransport {
     required String accept,
     Map<String, String> headers = const {},
   }) async {
+    if (SocksProxy.blockDirectTraffic) {
+      throw StateError('Direct previews are blocked by your proxy settings.');
+    }
     final client = HttpClient()
       ..connectionTimeout = _requestTimeout
       ..idleTimeout = _requestTimeout

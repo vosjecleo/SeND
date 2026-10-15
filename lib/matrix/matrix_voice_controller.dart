@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as flutter_webrtc;
@@ -8,10 +7,12 @@ import 'package:matrix/matrix.dart';
 import '../models/chat_models.dart';
 import '../models/rtc_connectivity.dart';
 import '../services/app_sounds.dart';
-import '../services/rtc_audio_controls.dart';
 import '../services/screen_capture_service.dart';
-import 'deltiecord_webrtc_delegate.dart';
-import 'refreshing_voip.dart';
+import 'rtc/rtc_protocol.dart';
+import 'rtc/rtc_matrix_client.dart';
+import 'rtc/rtc_transport_api.dart';
+import 'rtc/rtc_sfu_session.dart';
+import 'rtc/rtc_room_membership.dart';
 
 /// Platform boundary for WebRTC's process-wide audio output selection.
 abstract interface class RtcAudioOutputSelector {
@@ -27,16 +28,28 @@ final class WebRtcAudioOutputSelector implements RtcAudioOutputSelector {
 }
 
 /// Owns MatrixRTC/WebRTC resources independently from session and timeline
-/// state. This uses matrix-dart-sdk's MatrixRTC model and flutter-webrtc's
-/// native bindings; see CREDITS.md. Exactly one call may be active at a time.
+/// state. Matrix handles membership and keys; LiveKit handles SFU media.
+/// Exactly one call may be active at a time, including while a join is pending.
 class MatrixVoiceController extends ChangeNotifier {
   MatrixVoiceController(
     this._client, {
     required this.friendlyError,
     this.canRingRoom,
     RtcAudioOutputSelector? audioOutputSelector,
+    RtcTransportApi Function(Client)? transportApiFactory,
+    RtcSfuSession Function(Room, RtcTransport, AppPreferences, RtcTransportApi)?
+    sessionFactory,
   }) : _audioOutputSelector =
-           audioOutputSelector ?? const WebRtcAudioOutputSelector();
+           audioOutputSelector ?? const WebRtcAudioOutputSelector(),
+       _apiFactory = transportApiFactory ?? RtcTransportApi.new,
+       _sessionFactory =
+           sessionFactory ??
+           ((room, transport, preferences, api) => RtcSfuSession(
+             matrixRoom: room,
+             transport: transport,
+             preferences: preferences,
+             api: api,
+           ));
 
   final Client _client;
   final String Function(Object error) friendlyError;
@@ -66,7 +79,8 @@ class MatrixVoiceController extends ChangeNotifier {
   void handleCallNotification(Event event) {
     if (!event.isRtcNotificationEvent ||
         _disposed ||
-        _activeCall != null ||
+        _session != null ||
+        _joiningRoomId != null ||
         event.senderId == _client.userID ||
         !_mayRing(event.room) ||
         _client.ignoredUsers.contains(event.senderId)) {
@@ -95,6 +109,7 @@ class MatrixVoiceController extends ChangeNotifier {
     if (remaining <= Duration.zero) return;
     _ringEventIds.add(event.eventId);
     if (_ringEventIds.length > 128) _ringEventIds.remove(_ringEventIds.first);
+    _incomingCallerSeen = false;
     _incomingCall = (
       roomId: event.room.id,
       callerName:
@@ -106,184 +121,130 @@ class MatrixVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _checkIncomingCall() {
+  final RtcAudioOutputSelector _audioOutputSelector;
+  final RtcTransportApi Function(Client) _apiFactory;
+  final RtcSfuSession Function(
+    Room,
+    RtcTransport,
+    AppPreferences,
+    RtcTransportApi,
+  )
+  _sessionFactory;
+  RtcSfuSession? _session;
+  String? _joiningRoomId;
+  int _generation = 0;
+  Future<void>? _leaving;
+  bool _initialized = false, _disposed = false, _rejoining = false;
+  bool _muted = false, _deafened = false, _cameraEnabled = false;
+  bool _incomingCallerSeen = false, _changingScreenShare = false;
+  AppPreferences _preferences = const AppPreferences();
+  VoiceConnectionStatus _status = VoiceConnectionStatus.disconnected;
+  String? _error;
+  List<AudioInputSummary> _audioInputs = const [];
+  List<RtcDeviceSummary> _audioOutputs = const [], _cameras = const [];
+  String? _selectedAudioInputId, _selectedAudioOutputId, _selectedCameraId;
+  final Map<String, double> _participantVolumes = {};
+  final Set<String> _locallyMutedParticipants = {};
+  bool get _callSound => _preferences.callSound;
+
+  VoiceConnectionStatus get status => _status;
+  String? get activeRoomId => _session?.matrixRoom.id ?? _joiningRoomId;
+  bool get muted => _muted;
+  bool get deafened => _deafened;
+  bool get cameraEnabled => _session?.cameraEnabled ?? _cameraEnabled;
+  bool get screenSharing => _session?.screenSharing ?? false;
+  double get inputLevel => _muted ? 0 : _session?.inputLevel ?? 0;
+  String? get error => _error ?? _session?.error;
+  String? get activeSpeakerUserId => _session?.activeSpeakerUserId;
+  List<AudioInputSummary> get audioInputs => _audioInputs;
+  List<RtcDeviceSummary> get audioOutputs => _audioOutputs;
+  List<RtcDeviceSummary> get cameras => _cameras;
+  String? get selectedAudioInputId => _selectedAudioInputId;
+  String? get selectedAudioOutputId => _selectedAudioOutputId;
+  String? get selectedCameraId => _selectedCameraId;
+  List<RtcMediaStreamSummary> get mediaStreams =>
+      _session?.mediaStreams ?? const [];
+  RtcConnectivity get connectivity => _status == VoiceConnectionStatus.error
+      ? RtcConnectivity(
+          state: RtcConnectivityState.unavailable,
+          detail: error ?? 'Unable to connect to the call server',
+        )
+      : _session?.connectivity ?? const RtcConnectivity();
+  double participantVolume(String userId) => _participantVolumes[userId] ?? 1;
+  bool participantLocallyMuted(String userId) =>
+      _locallyMutedParticipants.contains(userId);
+
+  List<RtcMember> membersForRoom(Room room) {
+    final result = <String, RtcMember>{};
+    final client = _client;
+    if (client is RtcMatrixClient) {
+      for (final member in client.cachedRtcMembers(room.id)) {
+        result[member.deviceIdentity] = member;
+      }
+      for (final member in client.rtcStateMembers(room.id)) {
+        result.putIfAbsent(member.deviceIdentity, () => member);
+      }
+    }
+    for (final event in room.states[rtcCallMemberType]?.values ?? <Event>[]) {
+      final member = RtcMember.parse(
+        type: event.type,
+        sender: event.senderId,
+        content: event.content,
+        stateKey: event.stateKey,
+        timestamp: event is Event ? event.originServerTs : DateTime(1970),
+      );
+      if (member != null) {
+        result.putIfAbsent(member.deviceIdentity, () => member);
+      }
+    }
+    if (_session?.matrixRoom.id == room.id) {
+      for (final member in _session!.members) {
+        result[member.deviceIdentity] = member;
+      }
+    }
+    return result.values
+        .where((member) => rtcUserStillJoined(room, member.userId))
+        .toList();
+  }
+
+  Future<void> refreshMemberships({String? roomId}) async {
+    final client = _client;
+    if (_disposed || client is! RtcMatrixClient) return;
+    for (final id in roomId == null ? client.rtcStickyRoomIds : [roomId]) {
+      if (_disposed) return;
+      final room = client.getRoomById(id);
+      if (room != null) await client.hydrateRtcMembers(room);
+    }
+  }
+
+  Future<void> _checkIncomingCall() async {
     final incoming = _incomingCall;
-    if (incoming == null) return;
+    if (incoming == null || _disposed) return;
     final room = _client.getRoomById(incoming.roomId);
     if (room == null || !_mayRing(room)) {
       dismissIncomingCall();
       return;
     }
-    bool present(String userId) =>
-        (room.states[EventTypes.GroupCallMember]?.values ?? <Event>[])
-            .where((event) => event.senderId == userId)
-            .any(
-              (event) => (event.content['memberships'] as List? ?? const [])
-                  .whereType<Map>()
-                  .any(
-                    (entry) =>
-                        entry['expires_ts'] is num &&
-                        (entry['expires_ts'] as num) >
-                            DateTime.now().millisecondsSinceEpoch,
-                  ),
-            );
-    // Stop on caller hangup, or when another device on this account picks up.
-    if (!present(incoming.callerId) || present(_client.userID!)) {
+    await refreshMemberships(roomId: room.id);
+    if (_disposed || !identical(incoming, _incomingCall)) return;
+    final members = membersForRoom(room);
+    final present = members.any((member) => member.userId == incoming.callerId);
+    if (present) _incomingCallerSeen = true;
+    final answeredElsewhere = members.any(
+      (member) =>
+          member.userId == _client.userID &&
+          member.deviceId != _client.deviceID,
+    );
+    // Missing encrypted membership can mean its room key is still arriving.
+    // Do not cancel a fresh ring merely because that event is not decrypted.
+    if (answeredElsewhere || (_incomingCallerSeen && !present)) {
       dismissIncomingCall();
     }
   }
 
-  final RtcAudioOutputSelector _audioOutputSelector;
-  RefreshingVoIP? _voip;
-  GroupCallSession? _activeCall;
-  StreamSubscription<MatrixRTCCallEvent>? _callSubscription;
-  VoiceConnectionStatus _status = VoiceConnectionStatus.disconnected;
-  bool _muted = false;
-  bool _deafened = false;
-  bool _cameraEnabled = false;
-  bool _screenSharing = false;
-  bool _changingScreenShare = false;
-  String? _error;
-  String? _activeSpeakerUserId;
-  List<AudioInputSummary> _audioInputs = const [];
-  String? _selectedAudioInputId;
-  List<RtcDeviceSummary> _audioOutputs = const [];
-  String? _selectedAudioOutputId;
-  List<RtcDeviceSummary> _cameras = const [];
-  String? _selectedCameraId;
-  final Map<String, double> _participantVolumes = {};
-  final Set<String> _locallyMutedParticipants = {};
-  Timer? _inputMeterTimer;
-  double _inputLevel = 0;
-  bool _samplingInput = false;
-  bool _rejoining = false;
-  bool _disposed = false;
-  bool _echoCancellation = true;
-  bool _noiseSuppression = true;
-  bool _autoGainControl = true;
-  double _microphoneVolume = 1;
-  double _outputVolume = 1;
-  bool _callSound = true;
-  bool _shareDesktopAudio = false;
-  final Set<flutter_webrtc.RTCPeerConnection> _peers = {};
-  final Map<String, flutter_webrtc.RTCVideoRenderer> _webAudio = {};
-  bool _updatingWebAudio = false;
-  bool _webAudioDirty = false;
-  Timer? _connectivityTimer;
-  DateTime? _lastPeerRecovery;
-  bool _samplingConnectivity = false;
-  RtcConnectivity _connectivity = const RtcConnectivity();
-  RtcConnectivity get connectivity => _status == VoiceConnectionStatus.error
-      ? RtcConnectivity(
-          state: RtcConnectivityState.unavailable,
-          detail: _error ?? 'Unable to connect',
-        )
-      : _connectivity;
-
-  VoiceConnectionStatus get status => _status;
-  String? get activeRoomId => _activeCall?.room.id;
-  bool get muted => _muted;
-  bool get deafened => _deafened;
-  bool get cameraEnabled => _cameraEnabled;
-  bool get screenSharing => _screenSharing;
-  double get inputLevel => _muted ? 0 : _inputLevel;
-  String? get error => _error;
-  String? get activeSpeakerUserId => _activeSpeakerUserId;
-  List<AudioInputSummary> get audioInputs => _audioInputs;
-  String? get selectedAudioInputId => _selectedAudioInputId;
-  List<RtcDeviceSummary> get audioOutputs => _audioOutputs;
-  String? get selectedAudioOutputId => _selectedAudioOutputId;
-  List<RtcDeviceSummary> get cameras => _cameras;
-  String? get selectedCameraId => _selectedCameraId;
-
-  List<RtcMediaStreamSummary> get mediaStreams {
-    final call = _activeCall;
-    if (call == null) return const [];
-    final streams = [
-      ...call.backend.userMediaStreams.map((stream) => (stream, false)),
-      ...call.backend.screenShareStreams.map((stream) => (stream, true)),
-    ];
-    return streams
-        .where(
-          (entry) =>
-              entry.$1.stream != null &&
-              entry.$1.stream!.getVideoTracks().isNotEmpty,
-        )
-        .map(
-          (entry) => RtcMediaStreamSummary(
-            id: entry.$1.id,
-            userId: entry.$1.participant.userId,
-            displayName: entry.$1.displayName ?? entry.$1.participant.userId,
-            stream: entry.$1.stream!,
-            local: entry.$1.isLocal(),
-            screenShare: entry.$2,
-            videoMuted: entry.$1.isVideoMuted(),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  double participantVolume(String userId) => _participantVolumes[userId] ?? 1;
-
-  bool participantLocallyMuted(String userId) =>
-      _locallyMutedParticipants.contains(userId);
-
-  void applyPreferences(AppPreferences preferences) {
-    final processingChanged =
-        _echoCancellation != preferences.echoCancellation ||
-        _noiseSuppression != preferences.noiseSuppression ||
-        _autoGainControl != preferences.autoGainControl;
-    _echoCancellation = preferences.echoCancellation;
-    _noiseSuppression = preferences.noiseSuppression;
-    _autoGainControl = preferences.autoGainControl;
-    _microphoneVolume = preferences.microphoneVolume.clamp(0, 1);
-    _outputVolume = preferences.outputVolume.clamp(0, 1);
-    _callSound = preferences.callSound;
-    if (!_callSound || preferences.callVolume <= 0) {
-      unawaited(AppSounds.stopRingtone());
-    }
-    _shareDesktopAudio = preferences.shareDesktopAudio;
-    final inputId = preferences.preferredAudioInputId;
-    final outputId = preferences.preferredAudioOutputId;
-    final cameraId = preferences.preferredCameraId;
-    _selectedAudioInputId =
-        inputId.isEmpty ||
-            (_audioInputs.isNotEmpty &&
-                !_audioInputs.any((device) => device.id == inputId))
-        ? null
-        : inputId;
-    _selectedAudioOutputId =
-        outputId.isEmpty ||
-            (_audioOutputs.isNotEmpty &&
-                !_audioOutputs.any((device) => device.id == outputId))
-        ? null
-        : outputId;
-    _selectedCameraId =
-        cameraId.isEmpty ||
-            (_cameras.isNotEmpty &&
-                !_cameras.any((device) => device.id == cameraId))
-        ? null
-        : cameraId;
-    _participantVolumes
-      ..clear()
-      ..addAll(preferences.participantVolumes);
-    final selectedOutputId = _selectedAudioOutputId;
-    if (selectedOutputId != null) {
-      unawaited(
-        _audioOutputSelector.select(selectedOutputId).catchError((_) {}),
-      );
-    }
-    unawaited(_applyRemoteAudioSettings());
-    unawaited(_applyLocalInputVolume());
-    final roomId = activeRoomId;
-    if (processingChanged && roomId != null) {
-      unawaited(_rejoinPreservingState(roomId));
-    }
-    notifyListeners();
-  }
-
   void initialize() {
-    if (!_client.isLogged() || _voip != null || _disposed) return;
+    if (!_client.isLogged() || _initialized || _disposed) return;
+    _initialized = true;
     _ringEvents = _client.onTimelineEvent.stream.listen(handleCallNotification);
     // ignore: deprecated_member_use
     _lateRingEvents = _client.onEvent.stream.listen((update) {
@@ -293,21 +254,55 @@ class MatrixVoiceController extends ChangeNotifier {
         handleCallNotification(Event.fromJson(update.content, room));
       }
     });
-    _ringSync = _client.onSync.stream.listen((_) => _checkIncomingCall());
-    _voip = RefreshingVoIP(
-      _client,
-      DeltiecordWebRtcDelegate(
-        isCallActive: () =>
-            _status == VoiceConnectionStatus.connecting ||
-            _status == VoiceConnectionStatus.reconnecting ||
-            _status == VoiceConnectionStatus.connected,
-        shareDesktopAudio: () => _shareDesktopAudio,
-        onPeerConnection: (peer) {
-          if (!_disposed && _activeCall != null) _peers.add(peer);
-        },
-      ),
+    _ringSync = _client.onSync.stream.listen(
+      (_) => unawaited(_checkIncomingCall()),
     );
     unawaited(refreshAudioInputs());
+  }
+
+  AppPreferences get _sessionPreferences => _preferences.copyWith(
+    preferredAudioInputId: _selectedAudioInputId ?? '',
+    preferredAudioOutputId: _selectedAudioOutputId ?? '',
+    preferredCameraId: _selectedCameraId ?? '',
+    participantVolumes: Map.of(_participantVolumes),
+  );
+
+  void applyPreferences(AppPreferences preferences) {
+    final processingChanged =
+        _preferences.echoCancellation != preferences.echoCancellation ||
+        _preferences.noiseSuppression != preferences.noiseSuppression ||
+        _preferences.autoGainControl != preferences.autoGainControl;
+    _preferences = preferences;
+    _participantVolumes
+      ..clear()
+      ..addAll(preferences.participantVolumes);
+    String? valid(String id, Iterable<String> devices) =>
+        id.isEmpty || (devices.isNotEmpty && !devices.contains(id)) ? null : id;
+    _selectedAudioInputId = valid(
+      preferences.preferredAudioInputId,
+      _audioInputs.map((d) => d.id),
+    );
+    _selectedAudioOutputId = valid(
+      preferences.preferredAudioOutputId,
+      _audioOutputs.map((d) => d.id),
+    );
+    _selectedCameraId = valid(
+      preferences.preferredCameraId,
+      _cameras.map((d) => d.id),
+    );
+    if (!_callSound || preferences.callVolume <= 0) {
+      unawaited(AppSounds.stopRingtone());
+    }
+    if (_selectedAudioOutputId case final id?) {
+      unawaited(_audioOutputSelector.select(id).catchError((_) {}));
+    }
+    _session?.applyPreferences(_sessionPreferences);
+    unawaited(_applyRemoteAudioSettings());
+    final roomId = activeRoomId;
+    if (processingChanged && roomId != null) {
+      unawaited(_rejoinPreservingState(roomId));
+    }
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> refreshAudioInputs() async {
@@ -379,7 +374,7 @@ class MatrixVoiceController extends ChangeNotifier {
     try {
       await _audioOutputSelector.select(deviceId ?? 'default');
       _selectedAudioOutputId = deviceId;
-      if (kIsWeb) await _syncWebAudio();
+      _session?.applyPreferences(_sessionPreferences);
       _error = null;
     } catch (exception) {
       _error = friendlyError(exception);
@@ -409,142 +404,80 @@ class MatrixVoiceController extends ChangeNotifier {
 
   Future<void> join(String roomId) async {
     if (_disposed ||
-        (activeRoomId == roomId &&
+        (!_rejoining &&
+            activeRoomId == roomId &&
             _status == VoiceConnectionStatus.connected)) {
       return;
     }
-    if (_activeCall != null) await leave();
-    dismissIncomingCall();
+    await leave();
+    if (_disposed) return;
+    final generation = ++_generation;
     final room = _client.getRoomById(roomId);
     if (room == null) return;
     initialize();
-    final voip = _voip;
-    if (voip == null) return;
-    final startingCall = _mayRing(room) && !room.hasActiveGroupCall(voip);
-    _remoteUsers = {};
-    _participantSoundsReady = false;
+    dismissIncomingCall();
+    _joiningRoomId = roomId;
     _status = _rejoining
         ? VoiceConnectionStatus.reconnecting
         : VoiceConnectionStatus.connecting;
     _error = null;
+    _remoteUsers = {};
+    _participantSoundsReady = false;
     notifyListeners();
-    GroupCallSession? joiningCall;
+    RtcSfuSession? joining;
     try {
-      final call = joiningCall = await voip.fetchOrCreateGroupCall(
-        room.id,
-        room,
-        MeshBackend(),
-        'm.call',
-        'm.room',
-      );
-      if (_disposed) return;
-      _activeCall = call;
-      voip.beginJoining(call);
-      // Reserve this group before publishing membership. The SDK normally
-      // does so only AFTER entering, rejecting early peer invites as "busy".
-      voip.currentGroupCID = voip.groupCalls.keys.firstWhere(
-        (id) => identical(voip.groupCalls[id], call),
-      );
-      _connectivity = const RtcConnectivity();
-      _connectivityTimer?.cancel();
-      _connectivityTimer = Timer.periodic(
-        const Duration(seconds: 2),
-        (_) => unawaited(_sampleConnectivity()),
-      );
-      await _callSubscription?.cancel();
-      _callSubscription = call.matrixRTCEventStream.stream.listen(
-        _handleCallEvent,
-      );
-      final audioConstraints = <String, dynamic>{
-        'echoCancellation': _echoCancellation,
-        'noiseSuppression': _noiseSuppression,
-        'autoGainControl': _autoGainControl,
-        'volume': _microphoneVolume,
-        if (_selectedAudioInputId != null)
-          'deviceId': {'exact': _selectedAudioInputId},
-      };
-      flutter_webrtc.MediaStream stream;
-      try {
-        stream = await flutter_webrtc.navigator.mediaDevices.getUserMedia({
-          'audio': audioConstraints,
-          'video': _cameraEnabled
-              ? {
-                  'width': {'ideal': 1280},
-                  'height': {'ideal': 720},
-                  if (_selectedCameraId != null)
-                    'deviceId': {'exact': _selectedCameraId},
-                }
-              : false,
-        });
-      } catch (exception) {
-        if (!_cameraEnabled) rethrow;
-        _cameraEnabled = false;
-        _error = 'Camera unavailable; joined with audio only.';
-        stream = await flutter_webrtc.navigator.mediaDevices.getUserMedia({
-          'audio': audioConstraints,
-          'video': false,
-        });
-      }
-      if (_disposed || !identical(call, _activeCall)) {
-        for (final track in stream.getTracks()) {
-          track.stop();
-        }
-        return;
-      }
-      // A pre-muted join must not transmit while Matrix finishes entering.
-      setRtcAudioMuted(stream.getAudioTracks(), _muted);
-      await call.enter(
-        stream: WrappedMediaStream(
-          stream: stream,
-          participant: call.localParticipant!,
-          room: room,
-          client: _client,
-          purpose: SDPStreamMetadataPurpose.Usermedia,
-          audioMuted: _muted,
-          videoMuted: !_cameraEnabled,
-          isGroupCall: true,
-          voip: voip,
-        ),
-      );
-      voip.finishJoining();
-      if (_disposed || !identical(call, _activeCall)) return;
-      _status = VoiceConnectionStatus.connected;
-      if (_muted) {
-        await call.backend.setDeviceMuted(
-          call,
-          true,
-          MediaInputKind.audioinput,
+      await refreshMemberships(roomId: roomId);
+      final starting = _mayRing(room) && membersForRoom(room).isEmpty;
+      final api = _apiFactory(_client);
+      final transports = await api.discover();
+      if (_disposed || generation != _generation) return;
+      if (transports.isEmpty) {
+        throw StateError(
+          'Your homeserver has no MatrixRTC call server configured.',
         );
       }
-      _applyLocalMuteGate();
-      _startInputMeter();
-      await _applyLocalInputVolume();
-      await _applyRemoteAudioSettings();
-      if (_callSound && !_rejoining) unawaited(AppSounds.callConnected());
-      _remoteUsers = call.participants
-          .where((p) => !p.isLocal)
-          .map((p) => p.userId)
-          .toSet();
+      final session = joining =
+          _sessionFactory(room, transports.first, _sessionPreferences, api)
+            ..muted = _muted
+            ..deafened = _deafened
+            ..cameraEnabled = _cameraEnabled;
+      _session = session;
+      session.applyRemoteAudio(
+        deafen: _deafened,
+        locallyMutedUsers: _locallyMutedParticipants,
+        participantVolumes: _participantVolumes,
+      );
+      session.addListener(_sessionChanged);
+      await session.start();
+      if (_disposed ||
+          generation != _generation ||
+          !identical(session, _session)) {
+        await session.close();
+        return;
+      }
+      _joiningRoomId = null;
+      _status = session.status;
+      _cameraEnabled = session.cameraEnabled;
+      _remoteUsers = session.members.map((m) => m.userId).toSet();
       _participantSoundsReady = true;
-      if (startingCall && !_rejoining && _remoteUsers.isEmpty) {
+      if (_callSound && !_rejoining) unawaited(AppSounds.callConnected());
+      if (starting && !_rejoining && _remoteUsers.isEmpty) {
         try {
           final members = await room.requestParticipants();
-          if (!identical(call, _activeCall) || _disposed) return;
+          if (_disposed || generation != _generation) return;
           await room.sendRtcNotification(
             type: RtcNotificationType.ring,
             userIds: members
                 .where(
-                  (user) =>
-                      user.id != _client.userID &&
-                      user.membership == Membership.join,
+                  (member) =>
+                      member.id != _client.userID &&
+                      member.membership == Membership.join,
                 )
-                .map((user) => user.id)
+                .map((member) => member.id)
                 .toList(),
             lifetime: const Duration(seconds: 30),
           );
-          if (_callSound &&
-              identical(call, _activeCall) &&
-              call.participants.every((p) => p.isLocal)) {
+          if (_callSound && generation == _generation && _remoteUsers.isEmpty) {
             unawaited(AppSounds.startRingtone());
           }
         } catch (exception) {
@@ -553,294 +486,68 @@ class MatrixVoiceController extends ChangeNotifier {
         }
       }
     } catch (exception) {
-      try {
-        await joiningCall?.leave();
-      } catch (_) {
-        try {
-          if (joiningCall != null) {
-            await joiningCall.backend.dispose(joiningCall);
-          }
-        } catch (_) {}
-      }
+      joining?.removeListener(_sessionChanged);
+      await joining?.close();
+      if (_disposed || generation != _generation) return;
+      _session = null;
+      _joiningRoomId = null;
       _status = VoiceConnectionStatus.error;
-      _error = friendlyError(exception);
-      _activeCall = null;
-      voip.currentGroupCID = null;
-      voip.finishJoining();
-      _connectivityTimer?.cancel();
-      _peers.clear();
-      if (kIsWeb) await _syncWebAudio();
+      _error =
+          exception is MatrixException && exception.errcode == 'M_FORBIDDEN'
+          ? 'This room does not allow MatrixRTC calls. Ask a room admin to enable them.'
+          : friendlyError(exception);
     }
-    if (!_disposed) notifyListeners();
+    if (!_disposed && generation == _generation) notifyListeners();
   }
 
-  void _startInputMeter() {
-    _inputMeterTimer?.cancel();
-    _inputMeterTimer = Timer.periodic(
-      const Duration(milliseconds: 180),
-      (_) => unawaited(_sampleInputLevel()),
+  void _sessionChanged() {
+    final session = _session;
+    if (_disposed || session == null) return;
+    _status = session.status;
+    _cameraEnabled = session.cameraEnabled;
+    final users = session.members.map((m) => m.userId).toSet();
+    if (users.isNotEmpty) unawaited(AppSounds.stopRingtone());
+    if (_participantSoundsReady && _callSound && !_rejoining) {
+      if (users.difference(_remoteUsers).isNotEmpty) {
+        unawaited(AppSounds.callConnected());
+      } else if (_remoteUsers.difference(users).isNotEmpty) {
+        unawaited(AppSounds.participantLeft());
+      }
+    }
+    _remoteUsers = users;
+    notifyListeners();
+  }
+
+  Future<void> _applyRemoteAudioSettings({String? userId}) async {
+    _session?.applyRemoteAudio(
+      deafen: _deafened,
+      locallyMutedUsers: _locallyMutedParticipants,
+      participantVolumes: _participantVolumes,
     );
   }
 
-  Future<void> _sampleConnectivity() async {
-    final call = _activeCall;
-    if (call != null && _participantSoundsReady) {
-      final users = call.participants
-          .where((p) => !p.isLocal)
-          .map((p) => p.userId)
-          .toSet();
-      if (users.isNotEmpty) unawaited(AppSounds.stopRingtone());
-      if (_callSound && !_rejoining) {
-        if (users.difference(_remoteUsers).isNotEmpty) {
-          unawaited(AppSounds.callConnected());
-        } else if (_remoteUsers.difference(users).isNotEmpty) {
-          unawaited(AppSounds.participantLeft());
-        }
-      }
-      _remoteUsers = users;
-    }
-    if (_disposed || call == null || _samplingConnectivity) return;
-    _samplingConnectivity = true;
-    var connected = 0;
-    var failed = 0;
-    var total = 0;
-    int? ping;
-    try {
-      if (_screenSharing) {
-        for (final session in _voip?.calls.values.toList() ?? <CallSession>[]) {
-          if (session.room.id != call.room.id ||
-              session.groupCallId != call.groupCallId) {
-            continue;
-          }
-          final tracks =
-              session.localScreenSharingStream?.stream
-                  ?.getVideoTracks()
-                  .map((track) => track.id)
-                  .toSet() ??
-              <String?>{};
-          final peer = session.pc;
-          if (peer == null || tracks.isEmpty) continue;
-          try {
-            for (final sender in await peer.getSenders().timeout(
-              const Duration(seconds: 2),
-            )) {
-              if (sender.track == null || !tracks.contains(sender.track!.id)) {
-                continue;
-              }
-              final parameters = sender.parameters;
-              final encodings = parameters.encodings;
-              if (encodings == null ||
-                  encodings.isEmpty ||
-                  encodings.every(
-                    (encoding) =>
-                        encoding.maxBitrate == 6000000 &&
-                        encoding.maxFramerate == 30,
-                  )) {
-                continue;
-              }
-              for (final encoding in encodings) {
-                encoding.maxBitrate = 6000000;
-                encoding.maxFramerate = 30;
-              }
-              await sender
-                  .setParameters(parameters)
-                  .timeout(const Duration(seconds: 2));
-            }
-          } catch (_) {
-            // Platforms that cannot tune RTP retain their negotiated settings.
-          }
-        }
-      }
-      for (final peer in _peers.toList()) {
-        try {
-          final state = await peer.getConnectionState().timeout(
-            const Duration(seconds: 2),
-          );
-          if (state ==
-              flutter_webrtc
-                  .RTCPeerConnectionState
-                  .RTCPeerConnectionStateClosed) {
-            _peers.remove(peer);
-            continue;
-          }
-          total++;
-          if (state ==
-              flutter_webrtc
-                  .RTCPeerConnectionState
-                  .RTCPeerConnectionStateFailed) {
-            failed++;
-          }
-          if (state !=
-              flutter_webrtc
-                  .RTCPeerConnectionState
-                  .RTCPeerConnectionStateConnected) {
-            continue;
-          }
-          connected++;
-          final stats = await peer.getStats().timeout(
-            const Duration(seconds: 2),
-          );
-          final measured = rtcPingMilliseconds(
-            stats
-                .where((report) => report.type == 'candidate-pair')
-                .map((report) => Map<String, dynamic>.from(report.values)),
-          );
-          if (measured != null) ping = max(ping ?? 0, measured);
-        } catch (_) {
-          // A peer may close between polling and reading statistics.
-        }
-      }
-      if (_disposed || !identical(call, _activeCall)) return;
-      total = max(
-        total,
-        call.participants.where((participant) => !participant.isLocal).length,
-      );
-      _connectivity = RtcConnectivity(
-        state: connected > 0 && connected == total
-            ? RtcConnectivityState.connected
-            : failed > 0 && connected == 0
-            ? RtcConnectivityState.unavailable
-            : RtcConnectivityState.waiting,
-        connectedPeers: connected,
-        totalPeers: total,
-        pingMilliseconds: ping,
-        detail: connected > 0 && connected == total
-            ? 'RTC connected ($connected peer${connected == 1 ? '' : 's'})'
-            : failed > 0 && connected == 0
-            ? 'RTC connection failed. Check network/TURN, then rejoin.'
-            : total == 0
-            ? 'Room joined; waiting for another participant / RTC'
-            : 'Room joined; RTC connected to $connected of $total peers',
-      );
-      notifyListeners();
-    } finally {
-      _samplingConnectivity = false;
-    }
-    if (!_disposed &&
-        identical(call, _activeCall) &&
-        connected < total &&
-        call.state == GroupCallState.entered &&
-        (_lastPeerRecovery == null ||
-            DateTime.now().difference(_lastPeerRecovery!) >
-                const Duration(seconds: 20))) {
-      _lastPeerRecovery = DateTime.now();
-      try {
-        for (final session in _voip?.calls.values.toList() ?? <CallSession>[]) {
-          if (session.room.id != call.room.id ||
-              session.groupCallId != call.groupCallId) {
-            continue;
-          }
-          final peer = session.pc;
-          if (peer == null) continue;
-          final state = await peer.getConnectionState().timeout(
-            const Duration(seconds: 2),
-          );
-          if (state ==
-              flutter_webrtc
-                  .RTCPeerConnectionState
-                  .RTCPeerConnectionStateFailed) {
-            await session.restartIce();
-          }
-        }
-        if (!_disposed && identical(call, _activeCall)) {
-          await call.onMemberStateChanged();
-        }
-      } catch (_) {
-        // Keep healthy peers connected; retry missing links at the next interval.
-      }
-    }
-  }
-
-  Future<void> _sampleInputLevel() async {
-    final call = _activeCall;
-    if (call == null || _samplingInput || _disposed || _muted) {
-      if (_inputLevel != 0) {
-        _inputLevel = 0;
-        if (!_disposed) notifyListeners();
-      }
-      return;
-    }
-    _samplingInput = true;
-    var sampled = 0.0;
-    try {
-      for (final peerConnection in _peers.toList()) {
-        final reports = await peerConnection.getStats();
-        for (final report in reports) {
-          if (report.type != 'media-source' ||
-              report.values['kind'] != 'audio') {
-            continue;
-          }
-          final level = report.values['audioLevel'];
-          if (level is num) sampled = max(sampled, level.toDouble());
-        }
-      }
-    } catch (_) {
-      // WebRTC stats availability varies by Linux backend.
-    } finally {
-      _samplingInput = false;
-    }
-    if ((_inputLevel - sampled).abs() >= 0.01) {
-      _inputLevel = sampled.clamp(0, 1);
-      if (!_disposed) notifyListeners();
-    }
-  }
-
-  void _handleCallEvent(MatrixRTCCallEvent event) {
-    if (_disposed) return;
-    switch (event) {
-      case GroupCallStateChanged(:final state):
-        _status = switch (state) {
-          GroupCallState.entered => VoiceConnectionStatus.connected,
-          GroupCallState.entering ||
-          GroupCallState.initializingLocalCallFeed ||
-          GroupCallState.localCallFeedInitialized =>
-            _rejoining
-                ? VoiceConnectionStatus.reconnecting
-                : VoiceConnectionStatus.connecting,
-          GroupCallState.leaving =>
-            _rejoining
-                ? VoiceConnectionStatus.reconnecting
-                : VoiceConnectionStatus.disconnecting,
-          GroupCallState.ended || GroupCallState.localCallFeedUninitialized =>
-            VoiceConnectionStatus.disconnected,
-        };
-      case GroupCallStateError(:final msg):
-        _status = _activeCall?.state == GroupCallState.entered
-            ? VoiceConnectionStatus.connected
-            : VoiceConnectionStatus.error;
-        _error = msg;
-      case GroupCallLocalMutedChanged(:final muted, :final kind):
-        // Ignore old acknowledgements after a newer local toggle.
-        if (kind == MediaInputKind.audioinput) _applyLocalMuteGate();
-        if (kind == MediaInputKind.videoinput) _cameraEnabled = !muted;
-      case GroupCallActiveSpeakerChanged(:final participant):
-        _activeSpeakerUserId = participant.userId;
-      case GroupCallLocalScreenshareStateChanged(:final screensharing):
-        _screenSharing = screensharing;
-        if (!screensharing) unawaited(ScreenCaptureService.stop());
-      case GroupCallStreamAdded() ||
-          GroupCallStreamRemoved() ||
-          GroupCallStreamReplaced():
-        _applyLocalMuteGate();
-        unawaited(_applyRemoteAudioSettings());
-      default:
-        break;
-    }
+  Future<void> setMuted(bool value) async {
+    if (_disposed || _muted == value) return;
+    _muted = value;
+    // The session gates the capture track before awaiting publication changes.
+    final pending = _session?.setMuted(value);
     notifyListeners();
+    if (_callSound && !_rejoining) unawaited(AppSounds.muteChanged(value));
+    await pending;
   }
 
-  Future<void> setDeafened(bool deafened) async {
-    if (_deafened == deafened || _disposed) return;
-    _deafened = deafened;
+  Future<void> setDeafened(bool value) async {
+    if (_disposed || _deafened == value) return;
+    _deafened = value;
     await _applyRemoteAudioSettings();
-    if (_callSound && !_rejoining) unawaited(AppSounds.deafenChanged(deafened));
-    notifyListeners();
+    if (_callSound && !_rejoining) unawaited(AppSounds.deafenChanged(value));
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> setParticipantVolume(String userId, double volume) async {
     _participantVolumes[userId] = volume.clamp(0, 1);
     await _applyRemoteAudioSettings(userId: userId);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> setParticipantLocallyMuted(String userId, bool muted) async {
@@ -850,309 +557,78 @@ class MatrixVoiceController extends ChangeNotifier {
       _locallyMutedParticipants.remove(userId);
     }
     await _applyRemoteAudioSettings(userId: userId);
-    notifyListeners();
-  }
-
-  Future<void> _applyRemoteAudioSettings({String? userId}) async {
-    if (kIsWeb) {
-      await _syncWebAudio();
-      return;
-    }
-    final call = _activeCall;
-    if (call == null) return;
-    for (final wrapped in [
-      ...call.backend.userMediaStreams,
-      ...call.backend.screenShareStreams,
-    ]) {
-      if (wrapped.isLocal() ||
-          (userId != null && wrapped.participant.userId != userId)) {
-        continue;
-      }
-      final muted =
-          _deafened ||
-          _locallyMutedParticipants.contains(wrapped.participant.userId);
-      await applyRtcRemoteAudio(
-        tracks: wrapped.stream?.getAudioTracks() ?? const [],
-        muted: muted,
-        volume: participantVolume(wrapped.participant.userId) * _outputVolume,
-        setVolume: flutter_webrtc.Helper.setVolume,
-      );
-    }
-  }
-
-  Future<void> _syncWebAudio() async {
-    _webAudioDirty = true;
-    if (_updatingWebAudio) return;
-    _updatingWebAudio = true;
-    try {
-      while (_webAudioDirty) {
-        _webAudioDirty = false;
-        final call = _activeCall;
-        final streams = call == null
-            ? <WrappedMediaStream>[]
-            : [
-                    ...call.backend.userMediaStreams,
-                    ...call.backend.screenShareStreams,
-                  ]
-                  .where(
-                    (wrapped) =>
-                        !wrapped.isLocal() &&
-                        (wrapped.stream?.getAudioTracks().isNotEmpty ?? false),
-                  )
-                  .toList();
-        final ids = streams.map((wrapped) => wrapped.id).toSet();
-        for (final id
-            in _webAudio.keys.where((id) => !ids.contains(id)).toList()) {
-          final renderer = _webAudio.remove(id)!;
-          renderer.srcObject = null;
-          await renderer.dispose();
-        }
-        for (final wrapped in streams) {
-          var renderer = _webAudio[wrapped.id];
-          if (renderer == null) {
-            renderer = flutter_webrtc.RTCVideoRenderer();
-            await renderer.initialize();
-            if (_disposed || !identical(call, _activeCall)) {
-              await renderer.dispose();
-              break;
-            }
-            _webAudio[wrapped.id] = renderer;
-          }
-          // Browsers need an audio element even for audio-only streams.
-          // Its lifetime belongs to the call, not to a visible video tile.
-          if (renderer.srcObject != wrapped.stream) {
-            renderer.srcObject = wrapped.stream;
-          }
-          final userId = wrapped.participant.userId;
-          final muted = _deafened || _locallyMutedParticipants.contains(userId);
-          setRtcAudioMuted(
-            wrapped.stream!.getAudioTracks(),
-            muted || participantVolume(userId) * _outputVolume == 0,
-          );
-          renderer.muted = muted;
-          await renderer.setVolume(
-            muted ? 0 : participantVolume(userId) * _outputVolume,
-          );
-          if (_selectedAudioOutputId case final output?) {
-            await renderer.audioOutput(output);
-          }
-        }
-      }
-    } catch (_) {
-      // Output selection/autoplay support varies; keep RTC transport health
-      // separate from browser playback policy.
-    } finally {
-      _updatingWebAudio = false;
-    }
-  }
-
-  Future<void> _applyLocalInputVolume() async {
-    final call = _activeCall;
-    if (call == null) return;
-    for (final wrapped in call.backend.userMediaStreams.where(
-      (stream) => stream.isLocal(),
-    )) {
-      for (final track in wrapped.stream?.getAudioTracks() ?? const []) {
-        try {
-          await flutter_webrtc.Helper.setVolume(_microphoneVolume, track);
-        } catch (_) {
-          // Some Linux capture backends expose processing but not gain.
-        }
-      }
-    }
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> setCameraEnabled(bool enabled) async {
-    if (_disposed || _cameraEnabled == enabled) return;
-    final call = _activeCall;
-    final hasVideoTrack =
-        call?.backend.localUserMediaStream?.stream
-            ?.getVideoTracks()
-            .isNotEmpty ??
-        false;
-    if (call != null && (hasVideoTrack || !enabled)) {
-      _cameraEnabled = enabled;
-      notifyListeners();
-      if (hasVideoTrack) {
-        try {
-          await call.backend.setDeviceMuted(
-            call,
-            !enabled,
-            MediaInputKind.videoinput,
-          );
-        } catch (exception) {
-          _cameraEnabled = !enabled;
-          _error = friendlyError(exception);
-          notifyListeners();
-          rethrow;
-        }
-      }
+    if (_disposed || cameraEnabled == enabled) return;
+    _cameraEnabled = enabled;
+    await _session?.setCameraEnabled(enabled);
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> setScreenSharing(bool enabled) async {
+    final session = _session;
+    if (_disposed ||
+        session == null ||
+        screenSharing == enabled ||
+        _changingScreenShare) {
       return;
     }
-    _cameraEnabled = enabled;
-    final roomId = activeRoomId;
-    notifyListeners();
-    if (roomId != null) {
-      await _rejoinPreservingState(roomId);
+    _changingScreenShare = true;
+    _error = null;
+    try {
+      if (enabled && !await ScreenCaptureService.prepare()) return;
+      if (_disposed || !identical(session, _session)) return;
+      await session.setScreenSharing(enabled);
+    } catch (exception) {
+      _error = friendlyError(exception);
+    } finally {
+      _changingScreenShare = false;
+      if (!screenSharing) await ScreenCaptureService.stop();
+      if (!_disposed) notifyListeners();
     }
   }
 
   Future<void> _rejoinPreservingState(String roomId) async {
     if (_rejoining || _disposed) return;
     _rejoining = true;
-    _status = VoiceConnectionStatus.reconnecting;
-    notifyListeners();
-    final wasMuted = _muted;
-    final wasDeafened = _deafened;
     try {
-      await leave();
       await join(roomId);
-      if (_status == VoiceConnectionStatus.connected) {
-        if (wasMuted) await setMuted(true);
-        if (wasDeafened) await setDeafened(true);
-      }
     } finally {
       _rejoining = false;
     }
   }
 
-  Future<void> setScreenSharing(bool enabled) async {
-    final call = _activeCall;
-    if (call == null ||
-        _disposed ||
-        _screenSharing == enabled ||
-        _changingScreenShare) {
-      return;
-    }
-    if (enabled &&
-        (_status != VoiceConnectionStatus.connected ||
-            call.localParticipant == null ||
-            _connectivity.connectedPeers == 0)) {
-      _error =
-          'Wait for another participant to connect before sharing your screen.';
-      notifyListeners();
-      return;
-    }
-    _error = null;
-    _changingScreenShare = true;
-    try {
-      if (enabled) {
-        if (!await ScreenCaptureService.prepare()) return;
-        if (_disposed ||
-            !identical(call, _activeCall) ||
-            _status != VoiceConnectionStatus.connected ||
-            _connectivity.connectedPeers == 0) {
-          return;
-        }
-      }
-      await call.backend.setScreensharingEnabled(call, enabled, '');
-      if (_disposed || !identical(call, _activeCall)) {
-        await call.backend.setScreensharingEnabled(call, false, '');
-        return;
-      }
-      _screenSharing = call.backend.localScreenshareStream != null;
-    } catch (exception) {
-      _error = friendlyError(exception);
-      _screenSharing = call.backend.localScreenshareStream != null;
-    } finally {
-      _changingScreenShare = false;
-      if (!_screenSharing) await ScreenCaptureService.stop();
-    }
-    if (!_disposed) notifyListeners();
-  }
+  Future<void> leave() => _leaving ??= _leave().whenComplete(() {
+    _leaving = null;
+  });
 
-  void _applyLocalMuteGate() {
-    final call = _activeCall;
-    if (call == null) return;
-    final local = call.backend.localUserMediaStream;
-    if (local != null) {
-      if (local.isAudioMuted() != _muted) local.setAudioMuted(_muted);
-      setRtcAudioMuted(local.stream?.getAudioTracks() ?? const [], _muted);
-    }
-    for (final wrapped in call.backend.userMediaStreams) {
-      if (wrapped.isLocal()) {
-        if (wrapped.isAudioMuted() != _muted) wrapped.setAudioMuted(_muted);
-        setRtcAudioMuted(wrapped.stream?.getAudioTracks() ?? const [], _muted);
-      }
-    }
-    // Mesh calls clone the microphone stream for each peer. Muting only the
-    // original capture stream is insufficient if SDK device enumeration fails.
-    for (final peer in _voip?.calls.values ?? const <CallSession>[]) {
-      if (peer.room.id != call.room.id ||
-          peer.groupCallId != call.groupCallId) {
-        continue;
-      }
-      final microphone = peer.localUserMediaStream;
-      if (microphone == null) continue;
-      if (microphone.isAudioMuted() != _muted) microphone.setAudioMuted(_muted);
-      setRtcAudioMuted(microphone.stream?.getAudioTracks() ?? const [], _muted);
-    }
-    if (_muted) {
-      _inputLevel = 0;
-      if (_activeSpeakerUserId == _client.userID) _activeSpeakerUserId = null;
-    }
-  }
-
-  Future<void> setMuted(bool muted) async {
-    if (_disposed || _muted == muted) return;
-    _muted = muted;
-    // Do not depend on device enumeration/signalling to disable capture.
-    _applyLocalMuteGate();
-    notifyListeners();
-    if (_callSound && !_rejoining) unawaited(AppSounds.muteChanged(muted));
-    final call = _activeCall;
-    if (call == null) return;
-    try {
-      await call.backend.setDeviceMuted(call, muted, MediaInputKind.audioinput);
-    } catch (exception) {
-      _error = friendlyError(exception);
-      notifyListeners();
-      rethrow;
-    } finally {
-      _applyLocalMuteGate();
-    }
-  }
-
-  Future<void> leave() async {
+  Future<void> _leave() async {
+    ++_generation;
     dismissIncomingCall();
     _participantSoundsReady = false;
     _remoteUsers = {};
-    _voip?.currentGroupCID = null;
-    _voip?.finishJoining();
-    _connectivityTimer?.cancel();
-    _peers.clear();
-    _connectivity = const RtcConnectivity();
-    final call = _activeCall;
-    if (call == null) {
-      await ScreenCaptureService.stop();
-      _status = VoiceConnectionStatus.disconnected;
-      _error = null;
-      if (!_disposed) notifyListeners();
-      return;
-    }
+    _joiningRoomId = null;
+    final session = _session;
+    _session = null;
+    session?.removeListener(_sessionChanged);
     _status = _rejoining
         ? VoiceConnectionStatus.reconnecting
         : VoiceConnectionStatus.disconnecting;
     if (!_disposed) notifyListeners();
-    final playDisconnectSound = _callSound && !_rejoining && !_disposed;
     try {
-      await call.leave();
+      await session?.close();
     } finally {
-      _inputMeterTimer?.cancel();
-      _inputMeterTimer = null;
-      _inputLevel = 0;
-      await _callSubscription?.cancel();
-      _callSubscription = null;
-      _activeCall = null;
-      _activeSpeakerUserId = null;
-      if (kIsWeb) await _syncWebAudio();
-      _screenSharing = false;
       await ScreenCaptureService.stop();
       _status = _rejoining
           ? VoiceConnectionStatus.reconnecting
           : VoiceConnectionStatus.disconnected;
+      _error = null;
       if (!_disposed) notifyListeners();
-      if (playDisconnectSound) unawaited(AppSounds.callDisconnected());
+      if (session != null && _callSound && !_rejoining && !_disposed) {
+        unawaited(AppSounds.callDisconnected());
+      }
     }
   }
 
@@ -1163,8 +639,6 @@ class MatrixVoiceController extends ChangeNotifier {
     unawaited(_lateRingEvents?.cancel());
     unawaited(_ringSync?.cancel());
     _incomingTimer?.cancel();
-    _inputMeterTimer?.cancel();
-    _connectivityTimer?.cancel();
     unawaited(leave());
     super.dispose();
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'update_dialog.dart';
+import 'socks_proxy_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1355,6 +1356,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _privacy() {
     final preferences = backend.preferences;
     return _section('Privacy & presence', [
+      const SocksProxySettingsTile(),
+      const Divider(height: 28),
       DropdownButtonFormField<DirectLinkPreviewMode>(
         key: const ValueKey('direct-link-preview-mode'),
         initialValue: preferences.directLinkPreviewMode,

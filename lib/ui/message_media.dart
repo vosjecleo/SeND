@@ -282,6 +282,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
     });
     try {
       final uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
+      SocksProxy.requireLocalPlayback(uri);
       await player.open(Media(uri.toString()), play: true);
       if (widget.loop) await player.setPlaylistMode(PlaylistMode.single);
       _opened = true;

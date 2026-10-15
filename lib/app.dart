@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'services/desktop_idle_service.dart';
 import 'ui/video_preparation_overlay.dart';
+import 'ui/socks_proxy_settings.dart';
 import 'services/app_sounds.dart';
 import 'services/application_visibility.dart';
 import 'services/browser_lifecycle.dart' as browser;
@@ -860,14 +861,19 @@ class _StartupScreen extends StatelessWidget {
   const _StartupScreen();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Opening SeND…'),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          const Text('Opening SeND…'),
+          if (!kIsWeb)
+            TextButton(
+              onPressed: () => showSocksProxySettings(context),
+              child: const Text('Connection settings'),
+            ),
         ],
       ),
     ),
@@ -895,6 +901,11 @@ class _StartupFailure extends StatelessWidget {
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               FilledButton(onPressed: onRetry, child: const Text('Retry')),
+              if (!kIsWeb)
+                TextButton(
+                  onPressed: () => showSocksProxySettings(context),
+                  child: const Text('Connection settings'),
+                ),
             ],
           ),
         ),

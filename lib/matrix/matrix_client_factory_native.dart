@@ -10,6 +10,8 @@ import '../services/android_video_thumbnail.dart';
 
 import 'matrix_state_types.dart';
 import 'encrypted_android_database.dart';
+import 'rtc/rtc_matrix_client.dart';
+import 'rtc/rtc_protocol.dart';
 
 /// Creates the Matrix SDK client and its platform-appropriate persistent store.
 ///
@@ -41,7 +43,7 @@ Future<Client> createMatrixClient() async {
     sqfliteFactory: ffiFactory,
     fileStorageLocation: dataDirectory.uri,
   );
-  return Client(
+  return RtcMatrixClient(
     'Deltiecord', // Persistent SDK client ID; preserve existing sessions.
     database: sdkDatabase,
     customVideoThumbnailGenerator: AndroidVideoThumbnail.generate,
@@ -50,6 +52,7 @@ Future<Client> createMatrixClient() async {
     // cannot briefly (or permanently, without another rebuild) treat a voice
     // room as a text room while the SDK lazily hydrates custom state.
     importantStateEvents: {
+      rtcCallMemberType,
       deltiecordRoomPresentationEventType,
       deltiecordSpaceChannelsEventType,
       deltiecordSpaceRolesEventType,

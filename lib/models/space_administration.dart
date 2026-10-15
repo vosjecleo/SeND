@@ -267,8 +267,15 @@ const administrationRules = [
   ),
   AdministrationRule(
     'voice_membership',
-    'Join/leave voice sessions',
-    eventType: 'com.famedly.call.member',
+    'Join/leave calls (state membership)',
+    eventType: 'org.matrix.msc3401.call.member',
+  ),
+  AdministrationRule(
+    'voice_sticky_membership',
+    'Join/leave calls (unencrypted sticky membership)',
+    eventType: 'org.matrix.msc4143.rtc.member',
+    stateEvent: false,
+    fallback: 0,
   ),
   AdministrationRule(
     'voice_notification',

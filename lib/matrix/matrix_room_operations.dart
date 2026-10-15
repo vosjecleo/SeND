@@ -653,6 +653,20 @@ extension _MatrixRoomOperations on MatrixBackend {
         preset: CreateRoomPreset.privateChat,
         visibility: Visibility.private,
         topic: topic.trim().isEmpty ? null : topic.trim(),
+        // New rooms allow MatrixRTC membership without granting general
+        // state editing. Existing room permissions are never rewritten here.
+        powerLevelContentOverride: {
+          'events': {
+            'org.matrix.msc3401.call.member': 0,
+            'm.room.name': 50,
+            'm.room.topic': 50,
+            'm.room.avatar': 50,
+            'm.room.encryption': 100,
+            'm.room.power_levels': 100,
+            'm.room.server_acl': 100,
+            'm.room.tombstone': 100,
+          },
+        },
         initialState: [
           if (_selectedSpaceId case final spaceId?)
             StateEvent(

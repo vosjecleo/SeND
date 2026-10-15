@@ -31,11 +31,13 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals' \
   "$workspace/source/rust/target/wasm32-unknown-unknown/release/vodozemac_bindings_dart.wasm" \
   --target no-modules --no-typescript --out-dir "$PWD/web/pkg" --out-name vodozemac_bindings_dart
 flutter pub get --enforce-lockfile
+dart compile js third_party/livekit_e2ee/e2ee.worker.dart -o web/e2ee.worker.dart.js -m
 bash packaging/build-push-crypto.sh
 python3 packaging/flutter-with-credentials.py build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run "$@"
 test -s build/web/pkg/vodozemac_bindings_dart_bg.wasm
 test -s build/web/sw.js
 test -s build/web/browser_bridge.js
+test -s build/web/e2ee.worker.dart.js
 release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
 [[ "$release_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
 mkdir -p dist

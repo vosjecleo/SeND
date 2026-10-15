@@ -120,17 +120,22 @@ extension _MatrixRoomMetadata on MatrixBackend {
 
   List<VoiceParticipantSummary> _voiceParticipants(Room room) {
     final memberStates = room.states[EventTypes.GroupCallMember];
-    if (memberStates == null) return const [];
     final now = DateTime.now().millisecondsSinceEpoch;
     final participants = <String, VoiceParticipantSummary>{};
-    for (final state in memberStates.values) {
+    final activeUsers = <String>{
+      for (final member in _voice?.membersForRoom(room) ?? const [])
+        member.userId,
+    };
+    for (final state in memberStates?.values ?? <Event>[]) {
       final memberships = state.content.tryGetList('memberships') ?? const [];
       final active = memberships.whereType<Map>().any((membership) {
         final expires = membership['expires_ts'];
         return expires is int && expires > now;
       });
       if (!active) continue;
-      final userId = state.senderId;
+      activeUsers.add(state.senderId);
+    }
+    for (final userId in activeUsers) {
       final user = room.unsafeGetUserFromMemoryOrFallback(userId);
       participants[userId] = VoiceParticipantSummary(
         userId: userId,
@@ -179,6 +184,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
       if (kIsWeb) await Future<void>.delayed(const Duration(milliseconds: 16));
       do {
         _roomMetadataRefreshRequested = false;
+        await _voice?.refreshMemberships();
         final joinedRooms = _joinedRooms;
         final joinedRoomIds = joinedRooms.map((room) => room.id).toSet();
         _roomHeroUsersLoaded.removeWhere(

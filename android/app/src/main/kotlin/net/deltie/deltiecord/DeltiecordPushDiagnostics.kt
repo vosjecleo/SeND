@@ -75,6 +75,9 @@ object DeltiecordPushDiagnostics {
                 val body = JSONObject().put("notification", notification)
                     .toString()
                     .toByteArray(Charsets.UTF_8)
+                check(!NetworkProxyPolicy.blocked(context)) {
+                    "Notification gateway diagnostics are blocked by the proxy policy."
+                }
                 val connection = URL(gateway).openConnection() as HttpURLConnection
                 try {
                     connection.requestMethod = "POST"

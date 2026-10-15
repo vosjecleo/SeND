@@ -601,7 +601,10 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _joinVoiceRoom(String roomId) async {
     _initializeVoice();
     await _voice?.join(roomId);
-    await _publishActiveCallDevice(roomId);
+    if (_voice?.activeRoomId == roomId &&
+        _voice?.status == VoiceConnectionStatus.connected) {
+      await _publishActiveCallDevice(roomId);
+    }
   }
 
   Future<void> _setVoiceMuted(bool muted) async => _voice?.setMuted(muted);

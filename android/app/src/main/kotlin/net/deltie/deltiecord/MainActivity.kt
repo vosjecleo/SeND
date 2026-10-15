@@ -44,6 +44,37 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "net.deltie.send/network_privacy").setMethodCallHandler { call, result ->
+            if (call.method != "setProxyPolicy") result.notImplemented()
+            else try {
+                NetworkProxyPolicy.set(this, call.argument<Boolean>("block") == true)
+                result.success(null)
+            } catch (_: Exception) {
+                result.error("proxy_policy", "Could not save the proxy policy.", null)
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "net.deltie.send/rtc_security").setMethodCallHandler { call, result ->
+            if (call.method != "silenceDebugLogging") {
+                result.notImplemented()
+            } else {
+                try {
+                    // Dart initializes WebRTC first. Disable its native debug
+                    // sink too: the injectable logger alone does not control it.
+                    // flutter_webrtc owns this runtime dependency rather than
+                    // exporting it to the app's Kotlin compile classpath. Its
+                    // consumer ProGuard rules retain all org.webrtc classes.
+                    val logging = Class.forName("org.webrtc.Logging")
+                    val severity = Class.forName("org.webrtc.Logging\$Severity")
+                    val none = severity.getField("LS_NONE").get(null)
+                    logging.getMethod("enableLogToDebugOutput", severity).invoke(null, none)
+                    result.success(null)
+                } catch (_: Exception) {
+                    result.error("rtc_log_security", "Could not secure call diagnostics.", null)
+                }
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "net.deltie.deltiecord/screen_share").setMethodCallHandler { call, result ->
             val service = Intent(this, ScreenShareService::class.java)
             when (call.method) {

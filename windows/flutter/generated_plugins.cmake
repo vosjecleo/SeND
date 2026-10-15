@@ -3,11 +3,13 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  connectivity_plus
   file_selector_windows
   flutter_secure_storage_windows
   flutter_timezone
   flutter_webrtc
   irondash_engine_context
+  livekit_client
   media_kit_libs_windows_video
   media_kit_video
   record_windows

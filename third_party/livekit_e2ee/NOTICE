@@ -1,0 +1,10 @@
+LiveKit Flutter E2EE worker, from livekit_client 2.13.1 (pub.dev archive).
+Copyright LiveKit, Inc. Licensed under Apache-2.0, see LICENSE.
+
+SeND changes: forward keyDerivationAlgorithm to the worker key options; select
+HKDF or PBKDF2 consistently for key import, derivation and ratcheting; accept
+the 256-entry MatrixRTC key ring. PBKDF2 remains the upstream default.
+
+Only the worker is copied here. The client SDK remains a pinned pub dependency.
+Rebuild this worker for every web release, and review these changes when
+updating livekit_client. Never modify the developer's global pub cache.

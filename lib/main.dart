@@ -16,9 +16,11 @@ import 'services/android_push_bridge.dart';
 import 'services/temporary_attachment_store.dart';
 import 'services/browser_lifecycle.dart';
 import 'services/browser_push.dart';
+import 'services/socks_proxy.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SocksProxy.initialize();
   if (kIsWeb && !await initializeBrowser()) {
     runApp(
       const MaterialApp(
@@ -107,6 +109,7 @@ Future<void> main() async {
 Future<void> deltiecordPushBackgroundMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
+  await SocksProxy.initialize();
   timezone_data.initializeTimeZones();
   await vodozemac.init();
   final resolver = HeadlessAndroidPushResolver();

@@ -6,6 +6,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'web_login_form.dart';
 import 'browser_login_dialog.dart';
+import 'socks_proxy_settings.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.backend, super.key});
@@ -73,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (!kIsWeb) const SocksProxySettingsTile(),
                         Icon(
                           Icons.forum_rounded,
                           size: 54,

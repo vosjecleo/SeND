@@ -16,7 +16,7 @@ class RtcConnectivity {
   final String detail;
 
   String get description =>
-      '$detail\n${pingMilliseconds == null ? 'RTC ping unavailable' : 'RTC ping: $pingMilliseconds ms (slowest peer)'}';
+      '$detail\n${pingMilliseconds == null ? 'RTC ping unavailable' : 'RTC ping: $pingMilliseconds ms (slowest connection)'}';
 }
 
 /// Only a nominated/selected successful candidate pair measures media-path RTT.

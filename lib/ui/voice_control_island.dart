@@ -10,15 +10,13 @@ Future<void> toggleVoiceScreenSharing(
   ChatBackend backend,
 ) async {
   if (!backend.voiceScreenSharing &&
-      backend.rtcConnectivity.connectedPeers == 0) {
+      backend.voiceConnectionStatus != VoiceConnectionStatus.connected) {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('No one is connected to you yet'),
+        title: const Text('Connect to the call first'),
         content: const Text(
-          'You can wait in the voice channel alone, but audio, video and screen '
-          'sharing need another connected participant. Wait for someone to join '
-          'and for the connection icon to turn green, then share your screen.',
+          'Wait for the call server to connect before sharing your screen.',
         ),
         actions: [
           TextButton(

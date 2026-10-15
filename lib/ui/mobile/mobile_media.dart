@@ -1,4 +1,5 @@
 import '../audio_attachment_player.dart';
+import '../../services/socks_proxy.dart';
 import '../video_playback_status.dart';
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
@@ -1403,6 +1404,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
     });
     try {
       final uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
+      SocksProxy.requireLocalPlayback(uri);
       await player.open(Media(uri.toString()), play: true);
       if (widget.loop) await player.setPlaylistMode(PlaylistMode.single);
       if (!mounted) {

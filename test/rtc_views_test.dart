@@ -10,25 +10,44 @@ import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
 void main() {
-  testWidgets(
-    'screen sharing without peers explains why capture cannot start',
-    (tester) async {
-      final backend = FakeBackend();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => toggleVoiceScreenSharing(context, backend),
-              child: const Text('Share'),
-            ),
+  testWidgets('connected SFU screen sharing does not require another peer', (
+    tester,
+  ) async {
+    final backend = _ScreenShareBackend()
+      ..currentVoiceStatus = VoiceConnectionStatus.connected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => toggleVoiceScreenSharing(context, backend),
+            child: const Text('Share'),
           ),
         ),
-      );
-      await tester.tap(find.text('Share'));
-      await tester.pumpAndSettle();
-      expect(find.text('No one is connected to you yet'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    expect(backend.started, 1);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+  testWidgets('screen sharing waits for the call server connection', (
+    tester,
+  ) async {
+    final backend = FakeBackend();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => toggleVoiceScreenSharing(context, backend),
+            child: const Text('Share'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connect to the call first'), findsOneWidget);
+  });
 
   testWidgets('opens voice rooms without exposing a message composer', (
     tester,
@@ -162,4 +181,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('mobile-call-island')), findsOneWidget);
   });
+}
+
+class _ScreenShareBackend extends FakeBackend {
+  int started = 0;
+  @override
+  Future<void> setVoiceScreenSharing(bool enabled) async {
+    if (enabled) started++;
+  }
 }

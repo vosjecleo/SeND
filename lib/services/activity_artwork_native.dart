@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
+import 'socks_proxy.dart';
 
 /// Only normalized artwork is published, never local paths, source URLs or
 /// embedded metadata. Small LRU prevents fetching/decoding on each scan.
@@ -61,6 +62,7 @@ class ActivityArtworkCache {
       return null;
     }
     // Remote metadata is untrusted: no redirects, credentials or private hosts.
+    if (SocksProxy.blockDirectTraffic) return null;
     final addresses = await InternetAddress.lookup(
       uri.host,
     ).timeout(const Duration(seconds: 3));

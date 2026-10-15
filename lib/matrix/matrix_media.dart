@@ -399,6 +399,7 @@ extension _MatrixMedia on MatrixBackend {
     }
     final uri = await event.getAttachmentUri(skipScanner: false);
     if (uri == null) return null;
+    SocksProxy.requireLocalPlayback(uri);
     final source = MediaPlaybackSource(
       uri: uri,
       headers: {
