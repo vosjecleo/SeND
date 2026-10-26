@@ -4,6 +4,43 @@ import 'package:deltiecord/services/room_mentions.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 
 void main() {
+  test('malformed mention recipients are ignored, not cast into a crash', () {
+    for (final value in ['bad', 7, <String, Object?>{}, null]) {
+      expect(
+        messageMentionsUser(
+          body: 'hi',
+          userId: '@me:test',
+          senderId: '@other:test',
+          mentions: {'user_ids': value},
+        ),
+        false,
+      );
+    }
+  });
+  test(
+    'own self-chat mentions get visual treatment without self notifications',
+    () {
+      expect(messageHasVisualMention(body: '@everyone'), true);
+      expect(messageHasVisualMention(body: 'Hi @me:test'), true);
+      expect(
+        messageHasVisualMention(
+          body: '@cleo',
+          formattedBody:
+              '<a href="https://matrix.to/#/@cleo:deltie.net">@cleo</a>',
+        ),
+        true,
+      );
+      expect(
+        messageMentionsUser(
+          body: '@everyone',
+          userId: '@me:test',
+          senderId: '@me:test',
+        ),
+        false,
+      );
+      expect(messageHasVisualMention(body: r'\@everyone'), false);
+    },
+  );
   test(
     'room-wide aliases include punctuation but not escapes or longer names',
     () {

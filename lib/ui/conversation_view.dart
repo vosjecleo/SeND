@@ -1173,6 +1173,7 @@ class _ConversationState extends State<_Conversation> {
                       controller: widget.controller,
                       focusNode: widget.composerFocus,
                       roomName: room.name,
+                      sending: widget.sending,
                       replyToMessageId: widget.replyingTo?.id,
                       // The editor remains live while this only gates attachment
                       // and submit controls for the in-flight request.

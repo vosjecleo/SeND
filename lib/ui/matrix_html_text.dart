@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/room_mentions.dart';
+import 'emoji_details.dart';
+import 'advanced_chat_dialogs.dart' show showStickerPackForEmoji;
 
 Future<void> _confirmFormattedLink(BuildContext context, Uri uri) async {
   final open = await showDialog<bool>(
@@ -90,6 +92,7 @@ List<InlineSpan> _emojiAwareTextSpans(
   String text,
   TextStyle style, {
   bool roomMentions = true,
+  List<TapGestureRecognizer>? emojiRecognizers,
 }) {
   if (text.isEmpty) return const [];
   if (roomMentions && style.fontFamily != 'monospace') {
@@ -104,6 +107,7 @@ List<InlineSpan> _emojiAwareTextSpans(
             text.substring(offset, match.start),
             style,
             roomMentions: false,
+            emojiRecognizers: emojiRecognizers,
           ),
         );
         result.add(
@@ -126,6 +130,7 @@ List<InlineSpan> _emojiAwareTextSpans(
           text.substring(offset),
           style,
           roomMentions: false,
+          emojiRecognizers: emojiRecognizers,
         ),
       );
       return result;
@@ -148,6 +153,21 @@ List<InlineSpan> _emojiAwareTextSpans(
 
   for (final cluster in text.characters) {
     final isEmoji = _emojiPresentationPattern.hasMatch(cluster);
+    if (isEmoji && emojiRecognizers != null) {
+      flush();
+      bufferedEmoji = null;
+      final tap = TapGestureRecognizer()
+        ..onTap = () => showStockEmojiDetails(context, cluster);
+      emojiRecognizers.add(tap);
+      spans.add(
+        TextSpan(
+          text: cluster,
+          style: colourEmojiStyle(style),
+          recognizer: tap,
+        ),
+      );
+      continue;
+    }
     if (bufferedEmoji != null && bufferedEmoji != isEmoji) flush();
     bufferedEmoji = isEmoji;
     buffer.write(cluster);
@@ -209,6 +229,7 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
             context,
             widget.text.substring(offset, match.start),
             style,
+            emojiRecognizers: _recognizers,
           ),
         );
       }
@@ -245,13 +266,25 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
         ),
       );
       if (trailing.isNotEmpty) {
-        spans.addAll(_emojiAwareTextSpans(context, trailing, style));
+        spans.addAll(
+          _emojiAwareTextSpans(
+            context,
+            trailing,
+            style,
+            emojiRecognizers: _recognizers,
+          ),
+        );
       }
       offset = match.end;
     }
     if (offset < widget.text.length) {
       spans.addAll(
-        _emojiAwareTextSpans(context, widget.text.substring(offset), style),
+        _emojiAwareTextSpans(
+          context,
+          widget.text.substring(offset),
+          style,
+          emojiRecognizers: _recognizers,
+        ),
       );
     }
     final span = TextSpan(
@@ -349,7 +382,12 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
           : const TextStyle();
       final span = TextSpan(
         children: [
-          ..._emojiAwareTextSpans(context, widget.fallback, fallbackStyle),
+          ..._emojiAwareTextSpans(
+            context,
+            widget.fallback,
+            fallbackStyle,
+            emojiRecognizers: _linkRecognizers,
+          ),
           if (widget.trailing is! MessageMetadataSpan) ?widget.trailing,
         ],
       );
@@ -427,6 +465,8 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
         context,
         preformatted ? text : text.replaceAll(RegExp(r'[\t\r\n]+'), ' '),
         style,
+        roomMentions: !preformatted,
+        emojiRecognizers: _linkRecognizers,
       );
     }
     if (node is! dom.Element) return const [];
@@ -438,7 +478,12 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       final fallback =
           node.attributes['alt'] ?? node.attributes['title'] ?? ':emoji:';
       if (source == null || !source.isScheme('mxc')) {
-        return _emojiAwareTextSpans(context, fallback, style);
+        return _emojiAwareTextSpans(
+          context,
+          fallback,
+          style,
+          emojiRecognizers: _linkRecognizers,
+        );
       }
       final name = fallback.replaceAll(RegExp(r'^:|:$'), '');
       final reference = CustomEmojiReference(
@@ -448,7 +493,12 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       );
       final backend = widget.backend;
       if (backend == null) {
-        return _emojiAwareTextSpans(context, fallback, style);
+        return _emojiAwareTextSpans(
+          context,
+          fallback,
+          style,
+          emojiRecognizers: _linkRecognizers,
+        );
       }
       final image = CustomEmojiImage(
         backend: backend,
@@ -458,20 +508,20 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       return [
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
-          child: widget.onCustomEmojiTap == null
-              ? image
-              : Semantics(
-                  button: true,
-                  label: 'View ${reference.fallback} emoji pack',
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => widget.onCustomEmojiTap!(reference),
-                      child: image,
-                    ),
-                  ),
-                ),
+          child: Semantics(
+            button: true,
+            label: 'View ${reference.fallback} emoji pack',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => widget.onCustomEmojiTap != null
+                    ? widget.onCustomEmojiTap!(reference)
+                    : showStickerPackForEmoji(context, backend, reference),
+                child: image,
+              ),
+            ),
+          ),
         ),
       ];
     }

@@ -397,20 +397,23 @@ class _MobileChatShellState extends State<MobileChatShell>
           onPointerMove: (event) {
             final start = _pointerStarts[event.pointer];
             if (start == null || _detailsVisible || room == null) return;
+            final shell = context.findRenderObject();
+            if (_navigationVisible &&
+                shell is RenderBox &&
+                shell.globalToLocal(start).dx < 70) {
+              return;
+            }
             // Keep text-selection drags out of navigation. While editing, the
             // edge gesture and explicit navigation button remain available.
-            final editing =
-                FocusManager.instance.primaryFocus?.context
-                    ?.findAncestorStateOfType<EditableTextState>() !=
-                null;
-            if (editing && !_navigationVisible && start.dx > 28) return;
-            if (FocusManager.instance.primaryFocus?.context
-                        ?.findAncestorStateOfType<EditableTextState>() !=
-                    null &&
-                start.dy >
-                    MediaQuery.sizeOf(context).height -
-                        MediaQuery.viewInsetsOf(context).bottom -
-                        100) {
+            final editor = FocusManager.instance.primaryFocus?.context
+                ?.findAncestorStateOfType<EditableTextState>()
+                ?.context
+                .findRenderObject();
+            if (editor is RenderBox &&
+                editor.hasSize &&
+                (editor.localToGlobal(Offset.zero) & editor.size)
+                    .inflate(24)
+                    .contains(start)) {
               return;
             }
             final delta = event.position - start;

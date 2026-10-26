@@ -56,6 +56,8 @@ void main() {
         await enter('second');
         await send();
         expect(backend.sentMessages, ['first']);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byIcon(Icons.send), findsWidgets);
         await enter('third draft');
         gate.complete();
         await tester.pumpAndSettle();

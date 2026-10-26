@@ -1188,13 +1188,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       _reply = null;
       _edit = null;
     });
-    if (_pendingSends > 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message queued behind the current send.'),
-        ),
-      );
-    }
     try {
       await backend.enqueueRoomSend(roomId, () async {
         if (submittedAttachments.isEmpty) {
@@ -1681,14 +1674,22 @@ class _MobileMessageRow extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 message.pingedCurrentUser ||
-                    (albumMessages?.any((m) => m.pingedCurrentUser) ?? false)
+                    message.hasVisualMention ||
+                    (albumMessages?.any(
+                          (m) => m.pingedCurrentUser || m.hasVisualMention,
+                        ) ??
+                        false)
                 ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.11)
                 : highlighted
                 ? context.deltiecord.hover
                 : Colors.transparent,
             border:
                 message.pingedCurrentUser ||
-                    (albumMessages?.any((m) => m.pingedCurrentUser) ?? false)
+                    message.hasVisualMention ||
+                    (albumMessages?.any(
+                          (m) => m.pingedCurrentUser || m.hasVisualMention,
+                        ) ??
+                        false)
                 ? Border(
                     left: BorderSide(
                       color: Theme.of(context).colorScheme.primary,
@@ -2553,14 +2554,11 @@ class _MobileComposerState extends State<_MobileComposer> {
                       radius: 26,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(18, 12, 10, 12),
-                        child: widget.sending && _canRecord
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(_canRecord ? Icons.mic : Icons.send),
+                        child: Icon(
+                          widget.sending || !_canRecord
+                              ? Icons.send
+                              : Icons.mic,
+                        ),
                       ),
                     ),
                   ),

@@ -648,6 +648,7 @@ class ChatMessage {
     this.bookmarked = false,
     this.pinned = false,
     this.pingedCurrentUser = false,
+    this.hasVisualMention = false,
     this.senderColor,
     this.threadRootId,
     this.forumPost,
@@ -689,6 +690,7 @@ class ChatMessage {
   final bool bookmarked;
   final bool pinned;
   final bool pingedCurrentUser;
+  final bool hasVisualMention;
   final int? senderColor;
   final String? threadRootId;
   final ForumPost? forumPost;

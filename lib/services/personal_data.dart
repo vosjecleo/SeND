@@ -271,6 +271,27 @@ class PersonalData extends ChangeNotifier {
     await _changed();
   }
 
+  Future<void> setAll(Map<String, Object?> changes) async {
+    if (!ready || _closed) return;
+    final previous = _own['values'];
+    final next = Map<String, dynamic>.from(previous as Map);
+    for (final entry in changes.entries) {
+      if (entry.key.length > 2048 || jsonEncode(entry.value).length > 16000) {
+        throw StateError('Setting is too large');
+      }
+      next[entry.key] = {'clock': ++_clock, 'value': entry.value};
+    }
+    if (next.length > 1000) {
+      throw StateError('Personal settings limit reached.');
+    }
+    _own['values'] = next;
+    if (utf8.encode(jsonEncode(_own)).length > 240 * 1024) {
+      _own['values'] = previous;
+      throw StateError('Personal settings storage limit reached.');
+    }
+    await _changed();
+  }
+
   Future<void> _changed() async {
     _resolved = null;
     _dirty = true;

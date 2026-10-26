@@ -36,9 +36,15 @@ try {
     const empty=await call('stats');
     await call('put',{rows:Array.from({length:120},(_,i)=>row(String(i).padStart(3,'0'),'','image',42)),text:false,limit:16});
     const pages=[...await query(),...await query({offset:50}),...await query({offset:100})];
-    return {mediaOnly,noText,words,edited,redacted,isolated,reopened,disabled,empty,unique:new Set(pages).size};
+    await call('configure',{enabled:true,limit:16});
+    await call('put',{rows:[row('large','x'.repeat(5000000))],text:true,limit:16});
+    const warning=(await call('stats')).warning;
+    await call('ackWarning');await call('close');await call('open');
+    const acknowledged=(await call('stats')).warning;
+    await call('clear');const clearedWarning=(await call('stats')).warning;
+    return {mediaOnly,noText,words,edited,redacted,isolated,reopened,disabled,empty,unique:new Set(pages).size,warning,acknowledged,clearedWarning};
   });
-  assert.deepEqual(results,{mediaOnly:['image'],noText:[],words:['new','text'],edited:['text'],redacted:[],isolated:[],reopened:['text'],disabled:['image'],empty:{bytes:0,entries:0},unique:120});
+  assert.deepEqual(results,{mediaOnly:['image'],noText:[],words:['new','text'],edited:['text'],redacted:[],isolated:[],reopened:['text'],disabled:['image'],empty:{bytes:0,entries:0,budgetBytes:0,warning:0},unique:120,warning:2,acknowledged:1,clearedWarning:0});
   assert(requests.every(url=>url.startsWith(`http://127.0.0.1:${server.address().port}/`)));
   console.log('Browser index: metadata-only mode, opt-in, terms, edits, redactions, account isolation, restart, opt-out and clearing passed. No media/network requests.');
 } finally {await browser.close();server.close();}

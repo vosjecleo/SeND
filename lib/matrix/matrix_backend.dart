@@ -608,7 +608,11 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
-    await (await openHistoryIndex())?.configure(text: enabled, limit: limitMiB);
+    final index = await openHistoryIndex();
+    if (index == null) {
+      throw StateError('Local search storage could not be opened.');
+    }
+    await index.configure(text: enabled, limit: limitMiB);
     _indexFingerprints.clear();
     if (_timeline case final timeline?) await _indexEvents(timeline.events);
   }
@@ -633,15 +637,25 @@ class MatrixBackend extends ChatBackend {
         return null;
       }
       _historyIndex = index;
-      index.addListener(_notifyBackendListeners);
+      index.addListener(_indexWarningChanged);
       await _indexEventSubscription?.cancel();
       _indexEventSubscription = client.onTimelineEvent.stream.listen((event) {
         unawaited(_indexEvents([event]).catchError((Object _) {}));
       });
+      _notifyBackendListeners();
       return index;
     } catch (_) {
       await index.close();
       return null;
+    }
+  }
+
+  bool _indexWarningPending = false;
+  void _indexWarningChanged() {
+    final pending = _historyIndex?.warningPending == true;
+    if (pending != _indexWarningPending) {
+      _indexWarningPending = pending;
+      _notifyBackendListeners();
     }
   }
 
@@ -2051,7 +2065,7 @@ class MatrixBackend extends ChatBackend {
   @override
   void dispose() {
     _personal?.removeListener(_notifyBackendListeners);
-    _historyIndex?.removeListener(_notifyBackendListeners);
+    _historyIndex?.removeListener(_indexWarningChanged);
     unawaited(_indexEventSubscription?.cancel());
     unawaited(_historyIndex?.close());
     FavouriteReactionsStore.instance.bind(null);

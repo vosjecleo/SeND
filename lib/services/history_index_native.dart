@@ -51,6 +51,31 @@ class HistoryStore {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS event_kind_time ON events(room,kind,time DESC,id)',
     );
+    final settingsColumns = (await db.rawQuery(
+      'PRAGMA table_info(settings)',
+    )).map((r) => r['name']).toSet();
+    if (!settingsColumns.contains('warning_shown')) {
+      await db.execute(
+        'ALTER TABLE settings ADD COLUMN warning_shown INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS history_totals (id INTEGER PRIMARY KEY, n INTEGER NOT NULL, size INTEGER NOT NULL)',
+    );
+    if ((await db.query('history_totals', columns: ['id'], limit: 1)).isEmpty) {
+      await db.execute(
+        'INSERT INTO history_totals SELECT 1,COUNT(*),COALESCE(SUM(bytes),0) FROM events',
+      );
+    }
+    await db.execute(
+      'CREATE TRIGGER IF NOT EXISTS history_added AFTER INSERT ON events BEGIN UPDATE history_totals SET n=n+1,size=size+new.bytes WHERE id=1; END',
+    );
+    await db.execute(
+      'CREATE TRIGGER IF NOT EXISTS history_removed AFTER DELETE ON events BEGIN UPDATE history_totals SET n=n-1,size=size-old.bytes WHERE id=1; END',
+    );
+    await db.execute(
+      'CREATE TRIGGER IF NOT EXISTS history_updated AFTER UPDATE ON events BEGIN UPDATE history_totals SET size=size-old.bytes+new.bytes WHERE id=1; END',
+    );
     try {
       await db.execute(
         "CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(id UNINDEXED, room UNINDEXED, body, tokenize='trigram')",
@@ -60,7 +85,7 @@ class HistoryStore {
       _fts = false;
     }
     final config = await settings();
-    final limit = (config['limit'] as int? ?? 50).clamp(16, 250);
+    final limit = (config['limit'] as int? ?? 100).clamp(16, 250);
     final pages =
         (await db.rawQuery('PRAGMA page_size')).first.values.first as int;
     await db.rawQuery(
@@ -75,16 +100,21 @@ class HistoryStore {
       'enabled': rows.first['enabled'] == 1,
       'prompted': rows.first['prompted'] == 1,
       'limit': rows.first['budget'],
+      'warning': rows.first['warning_shown'],
     };
   }
 
   Future<void> configure(bool enabled, int limit) async {
     final db = database!;
+    final previous = await settings();
     await db.insert('settings', {
       'id': 1,
       'enabled': enabled ? 1 : 0,
       'prompted': 1,
       'budget': limit,
+      'warning_shown': previous['limit'] == limit
+          ? previous['warning'] ?? 0
+          : 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
     if (!enabled) {
       await db.transaction((txn) async {
@@ -122,6 +152,13 @@ class HistoryStore {
       0,
       (n, row) => n + 1024 + utf8.encode(jsonEncode(row)).length * 3,
     );
+    final total = (await db.query('history_totals', where: 'id=1')).single;
+    if ((total['size'] as int) + incoming >= limit * 1048576 * .65 * .8 ||
+        (total['n'] as int) + rows.length >= 80000) {
+      await db.rawUpdate(
+        'UPDATE settings SET warning_shown=2 WHERE id=1 AND warning_shown=0',
+      );
+    }
     await _trim(limit, reserve: incoming);
     if ((await stats())['bytes']! + incoming > limit * 1048576 * .8) {
       await db.execute('VACUUM');
@@ -197,9 +234,8 @@ class HistoryStore {
   });
   Future<void> _trim(int limit, {int reserve = 0}) async {
     for (var i = 0; i < 1000; i++) {
-      final rows = await database!.rawQuery(
-        'SELECT COALESCE(SUM(bytes),0) AS size,COUNT(*) AS n FROM events',
-      );
+      final rows = await database!.query('history_totals', where: 'id=1');
+      if (rows.first['n'] == 0) break;
       if ((rows.first['size'] as int) <= limit * 1024 * 1024 * .65 - reserve &&
           (rows.first['n'] as int) <= 100000) {
         break;
@@ -262,25 +298,34 @@ class HistoryStore {
   }
 
   Future<Map<String, int>> stats() async {
-    final count =
-        (await database!.rawQuery(
-              'SELECT COUNT(*) AS n FROM events',
-            )).first['n']
-            as int;
+    final total = (await database!.query(
+      'history_totals',
+      where: 'id=1',
+    )).single;
     final pages =
         (await database!.rawQuery('PRAGMA page_count')).first.values.first
             as int;
     final size =
         (await database!.rawQuery('PRAGMA page_size')).first.values.first
             as int;
-    return {'entries': count, 'bytes': pages * size};
+    final config = await settings();
+    return {
+      'entries': total['n'] as int,
+      'bytes': pages * size,
+      'budgetBytes': ((total['size'] as int) / .65).ceil(),
+      'warning': config['warning'] as int? ?? 0,
+    };
   }
 
   Future<void> clear() async {
     await database!.delete('events');
     if (_fts) await database!.delete('search');
     await database!.execute('VACUUM');
+    await database!.rawUpdate('UPDATE settings SET warning_shown=0 WHERE id=1');
   }
+
+  Future<void> acknowledgeWarning() async =>
+      database!.rawUpdate('UPDATE settings SET warning_shown=1 WHERE id=1');
 
   Future<String?> revision(String id) async {
     final row = await database!.query(

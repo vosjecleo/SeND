@@ -172,7 +172,11 @@ class _MessageRowState extends State<_MessageRow> {
   Widget build(BuildContext context) {
     final pinged =
         message.pingedCurrentUser ||
-        (widget.albumMessages?.any((m) => m.pingedCurrentUser) ?? false);
+        message.hasVisualMention ||
+        (widget.albumMessages?.any(
+              (m) => m.pingedCurrentUser || m.hasVisualMention,
+            ) ??
+            false);
     final compactness = widget.backend.preferences.compactness;
     final rowPadding = (7 - compactness * 5) / 2;
     final groupGap = 7 - compactness * 2;

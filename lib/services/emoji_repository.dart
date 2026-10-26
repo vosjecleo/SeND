@@ -151,6 +151,8 @@ class EmojiRepository {
 
   static final instance = EmojiRepository._();
   Future<List<EmojiEntry>>? _loading;
+  List<EmojiEntry>? _entries;
+  List<EmojiEntry>? get cachedEntries => _entries;
 
   Future<List<EmojiEntry>> load() => _loading ??= _load();
 
@@ -252,7 +254,7 @@ class EmojiRepository {
         ),
       );
     }
-    return catalog;
+    return _entries = catalog;
   }
 
   // emojis.json follows the standard Unicode presentation order. Keeping the

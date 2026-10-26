@@ -266,6 +266,13 @@ extension _MatrixMessages on MatrixBackend {
         continue;
       }
       if (event.type != EventTypes.Message) continue;
+      if (!index.enabled &&
+          !event.hasAttachment &&
+          event.relationshipType != RelationshipTypes.edit &&
+          !event.redacted &&
+          !RegExp(r'https?://', caseSensitive: false).hasMatch(event.body)) {
+        continue;
+      }
       String? revision;
       var editedAt = 0;
       if (event.relationshipType == RelationshipTypes.edit) {

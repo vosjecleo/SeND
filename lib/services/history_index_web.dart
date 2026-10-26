@@ -55,6 +55,7 @@ class HistoryStore {
     (key, value) => MapEntry(key as String, (value as num).toInt()),
   );
   Future<void> clear() async => _call('clear');
+  Future<void> acknowledgeWarning() async => _call('ackWarning');
   Future<String?> revision(String id) async =>
       await _call('revision', {'id': id}) as String?;
   Future<void> close() async => _call('close');

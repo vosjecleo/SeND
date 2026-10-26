@@ -434,19 +434,36 @@ Future<void> showStickerPackForMessage(
   required String messageId,
   required ChatAttachment attachment,
 }) async {
-  await backend.refreshStickerPacks();
-  final reference = await backend.getAttachmentReference(messageId);
-  if (!context.mounted) return;
-  final pack = await backend.resolveStickerPack(
-    packId: attachment.stickerPackId,
-    mediaUri: reference == null ? null : Uri.tryParse(reference),
-  );
-  if (!context.mounted) return;
-  await _showStickerPackDetails(
-    context,
-    backend,
-    pack: pack,
-    unavailableName: attachment.stickerPackName ?? 'Sticker',
+  final preview = backend.downloadAttachment(messageId);
+  Future<StickerPackSummary?> resolve() async {
+    final reference = await backend.getAttachmentReference(messageId);
+    return backend.resolveStickerPack(
+      packId: attachment.stickerPackId,
+      mediaUri: reference == null ? null : Uri.tryParse(reference),
+    );
+  }
+
+  final pack = resolve();
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _ExpressionDetails(
+      backend: backend,
+      pack: pack,
+      fallbackPack: attachment.stickerPackName ?? 'Pack unavailable',
+      preview: FutureBuilder<Uint8List>(
+        future: preview,
+        builder: (context, snapshot) => snapshot.hasData
+            ? LifecycleMemoryImage(
+                bytes: snapshot.data!,
+                animated: attachment.animated,
+                autoplay:
+                    backend.preferences.autoplayGifs &&
+                    !backend.preferences.reducedMotion,
+                fit: BoxFit.contain,
+              )
+            : const Center(child: Icon(Icons.image_outlined, size: 64)),
+      ),
+    ),
   );
 }
 
@@ -455,18 +472,141 @@ Future<void> showStickerPackForEmoji(
   ChatBackend backend,
   CustomEmojiReference emoji,
 ) async {
-  await backend.refreshStickerPacks();
-  if (!context.mounted) return;
-  final pack = await backend.resolveStickerPack(
+  final pack = backend.resolveStickerPack(
     packId: emoji.packId,
     mediaUri: emoji.id,
   );
-  if (!context.mounted) return;
-  await _showStickerPackDetails(
-    context,
-    backend,
-    pack: pack,
-    unavailableName: emoji.fallback,
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _ExpressionDetails(
+      backend: backend,
+      label: emoji.fallback,
+      fallbackPack: 'Pack unavailable',
+      pack: pack,
+      preview: _StickerPreviewImage(
+        backend: backend,
+        sticker: StickerSummary(
+          id: emoji.id.toString(),
+          name: emoji.name,
+          mxcUri: emoji.id,
+          assetType: StickerAssetType.emoji,
+          packId: emoji.packId,
+        ),
+      ),
+    ),
+  );
+}
+
+class _ExpressionDetails extends StatefulWidget {
+  const _ExpressionDetails({
+    required this.backend,
+    required this.pack,
+    required this.preview,
+    required this.fallbackPack,
+    this.label,
+  });
+  final ChatBackend backend;
+  final Future<StickerPackSummary?> pack;
+  final Widget preview;
+  final String fallbackPack;
+  final String? label;
+  @override
+  State<_ExpressionDetails> createState() => _ExpressionDetailsState();
+}
+
+class _ExpressionDetailsState extends State<_ExpressionDetails> {
+  bool _adding = false, _added = false;
+  String? _error;
+  Future<void> _add(StickerPackSummary pack) async {
+    setState(() => _adding = true);
+    try {
+      await widget.backend.setStickerPackGloballyEnabled(pack, true);
+      if (mounted) setState(() => _added = true);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not add this pack. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    key: const ValueKey('expression-details'),
+    content: SingleChildScrollView(
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 200, height: 200, child: widget.preview),
+            if (widget.label != null) ...[
+              const SizedBox(height: 12),
+              SelectableText(widget.label!, textAlign: TextAlign.center),
+            ],
+            const SizedBox(height: 12),
+            FutureBuilder<StickerPackSummary?>(
+              future: widget.pack,
+              builder: (context, snapshot) {
+                final pack = snapshot.data;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      pack?.name ??
+                          (snapshot.connectionState == ConnectionState.done
+                              ? widget.fallbackPack
+                              : 'Loading pack…'),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (pack != null) ...[
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed:
+                            _adding ||
+                                _added ||
+                                pack.globallyEnabled ||
+                                pack.sourceRoomId == null
+                            ? null
+                            : () => _add(pack),
+                        icon: const Icon(Icons.add),
+                        label: Text(
+                          _added ||
+                                  pack.globallyEnabled ||
+                                  pack.sourceRoomId == null
+                              ? 'In your account'
+                              : 'Add to my account',
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _showStickerPackDetails(
+                          context,
+                          widget.backend,
+                          pack: pack,
+                          unavailableName: pack.name,
+                        ),
+                        child: const Text('View pack'),
+                      ),
+                    ],
+                    if (_error != null) Text(_error!),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Close'),
+      ),
+    ],
   );
 }
 

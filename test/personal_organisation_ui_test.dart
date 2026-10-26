@@ -56,10 +56,17 @@ void main() {
       );
       expect(find.text('Alpha'), findsNothing);
       expect(find.text('Beta'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.folder_outlined));
+      await tester.tap(find.byTooltip('Friends (1)'));
       await tester.pumpAndSettle();
       expect(find.text('Alpha'), findsOneWidget);
-      await tester.tap(find.byTooltip('Organise spaces and archived chats'));
+      expect(
+        find.byTooltip('Organise spaces and archived chats'),
+        findsNothing,
+      );
+      showPersonalOrganisation(
+        tester.element(find.byType(SpaceFolderRail)),
+        backend,
+      );
       await tester.pumpAndSettle();
       final reorder = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),

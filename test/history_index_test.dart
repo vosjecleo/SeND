@@ -121,6 +121,25 @@ void main() {
     await store.put([row('a', body: 'old words')], true, 25);
     expect(await query(terms: ['old']), isEmpty);
   });
+  test(
+    'warning survives pruning and is acknowledged until cache is cleared',
+    () async {
+      await store.configure(true, 1);
+      await store.put(
+        List.generate(220, (i) => row('$i', body: 'text ' * 220, time: i)),
+        true,
+        1,
+      );
+      expect((await store.stats())['warning'], 2);
+      expect(await query(terms: ['text'], limit: 1000), isNot(contains('0')));
+      expect(await query(terms: ['text'], limit: 1000), contains('219'));
+      await store.acknowledgeWarning();
+      expect((await store.stats())['warning'], 1);
+      await store.clear();
+      expect((await store.stats())['warning'], 0);
+      expect((await store.stats())['entries'], 0);
+    },
+  );
   test('budget evicts oldest references and keeps newer records', () async {
     await store.configure(true, 16);
     for (var batch = 0; batch < 32; batch++) {

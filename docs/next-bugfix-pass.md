@@ -189,12 +189,38 @@ checks. No version/build change, push or release was made for this pass.
 
 ## Intake 2026-10-26
 
-Baseline: 0.9.40+130, commit `bccc1c1`. Implemented locally at the user's request;
-no version bump, application build, push or release is authorized for this pass.
+Baseline: 0.9.40+130, commit `bccc1c1`. The initial changes shipped in 0.9.41+131.
 Existing bug IDs are retained; new IDs start after B38. The investigation notes
 below describe the starting code, not the current implementation.
 
-### Implementation, unreleased
+### Build 132 follow-up
+
+- Mention styling includes the sender's own messages and self-chats, separate
+  from notification policy. Malformed recipient metadata cannot crash mapping.
+- Queued sends keep the ordinary Send button without queue snackbars.
+- The new text-index default is 100 MiB. A persistent 80% warning survives a
+  large incoming batch that triggers eviction. Index controls offer retry after
+  failed storage opens. Existing enabled 50 MiB budgets are preserved.
+- Index writes coalesce into batches, totals update incrementally, and backend
+  listeners no longer refresh every row when only index statistics change.
+- Server dragging replaces the rail's folder-management button. One-second
+  holds followed by movement drag; stationary holds retain context menus.
+  Centre drops create folders, edge drops reorder, and changes remain personal.
+- Message emoji/stickers open a large preview with alias, pack and account-add
+  action. Stock emoji retain selectable text and show their catalogue alias.
+- A brief Pixel 8 / Android 17 session reproduced the swipe failure after the
+  keyboard closed while focus remained. Navigation now excludes the editor's
+  actual bounds rather than most of the screen. No messages were sent or app
+  data changed during the test. Private screenshots/traces are not published.
+- Release-app traces lacked Flutter frame timing and CPU scheduling samples.
+  They do not prove a GPU cause for low FPS. Android shell profiling is enabled
+  for future approved measurements without making release builds debuggable.
+- Local validation: 765 Flutter tests passed with four skips, static analysis
+  and formatting were clean, and the Chromium index test covered metadata-only
+  storage, edits, redactions, isolation, restart, warning acknowledgement and
+  clearing without media requests. Physical-device performance remains open.
+
+### Build 131 implementation
 
 - **B23 / R12, notifications:** Notifications now has Settings and Diagnostics
   tabs. Android can test gateway-to-receiver delivery, then request a local

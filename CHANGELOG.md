@@ -3,6 +3,27 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.41 build 132 (2026-10-26)
+
+- Highlight whole mention messages, including your own messages and self-chats,
+  without generating self-notifications. Ignore malformed recipient lists.
+- Keep queued sends silent and retain the normal Send button during uploads.
+- Raise the default text-index budget to 100 MiB. Warn at 80% capacity before
+  oldest-first pruning; pruning removes search context, not homeserver messages.
+  Storage controls now report index-opening failures and offer a retry.
+- Batch index writes and maintain incremental size/count totals instead of
+  repeatedly scanning the index. Avoid rebuilding the chat UI for every indexed
+  event. This removes unnecessary work, not a confirmed fix for all mobile lag.
+- Organise the server rail by dragging. Hold for one second, then move; drop
+  over another server to create a folder, or at its edge to reorder. Stationary
+  holds still open the menu. Remove the separate folder-management rail button.
+- Restore swipe-to-Home after closing the keyboard. Keep composer selection
+  drags separate from navigation and server dragging.
+- Open emoji and sticker details from messages: a large preview, emoji alias,
+  pack name and an Add to my account action for available server packs. Unicode
+  emoji show their alias and “Stock emoji”. Picker selection is unchanged.
+- Allow approved local Android shell profiling without enabling app debugging.
+
 ## SeND 0.9.41 build 131 (2026-10-26)
 
 - Start emoji autocomplete after one character following `:`. Rank all matching

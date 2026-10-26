@@ -199,6 +199,15 @@ extension _MatrixEventMapping on MatrixBackend {
                   timeline,
                   body: body,
                 ),
+                hasVisualMention: messageHasVisualMention(
+                  body: body,
+                  formattedBody: displayEvent.isRichMessage
+                      ? displayEvent.formattedText
+                      : null,
+                  mentions: displayEvent.content.tryGetMap<String, Object?>(
+                    'm.mentions',
+                  ),
+                ),
               );
             })
             .toList(growable: false)

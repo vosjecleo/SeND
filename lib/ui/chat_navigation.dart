@@ -540,6 +540,8 @@ class _SpaceBar extends StatelessWidget {
                 ),
                 SpaceFolderRail(
                   backend: backend,
+                  onSpaceMenu: (space, position) =>
+                      _showSpaceMenu(context, space, position),
                   itemBuilder: (space) => Padding(
                     padding: EdgeInsets.only(
                       bottom: _densityBetween(
@@ -549,16 +551,12 @@ class _SpaceBar extends StatelessWidget {
                       ),
                     ),
                     child: _SpaceButton(
+                      holdDraggable: true,
                       tooltip: space.name,
                       selected: backend.selectedSpaceId == space.id,
                       onTap: () => backend.selectSpace(space.id),
                       attentionCount: backend.pingCountForSpace(space.id),
                       unread: backend.hasUnreadForSpace(space.id),
-                      onSecondaryTapDown: (details) => _showSpaceMenu(
-                        context,
-                        space,
-                        details.globalPosition,
-                      ),
                       child: space.avatarBytes == null
                           ? Text(
                               _initials(space.name),
@@ -774,23 +772,26 @@ class _SpaceButton extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.child,
-    this.onSecondaryTapDown,
     this.attentionCount = 0,
     this.unread = false,
+    this.holdDraggable = false,
   });
 
   final String tooltip;
   final bool selected;
   final VoidCallback onTap;
   final Widget child;
-  final GestureTapDownCallback? onSecondaryTapDown;
   final int attentionCount;
   final bool unread;
+  final bool holdDraggable;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      triggerMode: holdDraggable
+          ? TooltipTriggerMode.manual
+          : TooltipTriggerMode.longPress,
       child: Align(
         child: SizedBox.square(
           key: ValueKey('space-button-$tooltip'),
@@ -816,7 +817,6 @@ class _SpaceButton extends StatelessWidget {
                     clipBehavior: Clip.hardEdge,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onSecondaryTapDown: onSecondaryTapDown,
                       child: InkWell(
                         onTap: onTap,
                         borderRadius: BorderRadius.circular(

@@ -13,7 +13,8 @@ bool messageMentionsUser({
 }) {
   if (senderId == userId) return false;
   if (mentions != null) {
-    return (mentions['user_ids'] as List? ?? const []).contains(userId) ||
+    final recipients = mentions['user_ids'];
+    return (recipients is List && recipients.contains(userId)) ||
         (mentions['room'] == true && canNotifyRoom);
   }
   // Older Matrix clients may omit m.mentions altogether. Do not use this
@@ -22,4 +23,44 @@ bool messageMentionsUser({
       RegExp(
         '${RegExp.escape(userId)}(?![A-Za-z0-9_:/-]|\\.[A-Za-z0-9])',
       ).hasMatch(body);
+}
+
+/// Visual mention styling also applies to the sender's own messages. It must
+/// not create self-notifications or change unread/notification policy.
+bool messageHasVisualMention({
+  required String body,
+  Map<String, Object?>? mentions,
+  String? formattedBody,
+}) {
+  final users = mentions?['user_ids'];
+  return (users is List && users.whereType<String>().isNotEmpty) ||
+      mentions?['room'] == true ||
+      containsRoomMention(body) ||
+      RegExp(
+        r'(?<![A-Za-z0-9_@/\\])@[A-Za-z0-9._=/-]+:[A-Za-z0-9][A-Za-z0-9.:-]*',
+      ).hasMatch(body) ||
+      _hasFormattedUserMention(formattedBody);
+}
+
+bool _hasFormattedUserMention(String? html) {
+  if (html == null) return false;
+  for (final link in RegExp(
+    r'''href\s*=\s*["']([^"']+)["']''',
+    caseSensitive: false,
+  ).allMatches(html)) {
+    final uri = Uri.tryParse(link.group(1)!);
+    if (uri?.host != 'matrix.to' || !{'https', 'http'}.contains(uri?.scheme)) {
+      continue;
+    }
+    try {
+      if (RegExp(
+        r'^/(?:user/)?@[^:/\s]+:[^/\s]+$',
+      ).hasMatch(Uri.decodeComponent(uri!.fragment))) {
+        return true;
+      }
+    } on FormatException {
+      continue;
+    }
+  }
+  return false;
 }

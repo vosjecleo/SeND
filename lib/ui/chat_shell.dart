@@ -463,13 +463,6 @@ class _ChatShellState extends State<ChatShell> {
       _replyingTo = null;
       _editingMessage = null;
     });
-    if (_pendingSends > 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message queued behind the current send.'),
-        ),
-      );
-    }
     _memoryDrafts.remove(sendingRoomId);
     _draftStore.remove(sendingRoomId);
     try {

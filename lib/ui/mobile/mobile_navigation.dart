@@ -429,11 +429,13 @@ class _SpaceRail extends StatelessWidget {
             children: [
               SpaceFolderRail(
                 backend: backend,
+                onSpaceMenu: (space, position) =>
+                    _showSpaceActions(context, space),
                 itemBuilder: (space) => _RailButton(
+                  holdDraggable: true,
                   selected: backend.selectedSpaceId == space.id,
                   tooltip: space.name,
                   onTap: () => backend.selectSpace(space.id),
-                  onLongPress: () => _showSpaceActions(context, space),
                   attentionCount: backend.pingCountForSpace(space.id),
                   unread: backend.hasUnreadForSpace(space.id),
                   child: MobileAvatar(
@@ -759,7 +761,7 @@ class _RailButton extends StatelessWidget {
     required this.onTap,
     required this.child,
     this.selected = false,
-    this.onLongPress,
+    this.holdDraggable = false,
     this.attentionCount = 0,
     this.unread = false,
     super.key,
@@ -768,7 +770,7 @@ class _RailButton extends StatelessWidget {
   final VoidCallback onTap;
   final Widget child;
   final bool selected;
-  final VoidCallback? onLongPress;
+  final bool holdDraggable;
   final int attentionCount;
   final bool unread;
 
@@ -777,6 +779,9 @@ class _RailButton extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
     child: Tooltip(
       message: tooltip,
+      triggerMode: holdDraggable
+          ? TooltipTriggerMode.manual
+          : TooltipTriggerMode.longPress,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -821,7 +826,6 @@ class _RailButton extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: onTap,
-                onLongPress: onLongPress,
                 child: SizedBox.square(
                   dimension: 54,
                   child: Center(child: child),

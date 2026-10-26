@@ -40,12 +40,14 @@ async function run(account,op,args={}) {
   if(op==='open') return true;
   if(op==='close') { db.close();databases.delete(account);return true; }
   if(op==='settings') return (await result(db.transaction('settings').objectStore('settings').get('config'))) || {};
-  if(op==='stats') return stats(db);
+  if(op==='stats') {const s=await stats(db), c=await result(db.transaction('settings').objectStore('settings').get('config'));return {...s,budgetBytes:s.bytes,warning:c?.warning||0};}
+  if(op==='ackWarning') {const tx=db.transaction('settings','readwrite'),finished=done(tx),s=tx.objectStore('settings');const c=await result(s.get('config'));s.put({...c,warning:1},'config');await finished;return true;}
   if(op==='revision') return (await result(db.transaction('events').objectStore('events').get(args.id)))?.revision || null;
-  if(op==='clear') { const tx=db.transaction(['events','settings'],'readwrite');const finished=done(tx);tx.objectStore('events').clear();tx.objectStore('settings').put({bytes:0,entries:0},'totals');await finished;return true; }
+  if(op==='clear') { const tx=db.transaction(['events','settings'],'readwrite');const finished=done(tx);tx.objectStore('events').clear();const s=tx.objectStore('settings'),c=await result(s.get('config'));s.put({...c,warning:0},'config');s.put({bytes:0,entries:0},'totals');await finished;return true; }
   if(op==='configure') {
     const tx=db.transaction(['events','settings'],'readwrite'), finished=done(tx);
-    tx.objectStore('settings').put({...args,prompted:true},'config');
+    const prior=await result(tx.objectStore('settings').get('config'));
+    tx.objectStore('settings').put({...args,prompted:true,warning:prior?.limit===args.limit ? prior.warning||0 : 0},'config');
     tx.objectStore('settings').delete('totals');
     if(!args.enabled) await walk(tx.objectStore('events').openCursor(),c=> {
       if(!c.value.kind) c.delete(); else c.update({...c.value,body:'',tokens:[],bytes:512+JSON.stringify([c.value.id,c.value.room,c.value.sender]).length*3});
@@ -64,7 +66,9 @@ async function run(account,op,args={}) {
       const value={...row,body};value.bytes=512+new TextEncoder().encode(JSON.stringify(value)).length*3;
       totals.bytes+=value.bytes;totals.entries++;
       store.put(value);
-    } tx.objectStore('settings').put(totals,'totals');await finished; await trim(db,args.limit);return true;
+    } const settings=tx.objectStore('settings'), config=await result(settings.get('config'));
+    if((totals.bytes>=args.limit*1048576*.8 || totals.entries>=80000) && !config?.warning)settings.put({...config,warning:2},'config');
+    settings.put(totals,'totals');await finished; await trim(db,args.limit);return true;
   }
   if(op==='query') {
     const tx=db.transaction('events'), store=tx.objectStore('events'), found=new Map();

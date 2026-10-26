@@ -3,6 +3,13 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('local shell profiling does not enable debugging', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    expect(manifest, contains('<profileable android:shell="true"'));
+    expect(manifest, isNot(contains('android:debuggable="true"')));
+  });
   test('Android exposes bounded text and media share targets', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',

@@ -24,7 +24,7 @@ Future<void> showHistoryIndexPrompt(
         title: const Text('Keep a local search index?'),
         content: const Text(
           'A text index makes repeat searches faster and uses extra storage on this device. '
-          'It starts with a 50 MiB limit. You can change the limit or clear it in Storage settings. '
+          'It starts with a 100 MiB limit. You can change the limit or clear it in Storage settings. '
           'Media indexing saves event references, not the images or videos. '
           'Indexed message text is decrypted on this device. This is separate from the normal chat cache.',
         ),
@@ -57,6 +57,22 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
   HistoryIndex? _index;
   bool _busy = true;
   String? _error;
+  void _updated() {
+    if (mounted) setState(() {});
+  }
+
+  void _bind(HistoryIndex? index) {
+    _index?.removeListener(_updated);
+    _index = index;
+    index?.addListener(_updated);
+  }
+
+  @override
+  void dispose() {
+    _index?.removeListener(_updated);
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,11 +80,17 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
   }
 
   Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
+    }
     try {
       final index = await widget.backend.openHistoryIndex();
       if (mounted) {
         setState(() {
-          _index = index;
+          _bind(index);
           if (index == null) {
             _error =
                 'Local indexing is unavailable. Check storage and reopen Settings to retry.';
@@ -92,6 +114,8 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
       } else {
         await widget.backend.configureHistoryIndex(enabled, limitMiB: limit);
       }
+      final index = await widget.backend.openHistoryIndex();
+      if (mounted) setState(() => _bind(index));
     } catch (_) {
       if (mounted) {
         setState(
@@ -115,14 +139,14 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
             'Off by default. Turning it off removes indexed message text. Your chat history stays intact.',
           ),
           value: index?.enabled ?? false,
-          onChanged: _busy || index == null ? null : (v) => _change(v),
+          onChanged: _busy ? null : (v) => _change(v),
         ),
         const Text(
           'Media indexing stores event IDs and media types. It does not download image, video or audio files.',
         ),
         if (index != null) ...[
           Text(
-            '${index.entries} indexed events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB',
+            '${index.entries} indexed events · ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}% of cache budget used',
           ),
           DropdownButtonFormField<int>(
             initialValue: index.limitMiB,
@@ -150,8 +174,93 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
           ),
         ],
         if (_busy) const LinearProgressIndicator(),
-        if (_error != null) Text(_error!),
+        if (_error != null) ...[
+          Text(_error!),
+          TextButton(
+            onPressed: _busy ? null : _load,
+            child: const Text('Retry opening search storage'),
+          ),
+        ],
       ],
     );
   }
+}
+
+class HistoryIndexWarningGate extends StatefulWidget {
+  const HistoryIndexWarningGate({
+    required this.backend,
+    required this.child,
+    super.key,
+  });
+  final ChatBackend backend;
+  final Widget child;
+  @override
+  State<HistoryIndexWarningGate> createState() =>
+      _HistoryIndexWarningGateState();
+}
+
+class _HistoryIndexWarningGateState extends State<HistoryIndexWarningGate> {
+  bool _showing = false, _scheduled = false;
+  @override
+  void initState() {
+    super.initState();
+    widget.backend.addListener(_check);
+    _check();
+  }
+
+  @override
+  void didUpdateWidget(HistoryIndexWarningGate old) {
+    super.didUpdateWidget(old);
+    if (old.backend != widget.backend) {
+      old.backend.removeListener(_check);
+      widget.backend.addListener(_check);
+    }
+    _check();
+  }
+
+  @override
+  void dispose() {
+    widget.backend.removeListener(_check);
+    super.dispose();
+  }
+
+  void _check() {
+    if (_showing ||
+        _scheduled ||
+        widget.backend.historyIndex?.warningPending != true) {
+      return;
+    }
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _scheduled = false;
+      if (!mounted || _showing) return;
+      final index = widget.backend.historyIndex;
+      if (index == null || !index.warningPending) return;
+      _showing = true;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Search cache almost full'),
+          content: Text(
+            'The search cache has reached 80% of its ${index.limitMiB} MiB budget. '
+            'SeND will prune search context from the oldest messages onward as space is needed. '
+            'Your messages and media on the homeserver will not be deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Got it'),
+            ),
+          ],
+        ),
+      );
+      try {
+        await index.acknowledgeCapacityWarning();
+      } catch (_) {}
+      _showing = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

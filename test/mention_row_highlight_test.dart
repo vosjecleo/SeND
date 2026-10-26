@@ -25,12 +25,13 @@ void main() {
             ..messageList = [
               ChatMessage(
                 id: 'ping',
-                sender: 'Other',
-                senderId: '@other:test',
+                sender: 'Me',
+                senderId: '@me:test',
                 body: body,
                 timestamp: DateTime(2026, 10, 26, 12),
                 pending: false,
-                pingedCurrentUser: true,
+                own: true,
+                hasVisualMention: true,
               ),
             ];
           if (mobile) {

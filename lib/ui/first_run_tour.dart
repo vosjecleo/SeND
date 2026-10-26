@@ -92,7 +92,8 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) =>
+      HistoryIndexWarningGate(backend: widget.backend, child: widget.child);
 }
 
 class FirstRunTourDialog extends StatefulWidget {

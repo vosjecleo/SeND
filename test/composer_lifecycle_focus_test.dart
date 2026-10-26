@@ -133,6 +133,22 @@ Iterable<MethodCall> _keyboardCommands(WidgetTester tester) =>
 
 void main() {
   testWidgets(
+    'timeline swipe opens Home after keyboard closes with focus retained',
+    (tester) async {
+      final keyboard = _KeyboardFeed();
+      final composer = await _openComposer(tester, keyboard);
+      keyboard.emit(visible: false);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(composer).focusNode!.hasFocus, isTrue);
+      await tester.dragFrom(const Offset(110, 300), const Offset(270, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Home'), findsWidgets);
+      expect(find.text('Keep this draft'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
     'language subtype change restores a dismissed IME once without hiding it',
     (tester) async {
       final keyboard = _KeyboardFeed();

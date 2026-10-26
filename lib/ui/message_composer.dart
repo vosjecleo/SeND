@@ -25,6 +25,7 @@ class _MessageComposer extends StatefulWidget {
     required this.sendWithCtrlEnter,
     required this.maxHeight,
     this.replyToMessageId,
+    this.sending = false,
     super.key,
   });
 
@@ -51,6 +52,7 @@ class _MessageComposer extends StatefulWidget {
   final bool sendWithCtrlEnter;
   final double maxHeight;
   final String? replyToMessageId;
+  final bool sending;
 
   @override
   State<_MessageComposer> createState() => _MessageComposerState();
@@ -102,6 +104,7 @@ class _MentionPicker extends StatelessWidget {
 
 class _MessageComposerState extends State<_MessageComposer> {
   bool get _canRecord =>
+      !widget.sending &&
       widget.onRecord != null &&
       widget.pendingAttachments.isEmpty &&
       widget.controller.document.toPlainText().trim().isEmpty;
