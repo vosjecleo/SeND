@@ -15,7 +15,7 @@ class EmojiCompletion {
 /// backslash prevents composer replacement while editing `:name\:`; recipients
 /// receive the intended literal `:name:` text rather than the escape syntax.
 String unescapeLiteralEmojiAliases(String text) => text.replaceAllMapped(
-  RegExp(r':([a-zA-Z0-9_+-]{3,32})\\:'),
+  RegExp(r':([a-zA-Z0-9_+-]{1,32})\\:'),
   (match) => ':${match.group(1)}:',
 );
 
@@ -30,7 +30,7 @@ EmojiCompletion? findEmojiCompletion(String text, int cursorOffset) {
   if (_insideCode(before)) return null;
 
   final match = RegExp(
-    r'(?:^|\s):([a-zA-Z0-9_+-]{3,32})(:?)$',
+    r'(?:^|\s):([a-zA-Z0-9_+-]{1,32})(:?)$',
   ).firstMatch(before);
   if (match == null) return null;
   final start = before.lastIndexOf(

@@ -184,26 +184,36 @@ class _MessageComposerState extends State<_MessageComposer> {
     final start = completion.start;
     final query = completion.query;
     final generation = ++_emojiGeneration;
-    final customMatches = customEmojiEntries(
-      widget.backend.stickerPacks,
-    ).where((entry) => entry.matches(query)).take(3).toList(growable: false);
-    final familiarMatches = EmojiRepository.instance.familiarMatches(query);
-    if (familiarMatches.isNotEmpty) {
+    final customMatches = customEmojiEntries(widget.backend.stickerPacks);
+    final familiarMatches = EmojiRepository.instance.familiarMatches(
+      query,
+      limit: 100,
+    );
+    if (familiarMatches.isNotEmpty ||
+        customMatches.any((e) => e.matches(query))) {
       setState(() {
         _emojiStart = start;
-        _emojiMatches = [...customMatches, ...familiarMatches].take(3).toList();
+        _emojiMatches = rankEmojiCompletions(
+          [...customMatches, ...familiarMatches],
+          query,
+          FavouriteReactionsStore.instance.emojiUsage,
+        );
         _emojiSelection = 0;
       });
       _syncEmojiOverlay();
     }
-    EmojiRepository.instance.search(query, limit: 3).then((matches) {
+    EmojiRepository.instance.load().then((matches) {
       if (!mounted || generation != _emojiGeneration) return;
       setState(() {
         _emojiStart = start;
-        _emojiMatches = [...customMatches, ...matches].take(3).toList();
-        _emojiSelection = matches.isEmpty
+        _emojiMatches = rankEmojiCompletions(
+          [...customMatches, ...matches],
+          query,
+          FavouriteReactionsStore.instance.emojiUsage,
+        );
+        _emojiSelection = _emojiMatches.isEmpty
             ? 0
-            : _emojiSelection.clamp(0, matches.length - 1);
+            : _emojiSelection.clamp(0, _emojiMatches.length - 1);
       });
       _syncEmojiOverlay();
     });

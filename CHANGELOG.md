@@ -3,6 +3,50 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.41 build 131 (2026-10-26)
+
+- Start emoji autocomplete after one character following `:`. Rank all matching
+  custom and Unicode emoji by usage before shortening the list; matching later
+  in an alias still counts. Equal usage falls back to match relevance and name.
+- Add optional local text indexing, off by default, with an onboarding choice,
+  a 50 MiB default budget, a 100,000-event ceiling and Storage controls. Media
+  indexing keeps event references and types, not media files. Turning text
+  indexing off removes indexed text without deleting normal chat history.
+- Give media browsing its own history cursor and paged fullscreen viewers.
+  Reuse thumbnail requests, limit full-image viewer references to nearby items,
+  and match separate search words without the old phrase-only prefilter.
+- Add chat archiving, pinned chats, personal space folders and space ordering.
+  Sync these preferences, favourites and emoji/sticker/GIF usage across devices.
+  Old device favourites can be imported explicitly. Synced account data is
+  visible to the homeserver; it is not end-to-end encrypted.
+- Fetch profile activity independently of local detection and publication.
+  Remove the initial read delay, prioritize open profiles, and keep offline
+  listening-history subscriptions from being blocked by DM-row visibility.
+  Live activity still respects presence; completed listening history stays
+  visible offline.
+- Retain Libre.fm artwork and offer an optional MusicBrainz/Cover Art Archive
+  lookup for missing covers. The setting explains which metadata is sent.
+- Read Windows music-session metadata for track, artist, progress and artwork.
+  Treat Spotify IPC as music and its process fallback as an application, not a
+  game. Detection remains optional and respects per-program rules.
+- Add a Notifications Diagnostics tab with push delivery and local notification
+  tests, safe stage reports and Android permission status. Reuse valid existing
+  UnifiedPush registrations instead of registering again on restore.
+- Add a SOCKS5 connection test using unsaved settings, without direct fallback.
+- Preserve text-selection toolbar focus and keep selection drags out of mobile
+  navigation. Backspace on a rendered custom emoji removes its closing colon
+  without jumping to the start. Restore an editor once if an Android keyboard
+  language change dismisses its input connection.
+- Mark pending mobile spoilers visibly, put captions above collages, and measure
+  receipt/edited-marker placement from rendered content rather than estimates.
+  Keep media width intact. Correct mobile Yesterday labels across daylight saving.
+- Offer AppImage desktop integration in About so KDE can associate the window
+  with its installed icon and launcher.
+
+Sunup phone delivery, physical Gboard behaviour, Windows Spotify playback and
+KDE integration still need confirmation on the reporting devices. See the
+[bugfix notes](docs/next-bugfix-pass.md#intake-2026-10-26) for causes and checks.
+
 ## SeND 0.9.40 build 130 (2026-10-15)
 
 - Fix Android calls failing before connection. WebRTC's public debug-logging

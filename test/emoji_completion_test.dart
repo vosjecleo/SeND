@@ -13,10 +13,11 @@ void main() {
     expect(closed?.closed, isTrue);
   });
 
-  test('waits for three alias characters before searching', () {
-    expect(findEmojiCompletion(':o', 2), isNull);
-    expect(findEmojiCompletion(':3c', 3), isNull);
-    expect(findEmojiCompletion(':so', 3), isNull);
+  test('starts at the first alias character, but not a bare colon', () {
+    expect(findEmojiCompletion(':', 1), isNull);
+    expect(findEmojiCompletion(':o', 2)?.query, 'o');
+    expect(findEmojiCompletion(':3c', 3)?.query, '3c');
+    expect(findEmojiCompletion(':so', 3)?.query, 'so');
     expect(findEmojiCompletion(':sob', 4)?.query, 'sob');
   });
 
@@ -38,5 +39,6 @@ void main() {
 
   test('send-time escape preserves an ambiguous alias as plain text', () {
     expect(unescapeLiteralEmojiAliases(r'hello :party\:'), 'hello :party:');
+    expect(unescapeLiteralEmojiAliases(r':h\:'), ':h:');
   });
 }

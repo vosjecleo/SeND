@@ -118,6 +118,29 @@ List<EmojiEntry> customEmojiEntries(Iterable<StickerPackSummary> packs) => [
         ),
 ];
 
+/// Rank all matches before truncating, including custom aliases whose match
+/// occurs after a pack/name prefix. Usage keys are Unicode or stable MXC IDs.
+List<EmojiEntry> rankEmojiCompletions(
+  Iterable<EmojiEntry> entries,
+  String query,
+  Map<String, int> usage, {
+  int limit = 3,
+}) {
+  final matches = entries.where((e) => e.matches(query)).toList();
+  matches.sort((a, b) {
+    final frequency = (usage[b.favouriteKey] ?? 0).compareTo(
+      usage[a.favouriteKey] ?? 0,
+    );
+    if (frequency != 0) return frequency;
+    final relevance = a.score(query).compareTo(b.score(query));
+    if (relevance != 0) return relevance;
+    final name = a.shortcode.compareTo(b.shortcode);
+    return name != 0 ? name : a.favouriteKey.compareTo(b.favouriteKey);
+  });
+  final seen = <String>{};
+  return matches.where((e) => seen.add(e.favouriteKey)).take(limit).toList();
+}
+
 /// Lazily loaded local Unicode emoji catalogue and alias search index.
 ///
 /// Search never requires the network. Project-specific names and aliases live

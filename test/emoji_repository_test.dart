@@ -3,6 +3,46 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('completion ranks frequency before prefix relevance and truncation', () {
+    EmojiEntry entry(String name, String key) => EmojiEntry(
+      emoji: key,
+      name: name,
+      aliases: [name],
+      category: EmojiCategory.custom,
+    );
+    final matches = rankEmojiCompletions(
+      [
+        entry('happy', 'unused'),
+        entry('halo', 'other'),
+        entry('hand', 'another'),
+        entry('fir_hangry', 'frequent'),
+        entry('unrelated', 'most-used'),
+      ],
+      'ha',
+      {'frequent': 100, 'most-used': 200},
+    );
+    expect(matches.map((e) => e.shortcode), ['fir_hangry', 'halo', 'hand']);
+    expect(matches, hasLength(3));
+  });
+  test(
+    'equal usage retains match relevance and deterministic alias ordering',
+    () {
+      final entries = [
+        for (final name in ['fir_hangry', 'happy', 'ha'])
+          EmojiEntry(
+            emoji: name,
+            name: name,
+            aliases: [name],
+            category: EmojiCategory.custom,
+          ),
+      ];
+      expect(rankEmojiCompletions(entries, 'ha', {}).map((e) => e.shortcode), [
+        'ha',
+        'happy',
+        'fir_hangry',
+      ]);
+    },
+  );
 
   test(
     'local emoji search resolves familiar aliases without network',

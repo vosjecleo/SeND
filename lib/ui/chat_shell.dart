@@ -38,6 +38,7 @@ import '../services/secret_redaction.dart';
 import '../services/temporary_attachment_store.dart';
 import '../services/emoji_repository.dart';
 import '../services/emoji_completion.dart';
+import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/draft_store.dart';
 import 'giphy_dialog.dart';

@@ -308,24 +308,32 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     }
 
     final generation = ++_emojiGeneration;
-    final custom = customEmojiEntries(backend.stickerPacks)
-        .where((entry) => entry.matches(completion.query))
-        .take(3)
-        .toList(growable: false);
-    final familiar = EmojiRepository.instance.familiarMatches(completion.query);
+    final custom = customEmojiEntries(backend.stickerPacks);
+    final familiar = EmojiRepository.instance.familiarMatches(
+      completion.query,
+      limit: 100,
+    );
     setState(() {
       _emojiStart = completion.start;
-      _emojiMatches = [...custom, ...familiar].take(3).toList();
+      _emojiMatches = rankEmojiCompletions(
+        [...custom, ...familiar],
+        completion.query,
+        FavouriteReactionsStore.instance.emojiUsage,
+      );
       _emojiSelection = 0;
     });
-    EmojiRepository.instance.search(completion.query, limit: 3).then((matches) {
+    EmojiRepository.instance.load().then((matches) {
       if (!mounted || generation != _emojiGeneration) return;
       setState(() {
         _emojiStart = completion.start;
-        _emojiMatches = [...custom, ...matches].take(3).toList();
-        _emojiSelection = matches.isEmpty
+        _emojiMatches = rankEmojiCompletions(
+          [...custom, ...matches],
+          completion.query,
+          FavouriteReactionsStore.instance.emojiUsage,
+        );
+        _emojiSelection = _emojiMatches.isEmpty
             ? 0
-            : _emojiSelection.clamp(0, matches.length - 1);
+            : _emojiSelection.clamp(0, _emojiMatches.length - 1);
       });
     });
   }
