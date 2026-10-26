@@ -83,6 +83,24 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get --enforce-lockfile
 
+      - name: Install Android NDK with download retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version='28.2.13676358'
+          sdk_root="${ANDROID_HOME:?Android SDK is required}"
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --install "ndk;$ndk_version" &&
+               grep -Fxq "Pkg.Revision = $ndk_version" "$sdk_root/ndk/$ndk_version/source.properties" &&
+               [[ -x "$sdk_root/ndk/$ndk_version/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]]; then
+              exit 0
+            fi
+            printf 'NDK download/install attempt %s failed.\n' "$attempt" >&2
+            if [[ "$attempt" != 3 ]]; then sleep 10; fi
+          done
+          exit 1
+
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
