@@ -299,6 +299,30 @@ References for the added integrations:
 - [Windows media sessions](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmanager)
 - [MusicBrainz request limits](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting)
 
+### Release follow-up, 0.9.41+131
+
+The user authorized CI, web deployment and a Latest release after the local
+implementation commit. Publication waits for the matching platform builds.
+
+- Emoji autocomplete starts with one character after `:`. Rank the combined
+  custom/Unicode matches by usage before taking three results, so a frequent
+  `fir_hangry` can outrank an unused `happy` for `:ha`.
+- **B50, notification identity:** foreground and Android background resolution
+  both selected the sender avatar. They now share Space/group identity selection;
+  only DMs use the sender picture. Missing Space artwork stays generic.
+- **B51, queued sends:** the submit guard rejected a second send during an
+  upload. Submitting now detaches another draft and puts it in a per-room FIFO.
+  Text, attachment groups, GIFs and voice messages retain their target; other
+  rooms are independent. Pending jobs are cancelled when the session ends.
+- **B52, mention presentation:** room-wide aliases lacked token styling, and
+  punctuation after `everyone` prevented outgoing mention metadata. Both paths
+  now recognize punctuation boundaries. Recipient pings highlight the whole row,
+  including a collage whose caption belongs to a folded member. Explicit empty
+  mention metadata remains authoritative, and room permissions still apply.
+- Initial CI exposed a missing desktop-entry validator on the Android runner and
+  a UTC-midnight fixture crossing a collage's day boundary. Install the validator
+  explicitly in the Linux-hosted native test jobs and use a noon fixture.
+
 ### Initial investigation
 
 ### Open and reopened bugs

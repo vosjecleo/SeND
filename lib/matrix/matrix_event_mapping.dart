@@ -197,6 +197,7 @@ extension _MatrixEventMapping on MatrixBackend {
                   event,
                   displayEvent,
                   timeline,
+                  body: body,
                 ),
               );
             })
@@ -209,12 +210,22 @@ extension _MatrixEventMapping on MatrixBackend {
     });
   }
 
-  bool _eventPingsCurrentUser(Event source, Event display, Timeline timeline) {
+  bool _eventPingsCurrentUser(
+    Event source,
+    Event display,
+    Timeline timeline, {
+    required String body,
+  }) {
     final userId = _matrix.userID;
     if (userId == null || source.senderId == userId) return false;
     final mentions = display.content.tryGetMap<String, Object?>('m.mentions');
-    final userIds = mentions?.tryGetList<String>('user_ids') ?? const [];
-    if (userIds.contains(userId) || mentions?.tryGet<bool>('room') == true) {
+    if (messageMentionsUser(
+      body: body,
+      userId: userId,
+      senderId: source.senderId,
+      mentions: mentions,
+      canNotifyRoom: source.room.canSendNotification(source.senderId),
+    )) {
       return true;
     }
     final relatesTo = display.content.tryGetMap<String, Object?>(

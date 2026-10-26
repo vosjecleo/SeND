@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:crypto/crypto.dart';
 
 import 'desktop_window_service.dart';
+import 'temporary_attachment_store.dart';
+import 'platform_io.dart';
 import '../models/chat_models.dart';
 
 class InAppChatNotification {
@@ -132,6 +134,35 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
   final _activations = StreamController<NotificationTarget>.broadcast();
   var _nextId = 1;
   bool _initialized = false;
+  final _iconFiles = <String, File>{};
+  int _generation = 0;
+  Future<Uri?> _desktopIcon(Uint8List? bytes) async {
+    if (bytes == null || bytes.isEmpty || bytes.length > 1024 * 1024) {
+      return null;
+    }
+    final digest = sha256.convert(bytes).toString();
+    final cached = _iconFiles.remove(digest);
+    if (cached != null) {
+      _iconFiles[digest] = cached;
+      return cached.uri;
+    }
+    try {
+      final file = await TemporaryAttachmentStore.instance.create(
+        bytes: bytes,
+        displayName: 'notification-icon.png',
+      );
+      _iconFiles[digest] = file;
+      while (_iconFiles.length > 64) {
+        final old = _iconFiles.remove(_iconFiles.keys.first)!;
+        try {
+          await old.delete();
+        } catch (_) {}
+      }
+      return file.uri;
+    } catch (_) {
+      return null;
+    }
+  }
 
   int _fallbackNotificationId(String roomId) {
     final bytes = sha256.convert(utf8.encode(roomId)).bytes;
@@ -235,6 +266,14 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
       }
     }
     final android = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final generation = _generation;
+    final desktopIcon =
+        !kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.linux ||
+                defaultTargetPlatform == TargetPlatform.windows)
+        ? await _desktopIcon(senderAvatar)
+        : null;
+    if (generation != _generation) return;
     await _plugin.show(
       id: android ? _fallbackNotificationId(roomId) : _nextId++,
       title: title,
@@ -257,11 +296,24 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
               : ByteArrayAndroidBitmap(senderAvatar),
         ),
         linux: LinuxNotificationDetails(
+          icon: desktopIcon == null
+              ? null
+              : FilePathLinuxIcon(desktopIcon.toFilePath()),
           category: LinuxNotificationCategory.imReceived,
           urgency: LinuxNotificationUrgency.normal,
           suppressSound: !sound,
         ),
         windows: WindowsNotificationDetails(
+          images: [
+            if (desktopIcon != null)
+              WindowsImage(
+                desktopIcon,
+                altText: groupConversation
+                    ? 'Conversation picture'
+                    : 'Sender picture',
+                placement: WindowsImagePlacement.appLogoOverride,
+              ),
+          ],
           audio: sound ? null : WindowsNotificationAudio.silent(),
         ),
       ),
@@ -304,6 +356,14 @@ class PlatformChatNotificationSink implements ChatNotificationSink {
 
   @override
   Future<void> clearPrivateState() async {
+    _generation++;
+    final icons = _iconFiles.values.toList();
+    _iconFiles.clear();
+    for (final icon in icons) {
+      try {
+        await icon.delete();
+      } catch (_) {}
+    }
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
       await _nativeAssets.invokeMethod<void>('clearPrivateState');

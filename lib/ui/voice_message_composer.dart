@@ -136,6 +136,7 @@ class _VoiceMessageComposerState extends State<VoiceMessageComposer>
 
   Future<void> _send() async {
     final draft = _recording?.draft;
+    final targetRoom = widget.roomId, backend = widget.backend, reply = _reply;
     if (_sending || draft == null) return;
     setState(() {
       _sending = true;
@@ -143,10 +144,13 @@ class _VoiceMessageComposerState extends State<VoiceMessageComposer>
     });
     try {
       await _player?.pause();
-      await widget.backend.sendAttachment(
-        draft,
-        roomId: widget.roomId,
-        replyToMessageId: _reply,
+      await backend.enqueueRoomSend(
+        targetRoom,
+        () => backend.sendAttachment(
+          draft,
+          roomId: targetRoom,
+          replyToMessageId: reply,
+        ),
       );
       if (!mounted) return;
       setState(() => _sending = false);

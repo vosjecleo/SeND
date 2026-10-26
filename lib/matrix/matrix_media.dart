@@ -190,9 +190,15 @@ extension _MatrixMedia on MatrixBackend {
                   additionalContent != null ||
                       attachment.spoiler ||
                       attachment.gifSource != null ||
+                      replyEvent != null ||
                       attachment.caption?.trim().isNotEmpty == true
                   ? {
                       ...?additionalContent,
+                      ..._mentionsFor(
+                        attachment.caption ?? '',
+                        replyEvent,
+                        room,
+                      ),
                       if (attachment.gifSource != null)
                         'net.deltiecord.gif_source': attachment.gifSource
                             .toString(),

@@ -51,7 +51,7 @@ void main() {
     expect(index.hiddenMessageIds, isEmpty);
   });
   test('caption introduces a collage without absorbing older pictures', () {
-    final now = DateTime.utc(2026, 10, 26);
+    final now = DateTime.utc(2026, 10, 26, 12);
     final messages = [
       _media('second', now, AttachmentKind.image),
       _media(

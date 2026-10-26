@@ -90,7 +90,10 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test --concurrency=2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+          flutter test --concurrency=2
 
       - name: Build split Android APKs and app bundle
         shell: bash

@@ -7,6 +7,7 @@ part of 'matrix_backend.dart';
 /// generation established by this lifecycle.
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
+    cancelQueuedSends();
     if (kIsWeb) BrowserPushPreviews.stop();
     try {
       await _stopActivities(clear: true);
@@ -286,6 +287,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    cancelQueuedSends();
     await _indexEventSubscription?.cancel();
     await _historyIndex?.clear();
     await _historyIndex?.close();
@@ -929,6 +931,18 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<Uint8List?> _notificationAvatarFor(Room room, Event event) async {
+    final identity = notificationAvatarRoom(room);
+    if (identity != null) {
+      final cached = _avatarBytes[identity.id];
+      if (cached != null) return cached;
+      final uri = identity.avatar;
+      if (uri == null || !uri.isScheme('mxc')) return null;
+      try {
+        return await _avatarMedia(uri, AvatarMediaPool.rowDimension);
+      } catch (_) {
+        return null;
+      }
+    }
     final cached = _senderAvatarBytes[event.senderId];
     if (cached != null) return cached;
     final avatar = event.senderFromMemoryOrFallback.avatarUrl;

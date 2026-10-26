@@ -10,12 +10,23 @@ import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
 import '../services/personal_data.dart';
 import '../services/history_index.dart';
+import '../services/room_send_queue.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
 /// Keeping SDK objects behind this contract lets desktop and future Android
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
+  final _roomSends = RoomSendQueue();
+  Future<void> enqueueRoomSend(String roomId, Future<void> Function() send) =>
+      _roomSends.run(roomId, send);
+  void cancelQueuedSends() => _roomSends.cancelPending();
+  @override
+  void dispose() {
+    cancelQueuedSends();
+    super.dispose();
+  }
+
   PersonalData? get personalData => null;
   HistoryIndex? get historyIndex => null;
   Future<HistoryIndex?> openHistoryIndex() async => historyIndex;

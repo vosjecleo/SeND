@@ -38,6 +38,7 @@ import '../services/secret_redaction.dart';
 import '../services/temporary_attachment_store.dart';
 import '../services/emoji_repository.dart';
 import '../services/emoji_completion.dart';
+import '../services/room_send_queue.dart';
 import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/draft_store.dart';
@@ -142,7 +143,8 @@ class _ChatShellState extends State<ChatShell> {
   late final QuillController _message;
   void Function()? _removeBrowserPaste;
   final _composerFocus = FocusNode(debugLabel: 'message composer');
-  bool _sending = false;
+  int _pendingSends = 0;
+  bool get _sending => _pendingSends > 0;
   final List<AttachmentDraft> _pendingAttachments = [];
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
@@ -437,7 +439,10 @@ class _ChatShellState extends State<ChatShell> {
         : _withoutAttachmentPlaceholders(
             unescapeLiteralEmojiAliases(serialized.html!),
           );
-    if ((text.isEmpty && _pendingAttachments.isEmpty) || _sending) return;
+    if ((text.isEmpty && _pendingAttachments.isEmpty) ||
+        sendingRoomId == null) {
+      return;
+    }
     final submittedDelta = _message.document.toDelta().toJson();
     final attachments = List<AttachmentDraft>.from(_pendingAttachments);
     final submittedReply = _replyingTo;
@@ -453,41 +458,49 @@ class _ChatShellState extends State<ChatShell> {
       _restoringDraft = false;
     }
     setState(() {
-      _sending = true;
+      _pendingSends++;
       _pendingAttachments.clear();
       _replyingTo = null;
       _editingMessage = null;
     });
-    if (sendingRoomId != null) {
-      _memoryDrafts.remove(sendingRoomId);
-      _draftStore.remove(sendingRoomId);
+    if (_pendingSends > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message queued behind the current send.'),
+        ),
+      );
     }
+    _memoryDrafts.remove(sendingRoomId);
+    _draftStore.remove(sendingRoomId);
     try {
-      if (attachments.isEmpty) {
-        await widget.backend.sendMessage(
-          text,
-          roomId: sendingRoomId,
-          formattedBody: formatted,
-          replyToMessageId: submittedReply?.id,
-          editMessageId: submittedEdit?.id,
-        );
-      } else {
-        for (var index = 0; index < attachments.length; index++) {
-          final attachment = attachments[index];
-          await widget.backend.sendAttachment(
-            AttachmentDraft(
-              bytes: attachment.bytes,
-              name: attachment.name,
-              mimeType: attachment.mimeType,
-              spoiler: attachment.spoiler,
-              caption: index == 0 && text.isNotEmpty ? text : null,
-            ),
+      await widget.backend.enqueueRoomSend(sendingRoomId, () async {
+        if (attachments.isEmpty) {
+          await widget.backend.sendMessage(
+            text,
             roomId: sendingRoomId,
-            replyToMessageId: index == 0 ? submittedReply?.id : null,
+            formattedBody: formatted,
+            replyToMessageId: submittedReply?.id,
+            editMessageId: submittedEdit?.id,
           );
+        } else {
+          for (var index = 0; index < attachments.length; index++) {
+            final attachment = attachments[index];
+            await widget.backend.sendAttachment(
+              AttachmentDraft(
+                bytes: attachment.bytes,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                spoiler: attachment.spoiler,
+                caption: index == 0 && text.isNotEmpty ? text : null,
+              ),
+              roomId: sendingRoomId,
+              replyToMessageId: index == 0 ? submittedReply?.id : null,
+            );
+          }
         }
-      }
+      });
     } catch (error) {
+      if (error is QueuedSendCancelled) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -525,21 +538,23 @@ class _ChatShellState extends State<ChatShell> {
           _editingMessage ??= submittedEdit;
         });
         _storeCurrentDraft();
-      } else if (sendingRoomId != null) {
+      } else {
         _memoryDrafts[sendingRoomId] = failedDraft;
-        _draftStore.write(sendingRoomId, submittedDelta);
       }
+      _draftStore.write(sendingRoomId, submittedDelta);
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _pendingSends--);
     }
   }
 
   Future<void> _createPoll() async {
     final poll = await showPollComposer(context);
     if (poll == null || !mounted) return;
-    await widget.backend.sendPoll(
-      poll,
-      roomId: widget.backend.selectedRoom?.id,
+    final room = widget.backend.selectedRoom?.id;
+    if (room == null) return;
+    await widget.backend.enqueueRoomSend(
+      room,
+      () => widget.backend.sendPoll(poll, roomId: room),
     );
     _composerFocus.requestFocus();
   }
@@ -547,9 +562,11 @@ class _ChatShellState extends State<ChatShell> {
   Future<void> _sendSticker() async {
     final sticker = await showStickerPicker(context, widget.backend);
     if (sticker == null || !mounted) return;
-    await widget.backend.sendSticker(
-      sticker,
-      roomId: widget.backend.selectedRoom?.id,
+    final room = widget.backend.selectedRoom?.id;
+    if (room == null) return;
+    await widget.backend.enqueueRoomSend(
+      room,
+      () => widget.backend.sendSticker(sticker, roomId: room),
     );
     _composerFocus.requestFocus();
   }
@@ -638,7 +655,6 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   Future<void> _attachFile() async {
-    if (_sending) return;
     final result = await FilePicker.pickFiles(
       withData: kIsWeb,
       allowMultiple: true,
@@ -668,24 +684,36 @@ class _ChatShellState extends State<ChatShell> {
       return;
     }
     final sendingRoomId = widget.backend.selectedRoom?.id;
-    setState(() => _sending = true);
+    final submittedReply = _replyingTo;
+    setState(() => _pendingSends++);
     try {
-      final bytes = await _giphy.download(gif);
-      await widget.backend.sendAttachment(
-        AttachmentDraft(
-          bytes: bytes,
-          name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
-          gifSource: gif.shareUrl,
-          mimeType: 'image/gif',
-          spoiler: false,
-        ),
-        roomId: sendingRoomId,
-        replyToMessageId: _replyingTo?.id,
-      );
-      if (mounted) setState(() => _replyingTo = null);
-      unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
+      if (sendingRoomId == null) return;
+      await widget.backend.enqueueRoomSend(sendingRoomId, () async {
+        final service = GifService();
+        late Uint8List bytes;
+        try {
+          bytes = await service.download(gif);
+        } finally {
+          service.dispose();
+        }
+        await widget.backend.sendAttachment(
+          AttachmentDraft(
+            bytes: bytes,
+            name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+            gifSource: gif.shareUrl,
+            mimeType: 'image/gif',
+            spoiler: false,
+          ),
+          roomId: sendingRoomId,
+          replyToMessageId: submittedReply?.id,
+        );
+      });
+      if (mounted && _replyingTo?.id == submittedReply?.id) {
+        setState(() => _replyingTo = null);
+      }
+      if (mounted) unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _pendingSends--);
     }
     _composerFocus.requestFocus();
   }

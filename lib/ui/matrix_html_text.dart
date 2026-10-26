@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../services/room_mentions.dart';
 
 Future<void> _confirmFormattedLink(BuildContext context, Uri uri) async {
   final open = await showDialog<bool>(
@@ -87,9 +88,49 @@ bool _isEmojiCluster(String cluster) {
 List<InlineSpan> _emojiAwareTextSpans(
   BuildContext context,
   String text,
-  TextStyle style,
-) {
+  TextStyle style, {
+  bool roomMentions = true,
+}) {
   if (text.isEmpty) return const [];
+  if (roomMentions && style.fontFamily != 'monospace') {
+    final matches = roomMentionPattern.allMatches(text).toList();
+    if (matches.isNotEmpty) {
+      final result = <InlineSpan>[];
+      var offset = 0;
+      for (final match in matches) {
+        result.addAll(
+          _emojiAwareTextSpans(
+            context,
+            text.substring(offset, match.start),
+            style,
+            roomMentions: false,
+          ),
+        );
+        result.add(
+          TextSpan(
+            text: match.group(0),
+            style: style.copyWith(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xff80c7ff)
+                  : const Color(0xff12518a),
+              backgroundColor: const Color(0x403fa9f5),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+        offset = match.end;
+      }
+      result.addAll(
+        _emojiAwareTextSpans(
+          context,
+          text.substring(offset),
+          style,
+          roomMentions: false,
+        ),
+      );
+      return result;
+    }
+  }
   final spans = <InlineSpan>[];
   final buffer = StringBuffer();
   bool? bufferedEmoji;

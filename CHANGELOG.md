@@ -8,6 +8,15 @@ its known limitations at the time. For current issues, see [Known issues](KNOWN_
 - Start emoji autocomplete after one character following `:`. Rank all matching
   custom and Unicode emoji by usage before shortening the list; matching later
   in an alias still counts. Equal usage falls back to match relevance and name.
+- Use the Space avatar for server-channel notifications, including Android
+  background delivery. Standalone groups keep their room icon; DMs retain
+  sender pictures. A missing Space picture does not fall back to the sender.
+- Allow another message to be submitted while an upload or send is pending.
+  Preserve each submitted draft and target room, send in order within that room,
+  and let other rooms send independently. Logout cancels pending queued sends.
+- Highlight `@everyone` and `@room` like user mentions, including punctuation
+  after the name. Highlight messages that ping the recipient, including captioned
+  collages. Preserve explicit mention metadata and room-notification permissions.
 - Add optional local text indexing, off by default, with an onboarding choice,
   a 50 MiB default budget, a 100,000-event ceiling and Storage controls. Media
   indexing keeps event references and types, not media files. Turning text

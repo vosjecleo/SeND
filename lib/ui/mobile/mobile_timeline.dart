@@ -16,6 +16,7 @@ import '../../backend/chat_backend.dart';
 import '../chat_shell.dart' show openDiscussion;
 import '../../models/chat_models.dart';
 import '../../services/emoji_completion.dart';
+import '../../services/room_send_queue.dart';
 import '../../services/android_shared_content.dart';
 import '../../services/emoji_repository.dart';
 import '../../services/custom_emoji.dart';
@@ -91,7 +92,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   final List<AttachmentDraft> _attachments = [];
   ChatMessage? _reply;
   ChatMessage? _edit;
-  bool _sending = false;
+  int _pendingSends = 0;
+  bool get _sending => _pendingSends > 0;
   bool _autoFillingInitialChunk = false;
   bool _pageLoadInFlight = false;
   bool _restoringScrollAnchor = false;
@@ -1156,7 +1158,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     final formatted = serialized.html == null
         ? null
         : unescapeLiteralEmojiAliases(serialized.html!);
-    if (_sending || (text.isEmpty && _attachments.isEmpty)) return;
+    if (text.isEmpty && _attachments.isEmpty) return;
     final roomId = widget.room.id;
     final submittedText = text;
     final submittedRawText = _composer.text;
@@ -1181,42 +1183,52 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       }
     });
     setState(() {
-      _sending = true;
+      _pendingSends++;
       _attachments.clear();
       _reply = null;
       _edit = null;
     });
+    if (_pendingSends > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message queued behind the current send.'),
+        ),
+      );
+    }
     try {
-      if (submittedAttachments.isEmpty) {
-        await backend.sendMessage(
-          submittedText,
-          roomId: roomId,
-          formattedBody: formatted,
-          replyToMessageId: reply?.id,
-          editMessageId: edit?.id,
-        );
-      } else {
-        for (var index = 0; index < submittedAttachments.length; index++) {
-          final item = submittedAttachments[index];
-          await backend.sendAttachment(
-            AttachmentDraft(
-              bytes: item.bytes,
-              name: item.name,
-              mimeType: item.mimeType,
-              spoiler: item.spoiler,
-              caption: index == 0 && submittedText.isNotEmpty
-                  ? submittedText
-                  : null,
-              voiceMessage: item.voiceMessage,
-              durationMilliseconds: item.durationMilliseconds,
-              waveform: item.waveform,
-            ),
+      await backend.enqueueRoomSend(roomId, () async {
+        if (submittedAttachments.isEmpty) {
+          await backend.sendMessage(
+            submittedText,
             roomId: roomId,
-            replyToMessageId: index == 0 ? reply?.id : null,
+            formattedBody: formatted,
+            replyToMessageId: reply?.id,
+            editMessageId: edit?.id,
           );
+        } else {
+          for (var index = 0; index < submittedAttachments.length; index++) {
+            final item = submittedAttachments[index];
+            await backend.sendAttachment(
+              AttachmentDraft(
+                bytes: item.bytes,
+                name: item.name,
+                mimeType: item.mimeType,
+                spoiler: item.spoiler,
+                caption: index == 0 && submittedText.isNotEmpty
+                    ? submittedText
+                    : null,
+                voiceMessage: item.voiceMessage,
+                durationMilliseconds: item.durationMilliseconds,
+                waveform: item.waveform,
+              ),
+              roomId: roomId,
+              replyToMessageId: index == 0 ? reply?.id : null,
+            );
+          }
         }
-      }
+      });
     } catch (error) {
+      if (error is QueuedSendCancelled) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1226,24 +1238,35 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           ),
         );
       }
-      if (mounted &&
-          backend.selectedRoom?.id == roomId &&
-          _composer.text.isEmpty) {
-        _composer.text = submittedRawText;
-        _customEmojiSpans = submittedEmojiSpans;
-        _previousComposerText = submittedRawText;
+      if (mounted && backend.selectedRoom?.id == roomId) {
+        final nextText = _composer.text,
+            nextSpans = List<CustomEmojiTextSpan>.of(_customEmojiSpans);
+        final prefix = submittedRawText.isEmpty
+            ? ''
+            : '$submittedRawText${nextText.isEmpty ? '' : '\n'}';
+        _composer.text = '$prefix$nextText';
+        _customEmojiSpans = [
+          ...submittedEmojiSpans,
+          for (final span in nextSpans)
+            CustomEmojiTextSpan(
+              start: span.start + prefix.length,
+              end: span.end + prefix.length,
+              emoji: span.emoji,
+            ),
+        ];
+        _previousComposerText = _composer.text;
         widget.onDraftChanged((
-          text: submittedRawText,
-          emojis: List.unmodifiable(submittedEmojiSpans),
+          text: _composer.text,
+          emojis: List.unmodifiable(_customEmojiSpans),
         ));
         setState(() {
           _attachments.insertAll(0, submittedAttachments);
-          _reply = reply;
-          _edit = edit;
+          _reply ??= reply;
+          _edit ??= edit;
         });
       }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _pendingSends--);
     }
   }
 
@@ -1298,7 +1321,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     }
     if (choice == 'poll') {
       final poll = await showPollComposer(context);
-      if (poll != null) await backend.sendPoll(poll, roomId: widget.room.id);
+      if (poll != null) {
+        final room = widget.room.id;
+        await backend.enqueueRoomSend(
+          room,
+          () => backend.sendPoll(poll, roomId: room),
+        );
+      }
       return;
     }
     if (choice == null) return;
@@ -1408,33 +1437,46 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     } else if (result is GifSearchResult) {
       await _sendGif(result);
     } else if (result is StickerSummary) {
-      await backend.sendSticker(result, roomId: roomId);
+      await backend.enqueueRoomSend(
+        roomId,
+        () => backend.sendSticker(result, roomId: roomId),
+      );
     }
   }
 
   Future<void> _sendGif(GifSearchResult gif) async {
     final roomId = widget.room.id;
     final reply = _reply;
-    setState(() => _sending = true);
+    setState(() => _pendingSends++);
     try {
-      final bytes = await _giphy.download(gif);
-      await backend.sendAttachment(
-        AttachmentDraft(
-          bytes: bytes,
-          name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
-          gifSource: gif.shareUrl,
-          mimeType: 'image/gif',
-          spoiler: false,
-        ),
-        roomId: roomId,
-        replyToMessageId: reply?.id,
-      );
-      if (mounted && backend.selectedRoom?.id == roomId) {
+      await backend.enqueueRoomSend(roomId, () async {
+        final service = GifService();
+        late Uint8List bytes;
+        try {
+          bytes = await service.download(gif);
+        } finally {
+          service.dispose();
+        }
+        await backend.sendAttachment(
+          AttachmentDraft(
+            bytes: bytes,
+            name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+            gifSource: gif.shareUrl,
+            mimeType: 'image/gif',
+            spoiler: false,
+          ),
+          roomId: roomId,
+          replyToMessageId: reply?.id,
+        );
+      });
+      if (mounted &&
+          backend.selectedRoom?.id == roomId &&
+          _reply?.id == reply?.id) {
         setState(() => _reply = null);
       }
-      unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
+      if (mounted) unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _pendingSends--);
     }
   }
 
@@ -1637,12 +1679,16 @@ class _MobileMessageRow extends StatelessWidget {
         onLongPress: () => _showActions(context),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: message.pingedCurrentUser
+            color:
+                message.pingedCurrentUser ||
+                    (albumMessages?.any((m) => m.pingedCurrentUser) ?? false)
                 ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.11)
                 : highlighted
                 ? context.deltiecord.hover
                 : Colors.transparent,
-            border: message.pingedCurrentUser
+            border:
+                message.pingedCurrentUser ||
+                    (albumMessages?.any((m) => m.pingedCurrentUser) ?? false)
                 ? Border(
                     left: BorderSide(
                       color: Theme.of(context).colorScheme.primary,
@@ -2498,7 +2544,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                       highlightColor: Theme.of(
                         context,
                       ).colorScheme.primary.withValues(alpha: 0.08),
-                      onTap: widget.sending
+                      onTap: widget.sending && _canRecord
                           ? null
                           : (_canRecord ? widget.onRecord : widget.onSend),
                       onLongPress: widget.sending || _canRecord
@@ -2507,7 +2553,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                       radius: 26,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(18, 12, 10, 12),
-                        child: widget.sending
+                        child: widget.sending && _canRecord
                             ? const SizedBox.square(
                                 dimension: 20,
                                 child: CircularProgressIndicator(

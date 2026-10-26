@@ -170,6 +170,9 @@ class _MessageRowState extends State<_MessageRow> {
 
   @override
   Widget build(BuildContext context) {
+    final pinged =
+        message.pingedCurrentUser ||
+        (widget.albumMessages?.any((m) => m.pingedCurrentUser) ?? false);
     final compactness = widget.backend.preferences.compactness;
     final rowPadding = (7 - compactness * 5) / 2;
     final groupGap = 7 - compactness * 2;
@@ -276,14 +279,14 @@ class _MessageRowState extends State<_MessageRow> {
                 ? Duration.zero
                 : const Duration(milliseconds: 110),
             decoration: BoxDecoration(
-              color: message.pingedCurrentUser
+              color: pinged
                   ? Theme.of(
                       context,
                     ).colorScheme.primary.withValues(alpha: 0.11)
                   : _hovered || widget.highlighted
                   ? context.deltiecord.hover
                   : Colors.transparent,
-              border: message.pingedCurrentUser
+              border: pinged
                   ? Border(
                       left: BorderSide(
                         color: Theme.of(context).colorScheme.primary,

@@ -695,7 +695,7 @@ extension _MatrixMessages on MatrixBackend {
     if (replyEvent != null && replyEvent.senderId != _matrix.userID) {
       userIds.add(replyEvent.senderId);
     }
-    final everyone = RegExp(r'(^|\s)@(room|everyone)(?=\s|$)').hasMatch(text);
+    final everyone = containsRoomMention(text);
     if (RegExp(r'(^|\s)@all(?=\s|$)').hasMatch(text)) {
       for (final member in room.getParticipants()) {
         // ignore: deprecated_member_use

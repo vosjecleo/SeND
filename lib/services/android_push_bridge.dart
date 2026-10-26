@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart';
 import '../matrix/matrix_client_factory.dart';
 import '../matrix/matrix_push_reconciliation.dart';
 import 'avatar_media_pool.dart';
+import 'notification_avatar.dart';
 import 'chat_notifications.dart';
 
 typedef AndroidPushResolver =
@@ -200,7 +201,8 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
 
   final pool = avatarPool ?? AvatarMediaPool();
   Uint8List? avatar;
-  final avatarUri = sender.avatarUrl;
+  final identity = notificationAvatarRoom(room);
+  final avatarUri = identity == null ? sender.avatarUrl : identity.avatar;
   if (avatarUri != null && avatarUri.isScheme('mxc')) {
     try {
       avatar = await pool.load(
