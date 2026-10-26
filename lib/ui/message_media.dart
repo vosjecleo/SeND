@@ -1440,23 +1440,92 @@ class _MediaLightbox extends StatefulWidget {
 }
 
 class _MediaLightboxState extends State<_MediaLightbox> {
+  late final List<ChatMessage> _messages = widget.messages
+      .where(
+        (m) =>
+            !m.redacted &&
+            !(m.attachment?.sticker ?? false) &&
+            (m.attachment?.kind == AttachmentKind.image ||
+                m.attachment?.kind == AttachmentKind.video),
+      )
+      .toList();
+  late final String? _roomId =
+      widget.backend.roomIdForMessage(widget.initialMessageId) ??
+      widget.backend.selectedRoom?.id;
+  bool _loadingOlder = false;
+  String? _historyError;
   late int _index = max(
     0,
-    widget.messages.indexWhere(
-      (message) => message.id == widget.initialMessageId,
-    ),
+    _messages.indexWhere((message) => message.id == widget.initialMessageId),
   );
   final Map<String, Future<Uint8List>> _images = {};
 
-  ChatMessage get _message => widget.messages[_index];
+  ChatMessage get _message => _messages[_index];
   ChatAttachment get _attachment => _message.attachment!;
 
   void _previous() {
-    if (_index + 1 < widget.messages.length) setState(() => _index++);
+    if (_index + 1 < _messages.length) setState(() => _index++);
+    _pruneImages();
+    if (_index >= _messages.length - 3) unawaited(_loadOlder());
   }
 
   void _next() {
     if (_index > 0) setState(() => _index--);
+    _pruneImages();
+  }
+
+  void _pruneImages() {
+    final keep = _messages
+        .skip(max(0, _index - 1))
+        .take(3)
+        .map((m) => m.id)
+        .toSet();
+    _images.removeWhere((id, _) => !keep.contains(id));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _index >= _messages.length - 3) unawaited(_loadOlder());
+    });
+  }
+
+  Future<void> _loadOlder() async {
+    final room = _roomId;
+    if (_loadingOlder ||
+        room == null ||
+        !widget.backend.canLoadMoreMedia(room)) {
+      return;
+    }
+    setState(() {
+      _loadingOlder = true;
+      _historyError = null;
+    });
+    try {
+      final found = await widget.backend.loadMoreMedia(room);
+      if (!mounted) return;
+      final current = _message.id;
+      final merged = {
+        for (final m in _messages) m.id: m,
+        for (final m in found)
+          if (!m.redacted && m.attachment != null && !m.attachment!.sticker)
+            m.id: m,
+      };
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(merged.values);
+        _messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        _index = _messages.indexWhere((m) => m.id == current);
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _historyError = 'Could not load older media.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOlder = false);
+    }
   }
 
   Future<void> _copyReference() async {
@@ -1537,7 +1606,22 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                 behavior: HitTestBehavior.opaque,
                 onSecondaryTapDown: (details) =>
                     _contextMenu(details.globalPosition),
-                child: _attachment.kind == AttachmentKind.video
+                child:
+                    _attachment.spoiler &&
+                        !SpoilerReveals.forBackend(
+                          widget.backend,
+                        ).contains(_message.id)
+                    ? Center(
+                        child: TextButton(
+                          onPressed: () => setState(
+                            () => SpoilerReveals.forBackend(
+                              widget.backend,
+                            ).reveal(_message.id),
+                          ),
+                          child: const Text('Spoiler, click to reveal'),
+                        ),
+                      )
+                    : _attachment.kind == AttachmentKind.video
                     ? _LightboxVideo(
                         key: ValueKey(_message.id),
                         backend: widget.backend,
@@ -1582,7 +1666,7 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                       ),
               ),
             ),
-            if (_index + 1 < widget.messages.length)
+            if (_index + 1 < _messages.length)
               Positioned(
                 left: 12,
                 top: 0,
@@ -1620,10 +1704,21 @@ class _MediaLightboxState extends State<_MediaLightbox> {
               child: Row(
                 children: [
                   Text(
-                    '${_index + 1}/${widget.messages.length}',
+                    '${_index + 1}/${_messages.length}',
                     style: const TextStyle(color: Colors.white70),
                   ),
                   const SizedBox(width: 8),
+                  if (_roomId != null &&
+                      widget.backend.canLoadMoreMedia(_roomId!))
+                    TextButton(
+                      onPressed: _loadingOlder ? null : _loadOlder,
+                      child: Text(
+                        _historyError ??
+                            (_loadingOlder
+                                ? 'Loading older media…'
+                                : 'Load older media'),
+                      ),
+                    ),
                   IconButton.filledTonal(
                     tooltip: 'Save attachment',
                     onPressed: _save,

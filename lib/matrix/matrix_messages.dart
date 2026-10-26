@@ -37,30 +37,55 @@ extension _MatrixMessages on MatrixBackend {
       _historySearchCursor = null;
       _historySearchComplete = false;
       _historySearchMessages.clear();
+      _indexSearchOffset = 0;
+      _indexSearchDone = false;
     }
     final previousCursor = _historySearchCursor;
     try {
       final parsed = MessageSearchQuery.parse(normalized);
-      final result = _historySearchComplete
-          ? null
-          : await room.searchEvents(
-              searchTerm: parsed.serverTerm,
-              nextBatch: previousCursor,
-              limit: max(100, _preferences.timelineChunkSize),
-            );
+      final index = await openHistoryIndex();
+      List<Event> page = const [];
+      String? nextCursor = previousCursor;
+      var networkPage = false;
+      if (!_indexSearchDone &&
+          index != null &&
+          (index.enabled || parsed.terms.isEmpty)) {
+        final ids = await index
+            .query(
+              roomId,
+              terms: parsed.terms,
+              kind: parsed.has,
+              sender: parsed.from,
+              before: parsed.before?.millisecondsSinceEpoch,
+              after: parsed.after?.millisecondsSinceEpoch,
+              offset: _indexSearchOffset,
+            )
+            .catchError((Object _) => <String>[]);
+        _indexSearchOffset += ids.length;
+        _indexSearchDone = ids.length < 50;
+        page = await _historyEvents(room, ids);
+      } else {
+        _indexSearchDone = true;
+      }
+      if (page.isEmpty && !_historySearchComplete) {
+        final result = await _historyPage(room, previousCursor);
+        page = result.$1;
+        nextCursor = result.$2;
+        networkPage = true;
+      }
       if (_selectedRoomId != roomId || generation != _historySearchGeneration) {
         return const [];
       }
-      if (result != null) {
-        _historySearchCursor = result.nextBatch;
+      if (networkPage) {
+        _historySearchCursor = nextCursor;
         _historySearchComplete =
-            result.nextBatch == null || result.nextBatch == previousCursor;
+            nextCursor == null || nextCursor == previousCursor;
       }
       final matches = <String, ChatMessage>{
         ..._historySearchMessages,
         for (final message in searchMessages(normalized)) message.id: message,
       };
-      for (var event in result?.events ?? const <Event>[]) {
+      for (var event in page) {
         if (event.type == EventTypes.Encrypted && _matrix.encryption != null) {
           try {
             event = await _matrix.encryption!.decryptRoomEvent(event);
@@ -101,7 +126,248 @@ extension _MatrixMessages on MatrixBackend {
     }
   }
 
+  Future<Event?> _historyEvent(Room room, String id) async {
+    try {
+      var event = _attachmentEvents[id] ?? await room.getEventById(id);
+      if (event?.type == EventTypes.Encrypted && _matrix.encryption != null) {
+        event = await _matrix.encryption!.decryptRoomEvent(
+          event!,
+          store: false,
+        );
+      }
+      return event?.type == EventTypes.Message && event?.redacted != true
+          ? await _applyIndexedRevision(room, event!)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Event>> _historyEvents(Room room, List<String> ids) async {
+    final events = <Event>[];
+    for (var i = 0; i < ids.length; i += 6) {
+      if (!identical(room.client, _client)) return const [];
+      events.addAll(
+        (await Future.wait(
+          ids
+              .skip(i)
+              .take(6)
+              .map(
+                (id) => _historyEvent(
+                  room,
+                  id,
+                ).timeout(const Duration(seconds: 8), onTimeout: () => null),
+              ),
+        )).whereType<Event>(),
+      );
+    }
+    return events;
+  }
+
+  Future<Event> _applyIndexedRevision(Room room, Event event) async {
+    final revision = await _historyIndex
+        ?.revision(event.eventId)
+        .catchError((Object _) => null);
+    if (!event.redacted && revision != null) {
+      final edit = await room.getEventById(revision);
+      if (edit != null &&
+          !edit.redacted &&
+          edit.senderId == event.senderId &&
+          edit.relationshipEventId == event.eventId &&
+          edit.content['m.new_content'] is Map) {
+        return Event.fromJson({
+          ...event.toJson(),
+          'content': edit.content['m.new_content'],
+        }, room);
+      }
+    }
+    return event;
+  }
+
+  Future<(List<Event>, String?)> _historyPage(Room room, String? cursor) async {
+    final client = room.client;
+    final response = await client.getRoomEvents(
+      room.id,
+      Direction.b,
+      from: cursor,
+      limit: 100,
+      filter: jsonEncode({
+        'types': [EventTypes.Message, EventTypes.Encrypted, 'm.room.redaction'],
+      }),
+    );
+    if (!identical(client, _client)) return (<Event>[], null);
+    final events = <Event>[];
+    // Bound decryption concurrency; a missing session must not stall every
+    // following event in the page or monopolize the UI isolate.
+    for (var i = 0; i < response.chunk.length; i += 4) {
+      final batch = await Future.wait(
+        response.chunk.skip(i).take(4).map((raw) async {
+          var event = Event.fromMatrixEvent(raw, room);
+          if (event.type == EventTypes.Encrypted && client.encryption != null) {
+            try {
+              event = await client.encryption!
+                  .decryptRoomEvent(event, store: false)
+                  .timeout(const Duration(seconds: 5));
+            } catch (_) {
+              return null;
+            }
+          }
+          return event;
+        }),
+      );
+      events.addAll(batch.whereType<Event>());
+      await Future<void>.delayed(Duration.zero);
+    }
+    await _indexEvents(events).catchError((Object _) {});
+    return (
+      events
+          .where(
+            (e) =>
+                e.type == EventTypes.Message &&
+                !e.redacted &&
+                e.relationshipType != RelationshipTypes.edit,
+          )
+          .toList(),
+      response.end,
+    );
+  }
+
+  Future<void> _indexEvents(Iterable<Event> events) async {
+    final list = events.toList();
+    if (list.isEmpty || !identical(list.first.room.client, _client)) return;
+    final index = await openHistoryIndex();
+    if (index == null || !identical(list.first.room.client, _client)) return;
+    final rows = <Map<String, Object?>>[];
+    for (var event in list) {
+      if (!event.status.isSent) continue;
+      final fingerprint = jsonEncode([
+        event.content,
+        event.redacted,
+        index.enabled,
+      ]).hashCode;
+      if (_indexFingerprints[event.eventId] == fingerprint) continue;
+      _indexFingerprints[event.eventId] = fingerprint;
+      while (_indexFingerprints.length > 4000) {
+        _indexFingerprints.remove(_indexFingerprints.keys.first);
+      }
+      if (event.type == 'm.room.redaction') {
+        final id = event.toJson()['redacts'] ?? event.content['redacts'];
+        if (id is String) {
+          rows.add({
+            'id': id,
+            'room': event.room.id,
+            'time': 0,
+            'kind': '',
+            'deleted': true,
+          });
+          _mediaHistory[event.room.id]?.remove(id);
+          _attachmentEvents.remove(id);
+        }
+        continue;
+      }
+      if (event.type != EventTypes.Message) continue;
+      String? revision;
+      var editedAt = 0;
+      if (event.relationshipType == RelationshipTypes.edit) {
+        revision = event.eventId;
+        editedAt = event.originServerTs.millisecondsSinceEpoch;
+        final original = await event.room.getEventById(
+          event.relationshipEventId!,
+        );
+        if (original == null ||
+            original.senderId != event.senderId ||
+            event.content['m.new_content'] is! Map) {
+          continue;
+        }
+        event = Event.fromJson({
+          ...original.toJson(),
+          'content': event.content['m.new_content'],
+        }, event.room);
+      }
+      final message = _searchResultFromEvent(event);
+      rows.add({
+        'id': event.eventId,
+        'room': event.room.id,
+        'time': event.originServerTs.millisecondsSinceEpoch,
+        'sender': event.senderId,
+        'kind':
+            message.attachment?.kind.name ??
+            (RegExp(r'https?://', caseSensitive: false).hasMatch(message.body)
+                ? 'link'
+                : ''),
+        'body': index.enabled ? message.body : '',
+        'revision': revision,
+        'edited_at': editedAt,
+        'deleted': event.redacted,
+      });
+      if (event.redacted) _mediaHistory[event.room.id]?.remove(event.eventId);
+    }
+    if (rows.isNotEmpty) {
+      try {
+        await index.ingest(rows);
+      } catch (_) {
+        for (final row in rows) {
+          _indexFingerprints.remove(row['id']);
+        }
+        rethrow;
+      }
+    }
+  }
+
+  Future<List<ChatMessage>> _loadMediaPage(String roomId) async {
+    final room = _client?.getRoomById(roomId);
+    if (room == null || _mediaEnded.contains(roomId)) {
+      return mediaMessagesForRoom(roomId);
+    }
+    final index = await openHistoryIndex();
+    final records = _mediaHistory.putIfAbsent(roomId, () => {});
+    final offset = _mediaIndexOffset[roomId] ?? 0;
+    if (index != null && offset >= 0) {
+      final ids = await index
+          .query(roomId, kind: 'media', offset: offset)
+          .catchError((Object _) => <String>[]);
+      _mediaIndexOffset[roomId] = ids.length < 50 ? -1 : offset + ids.length;
+      for (final event in await _historyEvents(room, ids)) {
+        records[event.eventId] = _searchResultFromEvent(event);
+      }
+      if (ids.isNotEmpty) {
+        _notifyBackendListeners();
+        return mediaMessagesForRoom(roomId);
+      }
+    }
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final previous = _mediaCursor[roomId];
+      final page = await _historyPage(room, previous);
+      if (!identical(room.client, _client)) return const [];
+      final before = records.length;
+      for (final event in page.$1) {
+        final message = _searchResultFromEvent(event);
+        if (message.attachment?.kind == AttachmentKind.image ||
+            message.attachment?.kind == AttachmentKind.video) {
+          records[event.eventId] = message;
+        }
+      }
+      _mediaCursor[roomId] = page.$2;
+      if (page.$2 == null || page.$2 == previous) _mediaEnded.add(roomId);
+      if (records.length > before || _mediaEnded.contains(roomId)) break;
+    }
+    // Keep room metadata caches separate from image/video byte caches.
+    while (_mediaHistory.length > 4) {
+      final old = _mediaHistory.keys.firstWhere((id) => id != roomId);
+      _mediaHistory.remove(old);
+      _mediaCursor.remove(old);
+      _mediaEnded.remove(old);
+      _mediaIndexOffset.remove(old);
+    }
+    _notifyBackendListeners();
+    return mediaMessagesForRoom(roomId);
+  }
+
   ChatMessage _searchResultFromEvent(Event event) {
+    _indexedEventRooms[event.eventId] = event.room.id;
+    while (_indexedEventRooms.length > 12000) {
+      _indexedEventRooms.remove(_indexedEventRooms.keys.first);
+    }
     final attachment = _attachmentFor(event);
     return ChatMessage(
       id: event.eventId,

@@ -138,6 +138,63 @@ abstract final class SocksProxy {
     await _nativePolicy(blockDirectTraffic);
   }
 
+  static Future<void> testConnection(
+    SocksProxyConfig config,
+    Uri homeserver,
+    void Function(String) report,
+  ) async {
+    if (config.validationError case final error?) throw FormatException(error);
+    if (!{'https', 'http'}.contains(homeserver.scheme) ||
+        homeserver.host.isEmpty ||
+        homeserver.userInfo.isNotEmpty) {
+      throw const FormatException('Invalid test server.');
+    }
+    final target = Uri(
+      scheme: homeserver.scheme,
+      host: homeserver.host,
+      port: homeserver.hasPort ? homeserver.port : null,
+      path: '/_matrix/client/versions',
+    );
+    final clock = Stopwatch()..start();
+    void stage(String text) => report('${clock.elapsedMilliseconds} ms: $text');
+    final client = SocksHttpOverrides(
+      config,
+      onStage: stage,
+    ).createHttpClient(null);
+    final deadline = Timer(
+      const Duration(seconds: 25),
+      () => client.close(force: true),
+    );
+    try {
+      stage('Starting test');
+      final request = await client.getUrl(target);
+      request.followRedirects = false;
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      stage('HTTP ${response.statusCode}');
+      final bytes = <int>[];
+      await for (final part in response.timeout(const Duration(seconds: 5))) {
+        if (bytes.length + part.length > 65536) {
+          throw const FormatException('Response too large.');
+        }
+        bytes.addAll(part);
+      }
+      final data = jsonDecode(utf8.decode(bytes));
+      if (response.statusCode != 200 ||
+          data is! Map ||
+          data['versions'] is! List) {
+        throw const FormatException(
+          'The server did not return Matrix versions.',
+        );
+      }
+      stage('Connected through SOCKS5. Settings were not saved.');
+    } finally {
+      deadline.cancel();
+      client.close(force: true);
+    }
+  }
+
   static void requireLocalPlayback(Uri uri) {
     if (blockDirectTraffic &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
@@ -152,9 +209,14 @@ abstract final class SocksProxy {
 /// No direct fallback, local target DNS lookup, certificate exceptions or
 /// proxy credentials in URLs. A restart applies one snapshot to all clients.
 class SocksHttpOverrides extends HttpOverrides {
-  SocksHttpOverrides(this.config, {this.configurationError = false});
+  SocksHttpOverrides(
+    this.config, {
+    this.configurationError = false,
+    this.onStage,
+  });
   final SocksProxyConfig config;
   final bool configurationError;
+  final void Function(String)? onStage;
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     final client = super.createHttpClient(context);
@@ -163,7 +225,12 @@ class SocksHttpOverrides extends HttpOverrides {
       if (configurationError) {
         throw const SocketException('Proxy settings could not be loaded');
       }
-      return connectThroughSocks(config, uri, context: context);
+      return connectThroughSocks(
+        config,
+        uri,
+        context: context,
+        onStage: onStage,
+      );
     };
     return client;
   }
@@ -174,6 +241,7 @@ Future<ConnectionTask<Socket>> connectThroughSocks(
   Uri uri, {
   SecurityContext? context,
   Duration timeout = const Duration(seconds: 20),
+  void Function(String)? onStage,
 }) async {
   Socket? current;
   ServerSocket? relayServer;
@@ -196,12 +264,15 @@ Future<ConnectionTask<Socket>> connectThroughSocks(
   Future<Socket> connect() async {
     try {
       final host = config.host.replaceAll(RegExp(r'^\[|\]$'), '');
+      onStage?.call('Resolving/connecting to proxy');
       current = await Socket.connect(host, config.port, timeout: timeout);
+      onStage?.call('Proxy TCP connected');
       if (cancelled) throw const SocketException('Proxy connection cancelled');
       final tunnel = _SocksTunnel(current!);
-      await tunnel.handshake(uri, config);
+      await tunnel.handshake(uri, config, onStage);
       if (cancelled) throw const SocketException('Proxy connection cancelled');
       if (uri.scheme == 'https' || uri.scheme == 'wss') {
+        onStage?.call('Checking server TLS certificate');
         // Retain the real proxy socket during TLS negotiation. Dart detaches
         // the input Socket during SecureSocket.secure, so destroying that
         // detached object cannot cancel a stalled TLS handshake. A private
@@ -261,6 +332,7 @@ Future<ConnectionTask<Socket>> connectThroughSocks(
           context: context,
           supportedProtocols: const ['http/1.1'],
         );
+        onStage?.call('TLS verified');
         current!.done.whenComplete(() {
           peer.destroy();
           tunnel.destroy();
@@ -329,7 +401,11 @@ class _SocksTunnel extends SocksSocket {
     await destination.close();
   }
 
-  Future<void> handshake(Uri target, SocksProxyConfig config) async {
+  Future<void> handshake(
+    Uri target,
+    SocksProxyConfig config,
+    void Function(String)? report,
+  ) async {
     final method = config.username.isEmpty ? 0 : 2;
     add([5, 1, method]);
     await flush();
@@ -338,6 +414,7 @@ class _SocksTunnel extends SocksSocket {
       throw const FormatException('Proxy rejected the authentication method');
     }
     if (method == 2) {
+      report?.call('Authenticating with proxy');
       final user = utf8.encode(config.username),
           password = utf8.encode(config.password);
       add([1, user.length, ...user, password.length, ...password]);
@@ -347,6 +424,7 @@ class _SocksTunnel extends SocksSocket {
         throw const FormatException('Proxy authentication failed');
       }
     }
+    report?.call('Opening target tunnel (destination DNS handled by proxy)');
     final address = InternetAddress.tryParse(target.host);
     final domain = address == null ? ascii.encode(target.host) : null;
     if (domain != null && (domain.isEmpty || domain.length > 255)) {
@@ -385,5 +463,6 @@ class _SocksTunnel extends SocksSocket {
     // This address is not a target to resolve. Never leak proxy-supplied DNS.
     await readBytes(length + 2);
     await data.cancel();
+    report?.call('SOCKS5 tunnel established');
   }
 }

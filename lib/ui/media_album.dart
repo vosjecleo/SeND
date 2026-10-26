@@ -6,7 +6,7 @@ import 'deltiecord_theme.dart';
 
 import '../models/chat_models.dart';
 
-/// Finds adjacent, captionless image/video messages which can be presented as
+/// Finds adjacent image/video messages which can be presented as
 /// one visual attachment group. The stable event IDs remain untouched so
 /// receipts, replies, deletion and permalink navigation keep their semantics.
 class MediaAlbumIndex {
@@ -24,6 +24,8 @@ class MediaAlbumIndex {
       final run = <ChatMessage>[first];
       var cursor = index + 1;
       while (cursor < messages.length) {
+        // A caption introduces its upload group. Do not absorb older messages.
+        if (run.last.attachment?.caption?.trim().isNotEmpty == true) break;
         final candidate = messages[cursor];
         final newer = run.last;
         if (!_eligible(candidate) ||
@@ -57,7 +59,6 @@ class MediaAlbumIndex {
     if (attachment == null ||
         attachment.sticker ||
         attachment.animated ||
-        attachment.caption?.trim().isNotEmpty == true ||
         message.system ||
         message.redacted ||
         message.poll != null ||
@@ -112,36 +113,53 @@ class MediaAlbumGrid extends StatelessWidget {
     }
 
     final count = messages.length.clamp(1, 3);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        height: height,
-        child: count == 1
-            ? tile(0)
-            : count == 2
-            ? Row(
-                children: [
-                  Expanded(child: tile(0)),
-                  const SizedBox(width: 2),
-                  Expanded(child: tile(1)),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(child: tile(0)),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Expanded(child: tile(1)),
-                        const SizedBox(height: 2),
-                        Expanded(child: tile(2)),
-                      ],
-                    ),
+    final captions = messages
+        .where((m) => m.attachment?.caption?.trim().isNotEmpty == true)
+        .toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final message in captions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              message.attachment!.caption!,
+              key: ValueKey('album-caption-${message.id}'),
+            ),
+          ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: height,
+            child: count == 1
+                ? tile(0)
+                : count == 2
+                ? Row(
+                    children: [
+                      Expanded(child: tile(0)),
+                      const SizedBox(width: 2),
+                      Expanded(child: tile(1)),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: tile(0)),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Expanded(child: tile(1)),
+                            const SizedBox(height: 2),
+                            Expanded(child: tile(2)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

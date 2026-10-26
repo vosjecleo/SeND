@@ -39,17 +39,19 @@ void main() {
     return result;
   }
 
-  test('backspace removes a whole selected custom emoji', () {
+  test('backspace removes the closing colon and keeps the caret there', () {
     final result = delete('hi :wave:', 9);
-    expect(result.text, 'hi ');
-    expect(result.selection.baseOffset, 3);
+    expect(result.text, 'hi :wave');
+    expect(result.selection.baseOffset, 8);
   });
-  test('deletion inside a rendered shortcode removes the emoji', () {
-    expect(delete(':wave:!', 1).text, '!');
+  test('an internal rendered caret deletes the closing colon', () {
+    final result = delete(':wave:!', 1);
+    expect(result.text, ':wave!');
+    expect(result.selection.baseOffset, 5);
   });
   test('adjacent identical emojis remain separate editing units', () {
-    expect(delete(':wave::wave:', 6).text, ':wave:');
-    expect(delete(':wave::wave:', 12).text, ':wave:');
+    expect(delete(':wave::wave:', 6).text, ':wave:wave:');
+    expect(delete(':wave::wave:', 12).text, ':wave::wave');
   });
   test('ordinary typed shortcodes remain plain text', () {
     expect(delete(':wave:', 6, custom: false).text, ':wave');

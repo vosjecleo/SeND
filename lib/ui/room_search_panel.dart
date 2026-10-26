@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'deltiecord_theme.dart';
+import 'lifecycle_memory_image.dart';
+import 'mobile/mobile_media.dart';
+import 'history_index_settings.dart';
 
 enum RoomSearchSection { messages, media, files, links }
 
@@ -80,13 +83,21 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   int _paginationPasses = 0;
   bool _searchStopped = false;
   bool get _canLoadOlder => _query.text.trim().isEmpty
-      ? widget.backend.canLoadMoreHistory
+      ? _tabs.index == RoomSearchSection.media.index
+            ? widget.backend.canLoadMoreMedia(
+                widget.backend.selectedRoom?.id ?? '',
+              )
+            : widget.backend.canLoadMoreHistory
       : widget.backend.canLoadMoreSearchResults;
   String? _error;
+  List<ChatMessage> _mediaResults = const [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showHistoryIndexPrompt(context, widget.backend);
+    });
     _resultsScroll.addListener(() {
       if (_resultsScroll.hasClients &&
           _resultsScroll.position.extentAfter < 400) {
@@ -106,7 +117,9 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   void _tabChanged() {
     if (!_tabs.indexIsChanging &&
         _tabs.index != RoomSearchSection.messages.index &&
-        _paginationPasses == 0) {
+        (_paginationPasses == 0 ||
+            (_tabs.index == RoomSearchSection.media.index &&
+                _mediaResults.isEmpty))) {
       _loadOlder();
     }
     if (mounted) setState(() {});
@@ -165,7 +178,16 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     }
     setState(() => _loadingOlder = true);
     try {
-      if (_query.text.trim().isEmpty) await widget.backend.loadMoreHistory();
+      if (_query.text.trim().isEmpty) {
+        if (_tabs.index == RoomSearchSection.media.index) {
+          final found = await widget.backend.loadMoreMedia(
+            widget.backend.selectedRoom?.id ?? '',
+          );
+          if (mounted) setState(() => _mediaResults = found);
+        } else {
+          await widget.backend.loadMoreHistory();
+        }
+      }
       _paginationPasses++;
       if (_query.text.trim().isNotEmpty) await _search();
     } catch (_) {
@@ -186,7 +208,17 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
 
   List<ChatMessage> get _results {
     final byId = <String, ChatMessage>{
-      for (final message in widget.backend.messages) message.id: message,
+      for (final message
+          in _tabs.index == RoomSearchSection.media.index &&
+                  _query.text.trim().isEmpty
+              ? [
+                  ...widget.backend.mediaMessagesForRoom(
+                    widget.backend.selectedRoom?.id ?? '',
+                  ),
+                  ..._mediaResults,
+                ]
+              : widget.backend.messages)
+        message.id: message,
       for (final message in _serverResults) message.id: message,
     };
     final query = _query.text.trim().toLowerCase();
@@ -305,6 +337,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                         ),
                     itemCount: results.length,
                     itemBuilder: (context, index) => _MediaResult(
+                      key: ValueKey(results[index].id),
                       backend: widget.backend,
                       message: results[index],
                       onOpen: widget.onOpen,
@@ -363,16 +396,37 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   }
 }
 
-class _MediaResult extends StatelessWidget {
+class _MediaResult extends StatefulWidget {
   const _MediaResult({
     required this.backend,
     required this.message,
     required this.onOpen,
+    super.key,
   });
 
   final ChatBackend backend;
   final ChatMessage message;
   final Future<void> Function(String eventId) onOpen;
+  @override
+  State<_MediaResult> createState() => _MediaResultState();
+}
+
+class _MediaResultState extends State<_MediaResult> {
+  ChatBackend get backend => widget.backend;
+  ChatMessage get message => widget.message;
+  Future<Uint8List?>? _pending;
+  @override
+  void didUpdateWidget(_MediaResult oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.backend != backend ||
+        oldWidget.message.id != message.id ||
+        oldWidget.message.attachment?.sourceEventId !=
+            message.attachment?.sourceEventId ||
+        oldWidget.message.attachment?.hasThumbnail !=
+            message.attachment?.hasThumbnail) {
+      _pending = null;
+    }
+  }
 
   Future<Uint8List?> _thumbnail() async {
     final attachment = message.attachment;
@@ -405,18 +459,31 @@ class _MediaResult extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: () async {
+      await showDialog<void>(
+        context: context,
+        builder: (_) =>
+            MobileMediaGallery(backend: backend, initialMessage: message),
+      );
+    },
+    onLongPress: () async {
       Navigator.pop(context);
-      await onOpen(message.id);
+      await widget.onOpen(message.id);
     },
     child: ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: ColoredBox(
         color: context.deltiecord.elevated,
         child: FutureBuilder<Uint8List?>(
-          future: _thumbnail(),
+          future: _pending ??= _thumbnail(),
           builder: (context, snapshot) {
             if (snapshot.hasData) {
-              return Image.memory(snapshot.data!, fit: BoxFit.cover);
+              return LifecycleMemoryImage(
+                bytes: snapshot.data!,
+                fit: BoxFit.cover,
+                decodeWidth: 256,
+                animated: message.attachment?.animated ?? false,
+                autoplay: false,
+              );
             }
             return Center(
               child: Icon(

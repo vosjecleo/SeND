@@ -538,8 +538,9 @@ class _SpaceBar extends StatelessWidget {
                   padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
                   child: Divider(height: 1),
                 ),
-                for (final space in backend.spaces)
-                  Padding(
+                SpaceFolderRail(
+                  backend: backend,
+                  itemBuilder: (space) => Padding(
                     padding: EdgeInsets.only(
                       bottom: _densityBetween(
                         backend.preferences.compactness,
@@ -586,6 +587,7 @@ class _SpaceBar extends StatelessWidget {
                             ),
                     ),
                   ),
+                ),
                 Padding(
                   key: const Key('create-space-panel'),
                   padding: const EdgeInsets.only(top: 2, bottom: 6),
@@ -2093,6 +2095,19 @@ class _RoomListTile extends StatelessWidget {
               label: room.isDirect ? 'Edit DM name' : 'Room settings',
             ),
           ),
+        if (backend.selectedSpaceId == null &&
+            backend.personalData != null) ...[
+          PopupMenuItem(
+            value: 'pin-dm',
+            child: Text(
+              backend.personalData!.pinned(room.id) ? 'Unpin chat' : 'Pin chat',
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'archive-chat',
+            child: Text('Archive chat'),
+          ),
+        ],
         if (backend.selectedRoom?.id == room.id)
           PopupMenuItem(
             value: 'mute',
@@ -2162,6 +2177,13 @@ class _RoomListTile extends StatelessWidget {
           await backend.markRoomUnread(room.id, false);
         case 'settings':
           await _edit(context);
+        case 'pin-dm':
+          await backend.pinDirectRoom(
+            room.id,
+            !(backend.personalData?.pinned(room.id) ?? false),
+          );
+        case 'archive-chat':
+          await backend.archiveRoom(room.id, true);
         case 'mute':
           await backend.setSelectedRoomMuted(!backend.selectedRoomMuted);
         case 'copy-link':

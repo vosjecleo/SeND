@@ -241,6 +241,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
     if (generation != _timelineGeneration) return;
     final timeline = _timeline;
     if (timeline != null) {
+      unawaited(_indexEvents(timeline.events).catchError((Object _) {}));
       _notifyBackendListeners();
       unawaited(_hydrateCurrentTimeline(timeline, generation));
       unawaited(_markSelectedRoomRead());

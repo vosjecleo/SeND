@@ -288,7 +288,7 @@ void main() {
     expect(find.text('@alice:example.org'), findsOneWidget);
     expect(find.text('Matrix enthusiast'), findsOneWidget);
     expect(find.text('View full profile'), findsOneWidget);
-    expect(find.textContaining('UTC+02'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'UTC\+0[12]')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('conversation-presence-online')),
       findsOneWidget,
@@ -327,7 +327,7 @@ void main() {
       greaterThan(panelRect.left + 100),
     );
     expect(
-      tester.getTopLeft(find.textContaining('UTC+02')).dy,
+      tester.getTopLeft(find.textContaining(RegExp(r'UTC\+0[12]'))).dy,
       greaterThan(aboutRect.bottom),
     );
     expect(

@@ -365,9 +365,40 @@ String activityClock(int milliseconds) {
 
 /// Separate footer: a completed scrobble must never masquerade as live music
 /// or replace a game/activity above. Opted-in history remains visible offline.
-class LastFmRecentBar extends StatelessWidget {
+class LastFmRecentBar extends StatefulWidget {
   const LastFmRecentBar({required this.userId, super.key});
   final String userId;
+  @override
+  State<LastFmRecentBar> createState() => _LastFmRecentBarState();
+}
+
+class _LastFmRecentBarState extends State<LastFmRecentBar> {
+  ChatBackend? _backend;
+  VoidCallback? _unwatch;
+  void _bind() {
+    _unwatch?.call();
+    _backend = ActivityScope.of(context);
+    _unwatch = _backend?.watchListeningHistory(widget.userId);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bind();
+  }
+
+  @override
+  void didUpdateWidget(LastFmRecentBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) _bind();
+  }
+
+  @override
+  void dispose() {
+    _unwatch?.call();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final backend = ActivityScope.of(context);
@@ -375,7 +406,7 @@ class LastFmRecentBar extends StatelessWidget {
     return ListenableBuilder(
       listenable: backend,
       builder: (context, _) {
-        final track = backend.lastFmRecentFor(userId);
+        final track = backend.lastFmRecentFor(widget.userId);
         if (track == null) return const SizedBox.shrink();
         final palette = context.deltiecord;
         return Padding(

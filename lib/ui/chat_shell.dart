@@ -67,6 +67,7 @@ import 'poll_card.dart';
 import 'member_management.dart';
 import 'presence_controls.dart';
 import 'space_settings_screen.dart';
+import 'personal_organisation.dart';
 import 'typing_indicator.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
@@ -681,6 +682,7 @@ class _ChatShellState extends State<ChatShell> {
         replyToMessageId: _replyingTo?.id,
       );
       if (mounted) setState(() => _replyingTo = null);
+      unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
     } finally {
       if (mounted) setState(() => _sending = false);
     }

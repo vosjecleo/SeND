@@ -7,5 +7,5 @@ Icon=net.deltie.deltiecord
 Terminal=false
 Categories=Network;Chat;InstantMessaging;
 StartupNotify=true
-StartupWMClass=deltiecord
+StartupWMClass=net.deltie.deltiecord
 Keywords=Matrix;Chat;Messaging;

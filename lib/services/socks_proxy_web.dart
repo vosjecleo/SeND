@@ -11,5 +11,10 @@ abstract final class SocksProxy {
   static Future<void> save(SocksProxyConfig value) async =>
       throw UnsupportedError('Use browser or OS proxy settings.');
   static Future<void> reset() async {}
+  static Future<void> testConnection(
+    SocksProxyConfig config,
+    Uri homeserver,
+    void Function(String) report,
+  ) async => throw UnsupportedError('Use browser or system proxy settings.');
   static void requireLocalPlayback(Uri uri) {}
 }

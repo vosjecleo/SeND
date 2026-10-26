@@ -10,11 +10,13 @@ class KeyboardGeometry {
     this.focused = true,
     this.animating = false,
     this.physicalViewportHeight,
+    this.inputSubtype,
   });
   final bool? visible;
   final double physicalBottom;
   final bool focused, animating;
   final double? physicalViewportHeight;
+  final int? inputSubtype;
   bool get settled => visible != null && focused && !animating;
 
   double bottomForView(double physicalHeight, double logicalHeight) {
@@ -34,6 +36,9 @@ class KeyboardGeometry {
       physicalBottom: bottom,
       focused: value['focused'] == true,
       animating: value['animating'] == true,
+      inputSubtype: value['inputSubtype'] is int
+          ? value['inputSubtype'] as int
+          : null,
       physicalViewportHeight:
           value['physicalViewportHeight'] is num &&
               (value['physicalViewportHeight'] as num).isFinite &&

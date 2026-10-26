@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:flutter/rendering.dart';
 import '../models/chat_models.dart';
 
 InlineSpan messageMetadata(
@@ -9,11 +9,6 @@ InlineSpan messageMetadata(
   VoidCallback? onReaders,
   bool inHeader = false,
 }) {
-  if (!inHeader &&
-      ReceiptPlacementScope.of(context)?.relocated.contains(message.id) ==
-          true) {
-    return const TextSpan();
-  }
   final scheme = Theme.of(context).colorScheme;
   final color = MediaQuery.highContrastOf(context)
       ? scheme.onSurface
@@ -38,7 +33,7 @@ InlineSpan messageMetadata(
           ),
         ),
       );
-  return TextSpan(
+  final span = TextSpan(
     style: TextStyle(fontSize: 10, color: color, fontStyle: FontStyle.normal),
     children: [
       if (showReceipt) receipt(message.readBy, 'Sent to homeserver'),
@@ -50,6 +45,197 @@ InlineSpan messageMetadata(
         receipt(message.editReadBy, 'Edit sent'),
     ],
   );
+  return inHeader || (!showReceipt && !message.edited)
+      ? span
+      : MessageMetadataSpan(message.id, span);
+}
+
+class MessageMetadataSpan extends TextSpan {
+  MessageMetadataSpan(this.messageId, InlineSpan span)
+    : super(children: [span]);
+  final String messageId;
+}
+
+/// Measure the actual rendered rich text, including emoji and spoilers. Status
+/// markers never consume the width used to lay out an attachment or message.
+class TrailingMessageMetadata extends StatelessWidget {
+  const TrailingMessageMetadata({
+    super.key,
+    required this.child,
+    required this.metadata,
+    this.ids = const [],
+    this.text = true,
+  });
+  final Widget child;
+  final InlineSpan? metadata;
+  final List<String> ids;
+  final bool text;
+  @override
+  Widget build(BuildContext context) {
+    final span = metadata;
+    if (span == null) return child;
+    final keys = span is MessageMetadataSpan ? [span.messageId] : ids;
+    if (keys.isEmpty) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: child),
+          Text.rich(span),
+        ],
+      );
+    }
+    final scope = ReceiptPlacementScope.of(context);
+    return _MeasuredMetadata(
+      text: text,
+      report: (overflow) => scope?.report(keys, overflow),
+      children: [child, Text.rich(span, maxLines: 1, softWrap: false)],
+    );
+  }
+}
+
+class _MeasuredMetadata extends MultiChildRenderObjectWidget {
+  const _MeasuredMetadata({
+    required this.text,
+    required this.report,
+    required super.children,
+  });
+  final bool text;
+  final ValueChanged<bool> report;
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _MetadataLayout(text, report);
+  @override
+  void updateRenderObject(BuildContext context, _MetadataLayout renderObject) {
+    renderObject
+      ..isText = text
+      ..report = report
+      ..markNeedsLayout();
+  }
+}
+
+class _MetadataParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _MetadataLayout extends RenderBox
+    with
+        ContainerRenderObjectMixin<
+          RenderBox,
+          ContainerBoxParentData<RenderBox>
+        >,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          ContainerBoxParentData<RenderBox>
+        > {
+  _MetadataLayout(this.isText, this.report);
+  bool isText;
+  ValueChanged<bool> report;
+  bool _overflow = false;
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! ContainerBoxParentData<RenderBox>) {
+      child.parentData = _MetadataParentData();
+    }
+  }
+
+  Rect? _lastLine(RenderBox root) {
+    Rect? found;
+    void visit(RenderObject object) {
+      List<TextBox>? boxes;
+      final span = switch (object) {
+        RenderParagraph p => p.text,
+        RenderEditable e => e.text,
+        _ => null,
+      };
+      if (span != null) {
+        final length = span.toPlainText().length;
+        if (length > 0) {
+          final selection = TextSelection(
+            baseOffset: length - 1,
+            extentOffset: length,
+          );
+          boxes = switch (object) {
+            RenderParagraph p => p.getBoxesForSelection(selection),
+            RenderEditable e => e.getBoxesForSelection(selection),
+            _ => null,
+          };
+        }
+        if (boxes?.isNotEmpty == true) {
+          found = MatrixUtils.transformRect(
+            object.getTransformTo(root),
+            boxes!.last.toRect(),
+          );
+        }
+        return;
+      }
+      object.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
+  @override
+  void performLayout() {
+    final body = firstChild!, marker = lastChild!;
+    body.layout(constraints.loosen(), parentUsesSize: true);
+    marker.layout(const BoxConstraints(), parentUsesSize: true);
+    final end = isText ? _lastLine(body) : null;
+    final x = (end?.right ?? body.size.width) + 3;
+    final bottom = end?.bottom ?? body.size.height;
+    _overflow = x + marker.size.width > constraints.maxWidth;
+    (body.parentData as ContainerBoxParentData).offset = Offset.zero;
+    (marker.parentData as ContainerBoxParentData).offset = Offset(
+      x,
+      (bottom - marker.size.height).clamp(0.0, double.infinity),
+    );
+    size = constraints.constrain(
+      Size(
+        _overflow
+            ? body.size.width
+            : (x + marker.size.width).clamp(body.size.width, double.infinity),
+        _overflow
+            ? body.size.height
+            : body.size.height.clamp(marker.size.height, double.infinity),
+      ),
+    );
+    final overflow = _overflow;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (attached) report(overflow);
+    });
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    context.paintChild(firstChild!, offset);
+    if (!_overflow) {
+      context.paintChild(
+        lastChild!,
+        offset + (lastChild!.parentData as ContainerBoxParentData).offset,
+      );
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    if (!_overflow) {
+      final child = lastChild!,
+          offset = (lastChild!.parentData as ContainerBoxParentData).offset;
+      if (result.addWithPaintOffset(
+        offset: offset,
+        position: position,
+        hitTest: (result, position) =>
+            child.hitTest(result, position: position),
+      )) {
+        return true;
+      }
+    }
+    return firstChild!.hitTest(result, position: position);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    visitor(firstChild!);
+    if (!_overflow) visitor(lastChild!);
+  }
 }
 
 class MediaWithMessageMetadata extends StatelessWidget {
@@ -71,58 +257,36 @@ class MediaWithMessageMetadata extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!enabled) return child;
-    if (ReceiptPlacementScope.of(context)?.relocated.contains(message.id) ==
-        true) {
-      return child;
-    }
     final entries = album.isEmpty
         ? [if (showReceipt || message.edited) message]
         : album
-              .where(
-                (item) =>
-                    (receiptIds.contains(item.id) || item.edited) &&
-                    ReceiptPlacementScope.of(
-                          context,
-                        )?.relocated.contains(item.id) !=
-                        true,
-              )
+              .where((item) => (receiptIds.contains(item.id) || item.edited))
               .toList();
     if (entries.isEmpty) return child;
-    return Row(
+    return TrailingMessageMetadata(
       key: ValueKey('media-receipt-${message.id}'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Flexible(child: child),
-        const SizedBox(width: 3),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final item in entries)
-              Tooltip(
-                message: album.isEmpty
-                    ? 'Message status'
-                    : 'Attachment ${album.indexOf(item) + 1} of ${album.length}',
-                child: Text.rich(
-                  messageMetadata(
-                    context,
-                    item,
-                    showReceipt: album.isEmpty
-                        ? showReceipt
-                        : receiptIds.contains(item.id),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
+      text: false,
+      ids: entries.map((e) => e.id).toList(),
+      metadata: TextSpan(
+        children: [
+          for (final item in entries)
+            messageMetadata(
+              context,
+              item,
+              showReceipt: album.isEmpty
+                  ? showReceipt
+                  : receiptIds.contains(item.id),
+            ),
+        ],
+      ),
+      child: child,
     );
   }
 }
 
 /// Compute metadata placement once per viewport width. Keep receipt ownership
 /// attached to its original event even when its visual marker moves to a header.
-class ReceiptPlacement extends StatelessWidget {
+class ReceiptPlacement extends StatefulWidget {
   const ReceiptPlacement({
     required this.messages,
     required this.receiptIds,
@@ -136,51 +300,45 @@ class ReceiptPlacement extends StatelessWidget {
   final double contentInset;
   final Widget child;
   @override
+  State<ReceiptPlacement> createState() => _ReceiptPlacementState();
+}
+
+class _ReceiptPlacementState extends State<ReceiptPlacement> {
+  final _overflow = <String>{};
+  void _report(List<String> ids, bool overflow) {
+    if (!mounted || ids.every((id) => _overflow.contains(id) == overflow)) {
+      return;
+    }
+    setState(() {
+      for (final id in ids) {
+        if (overflow) {
+          _overflow.add(id);
+        } else {
+          _overflow.remove(id);
+        }
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ReceiptPlacement oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final ids = widget.messages.map((m) => m.id).toSet();
+    _overflow.removeWhere((id) => !ids.contains(id));
+  }
+
+  @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final messages = widget.messages,
+          receiptIds = widget.receiptIds,
+          hiddenIds = widget.hiddenIds;
       final headers = <String, List<ChatMessage>>{};
       final relocated = <String>{};
-      final width = (constraints.maxWidth - contentInset).clamp(
-        40.0,
-        double.infinity,
-      );
-      final scaler = MediaQuery.textScalerOf(context);
       for (var i = 0; i < messages.length; i++) {
         final message = messages[i];
         if (!receiptIds.contains(message.id) && !message.edited) continue;
-        final reserve = scaler.scale(message.edited ? 90 : 28);
-        final attachment = message.attachment;
-        var move = message.body.length > 8000;
-        if (attachment != null && message.body.isEmpty) {
-          final screen = MediaQuery.sizeOf(context);
-          final desktop = contentInset > 64;
-          final maxWidth = attachment.sticker
-              ? 128.0
-              : desktop
-              ? math.min(420.0, screen.width * .5)
-              : math.min(420.0, math.max(120.0, screen.width - 76));
-          final maxHeight = attachment.sticker
-              ? 128.0
-              : math.min(520.0, screen.height * (desktop ? .5 : .52));
-          final w = attachment.width, h = attachment.height;
-          final mediaWidth = w != null && h != null && w > 0 && h > 0
-              ? math.min(maxWidth, maxHeight * (w / h).clamp(.25, 4.0))
-              : maxWidth;
-          move = mediaWidth + reserve > width;
-        } else if (!move) {
-          final painter = TextPainter(
-            text: TextSpan(
-              text: message.body,
-              style: DefaultTextStyle.of(context).style.copyWith(fontSize: 14),
-            ),
-            textDirection: Directionality.of(context),
-            textScaler: scaler,
-          )..layout(maxWidth: width);
-          final lines = painter.computeLineMetrics();
-          move = lines.isNotEmpty && lines.last.width + reserve > width;
-          painter.dispose();
-        }
-        if (!move) continue;
+        if (!_overflow.contains(message.id)) continue;
         var anchor = i;
         // Only move within a contiguous sender group, never across another
         // sender, reply, day boundary or system event.
@@ -214,7 +372,8 @@ class ReceiptPlacement extends StatelessWidget {
         headers: headers,
         relocated: relocated,
         receiptIds: receiptIds,
-        child: child,
+        report: _report,
+        child: widget.child,
       );
     },
   );
@@ -225,11 +384,13 @@ class ReceiptPlacementScope extends InheritedWidget {
     required this.headers,
     required this.relocated,
     required this.receiptIds,
+    required this.report,
     required super.child,
     super.key,
   });
   final Map<String, List<ChatMessage>> headers;
   final Set<String> relocated, receiptIds;
+  final void Function(List<String>, bool) report;
   static ReceiptPlacementScope? of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ReceiptPlacementScope>();
   @override

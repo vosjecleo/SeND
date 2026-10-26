@@ -12,6 +12,7 @@ import 'public_network_address.dart';
 import 'private_file_store.dart';
 import 'socks_proxy.dart';
 import 'browser_private_store.dart';
+import 'personal_data.dart';
 
 class GifSearchResult {
   const GifSearchResult({
@@ -130,6 +131,41 @@ class GifService {
     ..userAgent = kIsWeb ? null : 'SeND/$deltiecordVersion';
   File? _favoritesFile;
   static List<GifSearchResult>? _favorites;
+  static PersonalData? _account;
+  static bool _accountScoped = false;
+  static void bind(PersonalData? account) {
+    _accountScoped = true;
+    _account = account;
+  }
+
+  List<GifSearchResult> get frequent {
+    final account = _account;
+    if (account == null) return const [];
+    final usage = account.usage('gif').entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return usage
+        .take(40)
+        .map((e) => GifSearchResult.fromJson(account.get('gif:${e.key}')))
+        .whereType<GifSearchResult>()
+        .toList();
+  }
+
+  Future<void> recordSent(GifSearchResult gif) async {
+    final account = _account;
+    if (account == null) return;
+    await account.set('gif:${gif.shareUrl}', gif.toJson());
+    await account.recordUsage('gif', gif.shareUrl.toString());
+  }
+
+  Future<void> importDeviceFavourites() async {
+    final account = _account;
+    if (account == null) return;
+    final legacy = await _deviceFavorites();
+    for (final gif in legacy) {
+      await account.set('fav.gif:${gif.shareUrl}', gif.toJson());
+    }
+  }
+
   static final _mediaCache = <Uri, Uint8List>{};
   static final _mediaRequests = <Uri, Future<Uint8List>>{};
   static int _cachedBytes = 0;
@@ -216,6 +252,19 @@ class GifService {
   }
 
   Future<List<GifSearchResult>> favorites() async {
+    final account = _account;
+    if (_accountScoped && account == null) return const [];
+    if (account != null) {
+      return account
+          .favourites('gif')
+          .map((id) => GifSearchResult.fromJson(account.get('fav.gif:$id')))
+          .whereType<GifSearchResult>()
+          .toList();
+    }
+    return _deviceFavorites();
+  }
+
+  Future<List<GifSearchResult>> _deviceFavorites() async {
     final loaded = _favorites;
     if (loaded != null) return List.unmodifiable(loaded);
     try {
@@ -248,6 +297,12 @@ class GifService {
   }
 
   Future<bool> toggleFavorite(GifSearchResult gif) async {
+    if (_accountScoped && _account == null) return false;
+    if (_account case final account?) {
+      final add = !isFavorite(gif);
+      await account.set('fav.gif:${gif.shareUrl}', add ? gif.toJson() : null);
+      return add;
+    }
     await favorites();
     if (!kIsWeb && _favoritesFile == null) {
       final support = await getApplicationSupportDirectory();
@@ -281,8 +336,11 @@ class GifService {
     return nowFavorite;
   }
 
-  bool isFavorite(GifSearchResult gif) =>
-      _favorites?.any((favorite) => favorite.shareUrl == gif.shareUrl) ?? false;
+  bool isFavorite(GifSearchResult gif) => _account != null
+      ? _account!.favourites('gif').contains(gif.shareUrl.toString())
+      : !_accountScoped &&
+            (_favorites?.any((favorite) => favorite.shareUrl == gif.shareUrl) ??
+                false);
 
   Future<Uint8List> download(GifSearchResult gif) async {
     final uri = gif.shareUrl;

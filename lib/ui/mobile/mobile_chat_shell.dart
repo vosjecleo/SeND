@@ -159,6 +159,7 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   void dispose() {
+    _languageRecovery?.cancel();
     _browserKeyboardVisibility?.cancel();
     _keyboardGeometrySubscription?.cancel();
     FocusManager.instance.removeListener(_rememberKeyboard);
@@ -246,6 +247,23 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   void _acceptKeyboardGeometry(KeyboardGeometry geometry) {
     if (!mounted) return;
+    final oldSubtype = _keyboardGeometry?.inputSubtype;
+    final languageChanged =
+        oldSubtype != null &&
+        geometry.inputSubtype != null &&
+        oldSubtype != geometry.inputSubtype;
+    final languageEditor = _focusedWithKeyboard ?? _languageEditor;
+    if (languageChanged && languageEditor != null && !_keyboardBackgrounded) {
+      _keyboardToRestore = languageEditor;
+      _restoreOnResume = true;
+      _languageRecoveryUntil = DateTime.now().add(
+        const Duration(milliseconds: 500),
+      );
+      _languageRecovery?.cancel();
+      _languageRecovery = Timer(const Duration(milliseconds: 500), () {
+        if (mounted) unawaited(_refreshKeyboardGeometry());
+      });
+    }
     setState(() => _keyboardGeometry = geometry);
     _rememberKeyboard();
     if (!_restoreOnResume ||
@@ -256,6 +274,11 @@ class _MobileChatShellState extends State<MobileChatShell>
     }
     // This flag is consumed once. Declined restoration never discards focus,
     // sends TextInput.hide or leaves the layout dependent on a timeout.
+    if (geometry.visible == true &&
+        _languageRecoveryUntil != null &&
+        DateTime.now().isBefore(_languageRecoveryUntil!)) {
+      return;
+    }
     _restoreOnResume = false;
     final focus = _keyboardToRestore;
     _keyboardToRestore = null;
@@ -281,6 +304,9 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   bool _keyboardRefreshQueued = false;
+  Timer? _languageRecovery;
+  DateTime? _languageRecoveryUntil;
+  FocusNode? _languageEditor;
   void _queueKeyboardRefresh() {
     if (_keyboardRefreshQueued || !mounted) return;
     _keyboardRefreshQueued = true;
@@ -304,6 +330,7 @@ class _MobileChatShellState extends State<MobileChatShell>
     _windowFocused = event.state == ViewFocusState.focused;
     if (!_windowFocused) {
       _rememberKeyboard();
+      _languageEditor = _focusedWithKeyboard;
     } else {
       // A refreshed measurement is safe on focus regain; reopening IME is only
       // permitted by the separate real-background flag.
@@ -356,8 +383,11 @@ class _MobileChatShellState extends State<MobileChatShell>
           behavior: HitTestBehavior.translucent,
           // Raw pointer tracking deliberately observes (but does not win) the
           // gesture arena. Message rows may still claim a left drag for reply,
-          // while a right drag anywhere on the timeline reliably opens nav.
+          // while a right drag on the timeline opens navigation.
           onPointerDown: (event) {
+            _languageEditor = null;
+            _languageRecoveryUntil = null;
+            _languageRecovery?.cancel();
             _keyboardGeneration++;
             _restoreOnResume = false;
             _keyboardToRestore = null;
@@ -367,6 +397,22 @@ class _MobileChatShellState extends State<MobileChatShell>
           onPointerMove: (event) {
             final start = _pointerStarts[event.pointer];
             if (start == null || _detailsVisible || room == null) return;
+            // Keep text-selection drags out of navigation. While editing, the
+            // edge gesture and explicit navigation button remain available.
+            final editing =
+                FocusManager.instance.primaryFocus?.context
+                    ?.findAncestorStateOfType<EditableTextState>() !=
+                null;
+            if (editing && !_navigationVisible && start.dx > 28) return;
+            if (FocusManager.instance.primaryFocus?.context
+                        ?.findAncestorStateOfType<EditableTextState>() !=
+                    null &&
+                start.dy >
+                    MediaQuery.sizeOf(context).height -
+                        MediaQuery.viewInsetsOf(context).bottom -
+                        100) {
+              return;
+            }
             final delta = event.position - start;
             if (delta.dx.abs() < 6 || delta.dx.abs() < delta.dy.abs() * 1.15) {
               return;

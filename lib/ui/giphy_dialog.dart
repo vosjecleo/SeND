@@ -172,6 +172,43 @@ class _GiphyDialogState extends State<GiphyDialog> {
                 ? const Center(child: CircularProgressIndicator())
                 : CustomScrollView(
                     slivers: [
+                      if (_query.text.trim().isEmpty &&
+                          widget.service.frequent.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Text('Frequently used'),
+                              ),
+                              SizedBox(
+                                height: 110,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: widget.service.frequent.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 6),
+                                  itemBuilder: (context, index) {
+                                    final gif = widget.service.frequent[index];
+                                    return SizedBox(
+                                      width: 110,
+                                      child: InkWell(
+                                        onTap: () =>
+                                            Navigator.pop(context, gif),
+                                        child: _GifPreview(
+                                          service: widget.service,
+                                          gif: gif,
+                                          autoplay: widget.autoplay,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       if (_query.text.trim().isEmpty && _favorites.isNotEmpty)
                         SliverToBoxAdapter(
                           child: Padding(

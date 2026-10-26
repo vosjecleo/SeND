@@ -148,6 +148,10 @@ void main() {
       );
       addTearDown(viewer.close);
       await viewer.start();
+      final stopRow = viewer.watchUser('@publisher:test', () => false);
+      final stopHistory = viewer.watchHistory('@publisher:test');
+      addTearDown(stopRow);
+      addTearDown(stopHistory);
       viewer.lastFmRecentFor('@publisher:test');
       await viewer.update(viewer.settings);
       expect(viewer.lastFmRecentFor('@publisher:test')?.name, 'Completed song');

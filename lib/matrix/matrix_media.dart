@@ -1,6 +1,16 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  Future<Event?> _resolveAttachmentEvent(String id) async {
+    final cached = _currentAttachmentEvent(id);
+    if (cached != null) return cached;
+    final room = _client?.getRoomById(roomIdForMessage(id) ?? '');
+    if (room == null) return null;
+    final event = await _historyEvent(room, id);
+    if (event != null) _attachmentFor(event);
+    return event;
+  }
+
   Event? _currentAttachmentEvent(String messageId) {
     final event = _eventById(messageId) ?? _attachmentEvents[messageId];
     if (event == null) return null;
@@ -249,7 +259,7 @@ extension _MatrixMedia on MatrixBackend {
     String messageId, {
     bool thumbnail = false,
   }) async {
-    final event = _currentAttachmentEvent(messageId);
+    final event = await _resolveAttachmentEvent(messageId);
     if (event == null || !event.hasAttachment) {
       throw StateError('That attachment is no longer available.');
     }
@@ -305,7 +315,7 @@ extension _MatrixMedia on MatrixBackend {
   }
 
   Future<MediaPlaybackSource?> _getMediaPlaybackSource(String messageId) async {
-    final event = _currentAttachmentEvent(messageId);
+    final event = await _resolveAttachmentEvent(messageId);
     if (event == null || !event.hasAttachment) {
       return null;
     }

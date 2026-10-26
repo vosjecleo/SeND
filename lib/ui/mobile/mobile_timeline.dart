@@ -39,6 +39,7 @@ import '../encryption_attention_banner.dart';
 import '../message_metadata.dart';
 import '../rich_message.dart';
 import '../../services/receipt_frontiers.dart';
+import '../../services/composer_editing.dart';
 import 'mobile_media.dart';
 import 'mobile_profile_sheet.dart';
 import 'mobile_widgets.dart';
@@ -1423,6 +1424,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       if (mounted && backend.selectedRoom?.id == roomId) {
         setState(() => _reply = null);
       }
+      unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1446,6 +1448,22 @@ class _CustomEmojiEditingController extends TextEditingController {
 
   final ChatBackend backend;
   final List<CustomEmojiTextSpan> Function() spans;
+
+  Iterable<TextRange> _tokens(String source) => spans()
+      .where(
+        (span) =>
+            span.start >= 0 &&
+            span.end <= source.length &&
+            span.start < span.end &&
+            source.substring(span.start, span.end) == span.emoji.fallback,
+      )
+      .map((span) => TextRange(start: span.start, end: span.end));
+
+  @override
+  set value(TextEditingValue next) {
+    final repaired = repairEmojiBackspace(value, next, _tokens(text));
+    super.value = normalizeEmojiCaret(repaired, _tokens(repaired.text));
+  }
 
   @override
   TextSpan buildTextSpan({
@@ -1518,7 +1536,7 @@ class _MobileDaySeparator extends StatelessWidget {
     final today = DateUtils.dateOnly(DateTime.now());
     final label = localDate == today
         ? 'Today'
-        : localDate == today.subtract(const Duration(days: 1))
+        : localDate == DateTime(today.year, today.month, today.day - 1)
         ? 'Yesterday'
         : MaterialLocalizations.of(context).formatFullDate(localDate);
     return Padding(
@@ -2408,18 +2426,20 @@ class _MobileComposerState extends State<_MobileComposer> {
                           onEditingComplete: () {},
                           textCapitalization: TextCapitalization.sentences,
                           contextMenuBuilder: (context, state) =>
-                              AdaptiveTextSelectionToolbar.buttonItems(
-                                anchors: state.contextMenuAnchors,
-                                buttonItems: [
-                                  ...state.contextMenuButtonItems,
-                                  ContextMenuButtonItem(
-                                    label: 'Paste image',
-                                    onPressed: () {
-                                      state.hideToolbar();
-                                      widget.onPasteImage();
-                                    },
-                                  ),
-                                ],
+                              TextFieldTapRegion(
+                                child: AdaptiveTextSelectionToolbar.buttonItems(
+                                  anchors: state.contextMenuAnchors,
+                                  buttonItems: [
+                                    ...state.contextMenuButtonItems,
+                                    ContextMenuButtonItem(
+                                      label: 'Paste image',
+                                      onPressed: () {
+                                        state.hideToolbar();
+                                        widget.onPasteImage();
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                           style: TextStyle(color: context.deltiecord.text),
                           cursorColor: Theme.of(context).colorScheme.primary,
@@ -2585,6 +2605,19 @@ class _PendingAttachmentPreview extends StatelessWidget {
                       ),
                     ),
             ),
+            if (attachment.spoiler)
+              const Positioned.fill(
+                child: ColoredBox(
+                  color: Color(0xcc17181c),
+                  child: Center(
+                    child: Icon(
+                      Icons.visibility_off_outlined,
+                      color: Colors.white,
+                      semanticLabel: 'Spoiler',
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               right: 2,
               top: 2,

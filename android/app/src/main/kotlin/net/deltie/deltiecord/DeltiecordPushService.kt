@@ -1,6 +1,7 @@
 package net.deltie.deltiecord
 
 import android.content.Context
+import androidx.core.app.NotificationManagerCompat
 import java.util.UUID
 import org.json.JSONObject
 import org.unifiedpush.android.connector.FailedReason
@@ -129,6 +130,7 @@ class DeltiecordPushService : MessagingReceiver() {
 
         fun state(context: Context, instance: String): Map<String, String?> =
             mapOf(
+                "notificationsAllowed" to NotificationManagerCompat.from(context).areNotificationsEnabled().toString(),
                 "distributor" to
                     if (BuiltInPushService.activeInstance(context) == instance) "builtin"
                     else org.unifiedpush.android.connector.UnifiedPush.getSavedDistributor(context),

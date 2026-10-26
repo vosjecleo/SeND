@@ -30,7 +30,7 @@ class ActivityController extends ChangeNotifier {
     this.pollInterval = const Duration(seconds: 5),
     this.heartbeat = const Duration(seconds: 55),
     this.readInterval = const Duration(seconds: 40),
-    Duration readStartDelay = const Duration(seconds: 15),
+    Duration readStartDelay = Duration.zero,
   }) : _source = source ?? DesktopActivitySource(),
        _lastFm = lastFm ?? LastFmActivitySource(),
        _libreFm = libreFm ?? LastFmActivitySource(libreFm: true),
@@ -73,7 +73,7 @@ class ActivityController extends ChangeNotifier {
   ActivitySettings settings = const ActivitySettings();
   List<ActivityCandidate> candidates = const [];
   String? warning;
-  Timer? _timer, _initialRead;
+  Timer? _timer, _initialRead, _readerTimer;
   Completer<void>? _tickDone;
   bool _dead = false, _busy = false, _published = false;
   String? _fingerprint, _publishWarning;
@@ -98,6 +98,7 @@ class ActivityController extends ChangeNotifier {
     if (_dead) return;
     notifyListeners();
     _timer = Timer.periodic(pollInterval, (_) => unawaited(_tick()));
+    _readerTimer = Timer.periodic(pollInterval, (_) => unawaited(_readTick()));
     await _tick();
   }
 
@@ -117,7 +118,7 @@ class ActivityController extends ChangeNotifier {
     if (_seen.length > 64) _seen.remove(_seen.keys.first);
     if (_foreground &&
         !_fetched.containsKey(id) &&
-        !_busy &&
+        !_reading &&
         !_dead &&
         _initialRead == null) {
       final remaining = _readAfter.difference(DateTime.now());
@@ -125,7 +126,7 @@ class ActivityController extends ChangeNotifier {
         remaining.isNegative ? const Duration(milliseconds: 150) : remaining,
         () {
           _initialRead = null;
-          unawaited(_tick());
+          unawaited(_readTick());
         },
       );
     }
@@ -151,6 +152,26 @@ class ActivityController extends ChangeNotifier {
   }
 
   UserActivity? activityFor(String id) => activitiesFor(id).primary;
+  final _historyWatchers = <String, int>{};
+  VoidCallback watchHistory(String id) {
+    final last = _fetched[id];
+    if (last != null &&
+        DateTime.now().difference(last) >= const Duration(seconds: 5)) {
+      _fetched.remove(id);
+    }
+    _historyWatchers[id] = (_historyWatchers[id] ?? 0) + 1;
+    _historyWatch.add(id);
+    _observe(id);
+    return () {
+      final remaining = (_historyWatchers[id] ?? 1) - 1;
+      if (remaining <= 0) {
+        _historyWatchers.remove(id);
+      } else {
+        _historyWatchers[id] = remaining;
+      }
+    };
+  }
+
   VoidCallback watchUser(String id, bool Function() isVisible) {
     (_watchers[id] ??= {}).add(isVisible);
     return () {
@@ -280,6 +301,7 @@ class ActivityController extends ChangeNotifier {
   }
 
   Future<void> _tick() async {
+    unawaited(_readTick());
     if (_dead || _busy) return;
     _busy = true;
     _tickDone = Completer<void>();
@@ -468,68 +490,7 @@ class ActivityController extends ChangeNotifier {
           _publishWarning = null;
         }
       }
-      _seen.removeWhere(
-        (_, at) => now.difference(at) > const Duration(minutes: 2),
-      );
-      if (_foreground) {
-        for (final id in _watchers.keys) {
-          if (_visible(id) && _watchedVisible(id)) _observe(id);
-        }
-      }
-      _historyWatch.removeWhere((id) => !_seen.containsKey(id));
-      final users = _seen.keys
-          .where(
-            (id) =>
-                _foreground &&
-                (!_watchers.containsKey(id) || _watchedVisible(id)) &&
-                (_visible(id) || _historyWatch.contains(id)) &&
-                !now.isBefore(_readAfter) &&
-                (_fetched[id] == null ||
-                    now.difference(_fetched[id]!) >= readInterval),
-          )
-          .toList();
-      users.sort(
-        (a, b) => (_fetched[a]?.millisecondsSinceEpoch ?? 0).compareTo(
-          _fetched[b]?.millisecondsSinceEpoch ?? 0,
-        ),
-      );
-      for (final id in users.take(8)) {
-        if (_dead || !_foreground) break;
-        if (_watchers.containsKey(id) && !_watchedVisible(id)) continue;
-        if (!_visible(id) && !_historyWatch.contains(id)) continue;
-        _fetched[id] = DateTime.now();
-        try {
-          final response = await read(id).timeout(const Duration(seconds: 8));
-          if (!_dead &&
-              _foreground &&
-              (_visible(id) || _historyWatch.contains(id))) {
-            _records[id] = response is Map && response['devices'] is Map
-                ? Map<String, Object?>.from(response['devices'] as Map)
-                : {activityProfileField: response};
-            if (!_visible(id)) {
-              _records[id]!.removeWhere(
-                (key, _) => !key.startsWith(lastFmHistoryPrefix),
-              );
-            }
-          }
-        } on ActivityServiceError catch (error) {
-          if (error.code == 'M_NOT_FOUND') {
-            _records.remove(id);
-            continue;
-          }
-          _readAfter = DateTime.now().add(
-            error.retryAfter ?? const Duration(minutes: 1),
-          );
-          break;
-        } catch (_) {
-          _readAfter = DateTime.now().add(const Duration(minutes: 1));
-          break;
-        }
-        await Future<void>.delayed(const Duration(seconds: 1));
-      }
-      _records.removeWhere((id, _) => !_seen.containsKey(id));
-      _fetched.removeWhere((id, _) => !_seen.containsKey(id));
-      _observedOnline.removeWhere((id, _) => !_seen.containsKey(id));
+      await _readTick();
     } catch (error) {
       final code = error is ActivityServiceError ? error.code : null;
       warning = switch (code) {
@@ -569,13 +530,133 @@ class ActivityController extends ChangeNotifier {
     }
   }
 
+  bool _reading = false;
+  Completer<void>? _readDone;
+  final _readRetry = <String, DateTime>{};
+
+  Future<void> _readTick() async {
+    if (_dead || !_foreground) return;
+    if (_reading) {
+      await _readDone?.future;
+      return;
+    }
+    _reading = true;
+    _readDone = Completer<void>();
+    final now = DateTime.now();
+    try {
+      _seen.removeWhere(
+        (_, at) => now.difference(at) > const Duration(minutes: 2),
+      );
+      if (_foreground) {
+        for (final id in _historyWatchers.keys) {
+          _historyWatch.add(id);
+          _observe(id);
+        }
+        for (final id in _watchers.keys) {
+          if (_visible(id) && _watchedVisible(id)) _observe(id);
+        }
+      }
+      _historyWatch.removeWhere((id) => !_seen.containsKey(id));
+      final users = _seen.keys
+          .where(
+            (id) =>
+                _foreground &&
+                (_historyWatch.contains(id) ||
+                    !_watchers.containsKey(id) ||
+                    _watchedVisible(id)) &&
+                (_visible(id) || _historyWatch.contains(id)) &&
+                !now.isBefore(_readAfter) &&
+                (_readRetry[id] == null || !now.isBefore(_readRetry[id]!)) &&
+                (_fetched[id] == null ||
+                    now.difference(_fetched[id]!) >= readInterval),
+          )
+          .toList();
+      users.sort((a, b) {
+        final priority =
+            (_historyWatchers.containsKey(b) ? 1 : 0) -
+            (_historyWatchers.containsKey(a) ? 1 : 0);
+        return priority != 0
+            ? priority
+            : (_fetched[a]?.millisecondsSinceEpoch ?? 0).compareTo(
+                _fetched[b]?.millisecondsSinceEpoch ?? 0,
+              );
+      });
+      Future<void> fetch(String id) async {
+        if (_dead || !_foreground) return;
+        if (!_historyWatch.contains(id) &&
+            _watchers.containsKey(id) &&
+            !_watchedVisible(id)) {
+          return;
+        }
+        if (!_visible(id) && !_historyWatch.contains(id)) return;
+        try {
+          final response = await read(id).timeout(const Duration(seconds: 8));
+          _fetched[id] = DateTime.now();
+          _readRetry.remove(id);
+          if (!_dead &&
+              _foreground &&
+              (_visible(id) || _historyWatch.contains(id))) {
+            _records[id] = response is Map && response['devices'] is Map
+                ? Map<String, Object?>.from(response['devices'] as Map)
+                : {activityProfileField: response};
+            if (!_visible(id)) {
+              _records[id]!.removeWhere(
+                (key, _) => !key.startsWith(lastFmHistoryPrefix),
+              );
+            }
+          }
+        } on ActivityServiceError catch (error) {
+          if (error.code == 'M_NOT_FOUND') {
+            _fetched[id] = DateTime.now();
+            _records.remove(id);
+            return;
+          }
+          _readRetry[id] = DateTime.now().add(
+            error.retryAfter ?? const Duration(seconds: 10),
+          );
+          if (error.code == 'M_LIMIT_EXCEEDED') {
+            _readAfter = _readRetry[id]!;
+            return;
+          }
+        } catch (_) {
+          _readRetry[id] = DateTime.now().add(const Duration(seconds: 10));
+        }
+        final signature = _uiSignature();
+        if (!_dead && _lastUi != signature) {
+          _lastUi = signature;
+          notifyListeners();
+        }
+      }
+
+      for (var i = 0; i < users.length && i < 8; i += 4) {
+        if (_dead || !_foreground || DateTime.now().isBefore(_readAfter)) break;
+        await Future.wait(users.skip(i).take(4).map(fetch));
+      }
+      _records.removeWhere((id, _) => !_seen.containsKey(id));
+      _fetched.removeWhere((id, _) => !_seen.containsKey(id));
+      _observedOnline.removeWhere((id, _) => !_seen.containsKey(id));
+      _readRetry.removeWhere((id, _) => !_seen.containsKey(id));
+    } finally {
+      _reading = false;
+      _readDone?.complete();
+      final signature = _uiSignature();
+      if (!_dead && _lastUi != signature) {
+        _lastUi = signature;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> close({bool clear = false}) async {
     _dead = true;
     _timer?.cancel();
+    _readerTimer?.cancel();
     _initialRead?.cancel();
     _watchers.clear();
+    _historyWatchers.clear();
     await _source.dispose();
     if (_busy) await _tickDone?.future;
+    if (_reading) await _readDone?.future;
     if (clear && _published) {
       try {
         await _publish(null);

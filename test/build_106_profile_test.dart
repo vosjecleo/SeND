@@ -46,7 +46,10 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    final scroll = find.byKey(const ValueKey('tour-scroll-2'));
+    expect(find.text('Keep a local text search index'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    final scroll = find.byKey(const ValueKey('tour-scroll-3'));
     final close = tester.getRect(find.text('Close'));
     expect(close.bottom, lessThan(640));
     await tester.scrollUntilVisible(

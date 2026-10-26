@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'emoji_typography.dart';
+import 'message_metadata.dart';
 import 'lifecycle_memory_image.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
@@ -212,10 +213,19 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
         _emojiAwareTextSpans(context, widget.text.substring(offset), style),
       );
     }
-    final span = TextSpan(style: style, children: [...spans, ?widget.trailing]);
-    return widget.selectable
+    final span = TextSpan(
+      style: style,
+      children: [
+        ...spans,
+        if (widget.trailing is! MessageMetadataSpan) ?widget.trailing,
+      ],
+    );
+    final body = widget.selectable
         ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
         : Text.rich(span);
+    return widget.trailing is MessageMetadataSpan
+        ? TrailingMessageMetadata(metadata: widget.trailing, child: body)
+        : body;
   }
 }
 
@@ -299,17 +309,28 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       final span = TextSpan(
         children: [
           ..._emojiAwareTextSpans(context, widget.fallback, fallbackStyle),
-          ?widget.trailing,
+          if (widget.trailing is! MessageMetadataSpan) ?widget.trailing,
         ],
       );
-      return widget.selectable
+      final body = widget.selectable
           ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
           : Text.rich(span);
+      return widget.trailing is MessageMetadataSpan
+          ? TrailingMessageMetadata(metadata: widget.trailing, child: body)
+          : body;
     }
-    final span = TextSpan(children: [...spans, ?widget.trailing]);
-    return widget.selectable
+    final span = TextSpan(
+      children: [
+        ...spans,
+        if (widget.trailing is! MessageMetadataSpan) ?widget.trailing,
+      ],
+    );
+    final body = widget.selectable
         ? SelectableText.rich(span, contextMenuBuilder: _noContextMenu)
         : Text.rich(span);
+    return widget.trailing is MessageMetadataSpan
+        ? TrailingMessageMetadata(metadata: widget.trailing, child: body)
+        : body;
   }
 
   List<InlineSpan> _nodes(

@@ -5,6 +5,7 @@ import 'package:flutter_quill/flutter_quill.dart'
 
 import '../backend/chat_backend.dart';
 import '../services/custom_emoji.dart';
+import '../services/composer_editing.dart';
 import 'composer_emoji_span.dart';
 import 'rich_message.dart';
 import 'inline_composer_preview.dart';
@@ -152,29 +153,30 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
           hintText: widget.placeholder,
           hintStyle: widget.hintStyle,
         ),
-        contextMenuBuilder: (context, state) =>
-            AdaptiveTextSelectionToolbar.buttonItems(
-              anchors: state.contextMenuAnchors,
-              buttonItems: state.contextMenuButtonItems
-                  .map(
-                    (item) => item.type == ContextMenuButtonType.paste
-                        ? ContextMenuButtonItem(
-                            type: ContextMenuButtonType.paste,
-                            onPressed: () {
-                              state.hideToolbar();
-                              _paste();
-                            },
-                          )
-                        : item,
-                  )
-                  .toList(),
-            ),
+        contextMenuBuilder: (context, state) => TextFieldTapRegion(
+          child: AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: state.contextMenuAnchors,
+            buttonItems: state.contextMenuButtonItems
+                .map(
+                  (item) => item.type == ContextMenuButtonType.paste
+                      ? ContextMenuButtonItem(
+                          type: ContextMenuButtonType.paste,
+                          onPressed: () {
+                            state.hideToolbar();
+                            _paste();
+                          },
+                        )
+                      : item,
+                )
+                .toList(),
+          ),
+        ),
       ),
     ),
   );
 }
 
-/// A displayed custom emoji is one editing unit, not its hidden shortcode.
+/// Repair IMEs that report the visible emoji edge as its first placeholder.
 class CustomEmojiDeletionFormatter extends TextInputFormatter {
   CustomEmojiDeletionFormatter(this.controller);
   final QuillController controller;
@@ -184,57 +186,30 @@ class CustomEmojiDeletionFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    if (newValue.text.length >= oldValue.text.length ||
-        !newValue.composing.isCollapsed ||
-        !oldValue.composing.isCollapsed ||
-        controller.document.toPlainText() != '${oldValue.text}\n') {
+    if (controller.document.toPlainText() != '${oldValue.text}\n') {
       return newValue;
     }
-    var start = 0;
-    while (start < newValue.text.length &&
-        oldValue.text[start] == newValue.text[start]) {
-      start++;
-    }
-    var suffix = 0;
-    while (suffix < newValue.text.length - start &&
-        oldValue.text[oldValue.text.length - 1 - suffix] ==
-            newValue.text[newValue.text.length - 1 - suffix]) {
-      suffix++;
-    }
-    if (start + suffix != newValue.text.length) return newValue;
-    var end = oldValue.text.length - suffix;
-    final cursor = oldValue.selection.extentOffset;
-    final removed = oldValue.text.length - newValue.text.length;
-    if (oldValue.selection.isCollapsed &&
-        cursor >= removed &&
-        oldValue.text.replaceRange(cursor - removed, cursor, '') ==
-            newValue.text) {
-      start = cursor - removed;
-      end = cursor;
-    }
-    var offset = 0;
-    for (final op in controller.document.toDelta().toJson()) {
-      final text = op['insert'];
-      if (text is! String) continue;
-      final next = offset + text.length;
-      final link = (op['attributes'] as Map?)?['link'] as String?;
-      if (customEmojiFromEditorLink(link) != null) {
-        for (final token in RegExp(r':[^:\s]+:').allMatches(text)) {
-          final tokenStart = offset + token.start;
-          final tokenEnd = offset + token.end;
-          if (tokenStart < end && tokenEnd > start) {
-            start = start < tokenStart ? start : tokenStart;
-            end = end > tokenEnd ? end : tokenEnd;
-          }
-        }
-      }
-      offset = next;
-    }
-    end = end.clamp(start, oldValue.text.length);
-    return TextEditingValue(
-      text: oldValue.text.replaceRange(start, end, ''),
-      selection: TextSelection.collapsed(offset: start),
+    return repairEmojiBackspace(
+      oldValue,
+      newValue,
+      _documentEmojiRanges(controller),
     );
+  }
+}
+
+Iterable<TextRange> _documentEmojiRanges(QuillController controller) sync* {
+  var offset = 0;
+  for (final op in controller.document.toDelta().toJson()) {
+    final text = op['insert'];
+    if (text is! String) continue;
+    final next = offset + text.length;
+    final link = (op['attributes'] as Map?)?['link'] as String?;
+    if (customEmojiFromEditorLink(link) != null) {
+      for (final token in RegExp(r':[^:\s]+:').allMatches(text)) {
+        yield TextRange(start: offset + token.start, end: offset + token.end);
+      }
+    }
+    offset = next;
   }
 }
 
@@ -242,6 +217,13 @@ class _PlainController extends TextEditingController {
   _PlainController(this.document, this.backend);
   final QuillController document;
   final ChatBackend backend;
+  @override
+  set value(TextEditingValue next) {
+    super.value = document.document.toPlainText() == '${next.text}\n'
+        ? normalizeEmojiCaret(next, _documentEmojiRanges(document))
+        : next;
+  }
+
   @override
   TextSpan buildTextSpan({
     required BuildContext context,

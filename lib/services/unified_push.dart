@@ -24,6 +24,7 @@ final class UnifiedPushState {
     this.lastTestResult,
     this.disabled = false,
     this.connection,
+    this.notificationsAllowed,
   });
 
   final String? distributor;
@@ -41,6 +42,7 @@ final class UnifiedPushState {
   final String? lastTestResult;
   final bool disabled;
   final String? connection;
+  final bool? notificationsAllowed;
   bool get builtIn => distributor == 'builtin';
 
   bool get registered => endpoint?.isNotEmpty == true;
@@ -254,6 +256,11 @@ final class UnifiedPushPlatform {
         lastTestResult: result?['lastTestResult'] as String?,
         disabled: result?['disabled'] == 'true',
         connection: result?['connection'] as String?,
+        notificationsAllowed: switch (result?['notificationsAllowed']) {
+          'true' => true,
+          'false' => false,
+          _ => null,
+        },
       );
 
   DateTime? _dateFromMilliseconds(Object? value) {

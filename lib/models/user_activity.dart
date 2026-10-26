@@ -137,9 +137,7 @@ class LastFmTrack {
       album: album,
       url: url,
       playedAt: DateTime.fromMillisecondsSinceEpoch(played),
-      artwork: url.host == 'libre.fm'
-          ? null
-          : validLastFmArtwork(value['artwork']),
+      artwork: validListeningArtwork(value['artwork']),
     );
   }
 }
@@ -245,7 +243,33 @@ Uri? validListeningUrl(Object? value) {
 String listeningProvider(Uri? url) =>
     url?.host == 'libre.fm' ? 'Libre.fm' : 'Last.fm';
 
-/// Only API-provided HTTPS Last.fm CDN artwork, never arbitrary profile URLs.
+/// HTTPS artwork on the provider CDNs or Cover Art Archive, not arbitrary URLs.
+Uri? validListeningArtwork(Object? value) {
+  final lastfm = validLastFmArtwork(value);
+  if (lastfm != null) return lastfm;
+  if (value is! String || value.length > 2048) return null;
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasFragment ||
+      uri.hasQuery ||
+      (uri.hasPort && uri.port != 443)) {
+    return null;
+  }
+  if ((uri.host == 'archive.org' || uri.host.endsWith('.archive.org')) &&
+      RegExp(r'^/download/mbid-[a-f0-9-]{36}/').hasMatch(uri.path)) {
+    return uri;
+  }
+  if (uri.host == 'coverartarchive.org' &&
+      RegExp(
+        r'^/release(?:-group)?/[a-f0-9-]{36}/front-(250|500|1200)$',
+      ).hasMatch(uri.path)) {
+    return uri;
+  }
+  return null;
+}
+
 Uri? validLastFmArtwork(Object? value) {
   if (value is! String || value.length > 2048) return null;
   final uri = Uri.tryParse(value);
@@ -304,7 +328,8 @@ class UserActivity {
       (lastFmUrl!.host == 'libre.fm' ? 'listening_url' : 'lastfm_url'):
           lastFmUrl.toString(),
     if (lastFmUrl != null && lastFmArtwork != null)
-      'lastfm_artwork': lastFmArtwork.toString(),
+      (lastFmUrl?.host == 'libre.fm' ? 'listening_artwork' : 'lastfm_artwork'):
+          lastFmArtwork.toString(),
     'expires_at': expiresAt.millisecondsSinceEpoch,
   };
   static UserActivity? fromJson(Object? value, {DateTime? now}) {
@@ -347,9 +372,9 @@ class UserActivity {
       lastFmUrl:
           validListeningUrl(value['listening_url']) ??
           validLastFmUrl(value['lastfm_url']),
-      lastFmArtwork: validLastFmUrl(value['lastfm_url']) == null
-          ? null
-          : validLastFmArtwork(value['lastfm_artwork']),
+      lastFmArtwork: validListeningArtwork(
+        value['listening_artwork'] ?? value['lastfm_artwork'],
+      ),
       startedAt:
           start is int && start > 0 && start <= current.millisecondsSinceEpoch
           ? DateTime.fromMillisecondsSinceEpoch(start)
@@ -386,6 +411,7 @@ class ActivitySettings {
     this.showLastFmRecent = false,
     this.libreFmUser = '',
     this.useLibreFm = false,
+    this.lookupListeningArtwork = false,
   });
   final bool detect, share, rpc;
   final bool showLastFmRecent;
@@ -393,6 +419,7 @@ class ActivitySettings {
   final String lastFmUser, lastFmKey;
   final String libreFmUser;
   final bool useLibreFm;
+  final bool lookupListeningArtwork;
   String get listeningUser => useLibreFm ? libreFmUser : lastFmUser;
   String get listeningProviderName => useLibreFm ? 'Libre.fm' : 'Last.fm';
   ActivitySettings copyWith({
@@ -405,6 +432,7 @@ class ActivitySettings {
     bool? showLastFmRecent,
     String? libreFmUser,
     bool? useLibreFm,
+    bool? lookupListeningArtwork,
   }) => ActivitySettings(
     detect: detect ?? this.detect,
     share: share ?? this.share,
@@ -415,6 +443,8 @@ class ActivitySettings {
     showLastFmRecent: showLastFmRecent ?? this.showLastFmRecent,
     libreFmUser: libreFmUser ?? this.libreFmUser,
     useLibreFm: useLibreFm ?? this.useLibreFm,
+    lookupListeningArtwork:
+        lookupListeningArtwork ?? this.lookupListeningArtwork,
   );
   Map<String, Object?> toJson() => {
     'detect': detect,
@@ -426,6 +456,7 @@ class ActivitySettings {
     'lastfm_recent': showLastFmRecent,
     'librefm_user': libreFmUser,
     'use_librefm': useLibreFm,
+    'listening_artwork_lookup': lookupListeningArtwork,
   };
   factory ActivitySettings.fromJson(Object? value) {
     if (value is! Map) return const ActivitySettings();
@@ -458,6 +489,7 @@ class ActivitySettings {
       showLastFmRecent: value['lastfm_recent'] == true,
       libreFmUser: value['librefm_user'] is String ? value['librefm_user'] : '',
       useLibreFm: value['use_librefm'] == true,
+      lookupListeningArtwork: value['listening_artwork_lookup'] == true,
     );
   }
 }

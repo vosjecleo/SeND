@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'private_file_store.dart';
 import 'browser_private_store.dart';
 import 'emoji_repository.dart';
+import 'personal_data.dart';
 import 'package:html/parser.dart' as html_parser;
 
 /// Small bounded local index for favourite Unicode emoji and Matrix stickers.
@@ -19,6 +20,27 @@ final class FavouriteReactionsStore extends ChangeNotifier {
 
   static final instance = FavouriteReactionsStore._();
   static const _maximumPerKind = 100;
+  PersonalData? _account;
+  bool _accountScoped = false;
+  void bind(PersonalData? account) {
+    _accountScoped = true;
+    _account?.removeListener(notifyListeners);
+    _account = account;
+    account?.addListener(notifyListeners);
+    notifyListeners();
+  }
+
+  Future<void> importDeviceFavourites() async {
+    await load();
+    final account = _account;
+    if (account == null) return;
+    for (final value in _emoji) {
+      await account.set('fav.emoji:$value', true);
+    }
+    for (final value in _stickers) {
+      await account.set('fav.sticker:$value', true);
+    }
+  }
 
   File? _file;
   bool _loaded = false;
@@ -26,10 +48,16 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   final List<String> _stickers = [];
   final Map<String, int> _emojiUsage = {};
   final Map<String, int> _stickerUsage = {};
-  Map<String, int> get stickerUsage => Map.unmodifiable(_stickerUsage);
-  Map<String, int> get emojiUsage => Map.unmodifiable(_emojiUsage);
+  Map<String, int> get stickerUsage =>
+      _account?.usage('sticker') ??
+      (_accountScoped ? const {} : Map.unmodifiable(_stickerUsage));
+  Map<String, int> get emojiUsage =>
+      _account?.usage('emoji') ??
+      (_accountScoped ? const {} : Map.unmodifiable(_emojiUsage));
 
   Future<void> recordEmoji(String key) async {
+    if (_accountScoped && _account == null) return;
+    if (_account case final account?) return account.recordUsage('emoji', key);
     await load();
     _emojiUsage[key] = (_emojiUsage[key] ?? 0) + 1;
     if (_emojiUsage.length > 200) {
@@ -43,6 +71,7 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   }
 
   Future<void> recordSentMessage(String text, String? html) async {
+    if (_accountScoped && _account == null) return;
     final catalogue = await EmojiRepository.instance.load();
     final known = catalogue.map((entry) => entry.emoji).toSet();
     final counts = <String, int>{};
@@ -63,6 +92,14 @@ final class FavouriteReactionsStore extends ChangeNotifier {
         }
       }
     }
+    if (_account case final account?) {
+      for (final entry in counts.entries) {
+        for (var i = 0; i < entry.value; i++) {
+          await account.recordUsage('emoji', entry.key);
+        }
+      }
+      return;
+    }
     await load();
     for (final entry in counts.entries) {
       _emojiUsage.update(
@@ -77,6 +114,10 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   }
 
   Future<void> recordSticker(Uri uri) async {
+    if (_accountScoped && _account == null) return;
+    if (_account case final account?) {
+      return account.recordUsage('sticker', uri.toString());
+    }
     await load();
     final key = uri.toString();
     _stickerUsage.update(key, (n) => n + 1, ifAbsent: () => 1);
@@ -91,8 +132,12 @@ final class FavouriteReactionsStore extends ChangeNotifier {
     }
   }
 
-  List<String> get emoji => List.unmodifiable(_emoji);
-  List<String> get stickers => List.unmodifiable(_stickers);
+  List<String> get emoji =>
+      _account?.favourites('emoji') ??
+      (_accountScoped ? const [] : List.unmodifiable(_emoji));
+  List<String> get stickers =>
+      _account?.favourites('sticker') ??
+      (_accountScoped ? const [] : List.unmodifiable(_stickers));
 
   Future<void> load() async {
     if (_loaded) return;
@@ -143,16 +188,24 @@ final class FavouriteReactionsStore extends ChangeNotifier {
     }
   }
 
-  bool isEmojiFavourite(String value) => _emoji.contains(value);
-  bool isStickerFavourite(Uri value) => _stickers.contains(value.toString());
+  bool isEmojiFavourite(String value) => emoji.contains(value);
+  bool isStickerFavourite(Uri value) => stickers.contains(value.toString());
 
   Future<void> toggleEmoji(String value) async {
+    if (_accountScoped && _account == null) return;
+    if (_account case final account?) {
+      return account.set('fav.emoji:$value', !isEmojiFavourite(value));
+    }
     await load();
     _toggle(_emoji, value);
     await _save();
   }
 
   Future<void> toggleSticker(Uri value) async {
+    if (_accountScoped && _account == null) return;
+    if (_account case final account?) {
+      return account.set('fav.sticker:$value', !isStickerFavourite(value));
+    }
     await load();
     _toggle(_stickers, value.toString());
     await _save();

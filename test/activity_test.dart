@@ -233,7 +233,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
   test(
-    'activity viewing defers startup requests and backs off on read errors',
+    'activity viewing starts promptly and respects a real rate limit',
     () async {
       var reads = 0;
       final controller = ActivityController(
@@ -241,7 +241,10 @@ void main() {
         source: Source(),
         read: (_) async {
           reads++;
-          throw StateError('rate limited');
+          throw const ActivityServiceError(
+            'M_LIMIT_EXCEEDED',
+            retryAfter: Duration(minutes: 1),
+          );
         },
         write: (_) async {},
         upload: (_) async => Uri.parse('mxc://example.org/icon'),
@@ -250,8 +253,6 @@ void main() {
       await controller.start();
       controller.activityFor('@other:example.org');
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(reads, 0);
-      await Future<void>.delayed(const Duration(seconds: 16));
       expect(reads, 1);
       controller.activityFor('@second:example.org');
       await Future<void>.delayed(const Duration(seconds: 5));

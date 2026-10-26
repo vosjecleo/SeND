@@ -27,7 +27,7 @@ void main() {
     expect(index.hiddenMessageIds, {'middle', 'old'});
   });
 
-  test('does not fold captions, GIFs, other senders, or five-minute gaps', () {
+  test('does not fold GIFs or five-minute gaps', () {
     final now = DateTime.utc(2026, 9, 15, 12);
     final captioned = _media(
       'captioned',
@@ -49,6 +49,26 @@ void main() {
     final index = MediaAlbumIndex.fromNewestFirst([captioned, gif, late]);
     expect(index.albums, isEmpty);
     expect(index.hiddenMessageIds, isEmpty);
+  });
+  test('caption introduces a collage without absorbing older pictures', () {
+    final now = DateTime.utc(2026, 10, 26);
+    final messages = [
+      _media('second', now, AttachmentKind.image),
+      _media(
+        'caption',
+        now.subtract(const Duration(seconds: 1)),
+        AttachmentKind.image,
+        caption: 'Trip',
+      ),
+      _media(
+        'older',
+        now.subtract(const Duration(seconds: 10)),
+        AttachmentKind.image,
+      ),
+    ];
+    final index = MediaAlbumIndex.fromNewestFirst(messages);
+    expect(index.albums['second']!.map((m) => m.id), ['caption', 'second']);
+    expect(index.hiddenMessageIds, {'caption'});
   });
 }
 

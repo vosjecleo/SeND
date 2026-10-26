@@ -9,6 +9,8 @@ import '../services/activity_candidate.dart';
 import '../services/activity_controller.dart';
 import '../services/pack_reorganization.dart';
 import '../services/socks_proxy.dart';
+import '../services/personal_data.dart';
+import '../services/history_index.dart';
 import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
 import 'dart:collection';
@@ -136,6 +138,9 @@ class MatrixBackend extends ChatBackend {
   @override
   LastFmTrack? lastFmRecentFor(String userId) =>
       _activities?.lastFmRecentFor(userId);
+  @override
+  void Function() watchListeningHistory(String userId) =>
+      _activities?.watchHistory(userId) ?? () {};
 
   bool _activityVisibleFor(String id) {
     if (id == _client?.userID) {
@@ -159,6 +164,8 @@ class MatrixBackend extends ChatBackend {
 
   void _startActivities() {
     if (_activities != null || _client?.userID == null) return;
+    unawaited(_startPersonalData());
+    unawaited(openHistoryIndex());
     final client = _matrix;
     final ownId = client.userID!;
     final activityField = activityDeviceField(client.deviceID!);
@@ -573,6 +580,93 @@ class MatrixBackend extends ChatBackend {
   bool _historySearchComplete = false;
   int _historySearchGeneration = 0;
   final Map<String, ChatMessage> _historySearchMessages = {};
+  HistoryIndex? _historyIndex;
+  Future<HistoryIndex?>? _openingIndex;
+  int _indexSearchOffset = 0;
+  bool _indexSearchDone = false;
+  StreamSubscription<Event>? _indexEventSubscription;
+  final _mediaHistory = <String, Map<String, ChatMessage>>{};
+  final _mediaCursor = <String, String?>{};
+  final _mediaEnded = <String>{};
+  final _mediaLoading = <String, Future<List<ChatMessage>>>{};
+  final _mediaIndexOffset = <String, int>{};
+  final _indexFingerprints = <String, int>{};
+  final _indexedEventRooms = <String, String>{};
+  @override
+  HistoryIndex? get historyIndex => _historyIndex;
+  @override
+  Future<HistoryIndex?> openHistoryIndex() {
+    if (_historyIndex != null) return Future.value(_historyIndex);
+    if (_client?.userID == null) return Future.value();
+    return _openingIndex ??= _openHistoryIndex().then((value) {
+      if (value == null) _openingIndex = null;
+      return value;
+    });
+  }
+
+  @override
+  Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
+    await (await openHistoryIndex())?.configure(text: enabled, limit: limitMiB);
+    _indexFingerprints.clear();
+    if (_timeline case final timeline?) await _indexEvents(timeline.events);
+  }
+
+  @override
+  Future<void> clearHistoryIndex() async {
+    await _historyIndex?.clear();
+    _indexFingerprints.clear();
+    _indexSearchOffset = 0;
+    _indexSearchDone = false;
+    _mediaIndexOffset.clear();
+  }
+
+  Future<HistoryIndex?> _openHistoryIndex() async {
+    final client = _client;
+    if (client?.userID == null) return null;
+    final index = HistoryIndex(client!.userID!);
+    try {
+      await index.open();
+      if (!identical(client, _client)) {
+        await index.close();
+        return null;
+      }
+      _historyIndex = index;
+      index.addListener(_notifyBackendListeners);
+      await _indexEventSubscription?.cancel();
+      _indexEventSubscription = client.onTimelineEvent.stream.listen((event) {
+        unawaited(_indexEvents([event]).catchError((Object _) {}));
+      });
+      return index;
+    } catch (_) {
+      await index.close();
+      return null;
+    }
+  }
+
+  @override
+  List<ChatMessage> mediaMessagesForRoom(String roomId) {
+    final result = <String, ChatMessage>{
+      ...?_mediaHistory[roomId],
+      if (roomId == _selectedRoomId)
+        for (final message in messages)
+          if (message.attachment?.kind == AttachmentKind.image ||
+              message.attachment?.kind == AttachmentKind.video)
+            message.id: message,
+    };
+    return result.values.where((m) => !m.redacted).toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  @override
+  bool canLoadMoreMedia(String roomId) => !_mediaEnded.contains(roomId);
+  @override
+  Future<List<ChatMessage>> loadMoreMedia(String roomId) =>
+      _mediaLoading.putIfAbsent(
+        roomId,
+        () => _loadMediaPage(
+          roomId,
+        ).whenComplete(() => _mediaLoading.remove(roomId)),
+      );
   @override
   bool get canLoadMoreSearchResults =>
       _historySearchRoom == _selectedRoomId && !_historySearchComplete;
@@ -682,18 +776,27 @@ class MatrixBackend extends ChatBackend {
   @override
   String? get selectedSpaceId => _selectedSpaceId;
   @override
-  List<SpaceSummary> get spaces => _joinedRooms
-      .where((room) => room.isSpace)
-      .map(
-        (room) => SpaceSummary(
-          id: room.id,
-          name: room.getLocalizedDisplayname(),
-          avatarBytes: _avatarBytes[room.id],
-          topic: room.topic,
-          muted: room.pushRuleState == PushRuleState.dontNotify,
-        ),
-      )
-      .toList(growable: false);
+  List<SpaceSummary> get spaces {
+    final rooms = _joinedRooms.where((room) => room.isSpace).toList();
+    final saved = _personal?.spaceOrder ?? const <String>[];
+    final ids = [
+      ...saved,
+      ...rooms.map((r) => r.id).where((id) => !saved.contains(id)),
+    ];
+    rooms.sort((a, b) => ids.indexOf(a.id).compareTo(ids.indexOf(b.id)));
+    return rooms
+        .map(
+          (room) => SpaceSummary(
+            id: room.id,
+            name: room.getLocalizedDisplayname(),
+            avatarBytes: _avatarBytes[room.id],
+            topic: room.topic,
+            muted: room.pushRuleState == PushRuleState.dontNotify,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   @override
   List<ChannelCategorySummary> get selectedSpaceCategories =>
       _channelCategoriesFor(_selectedSpaceId);
@@ -922,7 +1025,22 @@ class MatrixBackend extends ChatBackend {
     final visible = selectedSpaceId == null
         ? _homeRooms
         : _roomsForSpace(selectedSpaceId);
-    final joined = visible.map(_roomSummary).toList(growable: false);
+    final joined = visible
+        .where(
+          (r) =>
+              selectedSpaceId != null || !(_personal?.archived(r.id) ?? false),
+        )
+        .map(_roomSummary)
+        .toList(growable: false);
+    if (selectedSpaceId == null) {
+      final ranks = {for (var i = 0; i < joined.length; i++) joined[i].id: i};
+      joined.sort((a, b) {
+        final pin = (_personal?.pinned(b.id) == true ? 1 : 0).compareTo(
+          _personal?.pinned(a.id) == true ? 1 : 0,
+        );
+        return pin != 0 ? pin : ranks[a.id]!.compareTo(ranks[b.id]!);
+      });
+    }
     final ids = joined.map((room) => room.id).toSet();
     return [
       ...joined,
@@ -960,6 +1078,47 @@ class MatrixBackend extends ChatBackend {
           .where((room) => room.membership == Membership.join)
           .toList(growable: false) ??
       const [];
+
+  PersonalData? _personal;
+  Future<void>? _openingPersonal;
+  @override
+  PersonalData? get personalData => _personal;
+  @override
+  List<RoomSummary> get archivedRooms => _homeRooms
+      .where((r) => _personal?.archived(r.id) == true)
+      .map(_roomSummary)
+      .toList();
+  Future<void> _startPersonalData() => _openingPersonal ??= _openPersonalData();
+  Future<void> _openPersonalData() async {
+    final client = _client;
+    if (client?.userID == null) {
+      _openingPersonal = null;
+      return;
+    }
+    if (_personal?.account == client!.userID) return;
+    await _personal?.close();
+    final personal = PersonalData(
+      account: client.userID!,
+      write: (type, data) => client.setAccountData(client.userID!, type, data),
+    );
+    try {
+      await personal.open({
+        for (final e in client.accountData.entries) e.key: e.value.content,
+      });
+      if (!identical(client, _client)) {
+        await personal.close();
+        return;
+      }
+      _personal = personal;
+      FavouriteReactionsStore.instance.bind(personal);
+      GifService.bind(personal);
+      personal.addListener(_notifyBackendListeners);
+      _notifyBackendListeners();
+    } catch (_) {
+      await personal.close();
+      _openingPersonal = null;
+    }
+  }
 
   Set<String> get _allSpaceChildIds => _joinedRooms
       .where((room) => room.isSpace)
@@ -1001,6 +1160,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   String? roomIdForMessage(String eventId) {
+    if (_indexedEventRooms[eventId] case final room?) return room;
     for (final entry in _roomMessageCache.entries) {
       if (entry.value.any((message) => message.id == eventId)) return entry.key;
     }
@@ -1888,6 +2048,13 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _personal?.removeListener(_notifyBackendListeners);
+    _historyIndex?.removeListener(_notifyBackendListeners);
+    unawaited(_indexEventSubscription?.cancel());
+    unawaited(_historyIndex?.close());
+    FavouriteReactionsStore.instance.bind(null);
+    GifService.bind(null);
+    unawaited(_personal?.close());
     if (kIsWeb) browser.configureBrowserPresence(null);
     _memberAvatarGeneration++;
     if (kIsWeb) BrowserPushPreviews.stop();

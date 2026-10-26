@@ -439,6 +439,51 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
   late int _index;
   bool _zoomed = false;
   bool _saving = false;
+  bool _loadingOlder = false;
+  String? _historyError;
+  late final String? _roomId;
+
+  Future<void> _loadOlder() async {
+    final room = _roomId;
+    if (_loadingOlder ||
+        room == null ||
+        !widget.backend.canLoadMoreMedia(room)) {
+      return;
+    }
+    setState(() {
+      _loadingOlder = true;
+      _historyError = null;
+    });
+    try {
+      await widget.backend.loadMoreMedia(room);
+      if (!mounted) return;
+      final current = _messages[_index].id;
+      final merged = {
+        for (final m in _messages) m.id: m,
+        for (final m in widget.backend.mediaMessagesForRoom(room))
+          if (!m.redacted &&
+              m.attachment != null &&
+              !m.attachment!.sticker &&
+              (m.attachment!.kind == AttachmentKind.image ||
+                  m.attachment!.kind == AttachmentKind.video))
+            m.id: m,
+      };
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(merged.values);
+        _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        _index = _messages.indexWhere((m) => m.id == current);
+      });
+      if (_pages.hasClients) _pages.jumpToPage(_index);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _historyError = 'Could not load older media.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOlder = false);
+    }
+  }
 
   Future<void> _actions() async {
     final message = _messages[_index];
@@ -508,8 +553,13 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
   @override
   void initState() {
     super.initState();
+    _roomId =
+        widget.backend.roomIdForMessage(widget.initialMessage.id) ??
+        widget.backend.selectedRoom?.id;
     final candidates = {
       for (final m in widget.backend.messages) m.id: m,
+      if (_roomId != null)
+        for (final m in widget.backend.mediaMessagesForRoom(_roomId)) m.id: m,
       widget.initialMessage.id: widget.initialMessage,
     };
     _messages =
@@ -527,6 +577,9 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
     _index = _messages.indexWhere((m) => m.id == widget.initialMessage.id);
     _pages = PageController(initialPage: _index);
     _zoom.addListener(_zoomChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _index < 3) _loadOlder();
+    });
   }
 
   void _zoomChanged() {
@@ -564,10 +617,19 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
                 ? const NeverScrollableScrollPhysics()
                 : const PageScrollPhysics(),
             itemCount: _messages.length,
-            onPageChanged: (index) => setState(() {
-              _index = index;
-              _zoom.value = Matrix4.identity();
-            }),
+            onPageChanged: (index) {
+              setState(() {
+                _index = index;
+                _zoom.value = Matrix4.identity();
+                final keep = _messages
+                    .skip((_index - 1).clamp(0, _messages.length))
+                    .take(3)
+                    .map((m) => m.id)
+                    .toSet();
+                _downloads.removeWhere((id, _) => !keep.contains(id));
+              });
+              if (index < 3) _loadOlder();
+            },
             itemBuilder: (context, index) {
               final m = _messages[index];
               if (m.attachment!.spoiler &&
@@ -637,6 +699,26 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
         ),
         _fullscreenCloseButton(context),
         if (!_saving) _fullscreenActionsButton(context, _actions),
+        if (_loadingOlder ||
+            _historyError != null ||
+            (_index == 0 &&
+                _roomId != null &&
+                widget.backend.canLoadMoreMedia(_roomId)))
+          Positioned(
+            top: 64,
+            left: 16,
+            right: 16,
+            child: SafeArea(
+              child: Center(
+                child: _loadingOlder
+                    ? const CircularProgressIndicator()
+                    : TextButton(
+                        onPressed: _loadOlder,
+                        child: Text(_historyError ?? 'Load older media'),
+                      ),
+              ),
+            ),
+          ),
         Positioned(
           bottom: 12,
           left: 12,

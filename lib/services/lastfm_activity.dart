@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../models/user_activity.dart';
 import 'activity_candidate.dart';
 import 'platform_io.dart';
+import 'listening_artwork.dart';
 
 /// Foreground-only public now-playing reader shared by native and web clients.
 /// The controller owns lifecycle/consent; this class owns rate/cache bounds.
@@ -20,6 +21,7 @@ class LastFmActivitySource {
   String? _identity;
   ActivityCandidate? _cached;
   LastFmTrack? recent;
+  final _artwork = ListeningArtwork();
 
   void clear() {
     _cached = null;
@@ -103,8 +105,47 @@ class LastFmActivitySource {
               : seconds.clamp(0, 3600),
         ),
       );
-      final activity = lastFmNowPlaying(data, user, libreFm: libreFm);
+      var activity = lastFmNowPlaying(data, user, libreFm: libreFm);
       recent = lastFmRecentlyPlayed(data, user, libreFm: libreFm);
+      if (settings.lookupListeningArtwork && libreFm) {
+        final tracks = (data['recenttracks'] is Map)
+            ? data['recenttracks']['track']
+            : null;
+        final first = tracks is List && tracks.isNotEmpty && tracks.first is Map
+            ? tracks.first as Map
+            : null;
+        final album = first?['album'];
+        final art = await _artwork.lookup(
+          activity?.details ?? recent?.artist ?? '',
+          activity != null
+              ? '${album is Map ? album['#text'] ?? '' : album ?? ''}'
+              : recent?.album ?? '',
+        );
+        if (art != null && activity != null && activity.lastFmArtwork == null) {
+          activity = ActivityCandidate(
+            id: activity.id,
+            name: activity.name,
+            kind: activity.kind,
+            details: activity.details,
+            lastFmArtwork: art,
+            lastFmUrl: activity.lastFmUrl,
+          );
+        }
+        final track = recent;
+        if (track != null && track.artwork == null) {
+          final cover = await _artwork.lookup(track.artist, track.album);
+          if (cover != null) {
+            recent = LastFmTrack(
+              name: track.name,
+              artist: track.artist,
+              album: track.album,
+              url: track.url,
+              playedAt: track.playedAt,
+              artwork: cover,
+            );
+          }
+        }
+      }
       if (!cache.contains('no-store') && !cache.contains('no-cache')) {
         _cached = activity;
       }
@@ -151,9 +192,7 @@ LastFmTrack? lastFmRecentlyPlayed(
                   ))
               .toString(),
       'played_at': seconds * 1000,
-      'artwork': libreFm
-          ? null
-          : lastFmArtworkFromImages(track['image'])?.toString(),
+      'artwork': lastFmArtworkFromImages(track['image'])?.toString(),
     });
     if (value != null) return value;
   }
@@ -181,7 +220,7 @@ ActivityCandidate? lastFmNowPlaying(
   }
 
   final artist = track['artist'];
-  final artwork = libreFm ? null : lastFmArtworkFromImages(track['image']);
+  final artwork = lastFmArtworkFromImages(track['image']);
   return ActivityCandidate(
     id: libreFm ? 'librefm' : 'lastfm',
     name: bounded(track['name'], 128),
@@ -205,7 +244,7 @@ Uri? lastFmArtworkFromImages(Object? images) {
   if (images is List) {
     for (final image in images.take(12)) {
       if (image is! Map) continue;
-      final url = validLastFmArtwork(image['#text']);
+      final url = validListeningArtwork(image['#text']);
       final rank = const [
         'small',
         'medium',

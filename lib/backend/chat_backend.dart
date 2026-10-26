@@ -8,12 +8,40 @@ import '../models/forum_post.dart';
 import '../models/login_methods.dart';
 import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
+import '../services/personal_data.dart';
+import '../services/history_index.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
 /// Keeping SDK objects behind this contract lets desktop and future Android
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
+  PersonalData? get personalData => null;
+  HistoryIndex? get historyIndex => null;
+  Future<HistoryIndex?> openHistoryIndex() async => historyIndex;
+  Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
+    await (await openHistoryIndex())?.configure(text: enabled, limit: limitMiB);
+  }
+
+  Future<void> clearHistoryIndex() async => historyIndex?.clear();
+  List<ChatMessage> mediaMessagesForRoom(String roomId) => messages
+      .where(
+        (m) =>
+            m.attachment?.kind == AttachmentKind.image ||
+            m.attachment?.kind == AttachmentKind.video,
+      )
+      .toList();
+  bool canLoadMoreMedia(String roomId) => canLoadMoreHistory;
+  Future<List<ChatMessage>> loadMoreMedia(String roomId) async {
+    await loadMoreHistory();
+    return mediaMessagesForRoom(roomId);
+  }
+
+  List<RoomSummary> get archivedRooms => const [];
+  Future<void> archiveRoom(String id, bool archive) async =>
+      personalData?.set('archive:$id', archive);
+  Future<void> pinDirectRoom(String id, bool pin) async =>
+      personalData?.set('pin:$id', pin);
   ActivitySettings get activitySettings => const ActivitySettings();
   List<ActivityCandidate> get detectedApplications => const [];
   String? get activityWarning => null;
@@ -25,6 +53,7 @@ abstract class ChatBackend extends ChangeNotifier {
   }) => () {};
   List<UserActivity> activitiesFor(String userId) => [?activityFor(userId)];
   LastFmTrack? lastFmRecentFor(String userId) => null;
+  VoidCallback watchListeningHistory(String userId) => () {};
   Future<Uint8List?> loadActivityIcon(Uri uri) async => null;
   Future<void> updateActivitySettings(ActivitySettings value) async {}
   Future<void> enableWebNotifications() async {}

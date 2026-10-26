@@ -62,6 +62,7 @@ class _MessageRowState extends State<_MessageRow> {
   final _actionsOverlay = OverlayPortalController();
   bool _hovered = false;
   bool _actionsHovered = false;
+  bool _actionsKeyRegistered = false;
   Offset _actionsPosition = Offset.zero;
   Offset? _profileAnchorPosition;
 
@@ -105,14 +106,33 @@ class _MessageRowState extends State<_MessageRow> {
       );
     });
     widget.onActionsShown(_hideActions);
+    if (!_actionsKeyRegistered) {
+      HardwareKeyboard.instance.addHandler(_handleActionKey);
+      _actionsKeyRegistered = true;
+    }
     _actionsOverlay.show();
     _scheduleActionsDismissal();
   }
 
   void _hideActions() {
+    if (_actionsKeyRegistered) {
+      HardwareKeyboard.instance.removeHandler(_handleActionKey);
+      _actionsKeyRegistered = false;
+    }
     _dismissActionsTimer?.cancel();
     _actionsHovered = false;
     _actionsOverlay.hide();
+  }
+
+  bool _handleActionKey(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      // SelectableText may consume Escape for its own selection toolbar.
+      // Dismiss the message action overlay as well, without clearing selection.
+      _hideActions();
+      return true;
+    }
+    return false;
   }
 
   void _actionsEnter(PointerEnterEvent _) {
@@ -129,7 +149,7 @@ class _MessageRowState extends State<_MessageRow> {
     _dismissActionsTimer?.cancel();
     _dismissActionsTimer = Timer(const Duration(seconds: 1), () {
       if (mounted && !_actionsHovered) {
-        _actionsOverlay.hide();
+        _hideActions();
       }
     });
   }
@@ -142,6 +162,9 @@ class _MessageRowState extends State<_MessageRow> {
   @override
   void dispose() {
     _dismissActionsTimer?.cancel();
+    if (_actionsKeyRegistered) {
+      HardwareKeyboard.instance.removeHandler(_handleActionKey);
+    }
     super.dispose();
   }
 

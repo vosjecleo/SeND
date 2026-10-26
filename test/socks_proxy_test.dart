@@ -16,6 +16,8 @@ class _Proxy {
   final bool auth, downgrade, stall, stallTls;
   final SecurityContext? tls;
   final int? responseSize;
+  final String? responseBody;
+  String? requestHeaders;
   String? target, user, password;
   final disconnected = Completer<void>();
   _Proxy({
@@ -25,6 +27,7 @@ class _Proxy {
     this.stallTls = false,
     this.tls,
     this.responseSize,
+    this.responseBody,
   });
   Future<void> start() async {
     server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -113,9 +116,10 @@ class _Proxy {
         break;
       }
     }
-    final body = responseSize == null
-        ? 'OK'
-        : List.filled(responseSize!, 'x').join();
+    requestHeaders = ascii.decode(bytes);
+    final body =
+        responseBody ??
+        (responseSize == null ? 'OK' : List.filled(responseSize!, 'x').join());
     socket.add(
       ascii.encode(
         'HTTP/1.1 200 OK\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body',
@@ -157,6 +161,27 @@ Future<String> _request(
 }, SocksHttpOverrides(proxy.config(password: password)));
 
 void main() {
+  test(
+    'unsaved connection test uses SOCKS and strips query credentials',
+    () async {
+      final proxy = _Proxy(responseBody: '{"versions":["v1.11"]}');
+      await proxy.start();
+      addTearDown(proxy.close);
+      final before = HttpOverrides.current;
+      final stages = <String>[];
+      await SocksProxy.testConnection(
+        proxy.config(),
+        Uri.parse('http://matrix.invalid/path?token=do-not-send#fragment'),
+        stages.add,
+      );
+      expect(proxy.target, 'matrix.invalid');
+      expect(proxy.requestHeaders, startsWith('GET /_matrix/client/versions '));
+      expect(proxy.requestHeaders, isNot(contains('do-not-send')));
+      expect(stages.join('\n'), contains('Proxy TCP connected'));
+      expect(stages.join('\n'), contains('Connected through SOCKS5'));
+      expect(identical(HttpOverrides.current, before), true);
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'configuration rejects URLs, invalid ports and oversized credentials',

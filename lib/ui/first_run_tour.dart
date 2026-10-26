@@ -6,6 +6,7 @@ import '../models/chat_models.dart';
 import '../services/first_run_tour_store.dart';
 import 'deltiecord_theme.dart';
 import 'android_notification_setup.dart';
+import 'history_index_settings.dart';
 
 class FirstRunTourGate extends StatefulWidget {
   const FirstRunTourGate({
@@ -58,8 +59,14 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
     _checking = true;
     _store.isComplete(userId).then((complete) {
       _checking = false;
-      if (!mounted || complete || _shown) return;
+      if (!mounted || _shown) return;
       _shown = true;
+      if (complete) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) showHistoryIndexPrompt(context, widget.backend);
+        });
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) => _show(userId));
     });
   }
@@ -72,6 +79,10 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
       builder: (context) => FirstRunTourDialog(backend: widget.backend),
     );
     await _store.markComplete(userId);
+    final index = await widget.backend.openHistoryIndex();
+    if (index != null && !index.prompted) {
+      await widget.backend.configureHistoryIndex(index.enabled);
+    }
   }
 
   @override
@@ -159,6 +170,14 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
               'private browsing, or storage eviction can remove the local '
               'session. Only one SeND tab may use this session at a time.',
         ),
+      _TourPage(
+        icon: Icons.search,
+        title: 'Choose local search storage',
+        body:
+            'A text index makes repeat searches faster. It uses extra space on this device and is optional. '
+            'Media indexing keeps event details only; it does not download all your media.',
+        child: HistoryIndexSettings(backend: widget.backend),
+      ),
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _TourPage(
           icon: Icons.notifications_active_outlined,

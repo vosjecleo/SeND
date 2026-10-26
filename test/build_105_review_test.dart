@@ -165,7 +165,14 @@ void main() {
                 child: Builder(
                   builder: (context) {
                     placement = ReceiptPlacementScope.of(context)!;
-                    return const SizedBox();
+                    return SizedBox(
+                      width: 320,
+                      child: MediaWithMessageMetadata(
+                        message: message('media', media: attachment),
+                        showReceipt: true,
+                        child: const SizedBox(width: 320, height: 200),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -173,6 +180,7 @@ void main() {
           ),
         ),
       );
+      await tester.pump();
       expect(placement.relocated, contains('media'));
       expect(placement.headers['header']!.single.id, 'media');
     },

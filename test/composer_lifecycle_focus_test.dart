@@ -46,12 +46,14 @@ class _KeyboardFeed {
     double bottom = 0,
     bool focused = true,
     bool animating = false,
+    int? subtype,
   }) {
     state = {
       'visible': visible,
       'physicalBottom': bottom,
       'focused': focused,
       'animating': animating,
+      'inputSubtype': subtype,
     };
     sink?.success(state);
   }
@@ -130,6 +132,42 @@ Iterable<MethodCall> _keyboardCommands(WidgetTester tester) =>
     );
 
 void main() {
+  testWidgets(
+    'language subtype change restores a dismissed IME once without hiding it',
+    (tester) async {
+      final keyboard = _KeyboardFeed();
+      final composer = await _openComposer(tester, keyboard);
+      keyboard.emit(visible: true, bottom: 300, subtype: 1);
+      await tester.pump();
+      tester.testTextInput.log.clear();
+      _viewFocus(tester, ViewFocusState.unfocused);
+      keyboard.emit(visible: null, focused: false, subtype: 1);
+      await tester.pump();
+      _viewFocus(tester, ViewFocusState.focused);
+      keyboard.emit(visible: false, subtype: 2);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+      await tester.pump();
+      expect(
+        _keyboardCommands(tester).where((c) => c.method == 'TextInput.hide'),
+        isEmpty,
+      );
+      expect(
+        _keyboardCommands(
+          tester,
+        ).where((c) => c.method == 'TextInput.show').length,
+        lessThanOrEqualTo(1),
+      );
+      expect(
+        tester.widget<TextField>(composer).controller!.text,
+        'Keep this draft',
+      );
+      keyboard.emit(visible: true, bottom: 300, subtype: 2);
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.widget<TextField>(composer).focusNode!.hasFocus, true);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('Gboard-style focus-only picker never hides or reopens IME', (
     tester,
   ) async {

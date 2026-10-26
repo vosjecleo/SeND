@@ -11,6 +11,7 @@ import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
 import '../relative_activity_time.dart';
 import '../space_settings_screen.dart';
+import '../personal_organisation.dart';
 import '../member_management.dart';
 import '../chat_shell.dart' show showChannelActions, showCreateChannelCategory;
 import 'mobile_widgets.dart';
@@ -426,8 +427,9 @@ class _SpaceRail extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 84),
             children: [
-              for (final space in backend.spaces)
-                _RailButton(
+              SpaceFolderRail(
+                backend: backend,
+                itemBuilder: (space) => _RailButton(
                   selected: backend.selectedSpaceId == space.id,
                   tooltip: space.name,
                   onTap: () => backend.selectSpace(space.id),
@@ -442,6 +444,7 @@ class _SpaceRail extends StatelessWidget {
                     square: true,
                   ),
                 ),
+              ),
               _RailButton(
                 key: const ValueKey('mobile-create-space'),
                 tooltip: 'Create Space',

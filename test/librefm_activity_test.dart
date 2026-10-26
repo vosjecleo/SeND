@@ -118,7 +118,7 @@ void main() {
     },
   );
 
-  test('links remain allowlisted; Libre.fm cannot supply Last.fm artwork', () {
+  test('links and Libre.fm artwork use the shared artwork allowlist', () {
     for (final url in [
       'https://libre.fm.evil.test/user/a',
       'http://libre.fm/user/a',
@@ -137,7 +137,7 @@ void main() {
         ...track.toJson(),
         'artwork': 'https://lastfm.freetls.fastly.net/i/u/cover.jpg',
       })?.artwork,
-      isNull,
+      Uri.parse('https://lastfm.freetls.fastly.net/i/u/cover.jpg'),
     );
   });
 

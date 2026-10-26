@@ -10,6 +10,22 @@ extension _MatrixSession on MatrixBackend {
     if (kIsWeb) BrowserPushPreviews.stop();
     try {
       await _stopActivities(clear: true);
+      FavouriteReactionsStore.instance.bind(null);
+      GifService.bind(null);
+      await _personal?.close();
+      _personal = null;
+      _openingPersonal = null;
+      await _indexEventSubscription?.cancel();
+      await _historyIndex?.close();
+      _historyIndex = null;
+      _openingIndex = null;
+      _mediaHistory.clear();
+      _mediaCursor.clear();
+      _mediaEnded.clear();
+      _mediaLoading.clear();
+      _mediaIndexOffset.clear();
+      _indexFingerprints.clear();
+      _indexedEventRooms.clear();
       _settingsSaveTimer?.cancel();
       _pendingPreferences = null;
       _settingsEchoGuard.clear();
@@ -30,6 +46,9 @@ extension _MatrixSession on MatrixBackend {
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((_) {
+        _personal?.merge({
+          for (final e in _matrix.accountData.entries) e.key: e.value.content,
+        });
         _settingsHydrated = true;
         // An unrelated sync may arrive before our state write. Keep the local
         // layout until the SDK has received the acknowledged event.
@@ -267,6 +286,23 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    await _indexEventSubscription?.cancel();
+    await _historyIndex?.clear();
+    await _historyIndex?.close();
+    _historyIndex = null;
+    _openingIndex = null;
+    _indexFingerprints.clear();
+    _indexedEventRooms.clear();
+    _mediaHistory.clear();
+    _mediaCursor.clear();
+    _mediaEnded.clear();
+    _mediaLoading.clear();
+    _mediaIndexOffset.clear();
+    FavouriteReactionsStore.instance.bind(null);
+    GifService.bind(null);
+    await _personal?.close();
+    _personal = null;
+    _openingPersonal = null;
     if (kIsWeb) browser.configureBrowserPresence(null);
     final pushAccount = _matrix.userID;
     _error = null;
@@ -1558,7 +1594,11 @@ extension _MatrixSession on MatrixBackend {
     try {
       await platform.ensureDefaultDistributor(userId);
       var state = await platform.state(userId);
-      if (state.distributor != null) await platform.register(userId);
+      if (!state.disabled &&
+          state.distributor != null &&
+          (!state.registered || state.error != null)) {
+        state = await platform.register(userId);
+      }
       for (var attempt = 0; attempt < 20 && state.endpoint == null; attempt++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
         state = await platform.state(userId);

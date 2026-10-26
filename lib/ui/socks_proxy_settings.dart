@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/socks_proxy.dart';
 
 class SocksProxySettingsTile extends StatelessWidget {
-  const SocksProxySettingsTile({super.key});
+  const SocksProxySettingsTile({this.homeserver, super.key});
+  final Uri? homeserver;
   @override
   Widget build(BuildContext context) => ListTile(
     contentPadding: EdgeInsets.zero,
@@ -13,7 +14,9 @@ class SocksProxySettingsTile extends StatelessWidget {
           : 'Use your browser or system proxy settings. PWAs cannot select a SOCKS proxy.',
     ),
     trailing: SocksProxy.supported ? const Icon(Icons.chevron_right) : null,
-    onTap: SocksProxy.supported ? () => showSocksProxySettings(context) : null,
+    onTap: SocksProxy.supported
+        ? () => showSocksProxySettings(context, homeserver: homeserver)
+        : null,
   );
 }
 
@@ -22,12 +25,14 @@ Future<void> showSocksProxySettings(
   Future<SocksProxyConfig> Function()? load,
   Future<void> Function(SocksProxyConfig)? save,
   Future<void> Function()? reset,
+  Uri? homeserver,
 }) => showDialog<void>(
   context: context,
   builder: (_) => _ProxyDialog(
     load: load ?? SocksProxy.load,
     save: save ?? SocksProxy.save,
     reset: reset ?? SocksProxy.reset,
+    homeserver: homeserver ?? Uri.parse('https://matrix.deltie.net'),
   ),
 );
 
@@ -36,10 +41,12 @@ class _ProxyDialog extends StatefulWidget {
     required this.load,
     required this.save,
     required this.reset,
+    required this.homeserver,
   });
   final Future<SocksProxyConfig> Function() load;
   final Future<void> Function(SocksProxyConfig) save;
   final Future<void> Function() reset;
+  final Uri homeserver;
   @override
   State<_ProxyDialog> createState() => _ProxyDialogState();
 }
@@ -55,6 +62,40 @@ class _ProxyDialogState extends State<_ProxyDialog> {
       _saving = false,
       _showPassword = false;
   String? _error;
+  bool _testing = false;
+  final _testSteps = <String>[];
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _testSteps.clear();
+    });
+    try {
+      await SocksProxy.testConnection(
+        SocksProxyConfig(
+          enabled: true,
+          host: _host.text.trim(),
+          port: int.tryParse(_port.text) ?? 0,
+          username: _user.text,
+          password: _password.text,
+        ),
+        widget.homeserver,
+        (step) {
+          if (mounted) setState(() => _testSteps.add(step));
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _testSteps.add(
+            'Test failed at the last stage. Check the proxy, credentials and server. No direct fallback was used.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -242,6 +283,18 @@ class _ProxyDialogState extends State<_ProxyDialog> {
                         ),
                       ),
                     ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _testing || _saving ? null : _test,
+                    icon: const Icon(Icons.route),
+                    label: const Text('Test connection path'),
+                  ),
+                  Text(
+                    'Tests ${widget.homeserver.host} with these values, without saving.',
+                  ),
+                  if (_testing) const LinearProgressIndicator(),
+                  if (_testSteps.isNotEmpty)
+                    SelectableText(_testSteps.join('\n')),
                 ],
               ),
             ),

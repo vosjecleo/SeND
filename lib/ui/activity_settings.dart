@@ -222,6 +222,18 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
               ? null
               : (v) => save(settings.copyWith(showLastFmRecent: v)),
         ),
+        if (settings.useLibreFm)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Look up missing album covers'),
+            subtitle: const Text(
+              'Uses MusicBrainz and Cover Art Archive. Sends artist and album names, not your username.',
+            ),
+            value: settings.lookupListeningArtwork,
+            onChanged: _saving
+                ? null
+                : (v) => save(settings.copyWith(lookupListeningArtwork: v)),
+          ),
         if (settings.lastFmUser.isNotEmpty || settings.libreFmUser.isNotEmpty)
           DropdownButtonFormField<bool>(
             key: ValueKey(settings.useLibreFm),

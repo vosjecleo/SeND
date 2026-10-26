@@ -11,6 +11,7 @@ import 'activity_artwork_native.dart';
 import 'activity_discovery.dart';
 import 'activity_ipc_native.dart';
 import 'activity_pipe_windows.dart';
+import 'windows_music.dart';
 
 /// Local-only discovery. Never executes desktop entries or launcher commands.
 class DesktopActivitySource {
@@ -69,10 +70,33 @@ class DesktopActivitySource {
     final rules = settings.rules;
     // A closure created in this method can capture the same context as the RPC
     // filters below, including this source's non-sendable live ServerSocket.
+    final windowsMusic = Platform.isWindows
+        ? readWindowsMusic()
+        : Future<ActivityCandidate?>.value();
     final detected = await Isolate.run(
       ActivityProcessScan(catalogue, rules).call,
     );
-    final music = Platform.isLinux ? await _linuxMusic(_artwork) : null;
+    var music = Platform.isLinux
+        ? await _linuxMusic(_artwork)
+        : await windowsMusic;
+    if (music != null &&
+        Platform.isWindows &&
+        isSpotifyApplication(music.id.substring('music:windows:'.length))) {
+      final process = detected
+          .where((c) => isSpotifyApplication(c.id))
+          .firstOrNull;
+      if (process != null) {
+        music = ActivityCandidate(
+          id: process.id,
+          name: music.name,
+          kind: ActivityKind.music,
+          details: music.details,
+          iconBytes: music.iconBytes,
+          playback: music.playback,
+          priority: 100,
+        );
+      }
+    }
     return [
       // Prefer the player's richer music record (artwork, pause and position)
       // over music-only RPC. Game RPC retains priority over background music.
@@ -95,6 +119,7 @@ class DesktopActivitySource {
       ?music,
       ...detected.where(
         (e) =>
+            e.id != music?.id &&
             ![..._rpc.values, ..._pipeRpc.values].any((rpc) => rpc.id == e.id),
       ),
     ];
@@ -240,9 +265,7 @@ class DesktopActivitySource {
                     name: exe == null
                         ? 'Application $clientId'
                         : normalizeActivityPath(exe).split('/').last,
-                    kind: activity['type'] == 2
-                        ? ActivityKind.music
-                        : ActivityKind.game,
+                    kind: richPresenceKind(activity['type'], exe),
                     details: _boundedText(
                       [
                         activity['details'],
@@ -839,7 +862,9 @@ ConvertTo-Json -InputObject $items -Compress
                       (row['title'] as String).trim().isNotEmpty
                   ? row['title']
                   : row['name']),
-          kind: match?.kind,
+          kind: isSpotifyApplication(path)
+              ? ActivityKind.application
+              : match?.kind,
           steamAppId: match?.steamAppId,
           priority:
               (row['foreground'] == true ? 100 : 0) +
@@ -932,6 +957,4 @@ ActivityPlayback? playbackFromMpris(
 }
 
 bool preferPlayerMusic(ActivityCandidate rpc, ActivityCandidate? player) =>
-    rpc.kind == ActivityKind.music &&
-    player != null &&
-    player.playback?.playing != false;
+    rpc.kind == ActivityKind.music && player != null;

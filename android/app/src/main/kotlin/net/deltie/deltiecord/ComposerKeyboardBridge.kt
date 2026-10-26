@@ -4,6 +4,7 @@ import android.app.Activity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.inputmethod.InputMethodManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
@@ -64,6 +65,8 @@ class ComposerKeyboardBridge(
             "physicalBottom" to (insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0),
             "focused" to focused,
             "animating" to animating,
+            "inputSubtype" to activity.getSystemService(InputMethodManager::class.java)
+                ?.currentInputMethodSubtype?.hashCode(),
         )
     }
 

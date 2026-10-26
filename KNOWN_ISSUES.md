@@ -11,6 +11,13 @@ test lists below do not mean those platforms have gone untested.
 
 ## Open investigations
 
+- **October 26 pass, unreleased:** local changes cover mobile editing,
+  metadata-only media indexing, optional bounded text indexing, receipt layout,
+  personal chat/space organisation, activity refresh and Libre.fm artwork.
+  Sunup delivery, Gboard language switching, Windows Spotify metadata and KDE
+  AppImage integration still need checks on the reporting devices. Public Space
+  settings were resolved by user clarification. See the
+  [current bug intake](docs/next-bugfix-pass.md#intake-2026-10-26).
 - **Avatar flicker and GPU use:** extra clipping isolates avatar paints, but the
   reported long-session frame fragments and high GPU use still need native
   verification. See the [bugfix tracker](docs/next-bugfix-pass.md).

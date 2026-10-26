@@ -172,6 +172,8 @@ static void my_application_activate(GApplication* application) {
   gtk_window_set_default_size(
       window, self->window_width > 0 ? self->window_width : 1280,
       self->window_height > 0 ? self->window_height : 720);
+  // A matching installed desktop entry supplies the compositor's icon.
+  gtk_window_set_icon_name(window, APPLICATION_ID);
   if (self->remember_window_state && self->window_x >= 0 &&
       self->window_y >= 0) {
     gtk_window_move(window, self->window_x, self->window_y);

@@ -27,6 +27,12 @@ import 'profile_card.dart';
 import 'profile_editor_dialog.dart';
 import 'deltiecord_theme.dart';
 import 'android_notification_setup.dart';
+import 'history_index_settings.dart';
+import 'notification_diagnostics.dart';
+import '../services/favourite_reactions_store.dart';
+import '../services/gif_service.dart';
+import 'personal_organisation.dart';
+import '../services/appimage_integration.dart';
 
 enum _SettingsPage {
   account,
@@ -98,6 +104,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   int? _ownProfileRevision;
   Future<UnifiedPushState>? _unifiedPushState;
   bool _checkingForUpdates = false;
+  bool _notificationDiagnostics = false;
   bool _loggingOut = false;
   late final MicrophoneTestController _microphoneTest =
       MicrophoneTestController();
@@ -661,144 +668,32 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ],
     ]),
     _SettingsPage.notifications => _section('Notifications', [
-      if (backend.notificationError case final error?) Text(error),
-      if (!kIsWeb)
-        OutlinedButton.icon(
-          icon: const Icon(Icons.notifications_outlined),
-          label: const Text('Send test system notification'),
-          onPressed: () async {
-            try {
-              await backend.testSystemNotification();
-            } catch (_) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Notification test failed. Check system permissions and retry.',
-                    ),
-                  ),
-                );
-              }
-            }
-          },
-        ),
-      if (kIsWeb) ...[
-        const Text(
-          'On iPhone/iPad, add SeND to your Home Screen from Safari, '
-          'open that installed app, then enable notifications here (iOS 16.4 or later). '
-          'Web alerts are generic unless device-side previews are enabled below.',
-        ),
-        FilledButton.icon(
-          icon: const Icon(Icons.notifications_active_outlined),
-          label: const Text('Enable browser notifications'),
-          onPressed: () async {
-            try {
-              await backend.enableWebNotifications();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Browser notifications enabled.'),
-                  ),
-                );
-              }
-            } catch (_) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Could not enable notifications. Check permission and Home Screen installation, then try again.',
-                    ),
-                  ),
-                );
-              }
-            }
-          },
-        ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.fact_check_outlined),
-          label: const Text('Check browser notification setup'),
-          onPressed: () async {
-            String report;
-            try {
-              report = await browser.browserPushDiagnostics();
-            } catch (_) {
-              report =
-                  'Could not read browser setup. Reload the app and try again.';
-            }
-            if (!mounted || !context.mounted) return;
-            await showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Browser notification setup'),
-                content: SingleChildScrollView(child: SelectableText(report)),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.send_outlined),
-          label: const Text('Send test push notification'),
-          onPressed: () async {
-            var message =
-                'Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.';
-            try {
-              await browser.testBrowserPush();
-            } catch (_) {
-              message =
-                  'Test push failed. Enable browser notifications again, then retry. Tests are limited to two per minute.';
-            }
-            if (mounted && context.mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(message)));
-            }
-          },
-        ),
-      ],
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          defaultTargetPlatform == TargetPlatform.android
-              ? 'System notifications'
-              : 'Desktop notifications',
-        ),
-        subtitle: const Text('Notify for new Matrix messages.'),
-        value: backend.preferences.notificationsEnabled,
-        onChanged: (value) => backend.updatePreferences(
-          backend.preferences.copyWith(notificationsEnabled: value),
-        ),
+      SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment(value: false, label: Text('Settings')),
+          ButtonSegment(value: true, label: Text('Diagnostics')),
+        ],
+        selected: {_notificationDiagnostics},
+        onSelectionChanged: (value) =>
+            setState(() => _notificationDiagnostics = value.first),
       ),
-      if (defaultTargetPlatform != TargetPlatform.android)
-        OutlinedButton.icon(
-          onPressed: AppSounds.notification,
-          icon: const Icon(Icons.notifications_active_outlined),
-          label: const Text('Test notification sound'),
-        ),
-      if (kIsWeb)
-        ValueListenableBuilder<bool>(
-          valueListenable: BrowserPushPreviews.enabled,
-          builder: (context, enabled, _) => SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Decrypt previews on this browser'),
-            subtitle: const Text(
-              'Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.',
-            ),
-            value: enabled,
-            onChanged: (value) async {
+      const SizedBox(height: 16),
+      if (_notificationDiagnostics) NotificationDiagnostics(backend: backend),
+      if (!_notificationDiagnostics) ...[
+        if (backend.notificationError case final error?) Text(error),
+        if (!kIsWeb)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.notifications_outlined),
+            label: const Text('Send test system notification'),
+            onPressed: () async {
               try {
-                await BrowserPushPreviews.setEnabled(value);
+                await backend.testSystemNotification();
               } catch (_) {
-                if (context.mounted) {
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'Could not save browser preview settings. Please try again.',
+                        'Notification test failed. Check system permissions and retry.',
                       ),
                     ),
                   );
@@ -806,143 +701,316 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               }
             },
           ),
-        ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Show message content'),
-        subtitle: const Text(
-          'Include decrypted message previews in notifications.',
-        ),
-        value: backend.notificationPreviewsEnabled,
-        onChanged: backend.setNotificationPreviewsEnabled,
-      ),
-      if (defaultTargetPlatform == TargetPlatform.android)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Notification vibration'),
-          subtitle: const Text('Allow message alerts to vibrate the device.'),
-          value: backend.preferences.notificationVibration,
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(notificationVibration: value),
+        if (kIsWeb) ...[
+          const Text(
+            'On iPhone/iPad, add SeND to your Home Screen from Safari, '
+            'open that installed app, then enable notifications here (iOS 16.4 or later). '
+            'Web alerts are generic unless device-side previews are enabled below.',
           ),
-        ),
-      const SizedBox(height: 8),
-      DropdownButtonFormField<NotificationAlertCadence>(
-        initialValue: backend.preferences.notificationAlertCadence,
-        decoration: const InputDecoration(labelText: 'Alert cadence'),
-        items: const [
-          DropdownMenuItem(
-            value: NotificationAlertCadence.fiveMinuteCooldown,
-            child: Text('Once every 5 minutes per conversation'),
+          FilledButton.icon(
+            icon: const Icon(Icons.notifications_active_outlined),
+            label: const Text('Enable browser notifications'),
+            onPressed: () async {
+              try {
+                await backend.enableWebNotifications();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Browser notifications enabled.'),
+                    ),
+                  );
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not enable notifications. Check permission and Home Screen installation, then try again.',
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
           ),
-          DropdownMenuItem(
-            value: NotificationAlertCadence.everyMessage,
-            child: Text('Every message'),
-          ),
-          DropdownMenuItem(
-            value: NotificationAlertCadence.silent,
-            child: Text('Silent'),
-          ),
-        ],
-        onChanged: (value) {
-          if (value == null) return;
-          backend.updatePreferences(
-            backend.preferences.copyWith(notificationAlertCadence: value),
-          );
-        },
-      ),
-      if (defaultTargetPlatform != TargetPlatform.android)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Notification sound'),
-          subtitle: const Text(
-            'Play SeND’s notification sound on this desktop.',
-          ),
-          value: backend.preferences.notificationSound,
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(notificationSound: value),
-          ),
-        ),
-      if (!kIsWeb &&
-          defaultTargetPlatform != TargetPlatform.android &&
-          defaultTargetPlatform != TargetPlatform.iOS) ...[
-        Text(
-          'Notification volume: ${(backend.preferences.notificationVolume * 100).round()}%',
-        ),
-        Slider(
-          value: backend.preferences.notificationVolume,
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(notificationVolume: value),
-          ),
-        ),
-      ],
-      if (UnifiedPushPlatform.instance.supported) ...[
-        const Divider(height: 28),
-        Text(
-          'Background notifications',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        AndroidNotificationSetup(
-          backend: backend,
-          onChanged: _reloadUnifiedPush,
-        ),
-        if (_unifiedPushState case final stateFuture?)
-          FutureBuilder<UnifiedPushState>(
-            future: stateFuture,
-            builder: (context, snapshot) {
-              final state = snapshot.data;
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  state?.registered == true
-                      ? Icons.notifications_active
-                      : Icons.notifications_off_outlined,
+          OutlinedButton.icon(
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Check browser notification setup'),
+            onPressed: () async {
+              String report;
+              try {
+                report = await browser.browserPushDiagnostics();
+              } catch (_) {
+                report =
+                    'Could not read browser setup. Reload the app and try again.';
+              }
+              if (!mounted || !context.mounted) return;
+              await showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Browser notification setup'),
+                  content: SingleChildScrollView(child: SelectableText(report)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                  ],
                 ),
-                title: Text(
-                  state?.registered != true
-                      ? 'Not registered'
-                      : state?.lastPusherResult == 'verified' ||
-                            state?.lastPusherResult == 'repaired'
-                      ? 'Notification delivery registered'
-                      : 'Waiting for Matrix registration',
-                ),
-                subtitle: Text(
-                  state?.error != null
-                      ? 'Notification service error: ${state!.error}'
-                      : state?.builtIn == true
-                      ? 'Built-in: ${state?.connection ?? 'stopped'}'
-                      : state?.distributor ?? 'Choose a delivery method above.',
-                ),
-                trailing: snapshot.connectionState != ConnectionState.done
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : null,
               );
             },
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              onPressed: _refreshUnifiedPushRegistration,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh registration'),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Send test push notification'),
+            onPressed: () async {
+              var message =
+                  'Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.';
+              try {
+                await browser.testBrowserPush();
+              } catch (_) {
+                message =
+                    'Test push failed. Enable browser notifications again, then retry. Tests are limited to two per minute.';
+              }
+              if (mounted && context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(message)));
+              }
+            },
+          ),
+        ],
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            defaultTargetPlatform == TargetPlatform.android
+                ? 'System notifications'
+                : 'Desktop notifications',
+          ),
+          subtitle: const Text('Notify for new Matrix messages.'),
+          value: backend.preferences.notificationsEnabled,
+          onChanged: (value) => backend.updatePreferences(
+            backend.preferences.copyWith(notificationsEnabled: value),
+          ),
+        ),
+        if (defaultTargetPlatform != TargetPlatform.android)
+          OutlinedButton.icon(
+            onPressed: AppSounds.notification,
+            icon: const Icon(Icons.notifications_active_outlined),
+            label: const Text('Test notification sound'),
+          ),
+        if (kIsWeb)
+          ValueListenableBuilder<bool>(
+            valueListenable: BrowserPushPreviews.enabled,
+            builder: (context, enabled, _) => SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Decrypt previews on this browser'),
+              subtitle: const Text(
+                'Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.',
+              ),
+              value: enabled,
+              onChanged: (value) async {
+                try {
+                  await BrowserPushPreviews.setEnabled(value);
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Could not save browser preview settings. Please try again.',
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Show message content'),
+          subtitle: const Text(
+            'Include decrypted message previews in notifications.',
+          ),
+          value: backend.notificationPreviewsEnabled,
+          onChanged: backend.setNotificationPreviewsEnabled,
+        ),
+        if (defaultTargetPlatform == TargetPlatform.android)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Notification vibration'),
+            subtitle: const Text('Allow message alerts to vibrate the device.'),
+            value: backend.preferences.notificationVibration,
+            onChanged: (value) => backend.updatePreferences(
+              backend.preferences.copyWith(notificationVibration: value),
+            ),
+          ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<NotificationAlertCadence>(
+          initialValue: backend.preferences.notificationAlertCadence,
+          decoration: const InputDecoration(labelText: 'Alert cadence'),
+          items: const [
+            DropdownMenuItem(
+              value: NotificationAlertCadence.fiveMinuteCooldown,
+              child: Text('Once every 5 minutes per conversation'),
+            ),
+            DropdownMenuItem(
+              value: NotificationAlertCadence.everyMessage,
+              child: Text('Every message'),
+            ),
+            DropdownMenuItem(
+              value: NotificationAlertCadence.silent,
+              child: Text('Silent'),
             ),
           ],
+          onChanged: (value) {
+            if (value == null) return;
+            backend.updatePreferences(
+              backend.preferences.copyWith(notificationAlertCadence: value),
+            );
+          },
         ),
-        const Text(
-          'The private push endpoint is stored by Android and is never shown '
-          'or written to logs. Notification content is fetched from Matrix.',
-        ),
+        if (defaultTargetPlatform != TargetPlatform.android)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Notification sound'),
+            subtitle: const Text(
+              'Play SeND’s notification sound on this desktop.',
+            ),
+            value: backend.preferences.notificationSound,
+            onChanged: (value) => backend.updatePreferences(
+              backend.preferences.copyWith(notificationSound: value),
+            ),
+          ),
+        if (!kIsWeb &&
+            defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS) ...[
+          Text(
+            'Notification volume: ${(backend.preferences.notificationVolume * 100).round()}%',
+          ),
+          Slider(
+            value: backend.preferences.notificationVolume,
+            onChanged: (value) => backend.updatePreferences(
+              backend.preferences.copyWith(notificationVolume: value),
+            ),
+          ),
+        ],
+        if (UnifiedPushPlatform.instance.supported) ...[
+          const Divider(height: 28),
+          Text(
+            'Background notifications',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          AndroidNotificationSetup(
+            backend: backend,
+            onChanged: _reloadUnifiedPush,
+          ),
+          if (_unifiedPushState case final stateFuture?)
+            FutureBuilder<UnifiedPushState>(
+              future: stateFuture,
+              builder: (context, snapshot) {
+                final state = snapshot.data;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    state?.registered == true
+                        ? Icons.notifications_active
+                        : Icons.notifications_off_outlined,
+                  ),
+                  title: Text(
+                    state?.registered != true
+                        ? 'Not registered'
+                        : state?.lastPusherResult == 'verified' ||
+                              state?.lastPusherResult == 'repaired'
+                        ? 'Notification delivery registered'
+                        : 'Waiting for Matrix registration',
+                  ),
+                  subtitle: Text(
+                    state?.error != null
+                        ? 'Notification service error: ${state!.error}'
+                        : state?.builtIn == true
+                        ? 'Built-in: ${state?.connection ?? 'stopped'}'
+                        : state?.distributor ??
+                              'Choose a delivery method above.',
+                  ),
+                  trailing: snapshot.connectionState != ConnectionState.done
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                );
+              },
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _refreshUnifiedPushRegistration,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh registration'),
+              ),
+            ],
+          ),
+          const Text(
+            'The private push endpoint is stored by Android and is never shown '
+            'or written to logs. Notification content is fetched from Matrix.',
+          ),
+        ],
       ],
     ]),
     _SettingsPage.privacy => _privacy(),
     _SettingsPage.appearance => _appearance(),
     _SettingsPage.accessibility => _accessibility(),
     _SettingsPage.storage => _section('Storage', [
+      HistoryIndexSettings(backend: backend),
+      const Divider(height: 28),
+      const Text(
+        'Favourites, frequently used emoji, stickers and GIFs, pinned chats and space folders sync with your Matrix account. They contain media references, not media files. Account data is visible to your homeserver.',
+      ),
+      OutlinedButton(
+        onPressed: () async {
+          final accepted = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Import device favourites?'),
+              content: const Text(
+                'Older favourites were saved for this device, not a particular account. Import them into your current account?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Import'),
+                ),
+              ],
+            ),
+          );
+          if (accepted != true) return;
+          try {
+            await FavouriteReactionsStore.instance.importDeviceFavourites();
+            final gifs = GifService();
+            try {
+              await gifs.importDeviceFavourites();
+            } finally {
+              gifs.dispose();
+            }
+            if (mounted) _showSettingMessage('Device favourites imported.');
+          } catch (_) {
+            if (mounted) _showSettingMessage('Could not import favourites.');
+          }
+        },
+        child: const Text('Import device favourites'),
+      ),
+      OutlinedButton.icon(
+        onPressed: () => showPersonalOrganisation(context, backend),
+        icon: const Icon(Icons.folder_copy_outlined),
+        label: const Text('Chats and spaces'),
+      ),
       const Text(
         'Encrypted session data, room keys, thumbnails, and timeline caches are '
         'stored in SeND’s private per-user application-data directory.',
@@ -974,6 +1042,33 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]),
     _SettingsPage.shortcuts => _shortcuts(),
     _SettingsPage.about => _section('About SeND', [
+      if (canIntegrateAppImage)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.desktop_windows_outlined),
+          label: const Text('Add AppImage to application menu'),
+          onPressed: () async {
+            try {
+              await integrateAppImage();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('SeND was added to your application menu.'),
+                  ),
+                );
+              }
+            } catch (_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Could not add the launcher. Check the AppImage location and permissions.',
+                    ),
+                  ),
+                );
+              }
+            }
+          },
+        ),
       Text(
         'SeND v$deltiecordVersion+$deltiecordBuildNumber\n'
         'SeND is a recursive acronym: SeND is Not Discord.\n'
@@ -1356,7 +1451,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _privacy() {
     final preferences = backend.preferences;
     return _section('Privacy & presence', [
-      const SocksProxySettingsTile(),
+      SocksProxySettingsTile(homeserver: backend.homeserver),
       const Divider(height: 28),
       DropdownButtonFormField<DirectLinkPreviewMode>(
         key: const ValueKey('direct-link-preview-mode'),
