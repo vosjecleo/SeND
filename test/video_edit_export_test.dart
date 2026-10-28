@@ -4,13 +4,12 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/models/video_edit.dart';
 import 'package:deltiecord/services/video_optimizer_native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/ffmpeg_tools.dart';
 
 void main() {
   test(
     'video export trims, rotates, crops and removes audio from actual output',
     () async {
-      final available = await Process.run('ffmpeg', ['-version']);
-      if (available.exitCode != 0) return;
       final directory = await Directory.systemTemp.createTemp(
         'send-edit-test-',
       );
@@ -82,6 +81,7 @@ void main() {
       }
     },
     timeout: const Timeout(Duration(minutes: 2)),
+    skip: !ffmpegToolsAvailable(),
   );
   test('invalid edit bounds never export an untrimmed original', () {
     expect(

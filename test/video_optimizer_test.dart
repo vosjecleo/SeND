@@ -6,15 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/video_optimizer_native.dart';
 import 'fixtures/video_leading_black.dart';
+import 'support/ffmpeg_tools.dart';
 
-bool get hasFfmpeg {
-  try {
-    return Process.runSync('ffmpeg', ['-version']).exitCode == 0 &&
-        Process.runSync('ffprobe', ['-version']).exitCode == 0;
-  } on ProcessException {
-    return false;
-  }
-}
+bool get hasFfmpeg => ffmpegToolsAvailable();
 
 void main() {
   test(
