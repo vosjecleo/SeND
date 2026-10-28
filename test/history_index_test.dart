@@ -311,6 +311,29 @@ void main() {
     );
     expect(await query(terms: ['hello']), isEmpty);
   });
+  test('catalog kinds and selected Matrix IDs stay distinct', () async {
+    await store.put(
+      [
+        {...row('image', kind: 'image'), 'sender': '@Alice:test'},
+        {...row('file', kind: 'file'), 'sender': '@Alice:test'},
+        {...row('audio', kind: 'audio'), 'sender': '@alice:test'},
+      ],
+      false,
+      50,
+    );
+    expect(await query(kind: 'document'), unorderedEquals(['file', 'audio']));
+    expect(await query(kind: 'media'), ['image']);
+    expect(
+      await store.query(
+        '!r:test',
+        terms: [],
+        sender: '@Alice:test',
+        offset: 0,
+        limit: 50,
+      ),
+      unorderedEquals(['image', 'file']),
+    );
+  });
   test('all-terms search, edits, redactions and paging', () async {
     await store.configure(true, 25);
     await store.put(

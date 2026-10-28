@@ -63,7 +63,11 @@ class Storage:
         categories = {kind: {'bytes': 0, 'files': 0} for kind in sorted(KINDS)}
         categories.update(await self.run('send_storage_usage', query))
         used, quota = sum(item['bytes'] for item in categories.values()), await self.quota(owner)
+        def enforcement(txn):
+            txn.execute('SELECT enforce_all OR EXISTS(SELECT 1 FROM send_storage_limits WHERE user_id=?) FROM send_storage_policy WHERE id=1', (owner,))
+            return bool(txn.fetchone()[0])
         return {'version': 1, 'used_bytes': used, 'quota_bytes': quota,
+                'quota_enforced': await self.run('send_storage_enforcement',enforcement),
                 'remaining_bytes': max(0, quota - used), 'categories': categories,
                 'message_bytes': None, 'accounting': 'original_uploads',
                 'notes': 'Messages, server-generated previews, thumbnails and backups are separate.'}
@@ -134,7 +138,7 @@ class Storage:
         await self.run('send_storage_preview', save)
         return {'token': token, 'files': rows, 'bytes': sum(r['bytes'] for r in rows), 'limit': 100}
 
-    async def prune(self, owner, token):
+    async def prune(self, owner, token, dry_run=False):
         if not isinstance(token, str) or not 32 <= len(token) <= 128:
             raise ValueError('Invalid deletion preview.')
         digest = hashlib.sha256(token.encode()).hexdigest()
@@ -156,6 +160,8 @@ class Storage:
         ids = await self.run('send_storage_consume_preview', consume)
         protected = await self.protected(ids)
         selected = [media_id for media_id in ids if media_id not in protected]
+        if dry_run:
+            return {'deleted': 0, 'requested': len(ids), 'would_delete': len(selected), 'dry_run': True}
         deleted = await self.delete(selected) if selected else []
         return {'deleted': len(deleted), 'requested': len(ids)}
 
@@ -171,6 +177,11 @@ class SendStorage:
         from synapse.types import UserID
         self.api, self._rates = api, OrderedDict()
         hs = api._hs  # Version-pinned adapter; clients never receive admin access.
+        preview_users = config.get('preview_users')
+        if preview_users is not None and (not isinstance(preview_users,list) or not preview_users or
+                any(not isinstance(user,str) or not UserID.is_valid(user) for user in preview_users)):
+            raise ValueError('preview_users must contain explicit Matrix user IDs.')
+        preview_users = set(preview_users) if preview_users is not None else None
         repo, store = hs.get_media_repository(), hs.get_datastores().main
 
         async def protected(ids):
@@ -201,6 +212,8 @@ class SendStorage:
         if not getattr(repo, '_send_storage_guarded', False):
             original_upload = repo.create_or_update_content
             async def guarded_upload(media_type, upload_name, content, content_length, auth_user, media_id=None):
+                if preview_users is not None and auth_user.to_string() not in preview_users:
+                    return await original_upload(media_type,upload_name,content,content_length,auth_user,media_id=media_id)
                 allocated = media_id is None
                 if allocated:
                     # Know the ID before writing bytes, so a rejected database
@@ -221,8 +234,10 @@ class SendStorage:
             repo._send_storage_guarded = True
 
         async def allowed(user_id, size):
+            if preview_users is not None and user_id not in preview_users:
+                return True
             usage = await self.storage.usage(user_id)
-            return size >= 0 and usage['used_bytes'] + size <= usage['quota_bytes']
+            return not usage['quota_enforced'] or size >= 0 and usage['used_bytes'] + size <= usage['quota_bytes']
         api.register_media_repository_callbacks(is_user_allowed_to_upload_media_of_size=allowed)
 
         module = self
@@ -231,6 +246,8 @@ class SendStorage:
             async def handle(self, request, body):
                 requester = await api.get_user_by_req(request)
                 owner = requester.user.to_string()
+                if preview_users is not None and owner not in preview_users:
+                    raise SynapseError(404,'Storage preview is not enabled for this account.')
                 if not hs.is_mine(requester.user):
                     raise SynapseError(403, 'A local account is required.')
                 now = time.monotonic()
@@ -253,12 +270,13 @@ class SendStorage:
                 try:
                     if action == 'usage' and request.method == b'GET':
                         value = await module.storage.usage(owner)
+                        value['dry_run_pruning'] = config.get('dry_run_pruning') is True
                     elif action == 'labels' and request.method == b'POST':
                         value = await module.storage.label(owner, body.get('items'))
                     elif action == 'prune-preview' and request.method == b'POST':
                         value = await module.storage.preview(owner, body.get('before'), body.get('kind'), body.get('source'))
                     elif action == 'prune' and request.method == b'POST' and body.get('confirm') is True:
-                        value = await module.storage.prune(owner, body.get('token'))
+                        value = await module.storage.prune(owner, body.get('token'),dry_run=config.get('dry_run_pruning') is True)
                     elif action == 'profiles' and request.method == b'POST':
                         users = body.get('users')
                         if not isinstance(users, list) or not 1 <= len(users) <= 32 or any(not isinstance(u, str) or not UserID.is_valid(u) for u in users):

@@ -1068,6 +1068,7 @@ class AttachmentDraft {
     this.videoHeight,
     this.videoThumbnail,
     this.imagePrepared = false,
+    this.videoPrepared = false,
   });
 
   final Uint8List bytes;
@@ -1082,6 +1083,7 @@ class AttachmentDraft {
   final int? videoWidth, videoHeight;
   final Uint8List? videoThumbnail;
   final bool imagePrepared;
+  final bool videoPrepared;
   AttachmentDraft copyWith({
     Uint8List? bytes,
     String? name,
@@ -1089,6 +1091,7 @@ class AttachmentDraft {
     bool? spoiler,
     String? caption,
     bool? imagePrepared,
+    bool? videoPrepared,
   }) => AttachmentDraft(
     bytes: bytes ?? this.bytes,
     name: name ?? this.name,
@@ -1103,6 +1106,7 @@ class AttachmentDraft {
     videoHeight: videoHeight,
     videoThumbnail: videoThumbnail,
     imagePrepared: imagePrepared ?? this.imagePrepared,
+    videoPrepared: videoPrepared ?? this.videoPrepared,
   );
 }
 

@@ -103,8 +103,8 @@ async function run(account,op,args={}) {
     await walk(request,c=> {
       const row=c.value;
       if(row.room!==args.room || (args.before!=null && row.time>=args.before) || (args.after!=null && row.time<=args.after)) return;
-      if(args.kind==='media' ? !['image','video'].includes(row.kind) : args.kind==='file' ? !['image','video','audio','file'].includes(row.kind) : args.kind && row.kind!==args.kind) return;
-      if(args.sender && !row.sender.toLowerCase().includes(args.sender.toLowerCase())) return;
+      if(args.kind==='media' ? !['image','video'].includes(row.kind) : args.kind==='document' ? !['audio','file'].includes(row.kind) : args.kind==='file' ? !['image','video','audio','file'].includes(row.kind) : args.kind && row.kind!==args.kind) return;
+      if(args.sender && (args.sender.startsWith('@') && args.sender.includes(':') ? row.sender!==args.sender : !row.sender.toLowerCase().includes(args.sender.toLowerCase()))) return;
       if(!terms.every(t=>row.body.toLowerCase().includes(t))) return;
       found.set(row.id,{id:row.id,time:row.time});
       if(found.size>=args.offset+args.limit) return false;

@@ -1,8 +1,9 @@
 # 0.9.42+133 preview
 
-Local pre-production build, not published. The Arch package and signed arm64
-Android preview are installed over the existing apps. Accounts and data were
-retained. Android's ABI-specific installer code is 2133.
+Local pre-production build, not published. The first Arch and signed arm64
+Android previews were installed over the existing apps. Accounts and data were
+retained. The editor/search follow-up needs a new preview installation.
+Android's ABI-specific installer code is 2133.
 
 ## Included
 
@@ -22,9 +23,16 @@ retained. Android's ABI-specific installer code is 2133.
   reference comparison. Offscreen room avatars are no longer eagerly fetched.
 - Fullscreen profile images, bounded profile-media reuse and a byte budget for
   shared link-preview images.
-- Attachment image crop/move/quality controls on desktop and mobile. Animated
-  images keep their animation; static quality presets are optional. Video presets
-  use 12 MiB or 24 MiB limits, or original quality. Browser videos stay unchanged.
+- Tapping a pending image opens a fullscreen editor with folded crop, rotation,
+  aspect-ratio lock, markup and quality controls. Marker and highlighter strokes
+  export into the image. Animated images keep their animation.
+- Pending videos open a fullscreen trim, crop, rotation, mute and quality editor.
+  Native exports use high quality or 12 MiB/24 MiB presets. Video editing is not
+  available in the PWA; it can still send the unchanged original.
+- Files, Links and Media browse history independently of the open timeline, with
+  ten results per page and explicit Previous, Next and page-number controls.
+  Sparse history scans are bounded per action. Grid previews use thumbnails,
+  not full-resolution originals. The From filter opens a room-member dropdown.
 - Separate Local storage and Server storage pages. The server page has uploaded
   media categories, remaining allowance and confirmed age/type/source pruning.
 - Opt-in encrypted-upload labels and a per-account device-local retry queue.
@@ -59,14 +67,23 @@ operator checks before applying it during the deployment window.
    shade return, language switching and background/resume with the keyboard open.
 2. Check ordinary outgoing replies versus replies addressed to you, short-message
    avatar alignment and unchanged media layout.
-3. Edit a pending PNG/JPEG and an animated image. Check crop preview, cancel,
-   quality preview, captions and spoilers. Test both video presets and original
-   quality with the earlier problematic clips.
+3. Tap a pending PNG/JPEG and an animated image. Check fullscreen crop/rotate,
+   aspect locks, marker/highlighter, undo/redo, preview, cancel, captions and
+   spoilers. Tap a video and test trim, crop, rotate, mute and all quality choices.
 4. Test local search scopes, pause/resume and the larger-limit prompt. Downloads
    remain a user action; they do not fetch media files or mark rooms read.
 5. Test real closed-app notifications with Sunup. A receiver diagnostic alone is
    not proof of background decryption or notification display. Android Force stop
    is different from swiping the app away.
+6. Open Files and Links in a room whose old attachments are outside the current
+   timeline. Check ten-item pages, page-number navigation and the From dropdown.
+
+The editor/search follow-up passed 819 native tests, with four skipped, and 61
+server/helper tests. Additional checks passed for a real FFmpeg export with trim,
+crop, rotation and muting, phone/desktop editor layout and drawing, catalog paging,
+rich-link and selected-member filtering tests, and browser index checks. An
+isolated account-limited storage preview passed with quota enforcement off and
+pruning in dry-run mode. These are local tests, not a live server installation.
 
 Further performance, GPU and comprehensive cache/traffic profiling is deferred
 by request. No sustained-frame-rate or total-cache-size fix is claimed.

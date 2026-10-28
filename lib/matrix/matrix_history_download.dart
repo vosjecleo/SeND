@@ -150,10 +150,10 @@ extension _MatrixHistoryDownload on MatrixBackend {
                 'm.audio' => 'audio',
                 'm.file' => 'file',
                 _ =>
-                  RegExp(
-                        r'https?://',
-                        caseSensitive: false,
-                      ).hasMatch(event.body)
+                  hasMessageWebLink(
+                        event.body,
+                        event.isRichMessage ? event.formattedText : null,
+                      )
                       ? 'link'
                       : '',
               };

@@ -25,6 +25,7 @@ extension _MatrixSession on MatrixBackend {
       _openingIndex = null;
       _indexRetryAfter = null;
       _indexError = null;
+      _catalogGeneration++;
       _mediaHistory.clear();
       _mediaCursor.clear();
       _mediaEnded.clear();
@@ -305,6 +306,7 @@ extension _MatrixSession on MatrixBackend {
     _indexError = null;
     _indexFingerprints.clear();
     _indexedEventRooms.clear();
+    _catalogGeneration++;
     _mediaHistory.clear();
     _mediaCursor.clear();
     _mediaEnded.clear();

@@ -50,8 +50,14 @@ def main():
     parser.add_argument('--service', default='synapse')
     parser.add_argument('--database-service', default='postgres')
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--preview-user', action='append', default=[], help='Limit API access to this account; disable new quota enforcement and make pruning a dry run')
+    parser.add_argument('--activate', action='store_true', help='Activate a previously installed preview for all users')
     parser.add_argument('--rollback', type=Path)
     args = parser.parse_args()
+    if any(not user.startswith('@') or ':' not in user or len(user)>255 for user in args.preview_user):
+        parser.error('Preview accounts must be complete Matrix user IDs.')
+    if args.activate and (not args.apply or args.preview_user):
+        parser.error('--activate requires --apply and cannot be combined with --preview-user.')
     compose = args.compose.absolute()
     if (compose.is_symlink() or not compose.is_file() or args.apply and args.rollback):
         parser.error('Supply the real Compose file and a specific Synapse data directory.')
@@ -105,7 +111,10 @@ def main():
         atomic(hs, (backup / 'homeserver.yaml').read_bytes())
         # Keep classification records. Only remove the new admission trigger;
         # never delete media or tables as part of rollback.
-        sql('DROP TRIGGER IF EXISTS send_storage_quota ON local_media_repository;')
+        if saved.get('existing_storage'):
+            sql('UPDATE send_storage_policy SET enforce_all='+('TRUE' if saved.get('enforce_all') else 'FALSE')+' WHERE id=1;')
+        else:
+            sql('DROP TRIGGER IF EXISTS send_storage_quota ON local_media_repository;')
         restart()
 
     if args.rollback:
@@ -116,18 +125,21 @@ def main():
     sql('SELECT 1 FROM local_media_repository LIMIT 0;')
     installed = sql("SELECT to_regclass('send_storage_policy') IS NOT NULL;") == 't'
     if not args.apply:
-        print('Checks passed. Apply will add SeND’s authenticated storage/profile API and 12 GiB original-upload allowance, retaining existing media. Only Synapse will be recreated.')
+        print('Checks passed. Only Synapse will be recreated. '+('API access is limited to the preview accounts, pruning is a dry run and new quota enforcement stays off.' if args.preview_user else 'Apply enables the authenticated storage/profile API and 12 GiB original-upload allowance. Existing media is retained.'))
         print('No configuration or database changes made. Use --apply during a maintenance window after preview testing.')
         return
-    if installed:
+    if installed and not args.activate:
         parser.error('Storage tables already exist. Do not overwrite an existing installation; use its validated update/rollback procedure.')
+    if args.activate and not installed:
+        parser.error('No installed preview to activate.')
+    previous_enforcement = sql('SELECT enforce_all FROM send_storage_policy WHERE id=1;') == 't' if installed else None
 
     backup = Path(tempfile.mkdtemp(prefix='send-storage-rollback-133-', dir=compose.parent))
     backup.chmod(0o700)
     for source, name in [(compose, 'compose.yaml'), (hs, 'homeserver.yaml')]:
         shutil.copy2(source, backup / name)
         (backup / name).chmod(0o600)
-    (backup / 'targets.json').write_text(json.dumps({'compose': str(compose), 'data': str(data), 'config': str(hs)}))
+    (backup / 'targets.json').write_text(json.dumps({'compose': str(compose), 'data': str(data), 'config': str(hs), 'existing_storage': installed, 'enforce_all': previous_enforcement}))
     (backup / 'targets.json').chmod(0o600)
     # Use the existing image's YAML parser. Output is captured privately, never
     # printed: Compose and homeserver configuration may contain credentials.
@@ -141,9 +153,14 @@ if '/data/send_modules' not in old.split(':'):e['PYTHONPATH']='/data/send_module
 s['environment']=e
 m=h.setdefault('modules',[])
 if not any(v.get('module')=='send_storage.SendStorage' for v in m):m.append({'module':'send_storage.SendStorage','config':{}})
+for entry in m:
+ if entry.get('module')=='send_storage.SendStorage':
+  cfg=entry.setdefault('config',{})
+  if p['preview_users']:cfg.update(preview_users=p['preview_users'],dry_run_pruning=True)
+  else:cfg.pop('preview_users',None);cfg.pop('dry_run_pruning',None)
 print(json.dumps({'compose':yaml.safe_dump(c,sort_keys=False),'homeserver':yaml.safe_dump(h,sort_keys=False)}))
 '''
-    payload = json.dumps({'compose': compose.read_text(), 'homeserver': hs.read_text(), 'service': args.service}).encode()
+    payload = json.dumps({'compose': compose.read_text(), 'homeserver': hs.read_text(), 'service': args.service, 'preview_users': args.preview_user}).encode()
     changed = json.loads(execute(base + ['exec', '-T', args.service, 'python', '-c', modify], payload))
     try:
         module.parent.mkdir(mode=0o755, exist_ok=True)
@@ -151,7 +168,7 @@ print(json.dumps({'compose':yaml.safe_dump(c,sort_keys=False),'homeserver':yaml.
         atomic(hs, changed['homeserver'].encode())
         atomic(compose, changed['compose'].encode())
         execute(base + ['config', '--quiet'])
-        sql('BEGIN;\n' + (SOURCE / 'storage_schema.sql').read_text() + '\nCOMMIT;')
+        sql('BEGIN;\n' + (SOURCE / 'storage_schema.sql').read_text() + '\nUPDATE send_storage_policy SET enforce_all='+('FALSE' if args.preview_user else 'TRUE')+' WHERE id=1;\nCOMMIT;')
         restart()
         probe = "import urllib.request,urllib.error\ntry:urllib.request.urlopen('http://127.0.0.1:8008/_synapse/client/send/v1/usage',timeout=3)\nexcept urllib.error.HTTPError as e:assert e.code==401\nelse:raise RuntimeError('Storage endpoint did not enforce authentication')"
         healthy = False

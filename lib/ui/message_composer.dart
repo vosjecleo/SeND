@@ -810,8 +810,9 @@ class _PendingAttachmentTile extends StatelessWidget {
         Offset.zero & overlay.size,
       ),
       items: [
-        if (attachment.mimeType.startsWith('image/'))
-          const PopupMenuItem(value: 'edit', child: Text('Edit image')),
+        if (attachment.mimeType.startsWith('image/') ||
+            attachment.mimeType.startsWith('video/'))
+          const PopupMenuItem(value: 'edit', child: Text('Edit media')),
         PopupMenuItem(
           value: 'spoiler',
           child: ListTile(
@@ -844,6 +845,7 @@ class _PendingAttachmentTile extends StatelessWidget {
     final isImage = attachment.mimeType.startsWith('image/');
     final isVideo = attachment.mimeType.startsWith('video/');
     return GestureDetector(
+      onTap: isImage || isVideo ? onEdit : null,
       onSecondaryTapDown: (details) =>
           _showMenu(context, details.globalPosition),
       child: Tooltip(

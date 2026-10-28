@@ -116,7 +116,11 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
         'token': preview['token'],
         'confirm': true,
       });
-      if (mounted) _notice = '${result['deleted']} uploads deleted.';
+      if (mounted) {
+        _notice = result['dry_run'] == true
+            ? 'Preview only: ${result['would_delete']} uploads would be deleted. Nothing was removed.'
+            : '${result['deleted']} uploads deleted.';
+      }
       await _load();
     } catch (_) {
       if (mounted) {
@@ -137,6 +141,12 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
         Text('Server storage', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         if (usage != null) ...[
+          if (usage['quota_enforced'] == false)
+            const Text(
+              'The displayed allowance is not enforced during this preview.',
+            ),
+          if (usage['dry_run_pruning'] == true)
+            const Text('Deletion is a dry run. No uploads will be removed.'),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Categorize encrypted uploads'),

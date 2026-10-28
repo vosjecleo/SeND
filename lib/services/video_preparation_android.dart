@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
+import '../models/video_edit.dart';
 
 const _channel = MethodChannel('net.deltie.deltiecord/video_prepare');
 
@@ -11,6 +12,7 @@ Future<AttachmentDraft> prepareAndroidVideo(
   AttachmentDraft draft, {
   required bool optimize,
   VideoCompressionPreset preset = VideoCompressionPreset.balanced,
+  VideoEditPlan? edit,
   required void Function(double) progress,
   required bool Function() canceled,
   Future<Directory> Function() cacheDirectory = getTemporaryDirectory,
@@ -29,19 +31,26 @@ Future<AttachmentDraft> prepareAndroidVideo(
     var metadata = await _channel.invokeMapMethod<String, Object?>('probe', {
       'input': input.path,
     });
-    if (metadata == null) return draft;
+    if (metadata == null) {
+      if (edit?.hasChanges == true) {
+        throw StateError('Could not read this video for editing.');
+      }
+      return draft;
+    }
     if (canceled()) throw StateError('Video preparation canceled.');
     var bytes = draft.bytes;
-    if (optimize) {
+    if (optimize || edit?.hasChanges == true) {
       final duration = (metadata['duration'] as num?)?.toDouble() ?? 0;
       if (duration <= 0) {
         throw StateError(
           'Could not read video duration. Choose original quality to send it unchanged.',
         );
       }
-      final bitrate = (preset.targetBytes * 8 / (duration / 1000) - 192000)
+      final clipDuration =
+          edit?.durationMs(duration.round()) ?? duration.round();
+      final bitrate = (preset.targetBytes * 8 / (clipDuration / 1000) - 192000)
           .floor();
-      if (bitrate < 250000) {
+      if (optimize && bitrate < 250000) {
         throw StateError(
           'This clip is too long for the optimized size limit. Trim it or choose original quality.',
         );
@@ -67,11 +76,15 @@ Future<AttachmentDraft> prepareAndroidVideo(
             'output': output.path,
             'width': metadata['width'],
             'height': metadata['height'],
-            'bitrate': bitrate.clamp(250000, preset.maximumBitrate),
+            'bitrate': optimize
+                ? bitrate.clamp(250000, preset.maximumBitrate)
+                : 8000000,
+            if (edit != null) 'edit': edit.toMap(),
+            'resize': optimize,
           })
           .timeout(const Duration(minutes: 10));
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (await output.length() > preset.maximumBytes) {
+      if (optimize && await output.length() > preset.maximumBytes) {
         throw StateError(
           'The optimized clip is still too large. Trim it or choose original quality.',
         );
@@ -86,10 +99,12 @@ Future<AttachmentDraft> prepareAndroidVideo(
     }
     return AttachmentDraft(
       bytes: bytes,
-      name: optimize
+      name: optimize || edit?.hasChanges == true
           ? '${draft.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.mp4'
           : draft.name,
-      mimeType: optimize ? 'video/mp4' : draft.mimeType,
+      mimeType: optimize || edit?.hasChanges == true
+          ? 'video/mp4'
+          : draft.mimeType,
       spoiler: draft.spoiler,
       caption: draft.caption,
       gifSource: draft.gifSource,
@@ -99,13 +114,13 @@ Future<AttachmentDraft> prepareAndroidVideo(
       videoThumbnail: metadata['thumbnail'] as Uint8List?,
     );
   } catch (_) {
-    if (!optimize) {
+    if (!optimize && edit?.hasChanges != true) {
       return draft; // Original-quality upload must remain possible.
     }
     rethrow;
   } finally {
     polling?.cancel();
-    if (optimize) {
+    if (optimize || edit?.hasChanges == true) {
       try {
         await _channel.invokeMethod<void>('cancel');
       } catch (_) {}

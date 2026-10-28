@@ -8,6 +8,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.Crop
+import androidx.media3.effect.ScaleAndRotateTransformation
+import androidx.media3.common.Effect
 import androidx.media3.transformer.*
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -58,10 +61,19 @@ internal class VideoPreparationBridge(private val context: Context, messenger: B
                         } else {
                             val output = privateFile(call.argument<String>("output")!!)
                             require(!output.exists())
-                            val bitrate = (call.argument<Int>("bitrate") ?: 2000000).coerceIn(250000, 4000000)
-                            val width = call.argument<Int>("width") ?: 1280
-                            val height = call.argument<Int>("height") ?: 720
-                            val scale = minOf(1.0, 1280.0 / maxOf(width, height))
+                            val bitrate = (call.argument<Int>("bitrate") ?: 2000000).coerceIn(250000, 20000000)
+                            val edit = call.argument<Map<String, Any?>>("edit") ?: emptyMap()
+                            val turns = ((edit["turns"] as? Number)?.toInt() ?: 0).mod(4)
+                            val left = (edit["left"] as? Number)?.toDouble() ?: 0.0
+                            val top = (edit["top"] as? Number)?.toDouble() ?: 0.0
+                            val cropWidth = (edit["width"] as? Number)?.toDouble() ?: 1.0
+                            val cropHeight = (edit["height"] as? Number)?.toDouble() ?: 1.0
+                            require(left >= 0 && top >= 0 && cropWidth > 0 && cropHeight > 0 && left + cropWidth <= 1.000001 && top + cropHeight <= 1.000001)
+                            val originalWidth = call.argument<Int>("width") ?: 1280
+                            val originalHeight = call.argument<Int>("height") ?: 720
+                            val width = ((if (turns % 2 == 0) originalWidth else originalHeight) * cropWidth).toInt().coerceAtLeast(2)
+                            val height = ((if (turns % 2 == 0) originalHeight else originalWidth) * cropHeight).toInt().coerceAtLeast(2)
+                            val scale = if (call.argument<Boolean>("resize") != false) minOf(1.0, 1280.0 / maxOf(width, height)) else 1.0
                             val targetWidth = maxOf(2, (width * scale / 2).toInt() * 2)
                             val targetHeight = maxOf(2, (height * scale / 2).toInt() * 2)
                             pending = result
@@ -86,9 +98,26 @@ internal class VideoPreparationBridge(private val context: Context, messenger: B
                                         callback?.error("encode", "This device could not optimize the video. Try original quality.", null)
                                     }
                                 }).build()
-                            val item = EditedMediaItem.Builder(MediaItem.fromUri(input.toURI().toString()))
+                            val media = MediaItem.Builder().setUri(input.toURI().toString())
+                            val startMs = (edit["startMs"] as? Number)?.toLong() ?: 0L
+                            val endMs = (edit["endMs"] as? Number)?.toLong()
+                            if (startMs > 0 || endMs != null) {
+                                require(startMs >= 0 && (endMs == null || endMs > startMs))
+                                val clipping = MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startMs)
+                                if (endMs != null) clipping.setEndPositionMs(endMs)
+                                media.setClippingConfiguration(clipping.build())
+                            }
+                            val effects = mutableListOf<Effect>()
+                            if (turns != 0) effects.add(ScaleAndRotateTransformation.Builder().setRotationDegrees(-90f * turns).build())
+                            if (left != 0.0 || top != 0.0 || cropWidth != 1.0 || cropHeight != 1.0) {
+                                effects.add(Crop((2*left-1).toFloat(), (2*(left+cropWidth)-1).toFloat(),
+                                    (1-2*(top+cropHeight)).toFloat(), (1-2*top).toFloat()))
+                            }
+                            effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
+                            val item = EditedMediaItem.Builder(media.build())
+                                .setRemoveAudio(edit["muted"] == true)
                                 .setFrameRate(30)
-                                .setEffects(Effects(emptyList(), listOf(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))))
+                                .setEffects(Effects(emptyList(), effects))
                                 .build()
                             transformer!!.start(item, output.path)
                         }

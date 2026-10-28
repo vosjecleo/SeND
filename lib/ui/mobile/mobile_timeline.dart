@@ -2646,10 +2646,11 @@ class _PendingAttachmentPreview extends StatelessWidget {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            if (attachment.mimeType.startsWith('image/'))
+            if (attachment.mimeType.startsWith('image/') ||
+                attachment.mimeType.startsWith('video/'))
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit image'),
+                title: const Text('Edit media'),
                 onTap: () => Navigator.pop(context, 'edit'),
               ),
             ListTile(
@@ -2683,7 +2684,7 @@ class _PendingAttachmentPreview extends StatelessWidget {
     final isVideo = attachment.mimeType.startsWith('video/');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _showActions(context),
+      onTap: isImage || isVideo ? onEdit : () => _showActions(context),
       onLongPress: () => _showActions(context),
       child: SizedBox.square(
         dimension: 80,

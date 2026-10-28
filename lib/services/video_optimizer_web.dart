@@ -6,6 +6,7 @@ import 'package:web/web.dart' as web;
 
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
+import '../models/video_edit.dart';
 
 bool get videoOptimizationSupported => false;
 
@@ -122,4 +123,11 @@ Future<AttachmentDraft> optimizeVideo(
   required void Function(double) progress,
   required bool Function() canceled,
   VideoCompressionPreset preset = VideoCompressionPreset.balanced,
-}) => probeVideo(draft);
+  bool optimize = true,
+  VideoEditPlan? edit,
+}) async {
+  if (edit?.hasChanges == true) {
+    throw UnsupportedError('Video editing requires the native app.');
+  }
+  return probeVideo(draft);
+}

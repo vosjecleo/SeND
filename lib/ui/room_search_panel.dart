@@ -9,6 +9,7 @@ import 'deltiecord_theme.dart';
 import 'lifecycle_memory_image.dart';
 import 'mobile/mobile_media.dart';
 import 'history_index_settings.dart';
+import '../services/message_search.dart';
 
 enum RoomSearchSection { messages, media, files, links }
 
@@ -75,6 +76,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   int _queryGeneration = 0;
 
   final _query = TextEditingController();
+  final _fromKey = GlobalKey();
   late final TabController _tabs;
   Timer? _debounce;
   List<ChatMessage> _serverResults = const [];
@@ -82,15 +84,26 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   bool _loadingOlder = false;
   int _paginationPasses = 0;
   bool _searchStopped = false;
+  int _page = 0, _lastTab = 0;
+  bool _navigating = false;
+  bool _reloadTabAfterRequest = false;
+  static const _pageSize = 10;
+  final _catalogResults = <int, List<ChatMessage>>{};
+  String? get _kind => switch (_tabs.index) {
+    1 => 'media',
+    2 => 'document',
+    3 => 'link',
+    _ => null,
+  };
   bool get _canLoadOlder => _query.text.trim().isEmpty
-      ? _tabs.index == RoomSearchSection.media.index
-            ? widget.backend.canLoadMoreMedia(
+      ? _kind != null
+            ? widget.backend.canLoadMoreCatalog(
                 widget.backend.selectedRoom?.id ?? '',
+                _kind!,
               )
             : widget.backend.canLoadMoreHistory
       : widget.backend.canLoadMoreSearchResults;
   String? _error;
-  List<ChatMessage> _mediaResults = const [];
 
   @override
   void initState() {
@@ -99,7 +112,8 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       if (mounted) showHistoryIndexPrompt(context, widget.backend);
     });
     _resultsScroll.addListener(() {
-      if (_resultsScroll.hasClients &&
+      if (_tabs.index == RoomSearchSection.messages.index &&
+          _resultsScroll.hasClients &&
           _resultsScroll.position.extentAfter < 400) {
         unawaited(_loadOlder());
       }
@@ -109,23 +123,31 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       vsync: this,
       initialIndex: widget.initialSection.index,
     )..addListener(_tabChanged);
+    _lastTab = widget.initialSection.index;
     if (widget.initialSection != RoomSearchSection.messages) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadOlder());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _goPage(0));
     }
   }
 
   void _tabChanged() {
-    if (!_tabs.indexIsChanging &&
-        _tabs.index != RoomSearchSection.messages.index &&
-        (_paginationPasses == 0 ||
-            (_tabs.index == RoomSearchSection.media.index &&
-                _mediaResults.isEmpty))) {
-      _loadOlder();
+    if (_tabs.indexIsChanging || _lastTab == _tabs.index) return;
+    _lastTab = _tabs.index;
+    _queryGeneration++;
+    _debounce?.cancel();
+    _page = 0;
+    _serverResults = const [];
+    _searchStopped = false;
+    if (_loadingOlder || _navigating) _reloadTabAfterRequest = true;
+    if (_query.text.trim().isNotEmpty) {
+      _search();
+    } else if (_kind != null) {
+      _goPage(0);
     }
     if (mounted) setState(() {});
   }
 
   void _queryChanged(String value) {
+    _page = 0;
     _searchStopped = false;
     _queryGeneration++;
     _debounce?.cancel();
@@ -134,7 +156,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   }
 
   Future<void> _search() async {
-    final generation = ++_queryGeneration;
+    final generation = _queryGeneration;
     final value = _query.text.trim();
     if (value.isEmpty) {
       setState(() {
@@ -149,7 +171,9 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       _error = null;
     });
     try {
-      final found = await widget.backend.searchRoomHistory(value);
+      final found = await widget.backend.searchRoomHistory(
+        _kind == null ? value : '$value has:${_kind!}',
+      );
       if (mounted && generation == _queryGeneration) {
         setState(() => _serverResults = found);
       }
@@ -160,7 +184,8 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     } finally {
       if (mounted && generation == _queryGeneration) {
         setState(() => _searching = false);
-        if (!_searchStopped &&
+        if (_kind == null &&
+            !_searchStopped &&
             _error == null &&
             _serverResults.isEmpty &&
             _canLoadOlder) {
@@ -177,13 +202,21 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       return;
     }
     setState(() => _loadingOlder = true);
+    final generation = _queryGeneration;
+    final section = _tabs.index;
+    final kind = _kind;
     try {
       if (_query.text.trim().isEmpty) {
-        if (_tabs.index == RoomSearchSection.media.index) {
-          final found = await widget.backend.loadMoreMedia(
+        if (kind != null) {
+          final found = await widget.backend.loadMoreCatalog(
             widget.backend.selectedRoom?.id ?? '',
+            kind,
           );
-          if (mounted) setState(() => _mediaResults = found);
+          if (mounted &&
+              generation == _queryGeneration &&
+              section == _tabs.index) {
+            setState(() => _catalogResults[section] = found);
+          }
         } else {
           await widget.backend.loadMoreHistory();
         }
@@ -196,6 +229,18 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       }
     } finally {
       if (mounted) setState(() => _loadingOlder = false);
+      if (_reloadTabAfterRequest && mounted) {
+        _reloadTabAfterRequest = false;
+        Future<void>.delayed(Duration.zero, () {
+          if (mounted) {
+            if (_query.text.trim().isNotEmpty) {
+              _search();
+            } else if (_kind != null) {
+              _goPage(0);
+            }
+          }
+        });
+      }
     }
   }
 
@@ -206,29 +251,149 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     _queryChanged(_query.text);
   }
 
+  Future<void> _chooseSender() async {
+    final people = widget.backend.selectedRoomMembers;
+    final box = _fromKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final origin =
+        box?.localToGlobal(Offset.zero, ancestor: overlay) ??
+        const Offset(12, 100);
+    FocusScope.of(context).unfocus();
+    final selected = await showMenu<RoomMemberSummary>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(
+          origin.dx,
+          origin.dy + (box?.size.height ?? 0),
+          box?.size.width ?? 100,
+          0,
+        ),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (people.isEmpty)
+          const PopupMenuItem(
+            enabled: false,
+            child: Text('No room members loaded yet.'),
+          ),
+        for (final member in people)
+          PopupMenuItem(
+            value: member,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(member.displayName),
+                Text(
+                  member.userId,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    _query.text = _query.text.replaceAll(RegExp(r'(^|\s)from:\S*'), '').trim();
+    _addFilter('from:${selected.userId}');
+  }
+
+  Future<void> _goPage(int page) async {
+    if (_navigating || _loadingOlder || page < 0) return;
+    final generation = _queryGeneration;
+    setState(() {
+      _navigating = true;
+      _error = null;
+    });
+    try {
+      // Metadata is fetched only for an explicit page action, never as a side
+      // effect of scrolling. Bound each action when matching media is sparse.
+      for (
+        var pass = 0;
+        pass < 4 && _results.length < (page + 1) * _pageSize && _canLoadOlder;
+        pass++
+      ) {
+        if (!mounted || generation != _queryGeneration) return;
+        await _loadOlder();
+      }
+      if (!mounted || generation != _queryGeneration) return;
+      if (page == 0 || page * _pageSize < _results.length) {
+        setState(() => _page = page);
+        if (_resultsScroll.hasClients) _resultsScroll.jumpTo(0);
+      } else if (_canLoadOlder) {
+        setState(
+          () => _error =
+              'More history is needed to reach page ${page + 1}. Try Next or choose a loaded page.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
+  }
+
+  Future<void> _jumpPage() async {
+    final input = TextEditingController(text: '${_page + 1}');
+    final page = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Go to page'),
+        content: TextField(
+          controller: input,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Page number'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final n = int.tryParse(input.text);
+              if (n != null && n > 0 && n <= 100000) {
+                Navigator.pop(context, n - 1);
+              }
+            },
+            child: const Text('Go'),
+          ),
+        ],
+      ),
+    );
+    // The route may still be animating with its editor attached.
+    if (page != null && mounted) await _goPage(page);
+    Future<void>.delayed(const Duration(milliseconds: 300), input.dispose);
+  }
+
   List<ChatMessage> get _results {
     final byId = <String, ChatMessage>{
       for (final message
-          in _tabs.index == RoomSearchSection.media.index &&
-                  _query.text.trim().isEmpty
+          in _kind != null && _query.text.trim().isEmpty
               ? [
-                  ...widget.backend.mediaMessagesForRoom(
+                  ...widget.backend.catalogMessagesForRoom(
                     widget.backend.selectedRoom?.id ?? '',
+                    _kind!,
                   ),
-                  ..._mediaResults,
+                  ...?_catalogResults[_tabs.index],
                 ]
               : widget.backend.messages)
         message.id: message,
       for (final message in _serverResults) message.id: message,
     };
-    final query = _query.text.trim().toLowerCase();
+    final query = _query.text.trim();
     final section = RoomSearchSection.values[_tabs.index];
     final results = byId.values.where((message) {
       if (query.isNotEmpty &&
-          !message.body.toLowerCase().contains(query) &&
-          !message.sender.toLowerCase().contains(query)) {
-        // Structured filters and remote text search are evaluated by backend.
-        if (!_serverResults.any((item) => item.id == message.id)) return false;
+          !matchesMessageSearch(
+            body: message.body,
+            formattedBody: message.formattedBody,
+            sender: message.sender,
+            senderId: message.senderId,
+            roomName: widget.backend.selectedRoom?.name,
+            timestamp: message.timestamp,
+            attachment: message.attachment,
+            query: query,
+          )) {
+        return false;
       }
       return switch (section) {
         RoomSearchSection.messages => true,
@@ -239,9 +404,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
           message.attachment != null &&
               message.attachment?.kind != AttachmentKind.image &&
               message.attachment?.kind != AttachmentKind.video,
-        RoomSearchSection.links =>
-          message.linkPreviews.isNotEmpty ||
-              RegExp(r'https?://', caseSensitive: false).hasMatch(message.body),
+        RoomSearchSection.links => catalogMatches(message, 'link'),
       };
     }).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return results;
@@ -258,7 +421,11 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
 
   @override
   Widget build(BuildContext context) {
-    final results = _results;
+    final all = _results;
+    final catalog = _kind != null;
+    final results = catalog
+        ? all.skip(_page * _pageSize).take(_pageSize).toList()
+        : all;
     final media = _tabs.index == RoomSearchSection.media.index;
     return SafeArea(
       child: Column(
@@ -294,9 +461,12 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ActionChip(
+                      key: filter == 'from:' ? _fromKey : null,
                       visualDensity: VisualDensity.compact,
                       label: Text(filter),
-                      onPressed: () => _addFilter(filter),
+                      onPressed: filter == 'from:'
+                          ? _chooseSender
+                          : () => _addFilter(filter),
                     ),
                   ),
               ],
@@ -311,7 +481,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
               Tab(text: 'Links'),
             ],
           ),
-          if (_searching || _loadingOlder)
+          if (_searching || _loadingOlder || _navigating)
             const LinearProgressIndicator(minHeight: 2),
           if (_error != null)
             Padding(padding: const EdgeInsets.all(8), child: Text(_error!)),
@@ -377,7 +547,44 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
               },
               child: const Text('Stop searching older messages'),
             ),
-          if (_canLoadOlder)
+          if (catalog)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+              child: Column(
+                children: [
+                  Text(
+                    'Items ${results.isEmpty ? 0 : _page * _pageSize + 1} to ${_page * _pageSize + results.length} (${all.length} loaded)',
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: 'Previous page',
+                        onPressed: _navigating || _page == 0
+                            ? null
+                            : () => _goPage(_page - 1),
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      TextButton(
+                        onPressed: _navigating ? null : _jumpPage,
+                        child: Text('Page ${_page + 1}'),
+                      ),
+                      IconButton(
+                        tooltip: 'Next page',
+                        onPressed:
+                            _navigating ||
+                                (_page + 1) * _pageSize >= all.length &&
+                                    !_canLoadOlder
+                            ? null
+                            : () => _goPage(_page + 1),
+                        icon: const Icon(Icons.chevron_right),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          if (!catalog && _canLoadOlder)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
               child: OutlinedButton.icon(
@@ -431,6 +638,8 @@ class _MediaResultState extends State<_MediaResult> {
   Future<Uint8List?> _thumbnail() async {
     final attachment = message.attachment;
     if (attachment == null) return null;
+    // Browsing never fetches an original merely to produce a grid preview.
+    if (!attachment.hasThumbnail) return null;
     final useThumbnail = attachment.hasThumbnail;
     final size = useThumbnail ? attachment.thumbnailSize : attachment.size;
     final width = useThumbnail ? attachment.thumbnailWidth : attachment.width;

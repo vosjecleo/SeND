@@ -63,6 +63,7 @@ import '../services/app_sounds.dart';
 import '../services/android_push_bridge.dart';
 import '../services/font_preferences.dart';
 import '../services/message_search.dart';
+import '../services/message_links.dart';
 import '../services/link_preview_policy.dart';
 import '../services/link_preview_service.dart';
 import '../services/web_preview_proxy.dart';
@@ -829,6 +830,9 @@ class MatrixBackend extends ChatBackend {
     _resetIndexedSearch();
     _indexFingerprints.clear();
     _mediaHistory.clear();
+    _catalogGeneration++;
+    _mediaCursor.clear();
+    _mediaEnded.clear();
     _mediaIndexOffset.clear();
     if (_timeline case final timeline?) await _indexEvents(timeline.events);
   }
@@ -891,6 +895,7 @@ class MatrixBackend extends ChatBackend {
   bool _indexSearchDone = false;
   StreamSubscription<Event>? _indexEventSubscription;
   final _mediaHistory = <String, Map<String, ChatMessage>>{};
+  int _catalogGeneration = 0;
   final _mediaCursor = <String, String?>{};
   final _mediaEnded = <String>{};
   final _mediaLoading = <String, Future<List<ChatMessage>>>{};
@@ -1003,12 +1008,50 @@ class MatrixBackend extends ChatBackend {
   bool canLoadMoreMedia(String roomId) => !_mediaEnded.contains(roomId);
   @override
   Future<List<ChatMessage>> loadMoreMedia(String roomId) =>
-      _mediaLoading.putIfAbsent(
-        roomId,
-        () => _loadMediaPage(
-          roomId,
-        ).whenComplete(() => _mediaLoading.remove(roomId)),
-      );
+      _loadCatalogOnce(roomId, 'media');
+  @override
+  List<ChatMessage> catalogMessagesForRoom(String roomId, String kind) {
+    if (kind == 'media') return mediaMessagesForRoom(roomId);
+    final key = '$roomId|$kind';
+    final rows = <String, ChatMessage>{
+      ...?_mediaHistory[key],
+      if (roomId == _selectedRoomId)
+        for (final message in messages)
+          if (catalogMatches(message, kind)) message.id: message,
+    };
+    return rows.values.where((m) => catalogMatches(m, kind)).toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  @override
+  bool canLoadMoreCatalog(String roomId, String kind) =>
+      !_mediaEnded.contains(kind == 'media' ? roomId : '$roomId|$kind');
+  @override
+  Future<List<ChatMessage>> loadMoreCatalog(String roomId, String kind) {
+    if (!{'media', 'document', 'link'}.contains(kind)) {
+      throw ArgumentError('Unknown catalog');
+    }
+    return _loadCatalogOnce(roomId, kind);
+  }
+
+  Future<List<ChatMessage>> _loadCatalogOnce(String roomId, String kind) {
+    final key = kind == 'media' ? roomId : '$roomId|$kind';
+    final pending = _mediaLoading[key];
+    if (pending != null) return pending;
+    late final Future<List<ChatMessage>> request;
+    request = _loadMediaPage(roomId, kind: kind).whenComplete(() {
+      if (identical(_mediaLoading[key], request)) _mediaLoading.remove(key);
+    });
+    _mediaLoading[key] = request;
+    return request;
+  }
+
+  void _removeCatalogEvent(String roomId, String id) {
+    for (final key in [roomId, '$roomId|document', '$roomId|link']) {
+      _mediaHistory[key]?.remove(id);
+    }
+  }
+
   @override
   bool get canLoadMoreSearchResults =>
       _historySearchRoom == _selectedRoomId &&
@@ -1344,6 +1387,7 @@ class MatrixBackend extends ChatBackend {
         .where(
           (message) => matchesMessageSearch(
             body: message.body,
+            formattedBody: message.formattedBody,
             sender: message.sender,
             query: normalized,
             senderId: message.senderId,

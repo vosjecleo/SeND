@@ -12,6 +12,7 @@ import '../services/personal_data.dart';
 import '../services/history_index.dart';
 import '../services/history_download.dart';
 import '../services/history_scope.dart';
+import '../services/message_links.dart';
 import '../services/room_send_queue.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
@@ -67,6 +68,18 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<List<ChatMessage>> loadMoreMedia(String roomId) async {
     await loadMoreHistory();
     return mediaMessagesForRoom(roomId);
+  }
+
+  List<ChatMessage> catalogMessagesForRoom(String roomId, String kind) =>
+      kind == 'media'
+      ? mediaMessagesForRoom(roomId)
+      : messages.where((m) => catalogMatches(m, kind)).toList();
+  bool canLoadMoreCatalog(String roomId, String kind) =>
+      kind == 'media' ? canLoadMoreMedia(roomId) : canLoadMoreHistory;
+  Future<List<ChatMessage>> loadMoreCatalog(String roomId, String kind) async {
+    if (kind == 'media') return loadMoreMedia(roomId);
+    await loadMoreHistory();
+    return catalogMessagesForRoom(roomId, kind);
   }
 
   List<RoomSummary> get archivedRooms => const [];
@@ -578,3 +591,18 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> releaseMediaPlaybackSource(String messageId) async {}
   Future<String?> getAttachmentReference(String messageId);
 }
+
+bool catalogMatches(ChatMessage message, String kind) =>
+    !message.redacted &&
+    switch (kind) {
+      'media' =>
+        message.attachment?.kind == AttachmentKind.image ||
+            message.attachment?.kind == AttachmentKind.video,
+      'document' =>
+        message.attachment?.kind == AttachmentKind.audio ||
+            message.attachment?.kind == AttachmentKind.file,
+      'link' =>
+        hasMessageWebLink(message.body, message.formattedBody) ||
+            message.linkPreviews.isNotEmpty,
+      _ => false,
+    };

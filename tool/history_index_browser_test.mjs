@@ -34,6 +34,10 @@ try {
     const disabled=await query();
     await call('clear');
     const empty=await call('stats');
+    await call('put',{rows:[{...row('upper','','file'),sender:'@Alice:test'},{...row('lower','','audio'),sender:'@alice:test'},row('picture','','image')],text:false,limit:16});
+    const documents=await query({kind:'document'}),selectedSender=await query({sender:'@Alice:test'});
+    if(documents.sort().join(',')!=='lower,upper'||selectedSender.join(',')!=='upper')throw new Error('Catalog type or selected member filter failed');
+    await call('clear');
     await call('put',{rows:Array.from({length:120},(_,i)=>row(String(i).padStart(3,'0'),'','image',42)),text:false,limit:16});
     const pages=[...await query(),...await query({offset:50}),...await query({offset:100})];
     await call('configure',{enabled:true,limit:16});

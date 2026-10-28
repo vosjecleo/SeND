@@ -2,9 +2,10 @@
 -- No existing media, events, keys or users are changed by this migration.
 CREATE TABLE IF NOT EXISTS send_storage_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    default_bytes BIGINT NOT NULL CHECK (default_bytes > 0)
+    default_bytes BIGINT NOT NULL CHECK (default_bytes > 0),
+    enforce_all BOOLEAN NOT NULL DEFAULT TRUE
 );
-INSERT INTO send_storage_policy VALUES (1, 12884901888) ON CONFLICT DO NOTHING;
+INSERT INTO send_storage_policy(id,default_bytes) VALUES (1, 12884901888) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS send_storage_limits (
     user_id TEXT PRIMARY KEY,
     quota_bytes BIGINT NOT NULL CHECK (quota_bytes > 0)
@@ -26,6 +27,10 @@ LANGUAGE plpgsql AS $$
 DECLARE allowance BIGINT; used BIGINT;
 BEGIN
     IF NEW.user_id IS NULL OR NEW.media_length IS NULL OR NEW.url_cache IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
+    IF NOT (SELECT enforce_all FROM send_storage_policy WHERE id=1)
+       AND NOT EXISTS (SELECT 1 FROM send_storage_limits WHERE user_id=NEW.user_id) THEN
         RETURN NEW;
     END IF;
     -- Serialize admission for this owner across all Synapse workers. The sum

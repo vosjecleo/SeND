@@ -1,4 +1,5 @@
 import '../models/chat_models.dart';
+import 'message_links.dart';
 
 /// Parsed Discord-style search query used by cached and server results.
 class MessageSearchQuery {
@@ -27,7 +28,9 @@ class MessageSearchQuery {
       final value = separator < 0 ? '' : token.substring(separator + 1);
       switch (key) {
         case 'from':
-          from = value.toLowerCase();
+          from = value.startsWith('@') && value.contains(':')
+              ? value
+              : value.toLowerCase();
         case 'in':
           room = value.toLowerCase();
         case 'before':
@@ -35,7 +38,14 @@ class MessageSearchQuery {
         case 'after':
           after = DateTime.tryParse(value)?.toUtc();
         case 'has'
-            when const {'image', 'file', 'link', 'video'}.contains(value):
+            when const {
+              'image',
+              'file',
+              'link',
+              'video',
+              'media',
+              'document',
+            }.contains(value):
           has = value;
         default:
           terms.add(token.toLowerCase());
@@ -69,6 +79,7 @@ bool matchesMessageSearch({
   String? roomName,
   DateTime? timestamp,
   ChatAttachment? attachment,
+  String? formattedBody,
 }) {
   final parsed = MessageSearchQuery.parse(query);
   if (parsed.terms.isEmpty &&
@@ -82,7 +93,9 @@ bool matchesMessageSearch({
   final searchable = '${sender.toLowerCase()}\n${body.toLowerCase()}';
   if (!parsed.terms.every(searchable.contains)) return false;
   if (parsed.from case final from?) {
-    if (!sender.toLowerCase().contains(from) &&
+    if (from.startsWith('@') && from.contains(':')) {
+      if (senderId != from) return false;
+    } else if (!sender.toLowerCase().contains(from) &&
         !(senderId?.toLowerCase().contains(from) ?? false)) {
       return false;
     }
@@ -100,10 +113,16 @@ bool matchesMessageSearch({
     return false;
   }
   return switch (parsed.has) {
+    'media' =>
+      attachment?.kind == AttachmentKind.image ||
+          attachment?.kind == AttachmentKind.video,
+    'document' =>
+      attachment?.kind == AttachmentKind.audio ||
+          attachment?.kind == AttachmentKind.file,
     'image' => attachment?.kind == AttachmentKind.image,
     'video' => attachment?.kind == AttachmentKind.video,
     'file' => attachment != null,
-    'link' => RegExp(r'https?://', caseSensitive: false).hasMatch(body),
+    'link' => hasMessageWebLink(body, formattedBody),
     _ => true,
   };
 }

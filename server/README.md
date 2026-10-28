@@ -129,11 +129,21 @@ It backs up configuration privately and recreates only Synapse. It never changes
 nginx or certificates. Forward `/_synapse/client/send/v1/` through the Matrix
 HTTPS proxy before testing clients. Keep the source bundle together.
 
-The installer is for a first storage-module installation. It refuses to overwrite
-an existing adapter or storage schema. Use `--rollback BACKUP_DIRECTORY` with the
-same stack/configuration arguments to restore configuration and disable the new
-admission trigger. Classification records and media are retained. Review and back
-up the database before deployment; configuration backups are not database backups.
+For account-limited testing, add `--preview-user @alice:example.org` to the checks
+and installation command. Only those accounts can use the API. Pruning is a dry
+run, and the default quota is not enforced. Existing per-account quota overrides
+still apply. Other accounts keep their existing upload behavior.
+
+After testing, `--activate --apply` opens an installed preview to all accounts,
+enables the allowance and permits confirmed pruning. Plan a maintenance window
+for either installation or activation. Both recreate Synapse.
+
+The installer refuses to overwrite a different adapter or an existing schema
+without explicit activation. Use `--rollback BACKUP_DIRECTORY` with the same
+stack/configuration arguments to restore configuration and the previous quota
+policy, or disable the new admission trigger after a first installation.
+Classification records and media are retained. Review and back up the database
+before deployment; configuration backups are not database backups.
 
 Clients opt into encrypted-upload categorization. Labels contain media ID, type
 and source, never content or keys. Pruning requires an expiring owner-bound

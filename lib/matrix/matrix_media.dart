@@ -92,7 +92,7 @@ extension _MatrixMedia on MatrixBackend {
         attachment,
         _preferences.imageCompression,
       );
-      if (_preferences.optimizeVideos) {
+      if (_preferences.optimizeVideos && !attachment.videoPrepared) {
         attachment = await VideoPreparation.instance.prepare(
           attachment,
           preset: _preferences.videoCompression,

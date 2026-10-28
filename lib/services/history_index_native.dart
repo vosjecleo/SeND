@@ -419,6 +419,8 @@ class HistoryStore {
     final args = <Object?>[room];
     if (kind == 'media') {
       where.add("kind IN ('image','video')");
+    } else if (kind == 'document') {
+      where.add("kind IN ('audio','file')");
     } else if (kind == 'file') {
       where.add("kind IN ('image','video','audio','file')");
     } else if (kind != null) {
@@ -426,8 +428,9 @@ class HistoryStore {
       args.add(kind);
     }
     if (sender != null) {
-      where.add('instr(lower(sender),?)>0');
-      args.add(sender.toLowerCase());
+      final exact = sender.startsWith('@') && sender.contains(':');
+      where.add(exact ? 'sender=?' : 'instr(lower(sender),?)>0');
+      args.add(exact ? sender : sender.toLowerCase());
     }
     if (before != null) {
       where.add('time < ?');

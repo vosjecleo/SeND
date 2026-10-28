@@ -3,6 +3,48 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('member selection matches the exact Matrix ID, including case', () {
+    expect(
+      matchesMessageSearch(
+        body: 'hello',
+        sender: 'Alice',
+        senderId: '@Alice:test',
+        query: 'from:@Alice:test',
+      ),
+      isTrue,
+    );
+    expect(
+      matchesMessageSearch(
+        body: 'hello',
+        sender: 'Alice',
+        senderId: '@alice:test',
+        query: 'from:@Alice:test',
+      ),
+      isFalse,
+    );
+  });
+  test(
+    'rich links are searchable without counting mentions or quoted links',
+    () {
+      bool matches(String html) => matchesMessageSearch(
+        body: 'hello',
+        formattedBody: html,
+        sender: 'Alice',
+        query: 'has:link',
+      );
+      expect(matches('<a href="https://example.org/page">Website</a>'), isTrue);
+      expect(
+        matches('<a href="https://matrix.to/#/@alice:test">Alice</a>'),
+        isFalse,
+      );
+      expect(
+        matches(
+          '<mx-reply><a href="https://example.org">Quoted</a></mx-reply>hello',
+        ),
+        isFalse,
+      );
+    },
+  );
   test('requires every search term and rejects unrelated context events', () {
     expect(
       matchesMessageSearch(

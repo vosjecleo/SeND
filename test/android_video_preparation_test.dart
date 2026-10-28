@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/models/video_edit.dart';
 import 'package:deltiecord/services/video_preparation_android.dart';
 
 void main() {
@@ -114,6 +115,62 @@ void main() {
       throwsA(isA<PlatformException>()),
     );
   });
+  test('missing metadata cannot silently discard requested edits', () async {
+    messenger.setMockMethodCallHandler(channel, (_) async => null);
+    await expectLater(
+      prepareAndroidVideo(
+        draft,
+        optimize: false,
+        edit: const VideoEditPlan(muted: true),
+        progress: (_) {},
+        canceled: () => false,
+      ),
+      throwsStateError,
+    );
+  });
+  test(
+    'high-quality edits reach the Android exporter without size reduction',
+    () async {
+      var exported = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'probe') {
+          return {
+            'width': exported ? 360 : 720,
+            'height': 1280,
+            'duration': exported ? 1000 : 5000,
+          };
+        }
+        if (call.method == 'optimize') {
+          expect(call.arguments['resize'], false);
+          expect(call.arguments['edit'], containsPair('muted', true));
+          expect(call.arguments['edit'], containsPair('startMs', 1000));
+          expect(call.arguments['edit'], containsPair('endMs', 2000));
+          await File(
+            call.arguments['output'] as String,
+          ).writeAsBytes([6, 7, 8]);
+          exported = true;
+        }
+        return null;
+      });
+      final result = await prepareAndroidVideo(
+        draft,
+        optimize: false,
+        edit: const VideoEditPlan(
+          startMs: 1000,
+          endMs: 2000,
+          muted: true,
+          width: .5,
+        ),
+        progress: (_) {},
+        canceled: () => false,
+      );
+      expect(result.bytes, [6, 7, 8]);
+      expect(result.videoWidth, 360);
+      expect(result.durationMilliseconds, 1000);
+      expect(result.caption, 'caption');
+      expect(result.spoiler, true);
+    },
+  );
 
   test('original quality still probes metadata and does not encode', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {

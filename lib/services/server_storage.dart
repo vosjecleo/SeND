@@ -46,6 +46,8 @@ Map<String, dynamic> normalizeServerStorageUsage(Map<String, dynamic> raw) {
     'quota_bytes': quota,
     'remaining_bytes': used > quota ? 0 : quota - used,
     'categories': categories,
+    'quota_enforced': raw['quota_enforced'] != false,
+    'dry_run_pruning': raw['dry_run_pruning'] == true,
   };
 }
 

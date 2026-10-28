@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
+import '../models/video_edit.dart';
 import 'video_preparation_android.dart';
 
 bool get videoOptimizationSupported =>
@@ -42,8 +43,14 @@ Future<AttachmentDraft> optimizeVideo(
   required bool Function() canceled,
   bool optimize = true,
   VideoCompressionPreset preset = VideoCompressionPreset.balanced,
+  VideoEditPlan? edit,
 }) async {
   if (!videoOptimizationSupported || !draft.mimeType.startsWith('video/')) {
+    if (edit?.hasChanges == true) {
+      throw UnsupportedError(
+        'Video editing is unavailable for this attachment.',
+      );
+    }
     return draft;
   }
   if (Platform.isAndroid) {
@@ -51,11 +58,13 @@ Future<AttachmentDraft> optimizeVideo(
       draft,
       optimize: optimize,
       preset: preset,
+      edit: edit,
       progress: progress,
       canceled: canceled,
     );
   }
   final directory = await Directory.systemTemp.createTemp('deltiecord-video-');
+  final encode = optimize || edit?.hasChanges == true;
   Process? process;
   Timer? cancellation;
   Future<String> run(
@@ -75,7 +84,7 @@ Future<AttachmentDraft> optimizeVideo(
     final active = process!;
     var expired = false;
     final timeout = Timer(
-      optimize ? const Duration(minutes: 10) : const Duration(seconds: 30),
+      encode ? const Duration(minutes: 10) : const Duration(seconds: 30),
       () {
         expired = true;
         active.kill();
@@ -134,23 +143,43 @@ Future<AttachmentDraft> optimizeVideo(
     final video = streams.where((s) => s['codec_type'] == 'video').firstOrNull;
     final duration =
         double.tryParse(metadata['format']?['duration']?.toString() ?? '') ?? 0;
-    if (video == null || (optimize && (!duration.isFinite || duration <= 0))) {
+    if (video == null || (encode && (!duration.isFinite || duration <= 0))) {
       throw StateError(
         'Could not read this video’s duration. Choose original quality to send it unchanged.',
       );
     }
-    if (optimize) {
+    final clipDuration = edit == null
+        ? duration
+        : edit.durationMs((duration * 1000).round()) / 1000;
+    if (encode) {
       final audio = streams.any((s) => s['codec_type'] == 'audio');
       // Reserve muxing/bitrate variance headroom below the web viewer's 25 MiB
       // verified-download limit. Do not force unusable quality on long clips.
-      final budget = (preset.targetBytes * 8 / duration - (audio ? 128000 : 0))
-          .floor();
-      if (budget < 250000) {
+      final budget =
+          (preset.targetBytes * 8 / clipDuration - (audio ? 128000 : 0))
+              .floor();
+      if (optimize && budget < 250000) {
         throw StateError(
           'This video is too long for the selected size limit. Trim it or choose original quality.',
         );
       }
-      final bitrate = budget.clamp(250000, preset.maximumBitrate);
+      final bitrate = optimize
+          ? budget.clamp(250000, preset.maximumBitrate)
+          : 8000000;
+      final filters = <String>[
+        if (edit?.hasChanges == true)
+          'scale=max(2\\,trunc(iw*sar/2)*2):ih,setsar=1',
+        for (var turn = 0; turn < (edit?.turns ?? 0) % 4; turn++) 'transpose=1',
+        if (edit != null &&
+            (edit.left != 0 ||
+                edit.top != 0 ||
+                edit.width != 1 ||
+                edit.height != 1))
+          "crop=w='max(2,trunc(iw*${edit.width}/2)*2)':h='max(2,trunc(ih*${edit.height}/2)*2)':x='trunc(iw*${edit.left}/2)*2':y='trunc(ih*${edit.top}/2)*2'",
+        if (optimize)
+          "scale=w='if(gte(iw,ih),min(iw,${preset.landscapeWidth}),min(iw,${preset.landscapeHeight}))':h='if(gte(iw,ih),min(ih,${preset.landscapeHeight}),min(ih,${preset.landscapeWidth}))':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        'fps=30',
+      ];
       await run(
         'ffmpeg',
         [
@@ -162,6 +191,8 @@ Future<AttachmentDraft> optimizeVideo(
           'file,pipe',
           '-i',
           input.path,
+          if ((edit?.startMs ?? 0) > 0) ...['-ss', '${edit!.startMs / 1000}'],
+          if (edit != null) ...['-t', '$clipDuration'],
           '-map',
           '0:v:0',
           '-map',
@@ -171,7 +202,8 @@ Future<AttachmentDraft> optimizeVideo(
           '-map_chapters',
           '-1',
           '-vf',
-          "scale=w='if(gte(iw,ih),min(iw,${preset.landscapeWidth}),min(iw,${preset.landscapeHeight}))':h='if(gte(iw,ih),min(ih,${preset.landscapeHeight}),min(ih,${preset.landscapeWidth}))':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
+          filters.join(','),
+          if (edit?.muted == true) '-an',
           '-c:v',
           'libx264',
           '-preset',
@@ -199,17 +231,17 @@ Future<AttachmentDraft> optimizeVideo(
           output.path,
         ],
         encoding: true,
-        duration: duration,
+        duration: clipDuration,
       );
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (await output.length() > preset.maximumBytes) {
+      if (optimize && await output.length() > preset.maximumBytes) {
         throw StateError(
           'The optimized video still exceeds the selected size limit. The original was not sent; choose original quality or trim the clip.',
         );
       }
     }
-    final media = optimize ? output : input;
-    final verified = optimize
+    final media = encode ? output : input;
+    final verified = encode
         ? jsonDecode(
                 await run('ffprobe', [
                   '-v',
@@ -257,15 +289,15 @@ Future<AttachmentDraft> optimizeVideo(
       // A missing poster must not discard good dimensions or a usable video.
     }
     if (canceled()) throw StateError('Video preparation canceled.');
-    final bytes = optimize ? await output.readAsBytes() : draft.bytes;
+    final bytes = encode ? await output.readAsBytes() : draft.bytes;
     final size = videoDisplaySize(encoded);
     progress(1);
     return AttachmentDraft(
       bytes: bytes,
-      name: optimize
+      name: encode
           ? '${draft.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.mp4'
           : draft.name,
-      mimeType: optimize ? 'video/mp4' : draft.mimeType,
+      mimeType: encode ? 'video/mp4' : draft.mimeType,
       spoiler: draft.spoiler,
       caption: draft.caption,
       durationMilliseconds: encodedDuration.isFinite && encodedDuration > 0

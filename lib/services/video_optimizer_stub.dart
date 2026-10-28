@@ -1,5 +1,6 @@
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
+import '../models/video_edit.dart';
 
 bool get videoOptimizationSupported => false;
 Future<AttachmentDraft> probeVideo(AttachmentDraft draft) async => draft;
@@ -8,4 +9,11 @@ Future<AttachmentDraft> optimizeVideo(
   required void Function(double) progress,
   required bool Function() canceled,
   VideoCompressionPreset preset = VideoCompressionPreset.balanced,
-}) async => draft;
+  bool optimize = true,
+  VideoEditPlan? edit,
+}) async {
+  if (edit?.hasChanges == true) {
+    throw UnsupportedError('Video editing is unavailable on this platform.');
+  }
+  return draft;
+}

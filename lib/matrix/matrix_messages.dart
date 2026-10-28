@@ -137,6 +137,7 @@ extension _MatrixMessages on MatrixBackend {
         final message = _searchResultFromEvent(event);
         if (!matchesMessageSearch(
           body: message.body,
+          formattedBody: message.formattedBody,
           sender: message.sender,
           query: normalized,
           senderId: message.senderId,
@@ -307,7 +308,7 @@ extension _MatrixMessages on MatrixBackend {
             'kind': '',
             'deleted': true,
           });
-          _mediaHistory[event.room.id]?.remove(id);
+          _removeCatalogEvent(event.room.id, id);
           _attachmentEvents.remove(id);
         }
         continue;
@@ -317,7 +318,10 @@ extension _MatrixMessages on MatrixBackend {
           !event.hasAttachment &&
           event.relationshipType != RelationshipTypes.edit &&
           !event.redacted &&
-          !RegExp(r'https?://', caseSensitive: false).hasMatch(event.body)) {
+          !hasMessageWebLink(
+            event.body,
+            event.isRichMessage ? event.formattedText : null,
+          )) {
         continue;
       }
       String? revision;
@@ -347,7 +351,7 @@ extension _MatrixMessages on MatrixBackend {
         'sender': event.senderId,
         'kind':
             message.attachment?.kind.name ??
-            (RegExp(r'https?://', caseSensitive: false).hasMatch(message.body)
+            (hasMessageWebLink(message.body, message.formattedBody)
                 ? 'link'
                 : ''),
         'body': index.enabled ? message.body : '',
@@ -355,7 +359,7 @@ extension _MatrixMessages on MatrixBackend {
         'edited_at': editedAt,
         'deleted': event.redacted,
       });
-      if (event.redacted) _mediaHistory[event.room.id]?.remove(event.eventId);
+      if (event.redacted) _removeCatalogEvent(event.room.id, event.eventId);
     }
     if (rows.isNotEmpty) {
       try {
@@ -369,53 +373,68 @@ extension _MatrixMessages on MatrixBackend {
     }
   }
 
-  Future<List<ChatMessage>> _loadMediaPage(String roomId) async {
+  Future<List<ChatMessage>> _loadMediaPage(
+    String roomId, {
+    String kind = 'media',
+  }) async {
+    final key = kind == 'media' ? roomId : '$roomId|$kind';
+    final generation = _catalogGeneration;
     final room = _client?.getRoomById(roomId);
-    if (room == null || _mediaEnded.contains(roomId)) {
-      return mediaMessagesForRoom(roomId);
+    if (room == null || _mediaEnded.contains(key)) {
+      return catalogMessagesForRoom(roomId, kind);
     }
     final index = await openHistoryIndex();
-    final records = _mediaHistory.putIfAbsent(roomId, () => {});
-    final offset = _mediaIndexOffset[roomId] ?? 0;
+    if (generation != _catalogGeneration || !identical(room.client, _client)) {
+      return const [];
+    }
+    final records = _mediaHistory.putIfAbsent(key, () => {});
+    final offset = _mediaIndexOffset[key] ?? 0;
     if (index != null && offset >= 0) {
       final ids = await index
-          .query(roomId, kind: 'media', offset: offset)
+          .query(roomId, kind: kind, offset: offset)
           .catchError((Object _) => <String>[]);
-      _mediaIndexOffset[roomId] = ids.length < 50 ? -1 : offset + ids.length;
-      for (final event in await _historyEvents(room, ids)) {
+      final indexed = await _historyEvents(room, ids);
+      if (generation != _catalogGeneration ||
+          !identical(room.client, _client)) {
+        return const [];
+      }
+      _mediaIndexOffset[key] = ids.length < 50 ? -1 : offset + ids.length;
+      for (final event in indexed) {
         records[event.eventId] = _searchResultFromEvent(event);
       }
       if (ids.isNotEmpty) {
         _notifyBackendListeners();
-        return mediaMessagesForRoom(roomId);
+        return catalogMessagesForRoom(roomId, kind);
       }
     }
     for (var attempt = 0; attempt < 5; attempt++) {
-      final previous = _mediaCursor[roomId];
+      final previous = _mediaCursor[key];
       final page = await _historyPage(room, previous);
-      if (!identical(room.client, _client)) return const [];
+      if (!identical(room.client, _client) ||
+          generation != _catalogGeneration) {
+        return const [];
+      }
       final before = records.length;
       for (final event in page.$1) {
         final message = _searchResultFromEvent(event);
-        if (message.attachment?.kind == AttachmentKind.image ||
-            message.attachment?.kind == AttachmentKind.video) {
+        if (catalogMatches(message, kind)) {
           records[event.eventId] = message;
         }
       }
-      _mediaCursor[roomId] = page.$2;
-      if (page.$2 == null || page.$2 == previous) _mediaEnded.add(roomId);
-      if (records.length > before || _mediaEnded.contains(roomId)) break;
+      _mediaCursor[key] = page.$2;
+      if (page.$2 == null || page.$2 == previous) _mediaEnded.add(key);
+      if (records.length > before || _mediaEnded.contains(key)) break;
     }
     // Keep room metadata caches separate from image/video byte caches.
-    while (_mediaHistory.length > 4) {
-      final old = _mediaHistory.keys.firstWhere((id) => id != roomId);
+    while (_mediaHistory.length > 12) {
+      final old = _mediaHistory.keys.firstWhere((id) => id != key);
       _mediaHistory.remove(old);
       _mediaCursor.remove(old);
       _mediaEnded.remove(old);
       _mediaIndexOffset.remove(old);
     }
     _notifyBackendListeners();
-    return mediaMessagesForRoom(roomId);
+    return catalogMessagesForRoom(roomId, kind);
   }
 
   ChatMessage _searchResultFromEvent(Event event) {
