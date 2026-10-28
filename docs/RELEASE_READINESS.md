@@ -101,6 +101,28 @@ Physical iOS WebCodecs, Sunup closed-app delivery, automatic limited-sync gap
 recovery and the existing performance/avatar investigations remain separate
 open items. CI publication and deployment results must be recorded after release.
 
+## Recorded release: 0.9.42+133
+
+Published as Latest on 2026-10-28 from `57b540b`. Windows, Linux (including the
+clean AppImage launch), Android and Web workflows passed. Flatpak's build,
+sandbox smoke test, GitHub publication and mirror update also passed. The release
+tool verified the package checksums and updated the PWA and download manifest.
+Stable was not promoted.
+
+The live PWA reports 0.9.42+133. Its same-origin module worker is served as
+JavaScript and passed a synthetic H.264 trim/crop/rotation export under the live
+HTTPS/CSP headers, without logging in or uploading media. This is Chromium
+validation, not physical iOS acceptance. Deltie's storage module was already
+active with the 12 GiB default enforced and dry-run deletion disabled; no further
+server activation was performed by the release tool.
+
+The first CI attempt exposed a missing FFmpeg CLI in some test hosts. Linux
+package jobs now require it; optional desktop-codec tests explicitly skip on
+hosts without the tools. Tool-detection and edit-validation checks still run.
+
+See [next-release requests](next-release-attention.txt) for the post-update
+changelog popup and the post-compression 64 MiB selection-limit change.
+
 ## Recorded release: 0.9.39+126
 
 Published as Latest on 2026-10-10, with Deltie's PWA and download mirror updated.

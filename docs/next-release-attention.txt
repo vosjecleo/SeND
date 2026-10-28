@@ -1,0 +1,35 @@
+Next release requests, 2026-10-28
+Not included in SeND 0.9.42+133.
+
+1. Post-update changelog popup
+
+Title: "An Update?!? Whats changed...?"
+Darker text panel with concise bullets and a full changelog hyperlink.
+Examples supplied by Cleo:
+* Various bugfixes (see full changelog hyperlink)
+* Added Image and Video editing
+* Refined server-storage caps (12GiB free!)
+* Added better search via local caching
+* Added compression options
+* etcetera
+Actions: "Full log" and "Okay!"
+
+Show once after the compiled app/PWA has actually updated, not merely when a
+remote update is available. Keep fresh-install onboarding separate, preserve
+sessions and record acknowledgment so resume does not repeat the popup.
+
+2. Check the 64 MiB selection limit after compression
+
+Keep the existing aggregate attachment-selection/batch upload limit. Check it
+when Send is pressed, after preparation/compression, rather than rejecting raw
+selection bytes before editing is available. Preserve file-count and homeserver
+limits, with separate device-memory/file-read safety bounds for larger originals.
+
+If the prepared file or batch is still too large, block upload, retain the draft
+and highlight the offending item(s). Expose compression choices there. Do not
+silently remove files or bypass the limit through Original quality or queueing.
+
+Requested message: "Uh-oh! Your attachment is too big."
+Bottom text: "Select a (smaller) compression option or try another way".
+
+These requests are recorded, not implemented.
