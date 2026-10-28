@@ -287,8 +287,7 @@ Map<String, Object?> invitationNotification({
   'eventId': eventId,
   'roomName': roomName,
   'senderName': 'Invitation',
-  'body':
-      'You were invited to a conversation. Open your inbox to accept or ignore.',
+  'body': 'New chat invitation. Open your inbox to respond.',
   'timestamp': DateTime.now().millisecondsSinceEpoch,
   'groupConversation': false,
   'sound': settings?.tryGet<bool>('notification_sound') ?? true,

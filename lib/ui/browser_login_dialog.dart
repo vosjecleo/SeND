@@ -97,9 +97,7 @@ class _BrowserLoginDialogState extends State<BrowserLoginDialog> {
               onChanged: (_) => setState(() => _methods = null),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Use the sign-in methods offered by your homeserver. You will still need to verify this device or recover your encryption keys afterwards.',
-            ),
+
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(16),
@@ -124,8 +122,8 @@ class _BrowserLoginDialogState extends State<BrowserLoginDialog> {
               if (!methods.oidc && !methods.sso)
                 Text(
                   methods.password
-                      ? 'This server currently offers password sign-in only. Use the main sign-in form.'
-                      : 'This server does not advertise a supported interactive sign-in method.',
+                      ? 'This server only supports password sign-in. Use the main sign-in form.'
+                      : 'Browser sign-in isn\'t available for this server.',
                 ),
             ],
           ],

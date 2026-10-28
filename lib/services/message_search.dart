@@ -52,7 +52,7 @@ class MessageSearchQuery {
       }
     }
     return MessageSearchQuery(
-      terms: terms,
+      terms: terms.isEmpty ? const [] : [terms.join(' ')],
       from: from,
       room: room,
       before: before,
@@ -90,7 +90,7 @@ bool matchesMessageSearch({
       parsed.has == null) {
     return false;
   }
-  final searchable = '${sender.toLowerCase()}\n${body.toLowerCase()}';
+  final searchable = body.toLowerCase();
   if (!parsed.terms.every(searchable.contains)) return false;
   if (parsed.from case final from?) {
     if (from.startsWith('@') && from.contains(':')) {

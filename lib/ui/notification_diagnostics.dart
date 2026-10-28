@@ -16,7 +16,7 @@ String notificationStateReport(UnifiedPushState s) {
   return [
     'Delivery method: ${stage(s.distributor)}',
     'Disabled: ${s.disabled}',
-    'System notification permission: ${s.notificationsAllowed == null
+    'System notifications: ${s.notificationsAllowed == null
         ? 'Unknown'
         : s.notificationsAllowed!
         ? 'Allowed'
@@ -65,23 +65,21 @@ class _NotificationDiagnosticsState extends State<NotificationDiagnostics> {
           try {
             await platform.testPush(id);
           } catch (_) {
-            lines.add('Push test did not finish. See the stages below.');
+            lines.add('Push test didn\'t finish.');
           }
         }
         final state = await platform.state(id);
         lines.add(notificationStateReport(state));
         if (send && state.lastTestResult == 'receiver_verified') {
           await widget.backend.testSystemNotification();
-          lines.add(
-            'Android received the push. A test notification was requested.',
-          );
+          lines.add('Push received; a test notification was requested.');
         }
       } else {
         lines.add('Desktop notifications are delivered while SeND is running.');
       }
     } catch (_) {
       lines.add(
-        'The check failed. Check your connection and notification permissions.',
+        'Test failed. Check your connection and notification permissions.',
       );
     }
     if (!mounted) return;
@@ -95,9 +93,7 @@ class _NotificationDiagnosticsState extends State<NotificationDiagnostics> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Test delivery without sending a chat message. Tests do not check message decryption. For that, ask someone to send an encrypted message while SeND is closed.',
-      ),
+      const Text('Tests check delivery, not message decryption.'),
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,
@@ -127,9 +123,7 @@ class _NotificationDiagnosticsState extends State<NotificationDiagnostics> {
       const SizedBox(height: 12),
       SelectableText(_report),
       const SizedBox(height: 12),
-      const Text(
-        'Push tests are limited to one per minute on Android. Reports omit your private push address and message content.',
-      ),
+      const Text('Reports exclude your push address and message content.'),
     ],
   );
 }

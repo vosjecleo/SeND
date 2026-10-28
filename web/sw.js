@@ -22,7 +22,7 @@ self.addEventListener('push', event => event.waitUntil((async () => {
     if (preview && !await sendPushPreviewStore.active(preview.generation)) preview = null;
   } catch (_) { preview = null; }
   await self.registration.showNotification(preview?.title || 'SeND', {
-    body: preview?.body || (isTest ? 'Test notification received. Web Push is working on this device.' : 'New activity in a conversation'),
+    body: preview?.body || (isTest ? 'Test notification received.' : 'New activity in a conversation'),
     icon: '/icons/Icon-192.png', badge: '/icons/Icon-192.png',
     tag: isTest ? 'send-push-test' : data.room_id, renotify: true,
     data: {room_id: data.room_id, event_id: typeof data.event_id === 'string' ? data.event_id.slice(0, 1024) : ''},

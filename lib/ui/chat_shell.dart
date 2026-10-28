@@ -954,6 +954,9 @@ class _ChatShellState extends State<ChatShell> {
                                                 await showAttachmentImageEditor(
                                                   context,
                                                   old,
+                                                  preferences: widget
+                                                      .backend
+                                                      .preferences,
                                                 );
                                             if (!mounted || edited == null) {
                                               return;

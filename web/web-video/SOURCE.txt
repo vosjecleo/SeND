@@ -1,0 +1,3 @@
+Mediabunny 1.62.1, MPL-2.0
+https://registry.npmjs.org/mediabunny/-/mediabunny-1.62.1.tgz
+Unmodified library source is included in worker.js.map. Rebuild with npm ci && npm run build in tool/web-video.

@@ -13,6 +13,7 @@ from collections import OrderedDict, deque
 
 ROOT = '/_synapse/client/send/v1'
 KINDS = frozenset(('images', 'videos', 'gifs', 'audio', 'other'))
+DISPLAY_KINDS = KINDS | {'legacy'}
 SOURCES = frozenset(('upload', 'klipy', 'asset'))
 MEDIA_ID = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
 
@@ -55,12 +56,14 @@ class Storage:
         def query(txn):
             txn.execute("SELECT COALESCE(l.kind,CASE WHEN m.media_type='image/gif' THEN 'gifs' "
                         "WHEN SUBSTR(m.media_type,1,6)='image/' THEN 'images' WHEN SUBSTR(m.media_type,1,6)='video/' "
-                        "THEN 'videos' WHEN SUBSTR(m.media_type,1,6)='audio/' THEN 'audio' ELSE 'other' END),"
+                        "THEN 'videos' WHEN SUBSTR(m.media_type,1,6)='audio/' THEN 'audio' "
+                        "WHEN COALESCE(m.created_ts,0)<(SELECT classification_since FROM send_storage_policy WHERE id=1) "
+                        "THEN 'legacy' ELSE 'other' END),"
                         'COALESCE(SUM(m.media_length),0),COUNT(*) FROM local_media_repository m '
                         'LEFT JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
                         'WHERE m.user_id=? AND m.media_length IS NOT NULL AND m.url_cache IS NULL GROUP BY 1', (owner,))
             return {kind: {'bytes': int(size), 'files': int(count)} for kind, size, count in txn.fetchall()}
-        categories = {kind: {'bytes': 0, 'files': 0} for kind in sorted(KINDS)}
+        categories = {kind: {'bytes': 0, 'files': 0} for kind in sorted(DISPLAY_KINDS)}
         categories.update(await self.run('send_storage_usage', query))
         used, quota = sum(item['bytes'] for item in categories.values()), await self.quota(owner)
         def enforcement(txn):

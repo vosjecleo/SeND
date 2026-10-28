@@ -168,7 +168,13 @@ void main() {
     await tester.tap(find.text('Edit server profile'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit server profile — live preview'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Dialog).last,
+        matching: find.text('Edit server profile'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Use general top colour'), findsOneWidget);
     expect(find.text('Use general avatar'), findsOneWidget);
     expect(find.text('Use general voice tile'), findsOneWidget);

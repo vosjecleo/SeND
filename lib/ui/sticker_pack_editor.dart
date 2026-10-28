@@ -59,12 +59,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(
-              title: Text('Merge another pack into this one'),
-              subtitle: Text(
-                'Original packs stay available. Duplicate aliases receive a numbered suffix. Save changes to finish.',
-              ),
-            ),
+            const ListTile(title: Text('Merge another pack into this one')),
             if (candidates.isEmpty)
               const ListTile(title: Text('No other packs available')),
             for (final pack in candidates)
@@ -114,7 +109,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'The new pack is saved first, then these items are removed from the original. Other edits are saved too. If the second save fails, both copies are kept.',
+                'Move these items to a new pack and save your other edits?',
               ),
               TextFormField(
                 initialValue: name,
@@ -435,7 +430,7 @@ class _StickerPackEditorState extends State<StickerPackEditor> {
                             ],
                           ),
                           Text(
-                            '${_items.length}/150 items · aliases and removals do not re-upload media',
+                            '${_items.length}/150 items',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           if (_busy) ...[
@@ -595,7 +590,7 @@ class _PackCropDialogState extends State<_PackCropDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'Preview of the first selected item. All selected items use these settings. Aspect ratio and animation are preserved; GIF conversion may reduce colours.',
+            'Preview shows the first item; changes apply to all selected items. GIF conversion may reduce colours.',
           ),
           FutureBuilder<PreparedCustomEmoji>(
             future: _preview,

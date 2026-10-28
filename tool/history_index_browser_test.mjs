@@ -25,6 +25,7 @@ try {
     await call('configure',{enabled:true,limit:16});
     await call('put',{rows:[row('text','hello distant world'),row('new','world hello','',2)],text:true,limit:16});
     const words=await query({terms:['hello','world']});
+    if((await query({terms:['hello world']})).length) throw new Error('Phrase search accepted separated/reversed words');
     await call('put',{rows:[row('text','changed'),{...row('new',''),deleted:true}],text:true,limit:16});
     const edited=await query({terms:['changed']}),redacted=await query({terms:['world']});
     const isolated=await window.sendHistoryIndexCall('b'.repeat(64),'query',{room:'!r:test',terms:[],limit:50,offset:0});

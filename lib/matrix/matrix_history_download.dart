@@ -8,8 +8,9 @@ extension _MatrixHistoryDownload on MatrixBackend {
     String roomId,
     String? cursor,
     bool Function() active,
-    Set<String> attemptedBackup,
-  ) async {
+    Set<String> attemptedBackup, {
+    List<MatrixEvent>? suppliedEvents,
+  }) async {
     final room = client.getRoomById(roomId);
     if (!active() ||
         !identical(client, _client) ||
@@ -19,23 +20,25 @@ extension _MatrixHistoryDownload on MatrixBackend {
         room.membership != Membership.join) {
       throw StateError('The chat is no longer available.');
     }
-    final response = await client
-        .getRoomEvents(
-          roomId,
-          Direction.b,
-          from: cursor,
-          limit: 100,
-          filter: jsonEncode({
-            'types': [
-              EventTypes.Message,
-              EventTypes.Encrypted,
-              'm.sticker',
-              PollEventContent.startType,
-              'm.room.redaction',
-            ],
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
+    final response = suppliedEvents == null
+        ? await client
+              .getRoomEvents(
+                roomId,
+                Direction.b,
+                from: cursor,
+                limit: 100,
+                filter: jsonEncode({
+                  'types': [
+                    EventTypes.Message,
+                    EventTypes.Encrypted,
+                    'm.sticker',
+                    PollEventContent.startType,
+                    'm.room.redaction',
+                  ],
+                }),
+              )
+              .timeout(const Duration(seconds: 30))
+        : GetRoomEventsResponse(start: 'retry', chunk: suppliedEvents);
     if (!active() ||
         !identical(client, _client) ||
         room.membership != Membership.join) {
@@ -52,21 +55,35 @@ extension _MatrixHistoryDownload on MatrixBackend {
       attemptedBackup,
     );
     final rows = <String, Map<String, Object?>>{};
+    final failures = <HistoryDecryptionFailure>[];
     var unavailable = 0;
     for (var offset = 0; offset < response.chunk.length; offset += 4) {
       final events = await Future.wait(
         response.chunk.skip(offset).take(4).map((raw) async {
           var event = Event.fromMatrixEvent(raw, room);
+          void failed() => failures.add(
+            HistoryDecryptionFailure(
+              roomId: roomId,
+              eventId: event.eventId,
+              senderId: event.senderId,
+              timestamp: event.originServerTs.millisecondsSinceEpoch,
+            ),
+          );
           if (event.type == EventTypes.Encrypted && client.encryption != null) {
             try {
               event = await client.encryption!
                   .decryptRoomEvent(event, store: false)
                   .timeout(const Duration(seconds: 5));
             } catch (_) {
+              failed();
               return null;
             }
           }
-          return event.type == EventTypes.Encrypted ? null : event;
+          if (event.type == EventTypes.Encrypted) {
+            failed();
+            return null;
+          }
+          return event;
         }),
       );
       if (!active() ||
@@ -195,6 +212,7 @@ extension _MatrixHistoryDownload on MatrixBackend {
       nextCursor: response.end,
       checked: response.chunk.length,
       unavailable: unavailable,
+      failures: failures,
     );
   }
 

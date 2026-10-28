@@ -376,9 +376,7 @@ class _ConversationState extends State<_Conversation> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete message?'),
-        content: const Text(
-          'This removes the message for everyone in the room.',
-        ),
+        content: const Text('Delete this message for everyone?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

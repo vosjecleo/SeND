@@ -100,21 +100,21 @@ void main() {
       final backend = _Catalog();
       await show(tester, backend, RoomSearchSection.media);
       expect(backend.calls['media'], 1);
-      expect(find.text('Items 1 to 10 (10 loaded)'), findsOneWidget);
+      expect(find.text('1–10 · 10 loaded'), findsOneWidget);
       await tester.drag(find.byType(GridView), const Offset(0, -400));
       await tester.pumpAndSettle();
       expect(backend.calls['media'], 1);
       expect(backend.downloads, 0);
       await tester.tap(find.byTooltip('Next page'));
       await tester.pumpAndSettle();
-      expect(find.text('Page 2'), findsOneWidget);
+      expect(find.textContaining('Page 2 of'), findsOneWidget);
       expect(find.byKey(const ValueKey('media-0')), findsNothing);
-      await tester.tap(find.text('Page 2'));
+      await tester.tap(find.textContaining('Page 2 of'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, '3');
       await tester.tap(find.text('Go'));
       await tester.pumpAndSettle();
-      expect(find.text('Items 21 to 25 (25 loaded)'), findsOneWidget);
+      expect(find.text('21–25 · 25 loaded'), findsOneWidget);
       expect(backend.downloads, 0);
     },
   );

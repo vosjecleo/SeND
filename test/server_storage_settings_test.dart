@@ -62,7 +62,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Delete 1 uploads?'), findsOneWidget);
       expect(backend.calls, ['usage', 'prune-preview']);
-      expect(find.textContaining('cannot be undone'), findsOneWidget);
+      expect(find.textContaining("can't be undone"), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(backend.calls.contains('prune'), false);

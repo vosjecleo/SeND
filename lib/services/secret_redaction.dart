@@ -50,7 +50,7 @@ String friendlyRecoveryErrorMessage(Object error) {
       raw.contains('invalid character') ||
       raw.contains('incorrect key') ||
       raw.contains('bad key')) {
-    return 'That recovery key is invalid or was entered incorrectly.';
+    return 'Invalid recovery key. Check it and try again.';
   }
   return safeErrorMessage(error);
 }

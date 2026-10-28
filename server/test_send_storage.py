@@ -12,8 +12,8 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         self.db.executescript('''
           CREATE TABLE local_media_repository(media_id TEXT PRIMARY KEY,user_id TEXT,media_length INTEGER,
               media_type TEXT,created_ts INTEGER,url_cache TEXT,quarantined_by TEXT);
-          CREATE TABLE send_storage_policy(id INTEGER PRIMARY KEY,default_bytes INTEGER,enforce_all BOOLEAN);
-          INSERT INTO send_storage_policy VALUES(1,12884901888,TRUE);
+          CREATE TABLE send_storage_policy(id INTEGER PRIMARY KEY,default_bytes INTEGER,enforce_all BOOLEAN,classification_since INTEGER);
+          INSERT INTO send_storage_policy VALUES(1,12884901888,TRUE,1000);
           CREATE TABLE send_storage_limits(user_id TEXT PRIMARY KEY,quota_bytes INTEGER);
           CREATE TABLE send_storage_labels(media_id TEXT PRIMARY KEY,owner TEXT,kind TEXT,source TEXT,protected BOOLEAN);
           CREATE TABLE send_storage_prune_jobs(token_hash TEXT PRIMARY KEY,owner TEXT,media_ids TEXT,expires INTEGER);
@@ -47,7 +47,7 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         usage = await self.store.usage('@a:example.org')
         self.assertEqual(usage['used_bytes'], 80)
         self.assertEqual(usage['quota_bytes'], 12 * 1024**3)
-        self.assertEqual(usage['categories']['other']['bytes'], 80)
+        self.assertEqual(usage['categories']['legacy']['bytes'], 80)
         self.assertIsNone(usage['message_bytes'])
         await self.label()
         self.assertEqual((await self.store.usage('@a:example.org'))['categories']['videos']['bytes'], 80)
@@ -58,6 +58,20 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         self.db.execute("INSERT INTO send_storage_limits VALUES('@a:example.org',1000)")
         self.assertTrue((await self.store.usage('@a:example.org'))['quota_enforced'])
         self.assertFalse((await self.store.usage('@b:example.org'))['quota_enforced'])
+    async def test_legacy_is_old_unclassified_data_not_new_or_known_types(self):
+        self.add('new', '@a:example.org', 30)
+        self.db.execute("UPDATE local_media_repository SET created_ts=2000 WHERE media_id='new'")
+        self.add('old-photo', '@a:example.org', 20, 'image/png')
+        usage = await self.store.usage('@a:example.org')
+        self.assertEqual(usage['categories']['legacy']['bytes'], 80)
+        self.assertEqual(usage['categories']['other']['bytes'], 30)
+        self.assertEqual(usage['categories']['images']['bytes'], 20)
+        await self.label(kind='other')
+        usage = await self.store.usage('@a:example.org')
+        self.assertEqual(usage['categories']['legacy']['bytes'], 0)
+        self.assertEqual(usage['categories']['other']['bytes'], 110)
+        with self.assertRaises(ValueError):
+            await self.label(kind='legacy')
     async def test_dry_run_consumes_ticket_without_deleting_media(self):
         await self.label()
         preview = await self.store.preview('@a:example.org', 100, 'videos')

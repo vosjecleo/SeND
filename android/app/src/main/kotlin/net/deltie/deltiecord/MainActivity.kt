@@ -186,7 +186,7 @@ class MainActivity : FlutterActivity() {
                                 BuiltInPushService.enable(this, instance)
                                 result.success(DeltiecordPushService.state(this, instance))
                             } catch (_: Exception) {
-                                result.error("builtin_start_failed", "Could not start background notifications. Reopen SeND and try again.", null)
+                                result.error("builtin_start_failed", "Couldn't start background notifications. Reopen SeND and try again.", null)
                             }
                         }
                         "batterySettings" -> {
@@ -194,7 +194,7 @@ class MainActivity : FlutterActivity() {
                                 startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                                 result.success(null)
                             } catch (_: Exception) {
-                                result.error("settings_unavailable", "Open Android Settings and allow SeND to run in the background.", null)
+                                result.error("settings_unavailable", "Allow SeND to run in the background in Android Settings.", null)
                             }
                         }
                         "selectDistributor" -> {
@@ -589,7 +589,7 @@ class MainActivity : FlutterActivity() {
             {
                 pendingRegistrations.remove(instance)?.error(
                     "registration_timeout",
-                    "The UnifiedPush distributor did not return an endpoint within 30 seconds.",
+                    "Your notification app didn't finish setup within 30 seconds.",
                     null,
                 )
             },

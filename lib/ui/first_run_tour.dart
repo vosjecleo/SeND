@@ -114,18 +114,13 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
       const _TourPage(
         icon: Icons.waving_hand_outlined,
         title: 'Welcome to SeND!',
-        body:
-            'SeND connects to Matrix on desktop and phone. '
-            'You can chat with people using other Matrix clients. '
-            'Some SeND preferences can sync between your devices.',
+        body: '',
       ),
       _TourPage(
         icon: Icons.link_outlined,
         title: 'Choose how previews connect',
         body:
-            'SeND asks your Matrix homeserver for link previews first. '
-            'If you allow direct previews, linked websites can see your IP address '
-            'and request details.',
+            'Direct previews let websites see your IP address and request details.',
         child: DropdownButtonFormField<DirectLinkPreviewMode>(
           key: const ValueKey('tour-link-preview-mode'),
           isExpanded: true,
@@ -161,22 +156,12 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
           icon: Icons.install_mobile,
           title: 'Install SeND on your Home Screen',
           body:
-              'On iPhone or iPad, open this site in Safari, choose Share, '
-              'then Add to Home Screen. Open the installed SeND app and '
-              'enable browser notifications in Settings > Notifications. '
-              'Push requires iOS 16.4 or later and your permission. Android and '
-              'desktop browsers can install it from their browser menu too.\n\n'
-              'This browser stores your session and encryption keys. '
-              'Keep your Matrix recovery key safe: clearing site data, '
-              'private browsing, or storage eviction can remove the local '
-              'session. Only one SeND tab may use this session at a time.',
+              'Browser storage can be cleared, taking your session and encryption keys with it. Keep your recovery key safe.',
         ),
       _TourPage(
         icon: Icons.search,
         title: 'Choose local search storage',
-        body:
-            'A text index makes repeat searches faster. It uses extra space on this device and is optional. '
-            'Media indexing keeps event details only; it does not download all your media.',
+        body: '',
         child: HistoryIndexSettings(backend: widget.backend),
       ),
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
@@ -184,9 +169,7 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
           icon: Icons.notifications_active_outlined,
           title: 'Set up background notifications',
           body:
-              'Choose how SeND receives messages when it is closed. '
-              'Built-in delivery uses push.deltie.net. Messages are decrypted on your device; '
-              'the push server receives room and event IDs, not message text or encryption keys.',
+              'Built-in notifications use push.deltie.net, which receives room and event IDs, not messages or encryption keys.',
           child: AndroidNotificationSetup(backend: widget.backend),
         ),
     ];
@@ -253,8 +236,10 @@ class _TourPage extends StatelessWidget {
           context,
         ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
       ),
-      const SizedBox(height: 10),
-      Text(body, style: TextStyle(color: context.deltiecord.muted)),
+      if (body.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Text(body, style: TextStyle(color: context.deltiecord.muted)),
+      ],
       if (child != null) ...[const SizedBox(height: 18), child!],
     ],
   );

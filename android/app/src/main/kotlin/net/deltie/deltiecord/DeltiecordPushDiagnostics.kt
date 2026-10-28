@@ -29,7 +29,7 @@ object DeltiecordPushDiagnostics {
             callback(
                 Result.failure(
                     IllegalStateException(
-                        "The diagnostic is cooling down; retry in ${(remaining + 999) / 1000} seconds.",
+                        "Try again in ${(remaining + 999) / 1000} seconds.",
                     ),
                 ),
             )
@@ -76,7 +76,7 @@ object DeltiecordPushDiagnostics {
                     .toString()
                     .toByteArray(Charsets.UTF_8)
                 check(!NetworkProxyPolicy.blocked(context)) {
-                    "Notification gateway diagnostics are blocked by the proxy policy."
+                    "Your proxy settings block notification tests."
                 }
                 val connection = URL(gateway).openConnection() as HttpURLConnection
                 try {
@@ -116,7 +116,7 @@ object DeltiecordPushDiagnostics {
                     Thread.sleep(150)
                 }
                 throw IllegalStateException(
-                    "The gateway accepted the test, but Android did not receive it within 15 seconds.",
+                    "Push test accepted, but Android didn't receive it within 15 seconds.",
                 )
             }.onFailure {
                 if (it !is PushDiagnosticException) {

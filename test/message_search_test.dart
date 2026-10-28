@@ -64,16 +64,35 @@ void main() {
     );
   });
 
-  test('matches sender names without making term matching fuzzy', () {
+  test('text must be a contiguous phrase in the body, not the sender', () {
     expect(
       matchesMessageSearch(
         body: 'hello there',
         sender: 'Avery Morgan',
         query: 'avery hello',
       ),
-      isTrue,
+      isFalse,
     );
   });
+  test(
+    'sender filter and an exact phrase reject partial and separated matches',
+    () {
+      bool matches(String body) => matchesMessageSearch(
+        body: body,
+        sender: 'Cleo',
+        senderId: '@cleo:deltie.net',
+        query: 'from:@cleo:deltie.net here you go',
+      );
+      expect(matches('Well, HERE YOU GO!'), true);
+      expect(matches('yea i did that there'), false);
+      expect(matches('lets go'), false);
+      expect(matches('here is something you can go to'), false);
+      expect(
+        MessageSearchQuery.parse('from:@cleo:deltie.net here you go').terms,
+        ['here you go'],
+      );
+    },
+  );
 
   test('supports sender, date, room, and media filters', () {
     const image = ChatAttachment(

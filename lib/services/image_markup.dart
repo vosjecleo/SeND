@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'dart:math' as math;
+import '../models/markup_stroke.dart';
 import 'dart:ui' as ui;
 import 'package:image/image.dart' as image;
 
@@ -43,51 +45,63 @@ Future<Uint8List> renderMarkedImage({
       }
       final frame = await codec.getNextFrame();
       try {
-        final pixels = await frame.image.toByteData(
-          format: ui.ImageByteFormat.rawStraightRgba,
-        );
-        if (pixels == null) {
-          throw const FormatException('Could not read image pixels.');
-        }
-        var output = image.Image.fromBytes(
-          width: frame.image.width,
-          height: frame.image.height,
-          bytes: pixels.buffer,
-          bytesOffset: pixels.offsetInBytes,
-          numChannels: 4,
-        );
-        if (turns % 4 != 0) {
-          output = image.copyRotate(output, angle: (turns % 4) * 90);
-        }
-        for (final stroke in strokes) {
-          final argb = stroke['color'] as int;
-          final color = image.ColorRgba8(
-            (argb >> 16) & 255,
-            (argb >> 8) & 255,
-            argb & 255,
-            (argb >> 24) & 255,
-          );
-          final width =
-              ((stroke['width'] as double) *
-                      (output.width < output.height
-                          ? output.width
-                          : output.height))
-                  .round()
-                  .clamp(1, 500);
-          final points = (stroke['points'] as List).cast<List<double>>();
-          for (var p = 0; p < points.length; p++) {
-            final a = points[p == 0 ? 0 : p - 1], b = points[p];
-            image.drawLine(
-              output,
-              x1: (a[0] * (output.width - 1)).round(),
-              y1: (a[1] * (output.height - 1)).round(),
-              x2: (b[0] * (output.width - 1)).round(),
-              y2: (b[1] * (output.height - 1)).round(),
-              color: color,
-              thickness: width,
-              antialias: true,
+        final quarterTurns = turns % 4;
+        final rotatedWidth = quarterTurns.isOdd
+            ? frame.image.height
+            : frame.image.width;
+        final rotatedHeight = quarterTurns.isOdd
+            ? frame.image.width
+            : frame.image.height;
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        canvas.save();
+        switch (quarterTurns) {
+          case 1:
+            canvas.translate(frame.image.height.toDouble(), 0);
+            canvas.rotate(math.pi / 2);
+          case 2:
+            canvas.translate(
+              frame.image.width.toDouble(),
+              frame.image.height.toDouble(),
             );
+            canvas.rotate(math.pi);
+          case 3:
+            canvas.translate(0, frame.image.width.toDouble());
+            canvas.rotate(-math.pi / 2);
+        }
+        canvas.drawImage(frame.image, ui.Offset.zero, ui.Paint());
+        canvas.restore();
+        paintMarkupStrokes(
+          canvas,
+          ui.Size(rotatedWidth.toDouble(), rotatedHeight.toDouble()),
+          [
+            for (final stroke in strokes)
+              MarkupStroke(stroke['color'] as int, stroke['width'] as double, [
+                for (final p in (stroke['points'] as List).cast<List<double>>())
+                  ui.Offset(p[0], p[1]),
+              ]),
+          ],
+        );
+        final picture = recorder.endRecording();
+        final composed = await picture.toImage(rotatedWidth, rotatedHeight);
+        picture.dispose();
+        late image.Image output;
+        try {
+          final pixels = await composed.toByteData(
+            format: ui.ImageByteFormat.rawStraightRgba,
+          );
+          if (pixels == null) {
+            throw const FormatException('Could not read image pixels.');
           }
+          output = image.Image.fromBytes(
+            width: rotatedWidth,
+            height: rotatedHeight,
+            bytes: pixels.buffer,
+            bytesOffset: pixels.offsetInBytes,
+            numChannels: 4,
+          );
+        } finally {
+          composed.dispose();
         }
         final left = (crop[0] * output.width).round().clamp(
               0,

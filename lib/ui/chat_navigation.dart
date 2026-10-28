@@ -256,12 +256,7 @@ class _SpaceBar extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'Controls who may reorder rooms and manage '
-                        'SeND categories. The permission is synced '
-                        'through Matrix room power levels.',
-                        style: TextStyle(color: context.deltiecord.muted),
-                      ),
+
                       Slider(
                         key: const Key('space-settings-layout-slider'),
                         value: layoutPowerLevel.toDouble(),
@@ -359,8 +354,7 @@ class _SpaceBar extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text('Leave ${space.name}?'),
         content: const Text(
-          'You will also leave all joined channels and nested servers, including '
-          'channels shared with other servers. You may need new invitations to rejoin.',
+          'You\'ll also leave all joined channels and nested servers, including channels shared elsewhere. You may need new invitations to rejoin.',
         ),
         actions: [
           TextButton(
@@ -712,9 +706,7 @@ class _SpaceSearchDialogState extends State<_SpaceSearchDialog> {
             child: _results.isEmpty && !_searching
                 ? const Center(
                     child: Text(
-                      'No published Spaces found. Try #alias:server or a '
-                      'Matrix server name; unpublished Spaces cannot be '
-                      'discovered through Matrix directories.',
+                      'No listed Spaces found. Try #alias:server or a server name.',
                       textAlign: TextAlign.center,
                     ),
                   )
@@ -2039,9 +2031,7 @@ class _RoomListTile extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Leave ${room.name}?'),
-        content: const Text(
-          'You may need another invitation to return to this room.',
-        ),
+        content: const Text('You may need another invitation to rejoin.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

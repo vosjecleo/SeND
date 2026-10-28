@@ -2,12 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-class MarkupStroke {
-  MarkupStroke(this.color, this.width, this.points);
-  final int color;
-  final double width;
-  final List<Offset> points;
-}
+export '../models/markup_stroke.dart';
+import '../models/markup_stroke.dart';
 
 Rect cropForAspect(Rect crop, Size size, double ratio) {
   final normalized = ratio * size.height / size.width;
@@ -72,8 +68,8 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
   String _handle = 'move';
   Size _paintSize = Size.zero;
   Offset _point(Offset p) => Offset(
-    (p.dx / _paintSize.width).clamp(0, 1),
-    (p.dy / _paintSize.height).clamp(0, 1),
+    ((p.dx - 28) / _paintSize.width).clamp(0, 1),
+    ((p.dy - 28) / _paintSize.height).clamp(0, 1),
   );
   void _startDrag(DragStartDetails details) {
     final point = _point(details.localPosition);
@@ -90,16 +86,18 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
       'rb': widget.crop.bottomRight,
     };
     _handle = 'move';
+    var closest = 40.0;
     for (final entry in corners.entries) {
-      if ((Offset(
-                    entry.value.dx * _paintSize.width,
-                    entry.value.dy * _paintSize.height,
+      final distance =
+          (Offset(
+                    entry.value.dx * _paintSize.width + 28,
+                    entry.value.dy * _paintSize.height + 28,
                   ) -
                   details.localPosition)
-              .distance <
-          28) {
+              .distance;
+      if (distance < closest) {
+        closest = distance;
         _handle = entry.key;
-        break;
       }
     }
     if (_handle == 'move' && !widget.crop.contains(point)) _handle = 'new';
@@ -176,13 +174,16 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
       final fitted = applyBoxFit(
         BoxFit.contain,
         size,
-        Size(constraints.maxWidth, constraints.maxHeight),
+        Size(
+          math.max(1, constraints.maxWidth - 56),
+          math.max(1, constraints.maxHeight - 56),
+        ),
       ).destination;
       _paintSize = fitted;
       return Center(
         child: SizedBox(
-          width: fitted.width,
-          height: fitted.height,
+          width: fitted.width + 56,
+          height: fitted.height + 56,
           child: GestureDetector(
             dragStartBehavior: DragStartBehavior.down,
             key: const ValueKey('media-editor-canvas'),
@@ -195,20 +196,23 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
                     widget.brushWidth / fitted.shortestSide,
                   )
                 : null,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                RotatedBox(quarterTurns: widget.turns, child: widget.child),
-                IgnorePointer(
-                  child: CustomPaint(
-                    painter: _EditOverlay(
-                      widget.crop,
-                      widget.cropMode,
-                      widget.strokes,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  RotatedBox(quarterTurns: widget.turns, child: widget.child),
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _EditOverlay(
+                        widget.crop,
+                        widget.cropMode,
+                        widget.strokes,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -224,30 +228,7 @@ class _EditOverlay extends CustomPainter {
   final List<MarkupStroke> strokes;
   @override
   void paint(Canvas canvas, Size size) {
-    for (final stroke in strokes) {
-      final paint = Paint()
-        ..color = Color(stroke.color)
-        ..strokeWidth = stroke.width * size.shortestSide
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-      final points = stroke.points
-          .map((p) => Offset(p.dx * size.width, p.dy * size.height))
-          .toList();
-      if (points.length == 1) {
-        canvas.drawCircle(
-          points.first,
-          paint.strokeWidth / 2,
-          Paint()..color = paint.color,
-        );
-      } else if (points.isNotEmpty) {
-        final path = Path()..moveTo(points.first.dx, points.first.dy);
-        for (final p in points.skip(1)) {
-          path.lineTo(p.dx, p.dy);
-        }
-        canvas.drawPath(path, paint);
-      }
-    }
+    paintMarkupStrokes(canvas, size, strokes);
     final r = Rect.fromLTWH(
       crop.left * size.width,
       crop.top * size.height,
@@ -287,7 +268,7 @@ class _EditOverlay extends CustomPainter {
         );
       }
       for (final p in [r.topLeft, r.topRight, r.bottomLeft, r.bottomRight]) {
-        canvas.drawCircle(p, 6, Paint()..color = Colors.white);
+        canvas.drawCircle(p, 9, Paint()..color = Colors.white);
       }
     }
   }
@@ -304,49 +285,77 @@ class MediaCropTools extends StatelessWidget {
     required this.onRatio,
     required this.onRotate,
     required this.onReset,
-    required this.onExpand,
-    this.controller,
     super.key,
   });
   final bool locked;
-  final ExpansibleController? controller;
   final double? ratio;
-  final ValueChanged<bool> onLock, onExpand;
+  final ValueChanged<bool> onLock;
   final ValueChanged<double?> onRatio;
   final VoidCallback onRotate, onReset;
   @override
-  Widget build(BuildContext context) => ExpansionTile(
-    controller: controller,
-    title: const Text('Crop & rotate'),
-    onExpansionChanged: onExpand,
-    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
+        dense: true,
+        visualDensity: VisualDensity.compact,
         title: const Text('Lock aspect ratio'),
         value: locked,
         onChanged: onLock,
       ),
-      DropdownButtonFormField<double>(
-        key: ValueKey(ratio),
-        initialValue: ratio ?? 0,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Aspect ratio'),
-        items: [
-          const DropdownMenuItem(value: 0, child: Text('Original ratio')),
-          for (final entry in <double, String>{
-            1: 'Square, 1:1',
-            4 / 3: 'Landscape, 4:3',
-            3 / 4: 'Portrait, 3:4',
-            16 / 9: 'Wide, 16:9',
-            9 / 16: 'Tall, 9:16',
-            4 / 5: 'Portrait, 4:5',
-            5 / 4: 'Landscape, 5:4',
-          }.entries)
-            DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-        ],
-        onChanged: (v) => onRatio(v == 0 ? null : v),
-      ),
+      if (MediaQuery.sizeOf(context).width < 850)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DropdownButtonFormField<double>(
+            key: ValueKey(ratio),
+            initialValue: ratio ?? 0,
+            isExpanded: true,
+            isDense: true,
+            decoration: const InputDecoration(
+              labelText: 'Aspect ratio',
+              floatingLabelBehavior: FloatingLabelBehavior.always,
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            items: [
+              for (final entry in <double, String>{
+                0: 'Original',
+                1: '1:1',
+                4 / 3: '4:3',
+                3 / 4: '3:4',
+                16 / 9: '16:9',
+                9 / 16: '9:16',
+                4 / 5: '4:5',
+                5 / 4: '5:4',
+              }.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+            ],
+            onChanged: (value) => onRatio(value == 0 ? null : value),
+          ),
+        )
+      else
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final entry in <double, String>{
+              0: 'Original',
+              1: '1:1',
+              4 / 3: '4:3',
+              3 / 4: '3:4',
+              16 / 9: '16:9',
+              9 / 16: '9:16',
+              4 / 5: '4:5',
+              5 / 4: '5:4',
+            }.entries)
+              ChoiceChip(
+                label: Text(entry.value),
+                selected: (ratio ?? 0) == entry.key,
+                onSelected: (_) => onRatio(entry.key == 0 ? null : entry.key),
+              ),
+          ],
+        ),
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,

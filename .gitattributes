@@ -1,0 +1,5 @@
+# Copy-review data preserves exact source literals, including CRLF and trailing
+# spaces inside examples. Do not normalize or trim these reference documents.
+docs/*ui-copy*.csv -text whitespace=-blank-at-eol,-blank-at-eof
+docs/ui-copy-review.txt whitespace=-blank-at-eol
+docs/send-ui-copy-rewritten.txt whitespace=-blank-at-eol

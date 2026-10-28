@@ -51,10 +51,10 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining('administrator authentication'),
+        find.textContaining('administrator approval'),
         appImage ? findsNothing : findsOneWidget,
       );
-      expect(find.textContaining('save unsent drafts'), findsOneWidget);
+      expect(find.textContaining('save your drafts'), findsOneWidget);
       await tester.tap(find.text('Later'));
       await tester.pumpAndSettle();
       expect(find.text('SeND update available'), findsNothing);

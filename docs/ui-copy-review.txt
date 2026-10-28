@@ -1,0 +1,2645 @@
+SeND UI copy review, 2026-10-28
+450 candidates. No text has been approved for removal.
+Reply with COPY-... IDs and keep / shorten / remove, or fill the CSV review columns.
+Safety/privacy flags need particular care. Dynamic values are shown as source expressions.
+
+[COPY-B7F705140E] Safety/privacy warning
+Source: lib/ui/server_storage_settings.dart:97
+Remove ${storageSize(preview['bytes'] as num)} from your homeserver. These attachments will stop working for everyone who received them. This cannot be undone. Messages stay in chat history. Copies on other servers or devices may remain. This preview includes at most 100 files; profile images and protected assets are excluded.
+Decision:
+
+[COPY-D8E44DB51D] Error/status
+Source: lib/ui/server_storage_settings.dart:122
+Flags: Implementation/preview prose; Safety/privacy, review before removing
+Preview only: ${result['would_delete']} uploads would be deleted. Nothing was removed.
+Decision:
+
+[COPY-DA020AE69E] Heading
+Source: lib/ui/server_storage_settings.dart:142
+Flags: Repeated text (2 locations/groups)
+Server storage
+Decision:
+
+[COPY-2DECE08544] Explanatory text
+Source: lib/ui/server_storage_settings.dart:147
+Flags: Implementation/preview prose
+The displayed allowance is not enforced during this preview.
+Decision:
+
+[COPY-FA46A360F4] Explanatory text
+Source: lib/ui/server_storage_settings.dart:150
+Flags: Implementation/preview prose
+Deletion is a dry run. No uploads will be removed.
+Decision:
+
+[COPY-60A7CDCC36] Heading
+Source: lib/ui/server_storage_settings.dart:153
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Categorize encrypted uploads
+Decision:
+
+[COPY-BCA1AB370B] Safety/privacy warning
+Source: lib/ui/server_storage_settings.dart:155
+Flags: Safety/privacy, review before removing
+Share upload types and GIF sources with your homeserver. Message text, filenames and encryption keys are not sent.
+Decision:
+
+[COPY-05E521E910] Explanatory text
+Source: lib/ui/server_storage_settings.dart:185
+${storageSize(usage['used_bytes'] as num)} of ${storageSize(usage['quota_bytes'] as num)} used
+Decision:
+
+[COPY-FB1838B1E6] Safety/privacy warning
+Source: lib/ui/server_storage_settings.dart:250
+Flags: Implementation/preview prose; Safety/privacy, review before removing; Needs factual update for Legacy and the new categorization default if kept
+This is uploaded media, not your message database or local cache. Encrypted uploads without a type label appear under Other. Optional categorization shares media types and source labels with your homeserver, never message text or encryption keys.
+Decision:
+
+[COPY-B2FE9DF91A] Heading
+Source: lib/ui/server_storage_settings.dart:256
+Prune old uploads
+Decision:
+
+[COPY-FE945F0C78] Explanatory text
+Source: lib/ui/first_run_tour.dart:118
+SeND connects to Matrix on desktop and phone. You can chat with people using other Matrix clients. Some SeND preferences can sync between your devices.
+Decision:
+
+[COPY-49B0F389ED] Safety/privacy warning
+Source: lib/ui/first_run_tour.dart:126
+Flags: Safety/privacy, review before removing
+SeND asks your Matrix homeserver for link previews first. If you allow direct previews, linked websites can see your IP address and request details.
+Decision:
+
+[COPY-A44ACF425A] Safety/privacy warning
+Source: lib/ui/first_run_tour.dart:164
+Flags: Safety/privacy, review before removing
+On iPhone or iPad, open this site in Safari, choose Share, then Add to Home Screen. Open the installed SeND app and enable browser notifications in Settings > Notifications. Push requires iOS 16.4 or later and your permission. Android and desktop browsers can install it from their browser menu too.
+
+This browser stores your session and encryption keys. Keep your Matrix recovery key safe: clearing site data, private browsing, or storage eviction can remove the local session. Only one SeND tab may use this session at a time.
+Decision:
+
+[COPY-8C638DAB70] Explanatory text
+Source: lib/ui/first_run_tour.dart:178
+A text index makes repeat searches faster. It uses extra space on this device and is optional. Media indexing keeps event details only; it does not download all your media.
+Decision:
+
+[COPY-D67415E80E] Safety/privacy warning
+Source: lib/ui/first_run_tour.dart:187
+Flags: Safety/privacy, review before removing
+Choose how SeND receives messages when it is closed. Built-in delivery uses push.deltie.net. Messages are decrypted on your device; the push server receives room and event IDs, not message text or encryption keys.
+Decision:
+
+[COPY-01C75D0259] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:169
+Flags: Safety/privacy, review before removing
+Are you sure? Make sure you have your recovery key before logging out.
+Decision:
+
+[COPY-8BB8683B9F] Heading
+Source: lib/ui/settings_screen.dart:228
+Flags: Repeated text (4 locations/groups)
+Settings
+Decision:
+
+[COPY-9377B37621] Heading
+Source: lib/ui/settings_screen.dart:382
+Flags: Repeated text (2 locations/groups)
+Log out
+Decision:
+
+[COPY-2A49BCBB10] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:416
+Flags: Safety/privacy, review before removing
+Change account password
+Decision:
+
+[COPY-1659E737AC] Heading
+Source: lib/ui/settings_screen.dart:419
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Encryption & recovery
+Decision:
+
+[COPY-B3BC9FFBC4] Heading
+Source: lib/ui/settings_screen.dart:420
+Flags: Repeated text (2 locations/groups)
+Status
+Decision:
+
+[COPY-912E3E8CD4] Heading
+Source: lib/ui/settings_screen.dart:423
+Flags: Repeated text (2 locations/groups)
+Enabled
+Decision:
+
+[COPY-AC920A0F40] Heading
+Source: lib/ui/settings_screen.dart:427
+Flags: Repeated text (2 locations/groups)
+Verified
+Decision:
+
+[COPY-96E9D23864] Heading
+Source: lib/ui/settings_screen.dart:443
+Flags: Repeated text (3 locations/groups)
+Microphone
+Decision:
+
+[COPY-481A19DEF4] Heading
+Source: lib/ui/settings_screen.dart:449, 474, 490
+Flags: Repeated text (2 locations/groups)
+System default
+Decision:
+
+[COPY-373A5386DE] Heading
+Source: lib/ui/settings_screen.dart:486
+Flags: Repeated text (4 locations/groups)
+Camera
+Decision:
+
+[COPY-13AF47B67B] Explanatory text
+Source: lib/ui/settings_screen.dart:499
+Microphone volume — ${(backend.preferences.microphoneVolume * 100).round()}%
+Decision:
+
+[COPY-D2A764C958] Heading
+Source: lib/ui/settings_screen.dart:605
+Flags: Repeated text (2 locations/groups)
+Echo cancellation
+Decision:
+
+[COPY-1E2D3B3561] Explanatory text
+Source: lib/ui/settings_screen.dart:661
+Flags: Safety/privacy, review before removing
+Local H.264/AAC compression: desktop up to 1080p, Android up to 1280 px, 30 fps and 24 MiB. Desktop requires FFmpeg. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.
+Decision:
+
+[COPY-50E57108EE] Explanatory text
+Source: lib/ui/settings_screen.dart:671
+Screen selection uses the standard desktop portal on Linux/Wayland.
+Decision:
+
+[COPY-802C07696A] Heading
+Source: lib/ui/settings_screen.dart:675
+Flags: Repeated text (2 locations/groups)
+Notifications
+Decision:
+
+[COPY-8AB8227B8D] Heading
+Source: lib/ui/settings_screen.dart:678
+Flags: Repeated text (4 locations/groups)
+Settings
+Decision:
+
+[COPY-28C445DBDD] Heading
+Source: lib/ui/settings_screen.dart:679
+Flags: Repeated text (2 locations/groups)
+Diagnostics
+Decision:
+
+[COPY-DA590865EB] Explanatory text
+Source: lib/ui/settings_screen.dart:711
+On iPhone/iPad, add SeND to your Home Screen from Safari, open that installed app, then enable notifications here (iOS 16.4 or later). Web alerts are generic unless device-side previews are enabled below.
+Decision:
+
+[COPY-CDCDB76CBA] Explanatory text
+Source: lib/ui/settings_screen.dart:733
+Flags: Safety/privacy, review before removing
+Could not enable notifications. Check permission and Home Screen installation, then try again.
+Decision:
+
+[COPY-1AE81FD588] Explanatory text
+Source: lib/ui/settings_screen.dart:750
+Could not read browser setup. Reload the app and try again.
+Decision:
+
+[COPY-31DDF627EE] Heading
+Source: lib/ui/settings_screen.dart:761
+Flags: Repeated text (18 locations/groups)
+Close
+Decision:
+
+[COPY-BE3414E27A] Explanatory text
+Source: lib/ui/settings_screen.dart:773
+Flags: Safety/privacy, review before removing
+Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.
+Decision:
+
+[COPY-1DF33FDCB2] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:814
+Flags: Safety/privacy, review before removing
+Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.
+Decision:
+
+[COPY-4C19608D16] Explanatory text
+Source: lib/ui/settings_screen.dart:825
+Could not save browser preview settings. Please try again.
+Decision:
+
+[COPY-95580E8D2A] Explanatory text
+Source: lib/ui/settings_screen.dart:894
+Notification volume: ${(backend.preferences.notificationVolume * 100).round()}%
+Decision:
+
+[COPY-1C774C187E] Heading
+Source: lib/ui/settings_screen.dart:906
+Background notifications
+Decision:
+
+[COPY-0732A3FEB6] Explanatory text
+Source: lib/ui/settings_screen.dart:962
+The private push endpoint is stored by Android and is never shown or written to logs. Notification content is fetched from Matrix.
+Decision:
+
+[COPY-115750C288] Heading
+Source: lib/ui/settings_screen.dart:971
+Flags: Repeated text (2 locations/groups)
+Server storage
+Decision:
+
+[COPY-246F326D79] Explanatory text
+Source: lib/ui/settings_screen.dart:980
+Favourites, frequently used emoji, stickers and GIFs, pinned chats and space folders sync with your Matrix account. They contain media references, not media files. Account data is visible to your homeserver.
+Decision:
+
+[COPY-00A8436A0B] Explanatory text
+Source: lib/ui/settings_screen.dart:989
+Older favourites were saved for this device, not a particular account. Import them into your current account?
+Decision:
+
+[COPY-A7FCB20A7F] Heading
+Source: lib/ui/settings_screen.dart:994
+Flags: Repeated text (57 locations/groups)
+Cancel
+Decision:
+
+[COPY-4EF9BB34C5] Heading
+Source: lib/ui/settings_screen.dart:998
+Flags: Repeated text (2 locations/groups)
+Import
+Decision:
+
+[COPY-8E4C36CA58] Heading
+Source: lib/ui/settings_screen.dart:1022
+Flags: Repeated text (2 locations/groups)
+Chats and spaces
+Decision:
+
+[COPY-83F3CBCD89] Explanatory text
+Source: lib/ui/settings_screen.dart:1025
+Flags: Safety/privacy, review before removing
+Encrypted session data, room keys, thumbnails, and timeline caches are stored in SeND’s private per-user application-data directory.
+Decision:
+
+[COPY-8F4A49BBFB] Explanatory text
+Source: lib/ui/settings_screen.dart:1031
+Flags: Safety/privacy, review before removing
+This includes the encrypted Matrix database and locally cached media. Clearing media cache does not remove room keys or your signed-in session.
+Decision:
+
+[COPY-BCEF9A4E93] Explanatory text
+Source: lib/ui/settings_screen.dart:1074
+Flags: Safety/privacy, review before removing
+Could not add the launcher. Check the AppImage location and permissions.
+Decision:
+
+[COPY-E1E85B49F7] Explanatory text
+Source: lib/ui/settings_screen.dart:1083
+SeND v${deltiecordVersion}+${deltiecordBuildNumber}
+SeND is a recursive acronym: SeND is Not Discord.
+A compact, old-school ${defaultTargetPlatform == TargetPlatform.android ? 'mobile' : 'desktop'} Matrix client built with Flutter.
+Decision:
+
+[COPY-80542DF559] Heading
+Source: lib/ui/settings_screen.dart:1088
+Flags: Repeated text (2 locations/groups)
+Diagnostics
+Decision:
+
+[COPY-4E6F001BA1] Heading
+Source: lib/ui/settings_screen.dart:1091
+Flags: Repeated text (4 locations/groups)
+Voice
+Decision:
+
+[COPY-C4D56E787E] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:1111
+Flags: Safety/privacy, review before removing
+Diagnostics exclude access tokens, recovery material, decrypted messages, and media encryption keys.
+Decision:
+
+[COPY-1BFB923E4F] Explanatory text
+Source: lib/ui/settings_screen.dart:1144
+Flags: Safety/privacy, review before removing
+Matrix connectivity and encryption use matrix-dart-sdk. MatrixRTC, media_kit, Flutter WebRTC, Flutter Quill, KLIPY, Element, and FluffyChat informed or support parts of the implementation.
+Decision:
+
+[COPY-6D67A25F2C] Explanatory text
+Source: lib/ui/settings_screen.dart:1150
+Full acknowledgements and upstream license links are in CREDITS.md.
+Decision:
+
+[COPY-E34E95261A] Explanatory text
+Source: lib/ui/settings_screen.dart:1154
+Made for dense desktops, strange little computers, and friends.
+Decision:
+
+[COPY-723F3DEB10] Heading
+Source: lib/ui/settings_screen.dart:1172
+Configurable shortcuts
+Decision:
+
+[COPY-1F49BA19E5] Heading
+Source: lib/ui/settings_screen.dart:1205
+Fixed shortcuts
+Decision:
+
+[COPY-468F3035FD] Heading
+Source: lib/ui/settings_screen.dart:1219
+Flags: Repeated text (2 locations/groups)
+Account
+Decision:
+
+[COPY-ABD313C758] Heading
+Source: lib/ui/settings_screen.dart:1251
+Flags: Repeated text (3 locations/groups)
+Homeserver
+Decision:
+
+[COPY-2FC9BB3473] Explanatory text
+Source: lib/ui/settings_screen.dart:1259
+Permanently deactivate this Matrix account and request data erasure.
+Decision:
+
+[COPY-C9AE8B0D05] Explanatory text
+Source: lib/ui/settings_screen.dart:1276
+Theme, accent, sizing and accessibility appearance follow your Matrix account.
+Decision:
+
+[COPY-C66766D734] Explanatory text
+Source: lib/ui/settings_screen.dart:1300
+Could not apply the theme. Settings may still be synchronizing; please try again.
+Decision:
+
+[COPY-5E7A25BDB9] Explanatory text
+Source: lib/ui/settings_screen.dart:1323
+Scales panels, controls, icons, media, and text together. Text-only scaling is under Accessibility.
+Decision:
+
+[COPY-6270534869] Explanatory text
+Source: lib/ui/settings_screen.dart:1364
+Flags: Safety/privacy, review before removing
+Off by default to prevent accidental room and category moves. Permission checks still apply.
+Decision:
+
+[COPY-8E6D5805F9] Heading
+Source: lib/ui/settings_screen.dart:1393
+Flags: Repeated text (2 locations/groups)
+Accent colour
+Decision:
+
+[COPY-D774B6C4BD] Explanatory text
+Source: lib/ui/settings_screen.dart:1409
+Show GTK window decorations on Linux. Applies after restart.
+Decision:
+
+[COPY-2F448656D9] Explanatory text
+Source: lib/ui/settings_screen.dart:1438
+Choose which appearance should become the synced account setting.
+Decision:
+
+[COPY-CCD017547A] Heading
+Source: lib/ui/settings_screen.dart:1468
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Categorize encrypted uploads
+Decision:
+
+[COPY-775306B289] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:1470
+Flags: Safety/privacy, review before removing
+Share upload types and GIF sources with your homeserver for storage management. Off by default. Message text, filenames and encryption keys are not sent.
+Decision:
+
+[COPY-BC07C2E9D2] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:1486
+Flags: Safety/privacy, review before removing
+Direct previews contact websites from your device and may expose your IP address and browsing metadata. Matrix homeserver previews are always attempted first.
+Decision:
+
+[COPY-B83FE18D70] Heading
+Source: lib/ui/settings_screen.dart:1497
+Flags: Repeated text (2 locations/groups)
+Known providers only
+Decision:
+
+[COPY-9735F78E0D] Heading
+Source: lib/ui/settings_screen.dart:1501
+Flags: Repeated text (2 locations/groups)
+All public websites
+Decision:
+
+[COPY-885F91902D] Explanatory text
+Source: lib/ui/settings_screen.dart:1531
+Show per-message receipts up to ${preferences.readReceiptMemberThreshold} members
+Decision:
+
+[COPY-0B4D34090D] Explanatory text
+Source: lib/ui/settings_screen.dart:1568
+Away after 10 minutes without keyboard or mouse activity anywhere on your PC. Browsers and unsupported desktop sessions use activity in SeND instead.
+Decision:
+
+[COPY-89617C3B9F] Explanatory text
+Source: lib/ui/settings_screen.dart:1576
+Uses FxTwitter for previews and rewrites newly sent X/Twitter links. Disable this to preserve the original host.
+Decision:
+
+[COPY-636AD6A74A] Heading
+Source: lib/ui/settings_screen.dart:1585
+Blocked users
+Decision:
+
+[COPY-73546EC6BA] Heading
+Source: lib/ui/settings_screen.dart:1597
+Flags: Repeated text (2 locations/groups)
+Unblock
+Decision:
+
+[COPY-22BA9D2A97] Explanatory text
+Source: lib/ui/settings_screen.dart:1638
+The distributor has not returned an endpoint yet. Check its account and connection, then refresh registration.
+Decision:
+
+[COPY-DC7FA44C5A] Heading
+Source: lib/ui/settings_screen.dart:1685
+Flags: Repeated text (2 locations/groups)
+Verified
+Decision:
+
+[COPY-6072158F73] Explanatory text
+Source: lib/ui/settings_screen.dart:1714
+Flags: Safety/privacy, review before removing
+Verification uses Matrix SAS. Signing out a device does not delete local data until that device next connects.
+Decision:
+
+[COPY-0D87E70167] Explanatory text
+Source: lib/ui/settings_screen.dart:1734
+Changes text size without enlarging the rest of the UI.
+Decision:
+
+[COPY-09076592AF] Explanatory text
+Source: lib/ui/settings_screen.dart:1750
+Off by default. Desktop hover still animates avatars unless Reduce motion is on.
+Decision:
+
+[COPY-22D21A7CF3] Explanatory text
+Source: lib/ui/settings_screen.dart:1761
+Snap UI transitions instantly and pause automatic GIF playback.
+Decision:
+
+[COPY-F90B9DB000] Explanatory text
+Source: lib/ui/settings_screen.dart:1779
+All primary workflows remain keyboard reachable and use visible focus indicators. SeND does not communicate status by colour alone.
+Decision:
+
+[COPY-934A323E09] Explanatory text
+Source: lib/ui/settings_screen.dart:1819
+Flags: Safety/privacy, review before removing; Visibility needs checking
+This signs that device out and removes its Matrix device keys. Encrypted history stored only on that device may become unavailable.
+Decision:
+
+[COPY-53B759366B] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:1830
+Flags: Visibility needs checking
+This deactivates ${backend.userId}, signs out all devices, and requests server-side data erasure. This cannot be undone.
+Decision:
+
+[COPY-06C4E395AC] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2039
+Flags: Safety/privacy, review before removing
+Password changed.
+Decision:
+
+[COPY-21772B6021] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2056
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Change password
+Decision:
+
+[COPY-6B5FA3D481] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2063
+Flags: Safety/privacy, review before removing
+Current password
+Decision:
+
+[COPY-F3476FC48A] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2064
+Flags: Safety/privacy, review before removing
+New password
+Decision:
+
+[COPY-79526860EF] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2065
+Flags: Safety/privacy, review before removing
+Confirm new password
+Decision:
+
+[COPY-927912894C] Explanatory text
+Source: lib/ui/settings_screen.dart:2080
+Other sessions may be signed out by your homeserver.
+Decision:
+
+[COPY-672BA29404] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2098
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Change password
+Decision:
+
+[COPY-C77FF0D8F3] Safety/privacy warning
+Source: lib/ui/settings_screen.dart:2144
+Flags: Safety/privacy, review before removing
+Matrix account password
+Decision:
+
+[COPY-C7F6272631] Safety/privacy warning
+Source: lib/ui/space_settings_screen.dart:19
+Flags: Safety/privacy, review before removing
+Choose the default for channels created in this server. Encrypted messages can only be read by participants with the keys. Without encryption, homeserver operators can read messages. Existing encrypted rooms cannot be made unencrypted.
+Decision:
+
+[COPY-1BD8B377B6] Heading
+Source: lib/ui/space_settings_screen.dart:259
+Flags: Repeated text (3 locations/groups)
+Space settings
+Decision:
+
+[COPY-E64C7DB7BF] Heading
+Source: lib/ui/space_settings_screen.dart:336
+Flags: Repeated text (4 locations/groups)
+Choose picture
+Decision:
+
+[COPY-620C08C93B] Heading
+Source: lib/ui/space_settings_screen.dart:341
+Flags: Repeated text (2 locations/groups)
+Name
+Decision:
+
+[COPY-F0116A9AB1] Explanatory text
+Source: lib/ui/space_settings_screen.dart:352
+${backend.rooms.where((room) => !room.isVoice).length} text rooms  •  ${backend.rooms.where((room) => room.isVoice).length} voice rooms  •  ${backend.selectedSpaceCategories.length} categories
+Decision:
+
+[COPY-257BFAC955] Heading
+Source: lib/ui/space_settings_screen.dart:365
+Flags: Repeated text (2 locations/groups)
+Copy Space link
+Decision:
+
+[COPY-539E277FE9] Heading
+Source: lib/ui/space_settings_screen.dart:371
+Flags: Repeated text (5 locations/groups)
+Mute Space
+Decision:
+
+[COPY-19E5ECBCC3] Heading
+Source: lib/ui/space_settings_screen.dart:382
+Flags: Repeated text (4 locations/groups)
+Save changes
+Decision:
+
+[COPY-B523E4D0CA] Explanatory text
+Source: lib/ui/space_settings_screen.dart:397
+This uses the same interoperable Space order as the normal channel panel. ${canManage ? 'Drag the grips to move channels or categories. ' : ''}Arrow buttons remain available for keyboard and touch users.
+Decision:
+
+[COPY-48D6C85289] Explanatory text
+Source: lib/ui/space_settings_screen.dart:398
+Drag the grips to move channels or categories. 
+Decision:
+
+[COPY-0802E16DAC] Heading
+Source: lib/ui/space_settings_screen.dart:403
+Flags: Repeated text (2 locations/groups)
+Uncategorised
+Decision:
+
+[COPY-81E46F3DBF] Heading
+Source: lib/ui/space_settings_screen.dart:409
+Flags: Repeated text (2 locations/groups)
+Uncategorised
+Decision:
+
+[COPY-5E619BD247] Heading
+Source: lib/ui/space_settings_screen.dart:639
+Flags: Repeated text (2 locations/groups)
+Server profile
+Decision:
+
+[COPY-77293D5549] Heading
+Source: lib/ui/space_settings_screen.dart:659
+Flags: Repeated text (2 locations/groups)
+Reset every field to general profile
+Decision:
+
+[COPY-AFD2B54598] Safety/privacy warning
+Source: lib/ui/history_download_panel.dart:50
+Flags: Safety/privacy, review before removing
+Fetch all accessible message events for ${selected.length} ${selected.length == 1 ? 'chat' : 'chats'}. Photos, videos and other attachment files will not be downloaded. ${widget.index.encryptedAtRest ? '' : 'The search database stores decrypted text without separate encryption. '}Large histories can use a lot of data; use Wi-Fi if needed. The download pauses at your search-cache limit. Progress stays on this device, and no messages are marked read. On mobile, leaving SeND pauses the download. You can resume in Storage settings.
+Decision:
+
+[COPY-6F9FCE796C] Safety/privacy warning
+Source: lib/ui/history_download_panel.dart:52
+Flags: Safety/privacy, review before removing
+The search database stores decrypted text without separate encryption. 
+Decision:
+
+[COPY-CBF417E439] Explanatory text
+Source: lib/ui/history_download_panel.dart:106
+Raise the limit from ${widget.index.limitMiB} MiB to ${next} MiB and resume the saved download.
+Decision:
+
+[COPY-6E54140471] Heading
+Source: lib/ui/history_download_panel.dart:156
+Download history for search
+Decision:
+
+[COPY-AD61E53111] Safety/privacy warning
+Source: lib/ui/history_download_panel.dart:161
+Flags: Safety/privacy, review before removing
+Download message text and media references without fetching the attachment files. Search results stay available locally. Missing encryption keys can leave gaps.
+Decision:
+
+[COPY-C6FA4836D9] Safety/privacy warning
+Source: lib/ui/history_download_panel.dart:167
+Flags: Safety/privacy, review before removing
+The local search database stores decrypted text without separate encryption.
+Decision:
+
+[COPY-AC35A8DE72] Explanatory text
+Source: lib/ui/history_download_panel.dart:207
+${job.completedRooms}/${job.totalRooms} chats complete · ${job.checked} events processed
+Decision:
+
+[COPY-A5063AAAF7] Explanatory text
+Source: lib/ui/history_download_panel.dart:215
+Older downloads only stored a count. Failures without saved references: ${job.untrackedUnavailable}. Run a new history download to collect those references.
+Decision:
+
+[COPY-F84D4E9D51] Explanatory text
+Source: lib/ui/history_index_settings.dart:30
+Flags: Implementation/preview prose; Safety/privacy, review before removing
+A text index makes repeat searches faster and uses extra storage on this device. It starts with a 100 MiB limit. You can change the limit or clear it in Storage settings. Media indexing saves event references, not the images or videos. Indexed message text is decrypted on this device. This is separate from the normal chat cache. ${index.encryptedAtRest ? '' : 'The search database is not separately encrypted.'}
+Decision:
+
+[COPY-E951641FC9] Explanatory text
+Source: lib/ui/history_index_settings.dart:151
+This applies to history downloads and incoming messages. Search entries outside the chosen scope will be removed from this device, and saved download progress will reset. Your messages and uploaded media stay intact.
+Decision:
+
+[COPY-EE970948B5] Explanatory text
+Source: lib/ui/history_index_settings.dart:197
+Off by default. Turning it off removes indexed message text. Your chat history stays intact.
+Decision:
+
+[COPY-3838F35133] Explanatory text
+Source: lib/ui/history_index_settings.dart:203
+Media indexing stores event IDs and media types. It does not download image, video or audio files.
+Decision:
+
+[COPY-903C78F012] Explanatory text
+Source: lib/ui/history_index_settings.dart:225
+${index.entries} indexed events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ' database size'}
+Decision:
+
+[COPY-ED04C8CF33] Explanatory text
+Source: lib/ui/history_index_settings.dart:228
+Quota use: ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}%, including reserved overhead. Up to ${index.entryLimit} events, subject to space.
+Decision:
+
+[COPY-0E173238BE] Explanatory text
+Source: lib/ui/history_index_settings.dart:334
+Flags: Safety/privacy, review before removing
+The search cache has reached 80% of its ${index.limitMiB} MiB budget. SeND will prune search context from the oldest messages onward as space is needed. Your messages and media on the homeserver will not be deleted.
+Decision:
+
+[COPY-71C24125E9] Explanatory text
+Source: lib/ui/update_dialog.dart:52
+Finish recordings and uploads before reloading. Unsent drafts may be lost.
+Decision:
+
+[COPY-69A54C8800] Explanatory text
+Source: lib/ui/update_dialog.dart:58
+Finish recordings and uploads first. SeND will download and verify the installer, then open Windows setup. Setup may ask you to close SeND; it keeps your account data.
+Decision:
+
+[COPY-30289429B4] Explanatory text
+Source: lib/ui/update_dialog.dart:66
+Download and verify the update, then restart when ready. SeND keeps one previous AppImage for rollback. Finish calls, recordings and uploads, and save unsent drafts before restarting.
+Decision:
+
+[COPY-EFAA851560] Explanatory text
+Source: lib/ui/update_dialog.dart:67
+Flags: Safety/privacy, review before removing
+SeND will download and verify the package. Your desktop will ask for administrator authentication. The package manager may download dependencies outside your SOCKS proxy. Finish calls, recordings and uploads, and save unsent drafts before restarting.
+Decision:
+
+[COPY-F91F95B8BE] Heading
+Source: lib/ui/accent_color_picker.dart:63
+Flags: Repeated text (2 locations/groups)
+Accent colour
+Decision:
+
+[COPY-E0928C2D35] Explanatory text
+Source: lib/ui/accent_color_picker.dart:262
+Drag around the wheel for hue and saturation, or enter an exact six-digit hex value.
+Decision:
+
+[COPY-47BCB2B3F9] Explanatory text
+Source: lib/ui/activity_settings.dart:27
+Could not save activity preferences to this device’s secure storage.
+Decision:
+
+[COPY-AD68F21A58] Explanatory text
+Source: lib/ui/activity_settings.dart:64
+This rule stays on this device. The executable path is never published.
+Decision:
+
+[COPY-397D611C23] Heading
+Source: lib/ui/activity_settings.dart:122
+Flags: Repeated text (2 locations/groups)
+Link Libre.fm
+Decision:
+
+[COPY-BE3F97BF73] Explanatory text
+Source: lib/ui/activity_settings.dart:127
+Enter your Libre.fm username. SeND reads your public listening history without logging in or submitting scrobbles. Account ownership is not verified.
+Decision:
+
+[COPY-5397216A9C] Heading
+Source: lib/ui/activity_settings.dart:188
+Activity sharing
+Decision:
+
+[COPY-7D33B90903] Explanatory text
+Source: lib/ui/activity_settings.dart:192
+Flags: Safety/privacy, review before removing
+Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.
+Decision:
+
+[COPY-1030484729] Explanatory text
+Source: lib/ui/activity_settings.dart:195
+Your profile combines game/program activity, music and listening history from your devices. Linked services refresh while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.
+Decision:
+
+[COPY-80270C881D] Explanatory text
+Source: lib/ui/activity_settings.dart:218
+Share the last completed track and album, with artwork when available. It stays visible while offline. Turning this off removes this device’s contribution, not tracks shared by other devices.
+Decision:
+
+[COPY-87B16F0CDE] Explanatory text
+Source: lib/ui/activity_settings.dart:230
+Uses MusicBrainz and Cover Art Archive. Sends artist and album names, not your username.
+Decision:
+
+[COPY-485B8DAAB7] Explanatory text
+Source: lib/ui/activity_settings.dart:269
+Available on Linux and Windows. Close Discord to free its IPC connection. SeND recovers abandoned Linux sockets but never replaces active listeners. It does not use join secrets or access your Discord account.
+Decision:
+
+[COPY-CC0E1B5701] Explanatory text
+Source: lib/ui/activity_settings.dart:283
+No matching program yet. Scanning every 5 seconds. Add an executable below to classify it manually.
+Decision:
+
+[COPY-FB268E69C1] Explanatory text
+Source: lib/ui/activity_settings.dart:301
+${settings.rules[item.id]?.kind.name ?? item.kind?.name ?? "Unclassified — not shared"}${item.running ? "" : " · not running"}
+Decision:
+
+[COPY-C724A8F36B] Explanatory text
+Source: lib/ui/activity_widgets.dart:250
+${elapsed.inHours.toString().padLeft(2, '0')}:${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}
+Decision:
+
+[COPY-2BDA0F44D0] Explanatory text
+Source: lib/ui/activity_widgets.dart:438
+${track.name}
+${track.artist}
+${track.album}
+Decision:
+
+[COPY-BA4D9274D2] Explanatory text
+Source: lib/ui/activity_widgets.dart:594
+${playback.playing ? 'Song progress' : 'Song paused'}: ${activityClock(position)} of ${activityClock(playback.durationMs)}
+Decision:
+
+[COPY-F711450368] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:87
+Flags: Repeated text (6 locations/groups)
+Mute
+Decision:
+
+[COPY-0D15461785] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:340
+${sticker.name}
+Hold to ${favourite ? 'unfavourite' : 'favourite'}
+Decision:
+
+[COPY-963C31F5EB] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:635
+This message does not expose an accessible Matrix image pack. The media can still be viewed in the timeline.
+Decision:
+
+[COPY-346D301722] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:668
+Flags: Repeated text (3 locations/groups)
+${pack.stickers.length} items
+Decision:
+
+[COPY-CBC06D2007] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:726
+Could not update this pack. Check your connection and try again.
+Decision:
+
+[COPY-8720767766] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:870
+Flags: Safety/privacy, review before removing
+Personal packs use the Matrix image-pack format and work in compatible clients such as FluffyChat. Pack media is uploaded to your homeserver and is not room end-to-end encrypted.
+Decision:
+
+[COPY-28AAE2EF92] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:883
+Up to 150 PNG, JPEG, GIF or WebP files
+Decision:
+
+[COPY-C5C0AAFBEE] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:895
+Up to 150 images, 128×128 and 256 KiB each
+Decision:
+
+[COPY-315EA746E3] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:901
+Flags: Repeated text (2 locations/groups)
+Edit sticker or emoji pack
+Decision:
+
+[COPY-1B46EEB1EE] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:913
+Move a pack to a server so members can add it
+Decision:
+
+[COPY-38CB997D1E] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:987
+Server sticker pack published. Members can add it and receive future pack updates.
+Decision:
+
+[COPY-335BC52BDA] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1072
+Flags: Repeated text (2 locations/groups)
+Pack name
+Decision:
+
+[COPY-DB664217FE] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1113
+Flags: Repeated text (2 locations/groups)
+Edit sticker or emoji pack
+Decision:
+
+[COPY-A33BF22A89] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1123
+Flags: Repeated text (3 locations/groups)
+${pack.stickers.length} items
+Decision:
+
+[COPY-92D1C9EC11] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1259
+Set the :alias: used in messages, search and autocomplete.
+Decision:
+
+[COPY-57E5A578F7] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1411
+Images larger than 128×128 will keep their aspect ratio, fit inside a centred 128×128 canvas, and never be stretched.
+Decision:
+
+[COPY-94BF799626] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1414
+These images already meet the 128×128 limit. You can keep their original canvas or trim transparent padding.
+Decision:
+
+[COPY-AC44EE5D03] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1461
+Flags: Repeated text (2 locations/groups)
+Trim transparent padding
+Decision:
+
+[COPY-5E08340AA5] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1463
+Optional. Enlarges visible artwork without stretching. Animation uses one shared crop across all frames to avoid jumping.
+Decision:
+
+[COPY-426D64A9DD] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1475
+Edited animations stay animated and are encoded as GIF. Images that exceed safe processing limits fail without being flattened.
+Decision:
+
+[COPY-C83FFA67FB] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1515
+Private to this account and available in every conversation
+Decision:
+
+[COPY-0714C6CEFB] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1524
+Publish to this server; members can add it and updates sync
+Decision:
+
+[COPY-DC285063A9] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1553
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Delete pack
+Decision:
+
+[COPY-DE81F8D47C] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:1608
+Flags: Repeated text (2 locations/groups)
+Publish to server
+Decision:
+
+[COPY-C9DAF06F0C] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1610
+The server copy becomes canonical. Members can add it, and future owner edits update their copy automatically.
+Decision:
+
+[COPY-DA91CC9819] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1648
+Existing messages keep their fallback emoji names, but the media will no longer be offered by this pack.
+Decision:
+
+[COPY-09D41C231D] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1762
+Imported ${selected.length} ${assetType == StickerAssetType.emoji ? 'emoji' : 'stickers'} from ${pack.title}.
+Decision:
+
+[COPY-B91895C419] Explanatory text
+Source: lib/ui/advanced_chat_dialogs.dart:1855
+${selected.length} of ${pack.stickers.length} selected${pack.unsupportedCount == 0 ? '' : ' · ${pack.unsupportedCount} animated/video skipped'}
+Decision:
+
+[COPY-6B859F970F] Heading
+Source: lib/ui/advanced_chat_dialogs.dart:2059
+Flags: Repeated text (2 locations/groups)
+Create poll
+Decision:
+
+[COPY-60BCF29C2C] Heading
+Source: lib/ui/advanced_chat_views.dart:105
+Flags: Repeated text (4 locations/groups)
+Pinned messages
+Decision:
+
+[COPY-201388C21D] Heading
+Source: lib/ui/advanced_chat_views.dart:155
+Flags: Repeated text (5 locations/groups)
+Inbox
+Decision:
+
+[COPY-4377F65A12] Explanatory text
+Source: lib/ui/android_notification_setup.dart:180
+No extra app needed. SeND keeps a quiet notification while listening for messages. Allow background battery use for reliable delivery. This may use more battery. Force-stopping SeND stops alerts until you reopen it.
+Decision:
+
+[COPY-E871DC132C] Explanatory text
+Source: lib/ui/android_notification_setup.dart:184
+Use ntfy or Sunup if you already have one installed. Allow it to run in the background. Sunup uses Deltie’s gateway to forward room and event IDs to Mozilla, not message text. ntfy uses its own server’s gateway.
+Decision:
+
+[COPY-4D1C2FF640] Explanatory text
+Source: lib/ui/android_notification_setup.dart:188
+You may miss messages while SeND is closed. You can change this in Settings > Notifications.
+Decision:
+
+[COPY-4E40A59890] Safety/privacy warning
+Source: lib/ui/browser_login_dialog.dart:101
+Flags: Safety/privacy, review before removing
+Use the sign-in methods offered by your homeserver. You will still need to verify this device or recover your encryption keys afterwards.
+Decision:
+
+[COPY-A84189F6F9] Safety/privacy warning
+Source: lib/ui/browser_login_dialog.dart:127
+Flags: Safety/privacy, review before removing
+This server currently offers password sign-in only. Use the main sign-in form.
+Decision:
+
+[COPY-17C4E937AF] Explanatory text
+Source: lib/ui/browser_login_dialog.dart:128
+This server does not advertise a supported interactive sign-in method.
+Decision:
+
+[COPY-9CA3B500C3] Heading
+Source: lib/ui/chat_navigation.dart:14
+Flags: Repeated text (4 locations/groups)
+Create Space
+Decision:
+
+[COPY-16B78E75ED] Explanatory text
+Source: lib/ui/chat_navigation.dart:208
+${textRoomCount} text rooms  •  ${voiceRoomCount} voice rooms  •  ${categoryCount} categories
+Decision:
+
+[COPY-8A478A74B6] Heading
+Source: lib/ui/chat_navigation.dart:233
+Flags: Repeated text (5 locations/groups)
+Mute Space
+Decision:
+
+[COPY-7B2E78EFBA] Explanatory text
+Source: lib/ui/chat_navigation.dart:260
+Flags: Safety/privacy, review before removing
+Controls who may reorder rooms and manage SeND categories. The permission is synced through Matrix room power levels.
+Decision:
+
+[COPY-CBEF969B14] Heading
+Source: lib/ui/chat_navigation.dart:360
+Flags: Repeated text (2 locations/groups)
+Leave ${space.name}?
+Decision:
+
+[COPY-13E980208B] Explanatory text
+Source: lib/ui/chat_navigation.dart:362
+You will also leave all joined channels and nested servers, including channels shared with other servers. You may need new invitations to rejoin.
+Decision:
+
+[COPY-3262FCADEB] Heading
+Source: lib/ui/chat_navigation.dart:395
+Flags: Repeated text (5 locations/groups)
+Mute Space
+Decision:
+
+[COPY-3D0F2DC1FC] Heading
+Source: lib/ui/chat_navigation.dart:687
+Flags: Repeated text (2 locations/groups)
+Search for Spaces
+Decision:
+
+[COPY-F9DDBF6636] Explanatory text
+Source: lib/ui/chat_navigation.dart:715
+No published Spaces found. Try #alias:server or a Matrix server name; unpublished Spaces cannot be discovered through Matrix directories.
+Decision:
+
+[COPY-037173F0C9] Heading
+Source: lib/ui/chat_navigation.dart:942
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+End-to-end encryption
+Decision:
+
+[COPY-C55E1D1236] Heading
+Source: lib/ui/chat_navigation.dart:1125
+Flags: Repeated text (2 locations/groups)
+Start direct message
+Decision:
+
+[COPY-ABE3B4C2AB] Heading
+Source: lib/ui/chat_navigation.dart:1138
+Flags: Repeated text (4 locations/groups)
+Create room
+Decision:
+
+[COPY-DFE7240F68] Heading
+Source: lib/ui/chat_navigation.dart:1154
+Flags: Repeated text (3 locations/groups)
+Create category
+Decision:
+
+[COPY-93152DEE3D] Heading
+Source: lib/ui/chat_navigation.dart:1448
+Flags: Repeated text (2 locations/groups)
+Start direct message
+Decision:
+
+[COPY-C0FEB36031] Heading
+Source: lib/ui/chat_navigation.dart:1844
+Flags: Repeated text (3 locations/groups)
+Create category
+Decision:
+
+[COPY-F50F30E524] Explanatory text
+Source: lib/ui/chat_navigation.dart:2043
+You may need another invitation to return to this room.
+Decision:
+
+[COPY-DD7E9C48CE] Explanatory text
+Source: lib/ui/conversation_view.dart:380
+This removes the message for everyone in the room.
+Decision:
+
+[COPY-DAD3B8A4AB] Heading
+Source: lib/ui/conversation_view.dart:424
+Flags: Repeated text (4 locations/groups)
+Pinned messages
+Decision:
+
+[COPY-6309BD20D7] Heading
+Source: lib/ui/emoji_details.dart:9
+Flags: Repeated text (3 locations/groups)
+Emoji
+Decision:
+
+[COPY-5DB322ECF0] Heading
+Source: lib/ui/emoji_picker_dialog.dart:225
+Flags: Repeated text (3 locations/groups)
+Emoji
+Decision:
+
+[COPY-370AFDB668] Explanatory text
+Source: lib/ui/emoji_picker_dialog.dart:243
+${entry.name}  :${entry.shortcode}:
+Long-press to ${favourite ? 'unfavourite' : 'favourite'}
+Decision:
+
+[COPY-A025DEF25C] Explanatory text
+Source: lib/ui/encryption_attention_banner.dart:25
+Flags: Safety/privacy, review before removing
+This device is not verified. Encrypted history may be unavailable.
+Decision:
+
+[COPY-9215807E5B] Explanatory text
+Source: lib/ui/forum_view.dart:78
+Flags: Safety/privacy, review before removing
+This removes the opening post. Existing replies are not deleted.
+Decision:
+
+[COPY-4122A1CEBB] Heading
+Source: lib/ui/gif_favourite_button.dart:115
+Flags: Repeated text (4 locations/groups)
+GIF
+Decision:
+
+[COPY-2940DDD9CC] Heading
+Source: lib/ui/giphy_dialog.dart:295
+Flags: Repeated text (3 locations/groups)
+GIFs
+Decision:
+
+[COPY-9C3ADF9919] Explanatory text
+Source: lib/ui/json_theme_settings.dart:182
+Theme settings follow your appearance sync choice. High contrast disables glass effects; reduced motion disables blur.
+Decision:
+
+[COPY-EA224E5870] Heading
+Source: lib/ui/lastfm_connect_dialog.dart:61
+Flags: Repeated text (2 locations/groups)
+Connect Last.fm
+Decision:
+
+[COPY-DD21E72E43] Explanatory text
+Source: lib/ui/lastfm_connect_dialog.dart:68
+Browser linking needs SeND’s own Last.fm application registration. It is not configured in this local preview. You do not need to create an API key. Local music detection still works without Last.fm.
+Decision:
+
+[COPY-B76E58E34A] Safety/privacy warning
+Source: lib/ui/lastfm_connect_dialog.dart:70
+Flags: Safety/privacy, review before removing
+Sign in and approve SeND on Last.fm in your browser. We read your public now-playing feed and, if enabled, your last completed track. We do not scrobble, change your library, or keep your password. You control publication through Activity settings.
+Decision:
+
+[COPY-A94AEF2BF3] Explanatory text
+Source: lib/ui/lastfm_connect_dialog.dart:71
+Approve SeND in your browser, then finish linking here. Activity sharing remains controlled by your Activity settings.
+Decision:
+
+[COPY-C8681E1DB7] Heading
+Source: lib/ui/login_screen.dart:85
+Flags: Repeated text (3 locations/groups)
+SeND
+Decision:
+
+[COPY-C39004639A] Safety/privacy warning
+Source: lib/ui/login_screen.dart:197
+Flags: Safety/privacy, review before removing
+Password
+Decision:
+
+[COPY-E8FADC81BD] Safety/privacy warning
+Source: lib/ui/login_screen.dart:201
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Hide password
+Decision:
+
+[COPY-4E99307737] Safety/privacy warning
+Source: lib/ui/login_screen.dart:202
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Show password
+Decision:
+
+[COPY-6C824CAB5C] Safety/privacy warning
+Source: lib/ui/login_screen.dart:214
+Flags: Safety/privacy, review before removing
+Enter your password.
+Decision:
+
+[COPY-005E4BC1EA] Safety/privacy warning
+Source: lib/ui/login_screen.dart:228
+Flags: Safety/privacy, review before removing
+Confirm password
+Decision:
+
+[COPY-B6F028BBAF] Safety/privacy warning
+Source: lib/ui/login_screen.dart:232
+Flags: Safety/privacy, review before removing
+Passwords do not match.
+Decision:
+
+[COPY-2878E8E2AB] Explanatory text
+Source: lib/ui/login_screen.dart:286
+You can sign in with another Matrix homeserver. Its upload limits and account features may differ. SeND’s push, media conversion and link-preview services may not be available there.
+Decision:
+
+[COPY-B583613D24] Heading
+Source: lib/ui/media_compression_settings.dart:14
+Upload quality
+Decision:
+
+[COPY-C3EF5C4C1C] Explanatory text
+Source: lib/ui/media_compression_settings.dart:79
+Video compression runs in your browser. Unsupported files can be sent as originals.
+Decision:
+
+[COPY-1664AF2710] Explanatory text
+Source: lib/ui/media_compression_settings.dart:80
+This browser sends original videos. Image presets still apply.
+Decision:
+
+[COPY-B72BCC648E] Explanatory text
+Source: lib/ui/media_compression_settings.dart:81
+Flags: Safety/privacy, review before removing
+Compression runs on your device. Long clips may need trimming or an explicit choice to send the original. Captions, spoilers and encryption are preserved.
+Decision:
+
+[COPY-79D9C01886] Explanatory text
+Source: lib/ui/member_management.dart:53
+Restored by an online authorised SeND client; may expire late if all are offline.
+Decision:
+
+[COPY-BD992D1E53] Explanatory text
+Source: lib/ui/member_management.dart:114
+Flags: Safety/privacy, review before removing
+Could not apply this action. Check your permissions and connection, then retry.
+Decision:
+
+[COPY-82087FD9E6] Explanatory text
+Source: lib/ui/member_management.dart:144
+Flags: Safety/privacy, review before removing
+Saves shared role names and colours. Apply role power in Administration to change room permissions.
+Decision:
+
+[COPY-D085B6C6AD] Heading
+Source: lib/ui/member_management.dart:199
+Flags: Repeated text (2 locations/groups)
+Banned members
+Decision:
+
+[COPY-5B2C8A3ECF] Heading
+Source: lib/ui/member_management.dart:267
+Flags: Repeated text (2 locations/groups)
+Invite to server
+Decision:
+
+[COPY-99164A5AE5] Explanatory text
+Source: lib/ui/member_management.dart:283
+For server channels, this also invites them to the server if they are not already a member.
+Decision:
+
+[COPY-0F426F4E6D] Explanatory text
+Source: lib/ui/member_management.dart:307
+Flags: Safety/privacy, review before removing
+Could not complete the invitation. Check their ID and your room and server invitation permissions. A server invitation may already have been sent.
+Decision:
+
+[COPY-0C632F66F2] Heading
+Source: lib/ui/member_management.dart:329
+Flags: Repeated text (4 locations/groups)
+Room aliases
+Decision:
+
+[COPY-B0CACA353C] Heading
+Source: lib/ui/member_management.dart:402
+Flags: Repeated text (2 locations/groups)
+Power level
+Decision:
+
+[COPY-8047782588] Heading
+Source: lib/ui/message_composer.dart:511
+Flags: Repeated text (3 locations/groups)
+Emoji
+Decision:
+
+[COPY-F031CC7124] Heading
+Source: lib/ui/message_composer.dart:825
+Flags: Repeated text (3 locations/groups)
+Spoiler
+Decision:
+
+[COPY-6B5424D158] Heading
+Source: lib/ui/message_composer.dart:825
+Flags: Repeated text (3 locations/groups)
+Remove spoiler
+Decision:
+
+[COPY-7FA2DAC045] Heading
+Source: lib/ui/message_composer.dart:833
+Flags: Repeated text (3 locations/groups)
+Remove attachment
+Decision:
+
+[COPY-79D5880EEA] Explanatory text
+Source: lib/ui/message_composer.dart:852
+${attachment.name}
+Right-click for options
+Decision:
+
+[COPY-2E59D87B1D] Explanatory text
+Source: lib/ui/message_metadata.dart:413
+Status of message sent ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}
+Decision:
+
+[COPY-E162EE1A5C] Explanatory text
+Source: lib/ui/mobile/mobile_channel_manager.dart:147
+Your power level does not permit changing this Space layout.
+Decision:
+
+[COPY-6D77B4C0C5] Heading
+Source: lib/ui/mobile/mobile_channel_manager.dart:156
+Categories
+Decision:
+
+[COPY-96C9B7ABB4] Heading
+Source: lib/ui/mobile/mobile_channel_manager.dart:181
+Flags: Repeated text (2 locations/groups)
+Rooms
+Decision:
+
+[COPY-4992F31420] Explanatory text
+Source: lib/ui/mobile/mobile_channel_manager.dart:183
+Drag the handles to reorder, then tap the checkmark to save. Assign a category below.
+Decision:
+
+[COPY-EC27CB1894] Explanatory text
+Source: lib/ui/mobile/mobile_channel_manager.dart:240
+The default is Administrator (100). Space admins can change this from the desktop Space settings.
+Decision:
+
+[COPY-C2C92363BE] Heading
+Source: lib/ui/mobile/mobile_details_panel.dart:55
+Flags: Repeated text (2 locations/groups)
+Notifications
+Decision:
+
+[COPY-4B04DA44B3] Heading
+Source: lib/ui/mobile/mobile_details_panel.dart:56
+Flags: Repeated text (2 locations/groups)
+Enabled
+Decision:
+
+[COPY-E045145C4E] Heading
+Source: lib/ui/mobile/mobile_details_panel.dart:62
+Flags: Repeated text (3 locations/groups)
+Invite member
+Decision:
+
+[COPY-5C678DD564] Heading
+Source: lib/ui/mobile/mobile_details_panel.dart:67
+Flags: Repeated text (4 locations/groups)
+Room aliases
+Decision:
+
+[COPY-BD61147907] Heading
+Source: lib/ui/mobile/mobile_details_panel.dart:72
+Members — ${backend.selectedRoomMembers.length}
+Decision:
+
+[COPY-C4415C747A] Heading
+Source: lib/ui/mobile/mobile_media.dart:169
+Flags: Repeated text (2 locations/groups)
+Copy image
+Decision:
+
+[COPY-A8F0DA04CF] Heading
+Source: lib/ui/mobile/mobile_media.dart:175
+Flags: Repeated text (2 locations/groups)
+Copy media reference
+Decision:
+
+[COPY-166FAF3BEC] Heading
+Source: lib/ui/mobile/mobile_media.dart:175
+Flags: Repeated text (2 locations/groups)
+Copy image reference
+Decision:
+
+[COPY-9CA7428D46] Heading
+Source: lib/ui/mobile/mobile_media.dart:181
+Flags: Repeated text (2 locations/groups)
+Save media
+Decision:
+
+[COPY-997A8949DE] Heading
+Source: lib/ui/mobile/mobile_media.dart:186
+Flags: Repeated text (3 locations/groups)
+Open externally
+Decision:
+
+[COPY-613C549168] Heading
+Source: lib/ui/mobile/mobile_media.dart:192
+Flags: Repeated text (4 locations/groups)
+View fullscreen
+Decision:
+
+[COPY-4AC59D6CE4] Heading
+Source: lib/ui/mobile/mobile_media.dart:497
+Flags: Repeated text (2 locations/groups)
+Save media
+Decision:
+
+[COPY-0EE15D9377] Heading
+Source: lib/ui/mobile/mobile_media.dart:502
+Flags: Repeated text (2 locations/groups)
+Copy media reference
+Decision:
+
+[COPY-B3E9A0C507] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:124
+Flags: Repeated text (4 locations/groups)
+Home
+Decision:
+
+[COPY-FCE017FEF6] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:133
+Flags: Repeated text (2 locations/groups)
+Space
+Decision:
+
+[COPY-EB7BFA8F5F] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:267
+Flags: Repeated text (4 locations/groups)
+Create room
+Decision:
+
+[COPY-7662D8BE16] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:273
+Flags: Repeated text (3 locations/groups)
+Create category
+Decision:
+
+[COPY-A5A14C2CAF] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:336
+Flags: Repeated text (4 locations/groups)
+Create room
+Decision:
+
+[COPY-4B211E928E] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:347
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+End-to-end encryption
+Decision:
+
+[COPY-14D539A8F8] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:474
+Flags: Repeated text (4 locations/groups)
+Create Space
+Decision:
+
+[COPY-6E609708E4] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:517
+Flags: Repeated text (2 locations/groups)
+Invite to server
+Decision:
+
+[COPY-084B285C6D] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:526
+Flags: Repeated text (5 locations/groups)
+Mute Space
+Decision:
+
+[COPY-3DDCD1AC9F] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:531
+Flags: Repeated text (3 locations/groups)
+Space settings
+Decision:
+
+[COPY-071A5324DB] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:536
+Flags: Repeated text (2 locations/groups)
+Server profile
+Decision:
+
+[COPY-D58BE770B4] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:545
+Flags: Repeated text (2 locations/groups)
+Leave Space
+Decision:
+
+[COPY-CF624108B0] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:581
+Flags: Repeated text (2 locations/groups)
+Leave ${space.name}?
+Decision:
+
+[COPY-1A0C241396] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:615
+Flags: Repeated text (3 locations/groups)
+Space settings
+Decision:
+
+[COPY-25B1ED3DC8] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:665
+Flags: Repeated text (5 locations/groups)
+Mute Space
+Decision:
+
+[COPY-82100C35CA] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:725
+Flags: Repeated text (2 locations/groups)
+Discover Spaces
+Decision:
+
+[COPY-778C407AB5] Heading
+Source: lib/ui/mobile/mobile_navigation.dart:1136
+Flags: Repeated text (2 locations/groups)
+Nobody connected
+Decision:
+
+[COPY-39ADD28EBD] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2048
+Flags: Repeated text (2 locations/groups)
+Retry send
+Decision:
+
+[COPY-CFB0F81F57] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2059
+Flags: Repeated text (2 locations/groups)
+Reply
+Decision:
+
+[COPY-11C8F0F290] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2065
+Flags: Repeated text (2 locations/groups)
+Open discussion
+Decision:
+
+[COPY-5ECE07A9E1] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2070
+Flags: Repeated text (3 locations/groups)
+React
+Decision:
+
+[COPY-FE9AAA3FBF] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2076
+Flags: Repeated text (3 locations/groups)
+Edit
+Decision:
+
+[COPY-6FE1BE036F] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2082
+Flags: Safety/privacy, review before removing; Repeated text (5 locations/groups)
+Delete
+Decision:
+
+[COPY-98679849C3] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2087
+Flags: Repeated text (3 locations/groups)
+Copy text
+Decision:
+
+[COPY-EE876A107A] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2095
+Flags: Repeated text (2 locations/groups)
+Remove bookmark
+Decision:
+
+[COPY-CA62972790] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2095
+Flags: Repeated text (2 locations/groups)
+Save message
+Decision:
+
+[COPY-9C9F7ED65F] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2104
+Flags: Repeated text (2 locations/groups)
+Pin message
+Decision:
+
+[COPY-8AD2A47FEA] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2469
+Flags: Repeated text (2 locations/groups)
+Editing message
+Decision:
+
+[COPY-93A1BCB7E7] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2654
+Flags: Repeated text (2 locations/groups)
+Edit media
+Decision:
+
+[COPY-2126A1548B] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2664
+Flags: Repeated text (3 locations/groups)
+Remove spoiler
+Decision:
+
+[COPY-8A9940CB73] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2664
+Flags: Repeated text (2 locations/groups)
+Mark as spoiler
+Decision:
+
+[COPY-081E99239A] Heading
+Source: lib/ui/mobile/mobile_timeline.dart:2670
+Flags: Repeated text (3 locations/groups)
+Remove attachment
+Decision:
+
+[COPY-A75C388292] Heading
+Source: lib/ui/mobile/mobile_voice_view.dart:246
+Flags: Repeated text (3 locations/groups)
+Microphone
+Decision:
+
+[COPY-9D3442D0D5] Heading
+Source: lib/ui/mobile/mobile_voice_view.dart:264
+Speaker
+Decision:
+
+[COPY-36C9EFC483] Heading
+Source: lib/ui/mobile/mobile_voice_view.dart:282
+Flags: Repeated text (4 locations/groups)
+Camera
+Decision:
+
+[COPY-4BAEFF5802] Heading
+Source: lib/ui/mobile/mobile_voice_view.dart:309
+Flags: Repeated text (2 locations/groups)
+Echo cancellation
+Decision:
+
+[COPY-AD5E975616] Explanatory text
+Source: lib/ui/notification_diagnostics.dart:19
+Flags: Safety/privacy, review before removing; Visibility needs checking
+System notification permission: ${s.notificationsAllowed == null ? 'Unknown' : s.notificationsAllowed! ? 'Allowed' : 'Blocked'}
+Decision:
+
+[COPY-55E84BE3F9] Explanatory text
+Source: lib/ui/notification_diagnostics.dart:68
+Flags: Visibility needs checking
+Push test did not finish. See the stages below.
+Decision:
+
+[COPY-3830A66567] Explanatory text
+Source: lib/ui/notification_diagnostics.dart:76
+Flags: Visibility needs checking
+Android received the push. A test notification was requested.
+Decision:
+
+[COPY-A38E0FBCD9] Explanatory text
+Source: lib/ui/notification_diagnostics.dart:84
+Flags: Safety/privacy, review before removing; Visibility needs checking
+The check failed. Check your connection and notification permissions.
+Decision:
+
+[COPY-021BD73A52] Safety/privacy warning
+Source: lib/ui/notification_diagnostics.dart:99
+Flags: Safety/privacy, review before removing
+Test delivery without sending a chat message. Tests do not check message decryption. For that, ask someone to send an encrypted message while SeND is closed.
+Decision:
+
+[COPY-7CDC1CBCAF] Explanatory text
+Source: lib/ui/notification_diagnostics.dart:131
+Push tests are limited to one per minute on Android. Reports omit your private push address and message content.
+Decision:
+
+[COPY-56BC020C02] Heading
+Source: lib/ui/personal_organisation.dart:24
+Flags: Repeated text (2 locations/groups)
+Chats and spaces
+Decision:
+
+[COPY-16DFBFD9A7] Explanatory text
+Source: lib/ui/personal_organisation.dart:54
+Could not save this change. Check device storage and retry.
+Decision:
+
+[COPY-84DCE3ECB0] Heading
+Source: lib/ui/personal_organisation.dart:74
+Flags: Repeated text (3 locations/groups)
+Rename folder
+Decision:
+
+[COPY-662EC3A900] Heading
+Source: lib/ui/personal_organisation.dart:111
+Space bar
+Decision:
+
+[COPY-A75696B458] Explanatory text
+Source: lib/ui/personal_organisation.dart:113
+Drag to reorder. Folders and order follow your account across devices.
+Decision:
+
+[COPY-ADF28063EF] Heading
+Source: lib/ui/personal_organisation.dart:169
+Archived chats
+Decision:
+
+[COPY-7C2FA8F304] Explanatory text
+Source: lib/ui/personal_organisation.dart:171
+Archived chats stay here until restored. Their notification settings stay the same.
+Decision:
+
+[COPY-7E87F5888B] Heading
+Source: lib/ui/personal_organisation.dart:259
+Flags: Repeated text (3 locations/groups)
+Rename folder
+Decision:
+
+[COPY-27F0ADCCE0] Explanatory text
+Source: lib/ui/poll_card.dart:110
+${poll.disclosed || poll.ended ? '$total vote${total == 1 ? '' : 's'}' : 'Results hidden'}${poll.ended ? ' · Ended' : ''}
+Decision:
+
+[COPY-8611EC0762] Explanatory text
+Source: lib/ui/profile_card.dart:124
+${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns!.characters.take(16)}' : ''}
+Decision:
+
+[COPY-92FDC6D1DD] Explanatory text
+Source: lib/ui/profile_card.dart:169
+${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)}
+Decision:
+
+[COPY-5AAC7ED1C1] Heading
+Source: lib/ui/profile_editor_dialog.dart:405
+Edit server profile — live preview
+Decision:
+
+[COPY-4D843C23EA] Heading
+Source: lib/ui/profile_editor_dialog.dart:406
+Edit profile — live preview
+Decision:
+
+[COPY-9220C0F3D4] Heading
+Source: lib/ui/profile_editor_dialog.dart:667
+Voice tile
+Decision:
+
+[COPY-D64E881ACB] Explanatory text
+Source: lib/ui/profile_editor_dialog.dart:672
+Uses the average avatar colour by default. You can override it with a colour or a separately cropped background.
+Decision:
+
+[COPY-414788AA4E] Explanatory text
+Source: lib/ui/profile_editor_dialog.dart:798
+This homeserver does not advertise extensible profile fields. Basic name and avatar editing remain available.
+Decision:
+
+[COPY-C91D5C8CF5] Explanatory text
+Source: lib/ui/profile_image_cropper.dart:227
+Drag the preview or use the position controls. Zooming crops more tightly; only the visible area will be uploaded.
+Decision:
+
+[COPY-FA09594047] Explanatory text
+Source: lib/ui/room_access_dialog.dart:123
+Apply "${_default}" to all ${widget.children.length} listed channels? This includes private channels. Cancel to preserve private exceptions and edit channels individually instead. This does not join members automatically or change history visibility.
+Decision:
+
+[COPY-19C17E243E] Explanatory text
+Source: lib/ui/room_access_dialog.dart:224
+Off: general room. This classification follows your account across devices; other members keep their own choice.
+Decision:
+
+[COPY-D6E0229024] Explanatory text
+Source: lib/ui/room_access_dialog.dart:270
+Access and directory listing are separate. Space membership allows joining; it does not automatically join every channel.
+Decision:
+
+[COPY-FCFD3AF226] Explanatory text
+Source: lib/ui/room_access_dialog.dart:293
+Flags: Safety/privacy, review before removing
+History changes affect future events. Encryption key availability can further limit readable history.
+Decision:
+
+[COPY-396377FFD4] Heading
+Source: lib/ui/room_access_dialog.dart:317
+Shared timeline visibility
+Decision:
+
+[COPY-A4DAF7B36E] Explanatory text
+Source: lib/ui/room_access_dialog.dart:321
+Applies to all SeND members; channel settings override Space defaults. Other clients may still show these events. Messages, security and moderation events cannot be hidden here.
+Decision:
+
+[COPY-808D55EF51] Heading
+Source: lib/ui/room_event_visibility_dialog.dart:52
+Flags: Repeated text (3 locations/groups)
+Timeline events
+Decision:
+
+[COPY-FBC22A670D] Explanatory text
+Source: lib/ui/room_event_visibility_dialog.dart:60
+Flags: Safety/privacy, review before removing
+Only changes what you see. Preferences sync with your account. Messages, encryption notices and moderation actions remain visible.
+Decision:
+
+[COPY-6ADE0E8EA6] Explanatory text
+Source: lib/ui/room_search_panel.dart:550
+Items ${results.isEmpty ? 0 : _page * _pageSize + 1} to ${_page * _pageSize + results.length} (${all.length} loaded)
+Decision:
+
+[COPY-8FFB4F34D8] Explanatory text
+Source: lib/ui/room_search_panel.dart:565
+Page ${_page + 1} of ${pageCount}${_canLoadOlder ? '+' : ''}
+Decision:
+
+[COPY-4D33CC45E6] Safety/privacy warning
+Source: lib/ui/security_center.dart:92
+Flags: Safety/privacy, review before removing
+Replace recovery key?
+Decision:
+
+[COPY-10A5D0875F] Safety/privacy warning
+Source: lib/ui/security_center.dart:94
+Flags: Safety/privacy, review before removing
+Your existing recovery key will stop working. Cross-signing and encrypted key backup will be kept, but you must save the new key before closing SeND.
+Decision:
+
+[COPY-820DE60BBB] Heading
+Source: lib/ui/security_center.dart:143
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Encryption & recovery
+Decision:
+
+[COPY-B5117EEC80] Safety/privacy warning
+Source: lib/ui/security_center.dart:187
+Flags: Safety/privacy, review before removing
+Recovery key or passphrase
+Decision:
+
+[COPY-030706B16F] Explanatory text
+Source: lib/ui/security_center.dart:205
+This credential is used only to unlock Matrix Secure Secret Storage. SeND does not save the text you enter.
+Decision:
+
+[COPY-5B00963B1F] Safety/privacy warning
+Source: lib/ui/security_center.dart:248
+Flags: Safety/privacy, review before removing
+Replace recovery key
+Decision:
+
+[COPY-4E09511D43] Explanatory text
+Source: lib/ui/security_center.dart:279
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Cross-signing is connected and encrypted message keys can be backed up and recovered.
+Decision:
+
+[COPY-9C2477E241] Safety/privacy warning
+Source: lib/ui/security_center.dart:285
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Enter the recovery key or security passphrase from another Matrix client to authorize this device and unlock key backup.
+Decision:
+
+[COPY-6CC745CD72] Safety/privacy warning
+Source: lib/ui/security_center.dart:291
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Existing secure storage was found. Unlock it to repair missing cross-signing or key-backup components without replacing your recovery key.
+Decision:
+
+[COPY-E16A0F17EE] Safety/privacy warning
+Source: lib/ui/security_center.dart:297
+Flags: Safety/privacy, review before removing; Visibility needs checking
+This appears to be a new encryption identity. Setup will create cross-signing, encrypted key backup, and a recovery key that you must save.
+Decision:
+
+[COPY-01B2A399E5] Safety/privacy warning
+Source: lib/ui/security_center.dart:388
+Flags: Safety/privacy, review before removing
+Save this recovery key now
+Decision:
+
+[COPY-BDC90CC13B] Explanatory text
+Source: lib/ui/security_center.dart:396
+Flags: Safety/privacy, review before removing
+It is the only way to recover encrypted message history if all authorized devices are lost. SeND will not show it again.
+Decision:
+
+[COPY-AC39DCAF40] Safety/privacy warning
+Source: lib/ui/security_center.dart:418
+Flags: Safety/privacy, review before removing
+Copy recovery key
+Decision:
+
+[COPY-3D6609C7C5] Safety/privacy warning
+Source: lib/ui/security_center.dart:426
+Flags: Safety/privacy, review before removing
+I saved this recovery key somewhere safe
+Decision:
+
+[COPY-3F3DEE2506] Heading
+Source: lib/ui/socks_proxy_settings.dart:10
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+SOCKS5 proxy
+Decision:
+
+[COPY-8772C6D439] Explanatory text
+Source: lib/ui/socks_proxy_settings.dart:14
+Flags: Safety/privacy, review before removing
+Use your browser or system proxy settings. PWAs cannot select a SOCKS proxy.
+Decision:
+
+[COPY-649E6F3CFA] Explanatory text
+Source: lib/ui/socks_proxy_settings.dart:90
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Test failed at the last stage. Check the proxy, credentials and server. No direct fallback was used.
+Decision:
+
+[COPY-35E8C8D724] Explanatory text
+Source: lib/ui/socks_proxy_settings.dart:151
+Saved. Fully close and reopen SeND to apply the connection settings.
+Decision:
+
+[COPY-AD2CA4CBC4] Heading
+Source: lib/ui/socks_proxy_settings.dart:177
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+SOCKS5 proxy
+Decision:
+
+[COPY-10C18DEE02] Explanatory text
+Source: lib/ui/socks_proxy_settings.dart:188
+Flags: Safety/privacy, review before removing
+Routes messaging and media downloads through SOCKS5. The proxy resolves destination names. No direct fallback if it fails.
+Decision:
+
+[COPY-CAF1151A71] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:203
+Flags: Safety/privacy, review before removing
+Proxy hostname or IP address
+Decision:
+
+[COPY-42ED7284E7] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:237
+Flags: Safety/privacy, review before removing
+Password (optional)
+Decision:
+
+[COPY-EE9C5F33A8] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:240
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Hide password
+Decision:
+
+[COPY-537C4DAD33] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:241
+Flags: Safety/privacy, review before removing; Repeated text (2 locations/groups)
+Show password
+Decision:
+
+[COPY-9D7BD16D14] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:257
+Flags: Safety/privacy, review before removing
+Calls and some previews, artwork and streams bypass SOCKS and may expose your IP address.
+Decision:
+
+[COPY-7FB0F25AAB] Safety/privacy warning
+Source: lib/ui/socks_proxy_settings.dart:266
+Flags: Implementation/preview prose; Safety/privacy, review before removing
+This is not a VPN. External browsers, other apps and OS/distributor push delivery use their own connections. The built-in Android notification listener is blocked in strict mode. SOCKS passwords are not encrypted between your device and the proxy; use a trusted local tunnel or VPN for remote proxies.
+Decision:
+
+[COPY-7E7153E893] Explanatory text
+Source: lib/ui/socks_proxy_settings.dart:270
+Flags: Safety/privacy, review before removing
+Current session: ${SocksProxy.configurationError ? "blocked, proxy settings could not be loaded" : SocksProxy.enabled ? "proxy enabled" : "direct connection"}. Existing connections change only after restart.
+Decision:
+
+[COPY-DEA30A0BD2] Explanatory text
+Source: lib/ui/space_administration_panel.dart:276
+Flags: Safety/privacy, review before removing
+${rule?.label ?? 'Role power levels'} will be applied to ${targets.length} room(s). Each room is independent; failures will be reported. Unrelated permissions stay unchanged. Existing manual member power is preserved when applying roles.
+Decision:
+
+[COPY-F19CDAD851] Heading
+Source: lib/ui/space_administration_panel.dart:365
+Roles
+Decision:
+
+[COPY-AD42CFA8E8] Explanatory text
+Source: lib/ui/space_administration_panel.dart:367
+Topmost assigned colour wins; the highest assigned power level controls privileges. Role badges belong to server profiles, not direct messages.
+Decision:
+
+[COPY-1C98F352EC] Heading
+Source: lib/ui/space_administration_panel.dart:462
+Flags: Repeated text (2 locations/groups)
+Rules
+Decision:
+
+[COPY-8A5CEFC610] Explanatory text
+Source: lib/ui/space_administration_panel.dart:464
+Flags: Safety/privacy, review before removing
+Matrix power levels apply per room. Threads share their room’s permissions. Creating a room itself is governed by the homeserver; linking it here is controlled below. Pack actions and channel actions sharing an event type share a permission. A timeout changes member power; there is no independent Matrix mute capability. Encrypted messages use the encrypted-event permission: the server cannot inspect their inner message type. Alias registration, media uploads and account creation also follow homeserver policy.
+Decision:
+
+[COPY-A227CEB872] Explanatory text
+Source: lib/ui/sticker_pack_editor.dart:65
+Original packs stay available. Duplicate aliases receive a numbered suffix. Save changes to finish.
+Decision:
+
+[COPY-FB3FFF4CAA] Heading
+Source: lib/ui/sticker_pack_editor.dart:73
+Flags: Repeated text (3 locations/groups)
+${pack.stickers.length} items
+Decision:
+
+[COPY-47498FFFBD] Explanatory text
+Source: lib/ui/sticker_pack_editor.dart:117
+The new pack is saved first, then these items are removed from the original. Other edits are saved too. If the second save fails, both copies are kept.
+Decision:
+
+[COPY-77A0D18C0F] Heading
+Source: lib/ui/sticker_pack_editor.dart:354
+Edit pack
+Decision:
+
+[COPY-B013D3D02D] Explanatory text
+Source: lib/ui/sticker_pack_editor.dart:438
+${_items.length}/150 items · aliases and removals do not re-upload media
+Decision:
+
+[COPY-6C6FFB1D10] Heading
+Source: lib/ui/sticker_pack_editor.dart:590
+Flags: Repeated text (2 locations/groups)
+Crop / resize selected
+Decision:
+
+[COPY-458F92FF50] Explanatory text
+Source: lib/ui/sticker_pack_editor.dart:598
+Preview of the first selected item. All selected items use these settings. Aspect ratio and animation are preserved; GIF conversion may reduce colours.
+Decision:
+
+[COPY-A39D27B22D] Heading
+Source: lib/ui/sticker_pack_editor.dart:639
+Flags: Repeated text (2 locations/groups)
+Trim transparent padding
+Decision:
+
+[COPY-CE973A259B] Heading
+Source: lib/ui/thread_view.dart:214
+Flags: Repeated text (3 locations/groups)
+React
+Decision:
+
+[COPY-74D63E8286] Heading
+Source: lib/ui/thread_view.dart:220
+Flags: Repeated text (3 locations/groups)
+Edit
+Decision:
+
+[COPY-9C7DDFAFC2] Heading
+Source: lib/ui/thread_view.dart:231
+Flags: Repeated text (3 locations/groups)
+Copy text
+Decision:
+
+[COPY-8FD6EF8E21] Explanatory text
+Source: lib/ui/thread_view.dart:279
+${max(0, messages.length - 1)} loaded replies · ${participants.length} participants
+Decision:
+
+[COPY-F1E7FCD221] Heading
+Source: lib/ui/thread_view.dart:425
+Flags: Repeated text (2 locations/groups)
+Editing message
+Decision:
+
+[COPY-3D8B096755] Heading
+Source: lib/ui/timezone_picker_dialog.dart:50
+Flags: Repeated text (2 locations/groups)
+Choose timezone
+Decision:
+
+[COPY-EFFA99D35B] Explanatory text
+Source: lib/ui/timezone_picker_dialog.dart:99
+Could not detect your timezone. Choose it from the list.
+Decision:
+
+[COPY-CAD981C04A] Explanatory text
+Source: lib/ui/video_preparation_overlay.dart:76
+Original quality may use more data. Nothing has been uploaded yet.
+Decision:
+
+[COPY-6C8A012F19] Explanatory text
+Source: lib/ui/voice_control_island.dart:19
+Wait for the call server to connect before sharing your screen.
+Decision:
+
+[COPY-A528416529] Heading
+Source: lib/ui/voice_room_view.dart:264
+Flags: Repeated text (6 locations/groups)
+Mute
+Decision:
+
+[COPY-C1A00458FF] Heading
+Source: lib/ui/voice_room_view.dart:264
+Flags: Repeated text (4 locations/groups)
+Unmute
+Decision:
+
+[COPY-D8D2118A76] Heading
+Source: lib/ui/voice_room_view.dart:274
+Flags: Repeated text (5 locations/groups)
+Deafen
+Decision:
+
+[COPY-36519E34E6] Heading
+Source: lib/ui/voice_room_view.dart:274
+Flags: Repeated text (5 locations/groups)
+Undeafen
+Decision:
+
+[COPY-016EC862C7] Heading
+Source: lib/ui/voice_room_view.dart:287
+Flags: Repeated text (2 locations/groups)
+Camera off
+Decision:
+
+[COPY-6602723245] Heading
+Source: lib/ui/voice_room_view.dart:287
+Flags: Repeated text (2 locations/groups)
+Camera on
+Decision:
+
+[COPY-0C959701A3] Heading
+Source: lib/ui/voice_room_view.dart:303
+Flags: Repeated text (2 locations/groups)
+Share screen
+Decision:
+
+[COPY-AB6F0DA9AF] Heading
+Source: lib/ui/voice_room_view.dart:327
+Flags: Repeated text (5 locations/groups)
+Disconnect
+Decision:
+
+[COPY-6183D78928] Explanatory text
+Source: lib/ui/voice_room_view.dart:1112
+${widget.stream.displayName}${widget.stream.screenShare ? ' · screen share' : ''}
+Decision:
+
+[COPY-D785DC2C90] Explanatory text
+Source: android/app/src/main/AndroidManifest.xml:123
+Flags: Safety/privacy, review before removing; Visibility needs checking
+User-enabled persistent push connection for encrypted chat notifications without Google Play services or an external distributor. Receives event identifiers and schedules bounded local decryption.
+Decision:
+
+[COPY-29115B7244] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/BuiltInPushService.kt:255
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Built-in notifications cannot use the SOCKS proxy. Use a system VPN or allow direct traffic.
+Decision:
+
+[COPY-A2E5E91E29] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/BuiltInPushService.kt:277
+Flags: Visibility needs checking
+Android could not start background notifications. Reopen SeND and try again.
+Decision:
+
+[COPY-03187790EF] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:32
+Flags: Visibility needs checking
+The diagnostic is cooling down; retry in ${(remaining + 999) / 1000} seconds.
+Decision:
+
+[COPY-75F70EE392] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:79
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Notification gateway diagnostics are blocked by the proxy policy.
+Decision:
+
+[COPY-054B377A3C] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:119
+Flags: Visibility needs checking
+The gateway accepted the test, but Android did not receive it within 15 seconds.
+Decision:
+
+[COPY-E51FA41C5D] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:189
+Flags: Visibility needs checking
+Could not start background notifications. Reopen SeND and try again.
+Decision:
+
+[COPY-14E96175E0] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:197
+Flags: Visibility needs checking; Repeated text (2 locations/groups)
+Open Android Settings and allow SeND to run in the background.
+Decision:
+
+[COPY-53E00876B2] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:592
+Flags: Visibility needs checking
+The UnifiedPush distributor did not return an endpoint within 30 seconds.
+Decision:
+
+[COPY-8F62601A48] Explanatory text
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/VideoPreparationBridge.kt:98
+Flags: Visibility needs checking
+This device could not optimize the video. Try original quality.
+Decision:
+
+[COPY-AEEF47D23B] Heading
+Source: lib/app.dart:412
+Flags: Repeated text (3 locations/groups)
+SeND
+Decision:
+
+[COPY-997D299A71] Explanatory text
+Source: lib/main.dart:32
+SeND is already open in another tab, or browser storage is unavailable.
+Close other SeND tabs and reopen this page over HTTPS.
+Decision:
+
+[COPY-57CF6B3F03] Explanatory text
+Source: lib/matrix/matrix_advanced_features.dart:269
+A poll needs a question and at least two answers.
+Decision:
+
+[COPY-80A2CC46F5] Safety/privacy warning
+Source: lib/matrix/matrix_crypto.dart:69
+Flags: Safety/privacy, review before removing
+Enter a recovery key.
+Decision:
+
+[COPY-7283CB516C] Safety/privacy warning
+Source: lib/matrix/matrix_session.dart:642
+Flags: Safety/privacy, review before removing
+Enter your account password.
+Decision:
+
+[COPY-95A3C147F9] Explanatory text
+Source: lib/models/rtc_connectivity.dart:19
+${detail}
+${pingMilliseconds == null ? 'RTC ping unavailable' : 'RTC ping: $pingMilliseconds ms (slowest connection)'}
+Decision:
+
+[COPY-E4520DA71F] Safety/privacy warning
+Source: lib/models/socks_proxy_config.dart:25
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Enter a proxy hostname or IP address, without a URL or port.
+Decision:
+
+[COPY-1676224D79] Safety/privacy warning
+Source: lib/models/socks_proxy_config.dart:30
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Proxy usernames and passwords must each fit in 255 UTF-8 bytes.
+Decision:
+
+[COPY-1A57E796D2] Explanatory text
+Source: lib/models/user_activity.dart:314
+${switch (kind) {ActivityKind.game => 'Playing', ActivityKind.music => 'Listening to', ActivityKind.application => 'Using'}} ${name}
+Decision:
+
+[COPY-7FE60DA982] Explanatory text
+Source: lib/services/activity_source_native.dart:820
+Flags: Visibility needs checking
+Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class SendWindows { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }'
+[uint32]$foreground = 0
+[void][SendWindows]::GetWindowThreadProcessId([SendWindows]::GetForegroundWindow(), [ref]$foreground)
+$items = @(Get-Process | Select-Object -First 2048 | ForEach-Object {
+  try {
+    $p = $_.Path
+    if ($p) {
+      $icon = if ($_.MainWindowHandle -ne 0) { [System.Drawing.Icon]::ExtractAssociatedIcon($p) } else { $null }
+      $stream = New-Object System.IO.MemoryStream
+      if ($icon) { $bitmap = $icon.ToBitmap(); $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png); $bitmap.Dispose(); $icon.Dispose() }
+      @{id=$p; name=$_.ProcessName; window=($_.MainWindowHandle -ne 0); foreground=($_.Id -eq $foreground); title=$_.FileVersionInfo.ProductName; icon=[Convert]::ToBase64String($stream.ToArray())}
+      $stream.Dispose()
+    }
+  } catch {}
+})
+ConvertTo-Json -InputObject $items -Compress
+
+Decision:
+
+[COPY-CA3A452FEA] Explanatory text
+Source: lib/services/android_push_bridge.dart:291
+Flags: Visibility needs checking
+You were invited to a conversation. Open your inbox to accept or ignore.
+Decision:
+
+[COPY-215532AAD4] Explanatory text
+Source: lib/services/browser_image_paste_web.dart:35
+Paste at most 20 images, up to 64 MiB in total.
+Decision:
+
+[COPY-78D006AABB] Explanatory text
+Source: lib/services/browser_image_paste_web.dart:59
+Could not paste this image. Try attaching the original from Photos or Files.
+Decision:
+
+[COPY-280B50F35D] Explanatory text
+Source: lib/services/frame_diagnostics.dart:30
+Flags: Visibility needs checking
+SeND frames n=${frames.length} build_p95_ms=${p95((f) => f.buildDuration).toStringAsFixed(1)} raster_p95_ms=${p95((f) => f.rasterDuration).toStringAsFixed(1)} vsync_p95_ms=${p95((f) => f.vsyncOverhead).toStringAsFixed(1)} total_p95_ms=${p95((f) => f.totalSpan).toStringAsFixed(1)}
+Decision:
+
+[COPY-651E2239CD] Explanatory text
+Source: lib/services/frame_diagnostics.dart:49
+Flags: Visibility needs checking
+SeND ui event=${event.key} count=${event.value} source=${_sources[event.key] ?? '-'}
+Decision:
+
+[COPY-292C15E6FE] Heading
+Source: lib/services/gif_service.dart:54
+Flags: Repeated text (4 locations/groups)
+GIF
+Decision:
+
+[COPY-572FC8AAE4] Heading
+Source: lib/services/gif_service.dart:84
+Flags: Repeated text (4 locations/groups)
+GIF
+Decision:
+
+[COPY-ACB026CE19] Heading
+Source: lib/services/gif_service.dart:107
+Flags: Repeated text (4 locations/groups)
+GIF
+Decision:
+
+[COPY-8B0C1B16A0] Explanatory text
+Source: lib/services/history_download.dart:269, 354
+Flags: Visibility needs checking
+Paused until text indexing is enabled and SeND is open.
+Decision:
+
+[COPY-B66DBAB4E5] Explanatory text
+Source: lib/services/lastfm_auth.dart:24
+Flags: Visibility needs checking
+Last.fm returned an invalid login token. Please try again.
+Decision:
+
+[COPY-9EF417C3A9] Explanatory text
+Source: lib/services/lastfm_auth.dart:43
+Flags: Visibility needs checking
+Last.fm did not confirm your account. Please try again.
+Decision:
+
+[COPY-008C005566] Explanatory text
+Source: lib/services/lastfm_auth.dart:68
+Please approve SeND in your browser first, then try again.
+Decision:
+
+[COPY-CBB0CF4810] Explanatory text
+Source: lib/services/lastfm_auth.dart:70
+This login attempt expired. Close this window and connect again.
+Decision:
+
+[COPY-8BFE7481EA] Explanatory text
+Source: lib/services/lastfm_auth.dart:106
+Flags: Visibility needs checking
+Could not reach Last.fm. Check your connection and try again.
+Decision:
+
+[COPY-45F750515E] Heading
+Source: lib/services/link_preview_service.dart:129
+Flags: Repeated text (2 locations/groups)
+title
+Decision:
+
+[COPY-5825F9C7D8] Heading
+Source: lib/services/link_preview_service.dart:129
+Flags: Repeated text (2 locations/groups)
+og:title
+Decision:
+
+[COPY-78AF6FABFE] Heading
+Source: lib/services/link_preview_service.dart:652
+Flags: Repeated text (2 locations/groups)
+og:title
+Decision:
+
+[COPY-3D50F838C7] Heading
+Source: lib/services/link_preview_service.dart:653
+Flags: Repeated text (2 locations/groups)
+title
+Decision:
+
+[COPY-8E4F2E17AE] Safety/privacy warning
+Source: lib/services/secret_redaction.dart:53
+Flags: Safety/privacy, review before removing; Visibility needs checking
+That recovery key is invalid or was entered incorrectly.
+Decision:
+
+[COPY-7034EED920] Explanatory text
+Source: lib/services/unavailable_history.dart:22
+${count} earlier messages could not be decrypted. They will appear if their keys become available.
+Decision:
+
+[COPY-B72CB1BAB3] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:3
+Flags: Safety/privacy, review before removing; Visibility needs checking
+Copyright © 2015 Martin Gräßlin
+    Copyright © 2022 Simon Ser
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+Decision:
+
+[COPY-71DB42C8CB] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:28
+Flags: Visibility needs checking
+This interface allows clients to monitor user idle status.
+
+      After binding to this global, clients can create ext_idle_notification_v1
+      objects to get notified when the user is idle for a given amount of time.
+Decision:
+
+[COPY-D796E7C857] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:36
+Flags: Visibility needs checking
+Destroy the manager object. All objects created via this interface
+        remain valid.
+Decision:
+
+[COPY-2751AF6A9D] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:43
+Flags: Visibility needs checking
+Create a new idle notification object.
+
+        The notification object has a minimum timeout duration and is tied to a
+        seat. The client will be notified if the seat is inactive for at least
+        the provided timeout. See ext_idle_notification_v1 for more details.
+
+        A zero timeout is valid and means the client wants to be notified as
+        soon as possible when the seat is inactive.
+Decision:
+
+[COPY-1848953891] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:61
+Flags: Visibility needs checking
+Create a new idle notification object to track input from the
+        user, such as keyboard and mouse movement. Because this object is
+        meant to track user input alone, it ignores idle inhibitors.
+
+        The notification object has a minimum timeout duration and is tied to a
+        seat. The client will be notified if the seat is inactive for at least
+        the provided timeout. See ext_idle_notification_v1 for more details.
+
+        A zero timeout is valid and means the client wants to be notified as
+        soon as possible when the seat is inactive.
+Decision:
+
+[COPY-81E50DCC83] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:81
+Flags: Visibility needs checking
+This interface is used by the compositor to send idle notification events
+      to clients.
+
+      Initially the notification object is not idle. The notification object
+      becomes idle when no user activity has happened for at least the timeout
+      duration, starting from the creation of the notification object. User
+      activity may include input events or a presence sensor, but is
+      compositor-specific.
+
+      How this notification responds to idle inhibitors depends on how
+      it was constructed. If constructed from the
+      get_idle_notification request, then if an idle inhibitor is
+      active (e.g. another client has created a zwp_idle_inhibitor_v1
+      on a visible surface), the compositor must not make the
+      notification object idle. However, if constructed from the
+      get_input_idle_notification request, then idle inhibitors are
+      ignored, and only input from the user, e.g. from a keyboard or
+      mouse, counts as activity.
+
+      When the notification object becomes idle, an idled event is sent. When
+      user activity starts again, the notification object stops being idle,
+      a resumed event is sent and the timeout is restarted.
+Decision:
+
+[COPY-1CBE7F8077] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:113
+Flags: Visibility needs checking
+This event is sent when the notification object becomes idle.
+
+        It's a compositor protocol error to send this event twice without a
+        resumed event in-between.
+Decision:
+
+[COPY-91EAEA7BDB] Explanatory text
+Source: linux/runner/ext-idle-notify-v1.xml:122
+Flags: Visibility needs checking
+This event is sent when the notification object stops being idle.
+
+        It's a compositor protocol error to send this event twice without an
+        idled event in-between. It's a compositor protocol error to send this
+        event prior to any idled event.
+Decision:
+
+[COPY-33FC4EBAF3] Explanatory text
+Source: tool/web-video/worker.mjs:30
+Flags: Visibility needs checking
+This video or edit is too large or invalid for browser export.
+Decision:
+
+[COPY-F044AAD7FB] Explanatory text
+Source: tool/web-video/worker.mjs:38
+Flags: Visibility needs checking
+This video is too long for the selected size limit. Trim it or choose Original.
+Decision:
+
+[COPY-C5493ADB03] Explanatory text
+Source: tool/web-video/worker.mjs:44
+Flags: Visibility needs checking
+Browser editing supports videos up to 256 MiB. Choose Original or use the native app.
+Decision:
+
+[COPY-26DB718E6B] Explanatory text
+Source: tool/web-video/worker.mjs:50
+Flags: Visibility needs checking
+This video exceeds the browser editing resolution limit. Choose Original.
+Decision:
+
+[COPY-BB35C3734B] Explanatory text
+Source: tool/web-video/worker.mjs:52
+Flags: Visibility needs checking
+This browser cannot encode this video as H.264. Choose Original.
+Decision:
+
+[COPY-CCCEC1611B] Explanatory text
+Source: web/auth.html:7
+Flags: Visibility needs checking
+Return to SeND to finish signing in. You can close this tab.
+Decision:
+
+[COPY-80F6A90954] Explanatory text
+Source: web/browser_bridge.js:135
+Flags: Visibility needs checking
+Media is unavailable or exceeds the browser playback limit.
+Decision:
+
+[COPY-54F29C5C01] Explanatory text
+Source: web/browser_bridge.js:191
+Flags: Visibility needs checking
+Install SeND to your Home Screen to enable notifications on supported iOS versions.
+Decision:
+
+[COPY-70CF85ECA4] Explanatory text
+Source: web/index.html:8
+Flags: Safety/privacy, review before removing; Visibility needs checking
+SeND — encrypted Matrix chat on your phone and desktop.
+Decision:
+
+[COPY-EE4114361F] Explanatory text
+Source: web/sw.js:25
+Flags: Visibility needs checking
+Test notification received. Web Push is working on this device.
+Decision:
+
+[COPY-1566215783] Explanatory text
+Source: web/video_processing.js:8
+Flags: Visibility needs checking
+Video encoding is unavailable in this browser. Choose Original.
+Decision:
+
+[COPY-A28764C263] Explanatory text
+Source: web/video_processing.js:12
+Flags: Visibility needs checking
+Video export stopped while SeND was backgrounded. Retry with the app open.
+Decision:
+
+[COPY-C88289DCFB] Explanatory text
+Source: web/video_processing.js:15
+Flags: Visibility needs checking
+Video export timed out. Choose Original or a shorter clip.
+Decision:
+
+[COPY-DF424B25BC] Explanatory text
+Source: web/video_processing.js:22
+Flags: Visibility needs checking
+The video worker could not run. Retry or choose Original.
+Decision:
+
+[COPY-5D0AD98AB4] Explanatory text
+Source: web/video_processing.js:24
+Flags: Visibility needs checking
+Could not pass this video to the worker. Choose Original.
+Decision:

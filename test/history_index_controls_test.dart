@@ -171,7 +171,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Search cache almost full'), findsOneWidget);
-      expect(find.textContaining('oldest messages onward'), findsOneWidget);
+      expect(
+        find.textContaining('Older search results will be cleared'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Got it'));
       await tester.pumpAndSettle();
       backend.notifyListeners();

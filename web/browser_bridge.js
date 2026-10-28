@@ -132,7 +132,7 @@
         credentials: 'omit', referrerPolicy: 'no-referrer',
         headers: token ? {Authorization: 'Bearer ' + token} : {}});
       if (!response.ok || Number(response.headers.get('Content-Length')) > maximum || !response.body) {
-        throw new Error('Media is unavailable or exceeds the browser playback limit.');
+        throw new Error('This file is unavailable or too large to play here.');
       }
       const reader = response.body.getReader();
       const chunks = [];
@@ -188,7 +188,7 @@
   window.deltieSubscribePush = async () => {
     // Call this directly from a button; Safari requires user activation.
     if (!('Notification' in window) || !('PushManager' in window)) {
-      throw new Error('Install SeND to your Home Screen to enable notifications on supported iOS versions.');
+      throw new Error('Add SeND to your Home Screen to enable notifications.');
     }
     if (await Notification.requestPermission() !== 'granted') {
       throw new Error('Notification permission was not granted.');

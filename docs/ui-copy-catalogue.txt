@@ -1,0 +1,41 @@
+SeND UI copy catalogue, 2026-10-28
+
+No removal decisions have been made and no explanatory copy has been deleted.
+Read ui-copy-review.txt first, or use ui-copy-review.csv to record decisions.
+They contain the same 450 prose/warning/heading candidates.
+ui-copy-errors.csv contains 543 error/status entries for separate review.
+ui-copy-inventory.csv is the complete 2507-entry static inventory, including controls.
+ui-copy-inventory.json includes scan coverage and structured source references.
+
+Fill Keep / shorten / remove and Replacement / notes, or send decisions by COPY-... ID.
+IDs remain the same when only source line numbers move. Dynamic expressions are shown literally.
+Repeated text flags identify possible duplication, not automatic deletion candidates.
+Safety/privacy flags mark text that may prevent data loss or expose privacy consequences.
+Visibility-needs-checking entries include diagnostics that may be replaced by generic UI errors.
+
+Coverage: 301 Dart files (103 UI files), 49 first-party native/web sources and resources. Generated/vendor code, tests, documentation, OS-provided strings and dynamic server/chat content are excluded.
+
+Priority examples:
+COPY-B7F705140E | lib/ui/server_storage_settings.dart:97
+Remove ${storageSize(preview['bytes'] as num)} from your homeserver. These attachments will stop working for everyone who received them. This cannot be undone. Messages stay in chat history. Copies on other servers or devices may remain. This preview includes at most 100 files; profile images and protected assets are excluded.
+
+COPY-DA020AE69E | lib/ui/server_storage_settings.dart:142
+Server storage
+
+COPY-2DECE08544 | lib/ui/server_storage_settings.dart:147
+The displayed allowance is not enforced during this preview.
+
+COPY-FA46A360F4 | lib/ui/server_storage_settings.dart:150
+Deletion is a dry run. No uploads will be removed.
+
+COPY-BCA1AB370B | lib/ui/server_storage_settings.dart:155
+Share upload types and GIF sources with your homeserver. Message text, filenames and encryption keys are not sent.
+
+COPY-05E521E910 | lib/ui/server_storage_settings.dart:185
+${storageSize(usage['used_bytes'] as num)} of ${storageSize(usage['quota_bytes'] as num)} used
+
+COPY-FB1838B1E6 | lib/ui/server_storage_settings.dart:250
+This is uploaded media, not your message database or local cache. Encrypted uploads without a type label appear under Other. Optional categorization shares media types and source labels with your homeserver, never message text or encryption keys.
+
+COPY-115750C288 | lib/ui/settings_screen.dart:971
+Server storage

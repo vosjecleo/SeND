@@ -66,3 +66,4 @@ app.*.map.json
 /web/e2ee.worker.dart.js*
 # Local browser regression dependencies (the lockfile is committed).
 tool/browser-tests/node_modules/
+tool/web-video/node_modules/

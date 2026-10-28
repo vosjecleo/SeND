@@ -8,9 +8,15 @@ import '../models/media_compression.dart';
 import '../models/video_edit.dart';
 import '../services/video_optimizer.dart';
 import 'media_edit_canvas.dart';
+import 'media_editor_layout.dart';
 
 class VideoAttachmentEditor extends StatefulWidget {
-  const VideoAttachmentEditor({required this.draft, super.key});
+  const VideoAttachmentEditor({
+    required this.draft,
+    this.preferences = const AppPreferences(),
+    super.key,
+  });
+  final AppPreferences preferences;
   final AttachmentDraft draft;
   @override
   State<VideoAttachmentEditor> createState() => _VideoAttachmentEditorState();
@@ -33,7 +39,16 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
   Rect _crop = _full;
   double? _ratio;
   double _progress = 0;
-  String _quality = 'original';
+  late String _quality =
+      videoOptimizationSupported && widget.preferences.optimizeVideos
+      ? widget.preferences.videoCompression.name
+      : 'original';
+  late bool _spoiler = widget.draft.spoiler;
+  int _section = 0;
+  void _select(int value) => setState(() {
+    _section = value;
+    _cropMode = value == 1;
+  });
   String? _error;
   @override
   void initState() {
@@ -106,13 +121,16 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
       height: _crop.height,
     );
     if (!plan.hasChanges && _quality == 'original') {
-      Navigator.pop(context, widget.draft.copyWith(videoPrepared: true));
+      Navigator.pop(
+        context,
+        widget.draft.copyWith(videoPrepared: true, spoiler: _spoiler),
+      );
       return;
     }
     if (!videoOptimizationSupported) {
       setState(
         () => _error =
-            'Video export is available in the native app. Cancel to keep the original.',
+            'Video export is unavailable in this browser. Cancel to keep the original or use the native app.',
       );
       return;
     }
@@ -133,12 +151,18 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
           if (mounted) setState(() => _progress = v);
         },
       );
-      if (mounted) Navigator.pop(context, result.copyWith(videoPrepared: true));
-    } catch (_) {
+      if (mounted) {
+        Navigator.pop(
+          context,
+          result.copyWith(videoPrepared: true, spoiler: _spoiler),
+        );
+      }
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _error =
-              'Could not export the video. Try a shorter selection or cancel to keep the original.',
+          () => _error = error is StateError
+              ? error.message.toString()
+              : 'Could not export the video. Try a shorter selection or cancel to keep the original.',
         );
       }
     } finally {
@@ -146,103 +170,99 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
     }
   }
 
-  Widget _tools() => IgnorePointer(
-    ignoring: _busy || _loading,
-    child: Column(
-      children: [
-        ExpansionTile(
-          title: const Text('Trim'),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          children: [
-            Text('${_time(_range.start)} to ${_time(_range.end)}'),
-            RangeSlider(
-              values: _range,
-              min: 0,
-              max: math.max(1, _duration).toDouble(),
-              onChanged: _duration <= 0
-                  ? null
-                  : (v) {
-                      if (v.end - v.start >= 100) setState(() => _range = v);
-                    },
-              onChangeEnd: (v) =>
-                  _player?.seek(Duration(milliseconds: v.start.round())),
-            ),
-            const Text('Drag the ends to choose the part to keep.'),
-          ],
-        ),
-        MediaCropTools(
-          locked: _locked,
-          ratio: _ratio,
-          onLock: (v) => setState(() {
-            _locked = v;
-            if (v) {
-              _crop = cropForAspect(
-                _crop,
-                _display,
-                _ratio ?? _display.aspectRatio,
-              );
-            }
-          }),
-          onRatio: (v) => setState(() {
-            _ratio = v;
-            _locked = true;
-            _crop = cropForAspect(_crop, _display, v ?? _display.aspectRatio);
-          }),
-          onRotate: () => setState(() {
-            _turns = (_turns + 1) % 4;
-            _crop = rotateCrop(_crop);
-            if (_ratio != null) _ratio = 1 / _ratio!;
-          }),
-          onReset: () => setState(() => _crop = _full),
-          onExpand: (v) => setState(() => _cropMode = v),
-        ),
-        ExpansionTile(
-          title: const Text('Audio'),
-          children: [
-            SwitchListTile(
-              title: const Text('Mute video'),
-              value: _muted,
-              onChanged: (v) {
-                setState(() => _muted = v);
-                _player?.setVolume(v ? 0 : 100);
-              },
-            ),
-          ],
-        ),
-        ExpansionTile(
-          title: const Text('Quality'),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: _quality,
-              decoration: const InputDecoration(labelText: 'Export quality'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'original',
-                  child: Text('High quality'),
-                ),
-                DropdownMenuItem(
-                  value: 'balanced',
-                  child: Text('Balanced, up to 24 MiB'),
-                ),
-                DropdownMenuItem(
-                  value: 'smaller',
-                  child: Text('Smaller, up to 12 MiB'),
-                ),
-              ],
-              onChanged: (v) => setState(() => _quality = v!),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              videoOptimizationSupported
-                  ? 'Editing re-encodes the clip. The original attachment stays unchanged until you use the result.'
-                  : 'Video export needs the native app; browser previews do not upload your video to an editing service.',
-            ),
-          ],
-        ),
-      ],
+  List<MediaEditorTool> _tools() => [
+    MediaEditorTool(
+      'Trim',
+      Icons.content_cut,
+      Column(
+        children: [
+          Text('${_time(_range.start)} to ${_time(_range.end)}'),
+          RangeSlider(
+            values: _range,
+            min: 0,
+            max: math.max(1, _duration).toDouble(),
+            onChanged: _duration <= 0
+                ? null
+                : (v) {
+                    if (v.end - v.start >= 100) setState(() => _range = v);
+                  },
+            onChangeEnd: (v) =>
+                _player?.seek(Duration(milliseconds: v.start.round())),
+          ),
+        ],
+      ),
     ),
-  );
+    MediaEditorTool(
+      'Crop',
+      Icons.crop,
+      MediaCropTools(
+        locked: _locked,
+        ratio: _ratio,
+        onLock: (v) => setState(() {
+          _locked = v;
+          if (v) {
+            _crop = cropForAspect(
+              _crop,
+              _display,
+              _ratio ?? _display.aspectRatio,
+            );
+          }
+        }),
+        onRatio: (v) => setState(() {
+          _ratio = v;
+          _locked = true;
+          _crop = cropForAspect(_crop, _display, v ?? _display.aspectRatio);
+        }),
+        onRotate: () => setState(() {
+          _turns = (_turns + 1) % 4;
+          _crop = rotateCrop(_crop);
+          if (_ratio != null) _ratio = 1 / _ratio!;
+        }),
+        onReset: () => setState(() => _crop = _full),
+      ),
+    ),
+    MediaEditorTool(
+      'Audio',
+      Icons.volume_up_outlined,
+      Column(
+        children: [
+          SwitchListTile(
+            title: const Text('Mute video'),
+            value: _muted,
+            onChanged: (v) {
+              setState(() => _muted = v);
+              _player?.setVolume(v ? 0 : 100);
+            },
+          ),
+        ],
+      ),
+    ),
+    MediaEditorTool(
+      'Quality',
+      Icons.hd_outlined,
+      Column(
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in const {
+                'original': 'Original',
+                'balanced': 'Balanced',
+                'smaller': 'Smaller',
+              }.entries)
+                ChoiceChip(
+                  label: Text(entry.value),
+                  selected: _quality == entry.key,
+                  onSelected: (_) => setState(() => _quality = entry.key),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -273,7 +293,7 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
                   children: [
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: EdgeInsets.zero,
                         child: MediaEditCanvas(
                           sourceSize: _size,
                           turns: _turns,
@@ -315,25 +335,14 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
                     ),
                   ],
                 );
-                if (c.maxWidth >= 850) {
-                  return Row(
-                    children: [
-                      Expanded(child: preview),
-                      SizedBox(
-                        width: 340,
-                        child: SingleChildScrollView(child: _tools()),
-                      ),
-                    ],
-                  );
-                }
-                return Column(
-                  children: [
-                    Expanded(child: preview),
-                    SizedBox(
-                      height: math.min(320, c.maxHeight * .45),
-                      child: SingleChildScrollView(child: _tools()),
-                    ),
-                  ],
+                return MediaEditorLayout(
+                  preview: preview,
+                  tools: _tools(),
+                  selected: _section,
+                  onSelect: _select,
+                  spoiler: _spoiler,
+                  disabled: _busy || _loading,
+                  onSpoiler: () => setState(() => _spoiler = !_spoiler),
                 );
               },
             ),

@@ -165,9 +165,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Log out?'),
-        content: const Text(
-          'Are you sure? Make sure you have your recovery key before logging out.',
-        ),
+        content: const Text('Save your recovery key before logging out.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -657,20 +655,12 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Optimize videos before sending'),
-          subtitle: const Text(
-            'Local H.264/AAC compression: desktop up to 1080p, Android up to 1280 px, 30 fps and 24 MiB. Desktop requires FFmpeg. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.',
-          ),
+
           value: backend.preferences.optimizeVideos,
           onChanged: (value) => backend.updatePreferences(
             backend.preferences.copyWith(optimizeVideos: value),
           ),
         ),
-      if (defaultTargetPlatform == TargetPlatform.linux) ...[
-        const SizedBox(height: 12),
-        const Text(
-          'Screen selection uses the standard desktop portal on Linux/Wayland.',
-        ),
-      ],
     ]),
     _SettingsPage.notifications => _section('Notifications', [
       SegmentedButton<bool>(
@@ -708,9 +698,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         if (kIsWeb) ...[
           const Text(
-            'On iPhone/iPad, add SeND to your Home Screen from Safari, '
-            'open that installed app, then enable notifications here (iOS 16.4 or later). '
-            'Web alerts are generic unless device-side previews are enabled below.',
+            'On iPhone or iPad, use Safari → Share → Add to Home Screen, then open SeND there to enable notifications.',
           ),
           FilledButton.icon(
             icon: const Icon(Icons.notifications_active_outlined),
@@ -730,7 +718,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'Could not enable notifications. Check permission and Home Screen installation, then try again.',
+                        'Couldn\'t enable notifications. Check browser permissions.',
                       ),
                     ),
                   );
@@ -746,8 +734,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               try {
                 report = await browser.browserPushDiagnostics();
               } catch (_) {
-                report =
-                    'Could not read browser setup. Reload the app and try again.';
+                report = 'Couldn\'t read browser settings. Reload SeND.';
               }
               if (!mounted || !context.mounted) return;
               await showDialog<void>(
@@ -770,7 +757,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             label: const Text('Send test push notification'),
             onPressed: () async {
               var message =
-                  'Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.';
+                  'Test sent. No alert? Check notification permissions and Focus.';
               try {
                 await browser.testBrowserPush();
               } catch (_) {
@@ -811,7 +798,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Decrypt previews on this browser'),
               subtitle: const Text(
-                'Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.',
+                'Saves encrypted keys on this device for message previews, which may appear on your lock screen.',
               ),
               value: enabled,
               onChanged: (value) async {
@@ -822,7 +809,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'Could not save browser preview settings. Please try again.',
+                          'Couldn\'t save preview settings. Try again.',
                         ),
                       ),
                     );
@@ -958,10 +945,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               ),
             ],
           ),
-          const Text(
-            'The private push endpoint is stored by Android and is never shown '
-            'or written to logs. Notification content is fetched from Matrix.',
-          ),
         ],
       ],
     ]),
@@ -977,7 +960,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       HistoryIndexSettings(backend: backend),
       const Divider(height: 28),
       const Text(
-        'Favourites, frequently used emoji, stickers and GIFs, pinned chats and space folders sync with your Matrix account. They contain media references, not media files. Account data is visible to your homeserver.',
+        'Your homeserver can see your synced favourites, frequently used emoji and chat layout.',
       ),
       OutlinedButton(
         onPressed: () async {
@@ -986,7 +969,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             builder: (context) => AlertDialog(
               title: const Text('Import device favourites?'),
               content: const Text(
-                'Older favourites were saved for this device, not a particular account. Import them into your current account?',
+                'Import this device\'s favourites into your current account?',
               ),
               actions: [
                 TextButton(
@@ -1021,15 +1004,11 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         icon: const Icon(Icons.folder_copy_outlined),
         label: const Text('Chats and spaces'),
       ),
-      const Text(
-        'Encrypted session data, room keys, thumbnails, and timeline caches are '
-        'stored in SeND’s private per-user application-data directory.',
-      ),
+
       const SizedBox(height: 12),
       _value('Application data', _formatBytes(backend.storageUsageBytes)),
       const Text(
-        'This includes the encrypted Matrix database and locally cached media. '
-        'Clearing media cache does not remove room keys or your signed-in session.',
+        'Clearing cached media won\'t sign you out or remove encryption keys.',
       ),
       const SizedBox(height: 12),
       Row(
@@ -1071,7 +1050,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'Could not add the launcher. Check the AppImage location and permissions.',
+                      'Couldn\'t add the launcher. Check the AppImage location and permissions.',
                     ),
                   ),
                 );
@@ -1080,9 +1059,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           },
         ),
       Text(
-        'SeND v$deltiecordVersion+$deltiecordBuildNumber\n'
-        'SeND is a recursive acronym: SeND is Not Discord.\n'
-        'A compact, old-school ${defaultTargetPlatform == TargetPlatform.android ? 'mobile' : 'desktop'} Matrix client built with Flutter.',
+        'SeND v$deltiecordVersion+$deltiecordBuildNumber\nSeND is Not Discord.',
       ),
       const SizedBox(height: 12),
       Text('Diagnostics', style: Theme.of(context).textTheme.titleMedium),
@@ -1108,8 +1085,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
       const SizedBox(height: 8),
       const Text(
-        'Diagnostics exclude access tokens, recovery material, '
-        'decrypted messages, and media encryption keys.',
+        'Reports exclude access tokens, recovery details, decrypted messages and media keys.',
       ),
       const SizedBox(height: 12),
       Wrap(
@@ -1139,19 +1115,27 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ],
       ),
+
       const SizedBox(height: 12),
-      const Text(
-        'Matrix connectivity and encryption use matrix-dart-sdk. MatrixRTC, '
-        'media_kit, Flutter WebRTC, Flutter Quill, KLIPY, Element, and '
-        'FluffyChat informed or support parts of the implementation.',
-      ),
-      const SizedBox(height: 12),
-      const SelectableText(
-        'Full acknowledgements and upstream license links are in CREDITS.md.',
-      ),
-      const SizedBox(height: 20),
-      const Text(
-        'Made for dense desktops, strange little computers, and friends.',
+      TextButton.icon(
+        onPressed: () => showAboutDialog(
+          context: context,
+          applicationName: 'SeND',
+          applicationVersion: '$deltiecordVersion+$deltiecordBuildNumber',
+          children: [
+            TextButton(
+              onPressed: () => launchUrl(
+                Uri.parse(
+                  'https://github.com/VosjeCleo/SeND/blob/main/CREDITS.md',
+                ),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: const Text('Credits'),
+            ),
+          ],
+        ),
+        icon: const Icon(Icons.info_outline),
+        label: const Text('Credits and licences'),
       ),
     ]),
   };
@@ -1255,9 +1239,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       'Danger zone',
       style: TextStyle(color: Theme.of(context).colorScheme.error),
     ),
-    const Text(
-      'Permanently deactivate this Matrix account and request data erasure.',
-    ),
+
     OutlinedButton.icon(
       onPressed: _confirmDeleteAccount,
       icon: const Icon(Icons.delete_forever_outlined),
@@ -1271,11 +1253,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Sync appearance between devices'),
-        subtitle: Text(
-          preferences.syncAppearance
-              ? 'Theme, accent, sizing and accessibility appearance follow your Matrix account.'
-              : 'Appearance is stored only on this device.',
-        ),
+
         value: preferences.syncAppearance,
         onChanged: _changeAppearanceSync,
       ),
@@ -1296,9 +1274,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text(
-                  'Could not apply the theme. Settings may still be synchronizing; please try again.',
-                ),
+                content: Text('Couldn\'t apply the theme. Try again shortly.'),
               ),
             );
           }
@@ -1319,10 +1295,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           backend.preferences.copyWith(interfaceScale: value),
         ),
       ),
-      const Text(
-        'Scales panels, controls, icons, media, and text together. Text-only '
-        'scaling is under Accessibility.',
-      ),
+
       const SizedBox(height: 20),
       if (defaultTargetPlatform != TargetPlatform.android) ...[
         Text('Room panel — ${preferences.roomPanelWidth.round()} px'),
@@ -1360,10 +1333,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           key: const Key('channel-drag-drop-toggle'),
           contentPadding: EdgeInsets.zero,
           title: const Text('Enable channel drag and drop'),
-          subtitle: const Text(
-            'Off by default to prevent accidental room and category moves. '
-            'Permission checks still apply.',
-          ),
+
           value: preferences.enableChannelDragAndDrop,
           onChanged: (value) => backend.updatePreferences(
             backend.preferences.copyWith(enableChannelDragAndDrop: value),
@@ -1405,9 +1375,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Native title bar'),
-          subtitle: const Text(
-            'Show GTK window decorations on Linux. Applies after restart.',
-          ),
+          subtitle: const Text('Restart for changes to take effect.'),
           value: preferences.showNativeTitleBar,
           onChanged: (value) => backend.updatePreferences(
             backend.preferences.copyWith(showNativeTitleBar: value),
@@ -1435,7 +1403,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Resume appearance sync?'),
         content: const Text(
-          'Choose which appearance should become the synced account setting.',
+          'Which appearance should sync across your devices?',
         ),
         actions: [
           TextButton(
@@ -1467,7 +1435,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         contentPadding: EdgeInsets.zero,
         title: const Text('Categorize encrypted uploads'),
         subtitle: const Text(
-          'Share upload types and GIF sources with your homeserver for storage management. Off by default. Message text, filenames and encryption keys are not sent.',
+          'Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.',
         ),
         value: preferences.shareUploadCategories,
         onChanged: (value) => backend.updatePreferences(
@@ -1483,9 +1451,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           labelText: 'Direct link-preview fallback',
           helperMaxLines: 4,
           helperText:
-              'Direct previews contact websites from your device and may '
-              'expose your IP address and browsing metadata. Matrix '
-              'homeserver previews are always attempted first.',
+              'Direct previews let websites see your IP address and request details.',
         ),
         items: const [
           DropdownMenuItem(
@@ -1528,7 +1494,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         ),
       ),
       Text(
-        'Show per-message receipts up to ${preferences.readReceiptMemberThreshold} members',
+        'Read receipts in rooms of up to ${preferences.readReceiptMemberThreshold} members',
       ),
       Slider(
         value: preferences.readReceiptMemberThreshold.toDouble(),
@@ -1565,17 +1531,14 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           contentPadding: EdgeInsets.zero,
           title: Text('Desktop away status'),
           subtitle: Text(
-            'Away after 10 minutes without keyboard or mouse activity anywhere on your PC. Browsers and unsupported desktop sessions use activity in SeND instead.',
+            'Set you as away after 10 minutes of inactivity on your PC, or in SeND when system activity isn\'t available.',
           ),
         ),
       SwitchListTile(
         key: const ValueKey('improve-twitter-links-toggle'),
         contentPadding: EdgeInsets.zero,
         title: const Text('Improve X/Twitter links with FxTwitter'),
-        subtitle: const Text(
-          'Uses FxTwitter for previews and rewrites newly sent X/Twitter '
-          'links. Disable this to preserve the original host.',
-        ),
+        subtitle: const Text('Use FxTwitter for previews and links you send.'),
         value: preferences.improveTwitterLinks,
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(improveTwitterLinks: value),
@@ -1635,8 +1598,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       _reloadUnifiedPush();
       _showSettingMessage(
         state.error == null
-            ? 'The distributor has not returned an endpoint yet. Check its '
-                  'account and connection, then refresh registration.'
+            ? 'Your notification app hasn\'t connected yet. Check its account and connection, then retry.'
             : 'The distributor rejected registration (${state.error}).',
       );
     }
@@ -1711,8 +1673,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ),
     const Text(
-      'Verification uses Matrix SAS. Signing out a device does not delete '
-      'local data until that device next connects.',
+      'Signing out a device won\'t clear its local data until it reconnects.',
     ),
   ]);
 
@@ -1731,7 +1692,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           backend.preferences.copyWith(fontScale: value),
         ),
       ),
-      const Text('Changes text size without enlarging the rest of the UI.'),
+
       const SizedBox(height: 12),
       SwitchListTile(
         key: const Key('use-24-hour-time'),
@@ -1746,9 +1707,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Animate profile pictures in messages'),
-        subtitle: const Text(
-          'Off by default. Desktop hover still animates avatars unless Reduce motion is on.',
-        ),
+
         value: preferences.animateTimelineAvatars,
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(animateTimelineAvatars: value),
@@ -1757,9 +1716,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Reduce motion'),
-        subtitle: const Text(
-          'Snap UI transitions instantly and pause automatic GIF playback.',
-        ),
+
         value: preferences.reducedMotion,
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(reducedMotion: value),
@@ -1773,11 +1730,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(highContrast: value),
         ),
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'All primary workflows remain keyboard reachable and use visible focus '
-        'indicators. SeND does not communicate status by colour alone.',
       ),
     ]);
   }
@@ -1816,8 +1768,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Future<void> _confirmRemoveDevice(DeviceSessionSummary device) async {
     final password = await _askForPassword(
       'Remove ${device.displayName}?',
-      'This signs that device out and removes its Matrix device keys. '
-          'Encrypted history stored only on that device may become unavailable.',
+      'Signs this device out and removes its encryption keys. History stored only there may be lost.',
     );
     if (password != null) {
       await _runSettingAction(() => backend.removeDevice(device.id, password));
@@ -1827,8 +1778,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Future<void> _confirmDeleteAccount() async {
     final password = await _askForPassword(
       'Permanently delete account?',
-      'This deactivates ${backend.userId}, signs out all devices, and requests '
-          'server-side data erasure. This cannot be undone.',
+      'Permanently deactivate ${backend.userId}, sign out all devices and request data deletion? This can\'t be undone.',
     );
     if (password != null) {
       await _runSettingAction(() => backend.deleteAccount(password));
@@ -2076,9 +2026,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
                     decoration: InputDecoration(labelText: field.$2),
                   ),
                 ),
-              const Text(
-                'Other sessions may be signed out by your homeserver.',
-              ),
+              const Text('This may sign you out on other devices.'),
               if (_error != null)
                 Text(
                   _error!,

@@ -7,6 +7,7 @@ const _storageKinds = {
   'videos': ('Videos', Colors.deepPurple),
   'gifs': ('GIFs', Colors.pink),
   'audio': ('Audio', Colors.orange),
+  'legacy': ('Legacy', Colors.grey),
   'other': ('Other', Colors.blueGrey),
 };
 String storageSize(num bytes) => bytes >= 1073741824
@@ -93,10 +94,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
           scrollable: true,
           title: Text('Delete ${files.length} uploads?'),
           content: Text(
-            'Remove ${storageSize(preview['bytes'] as num)} from your homeserver. '
-            'These attachments will stop working for everyone who received them. '
-            'This cannot be undone. Messages stay in chat history. Copies on other servers or devices may remain. '
-            'This preview includes at most 100 files; profile images and protected assets are excluded.',
+            'Delete ${storageSize(preview['bytes'] as num)} from your homeserver? Shared attachments will stop working; messages stay. This can\'t be undone, and copies elsewhere may remain.\nPreview: up to 100 files, excluding profile images and protected files.',
           ),
           actions: [
             TextButton(
@@ -118,7 +116,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
       });
       if (mounted) {
         _notice = result['dry_run'] == true
-            ? 'Preview only: ${result['would_delete']} uploads would be deleted. Nothing was removed.'
+            ? 'Preview: ${result['would_delete']} uploads would be deleted. Nothing was removed.'
             : '${result['deleted']} uploads deleted.';
       }
       await _load();
@@ -142,16 +140,14 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
         const SizedBox(height: 12),
         if (usage != null) ...[
           if (usage['quota_enforced'] == false)
-            const Text(
-              'The displayed allowance is not enforced during this preview.',
-            ),
+            const Text('Preview only — storage limits aren\'t enforced.'),
           if (usage['dry_run_pruning'] == true)
-            const Text('Deletion is a dry run. No uploads will be removed.'),
+            const Text('Preview only — nothing will be deleted.'),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Categorize encrypted uploads'),
             subtitle: const Text(
-              'Share upload types and GIF sources with your homeserver. Message text, filenames and encryption keys are not sent.',
+              'Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.',
             ),
             value: widget.backend.preferences.shareUploadCategories,
             onChanged: _busy
@@ -245,11 +241,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
                 ),
               ),
             ),
-          const Text(
-            'This is uploaded media, not your message database or local cache. '
-            'Encrypted uploads without a type label appear under Other. '
-            'Optional categorization shares media types and source labels with your homeserver, never message text or encryption keys.',
-          ),
+
           const Divider(height: 32),
           Text(
             'Prune old uploads',
@@ -260,7 +252,9 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
             initialValue: _kind,
             decoration: const InputDecoration(labelText: 'Media type'),
             items: [
-              for (final entry in _storageKinds.entries)
+              for (final entry in _storageKinds.entries.where(
+                (entry) => entry.key != 'legacy',
+              ))
                 DropdownMenuItem(value: entry.key, child: Text(entry.value.$1)),
             ],
             onChanged: _busy ? null : (v) => setState(() => _kind = v!),

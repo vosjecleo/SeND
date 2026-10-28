@@ -22,12 +22,12 @@ class SocksProxyConfig {
               'socks5://${value.contains(':') && !value.startsWith('[') ? '[$value]' : value}:$port',
             )?.host.isNotEmpty !=
             true) {
-      return 'Enter a proxy hostname or IP address, without a URL or port.';
+      return 'Use a hostname or IP address, not a URL or port.';
     }
     if (port < 1 || port > 65535) return 'Enter a port from 1 to 65535.';
     if (utf8.encode(username).length > 255 ||
         utf8.encode(password).length > 255) {
-      return 'Proxy usernames and passwords must each fit in 255 UTF-8 bytes.';
+      return 'Use up to 255 UTF-8 bytes per username or password.';
     }
     if (password.isNotEmpty && username.isEmpty) {
       return 'Enter a proxy username too.';

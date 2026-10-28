@@ -5,6 +5,22 @@ import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'legacy usage is distinct from Other and included in quota accounting',
+    () {
+      final usage = normalizeServerStorageUsage({
+        'used_bytes': 100,
+        'quota_bytes': 1000,
+        'categories': {
+          'legacy': {'bytes': 80, 'files': 1},
+          'other': {'bytes': 20, 'files': 1},
+        },
+      });
+      expect(usage['categories']['legacy']['bytes'], 80);
+      expect(usage['categories']['other']['bytes'], 20);
+      expect(usage['remaining_bytes'], 900);
+    },
+  );
   test('multi-gigabyte server quotas normalize on native and web', () {
     final usage = normalizeServerStorageUsage({
       'used_bytes': 900 * 1048576,

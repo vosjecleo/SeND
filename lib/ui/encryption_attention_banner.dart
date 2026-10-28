@@ -22,7 +22,7 @@ class EncryptionAttentionBanner extends StatelessWidget {
     }
     final label = state.deviceVerified
         ? 'Encryption needs attention on this account.'
-        : 'This device is not verified. Encrypted history may be unavailable.';
+        : 'This device isn\'t verified. Encrypted history may be missing.';
     return Material(
       color: Theme.of(context).colorScheme.primaryContainer,
       child: InkWell(

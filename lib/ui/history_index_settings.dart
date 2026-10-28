@@ -27,11 +27,7 @@ Future<void> showHistoryIndexPrompt(
       builder: (context) => AlertDialog(
         title: const Text('Keep a local search index?'),
         content: Text(
-          'A text index makes repeat searches faster and uses extra storage on this device. '
-          'It starts with a 100 MiB limit. You can change the limit or clear it in Storage settings. '
-          'Media indexing saves event references, not the images or videos. '
-          'Indexed message text is decrypted on this device. This is separate from the normal chat cache. '
-          '${index.encryptedAtRest ? '' : 'The search database is not separately encrypted.'}',
+          'Save messages on this device for faster searches? ${index.encryptedAtRest ? '' : 'Message text will be stored unencrypted.'}',
         ),
         actions: [
           TextButton(
@@ -148,7 +144,7 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
       builder: (context) => AlertDialog(
         title: const Text('Change search scope?'),
         content: const Text(
-          'This applies to history downloads and incoming messages. Search entries outside the chosen scope will be removed from this device, and saved download progress will reset. Your messages and uploaded media stay intact.',
+          'Remove excluded messages from local search and reset download progress? Your chats and uploads won\'t be deleted.',
         ),
         actions: [
           TextButton(
@@ -194,14 +190,12 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Keep a local text search index'),
           subtitle: const Text(
-            'Off by default. Turning it off removes indexed message text. Your chat history stays intact.',
+            'Turning this off clears saved search text, not your chats.',
           ),
           value: index?.enabled ?? false,
           onChanged: _busy ? null : (v) => _change(v),
         ),
-        const Text(
-          'Media indexing stores event IDs and media types. It does not download image, video or audio files.',
-        ),
+
         if (index != null) ...[
           DropdownButtonFormField<HistoryScope>(
             key: ValueKey(
@@ -222,10 +216,10 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
           ),
           const SizedBox(height: 12),
           Text(
-            '${index.entries} indexed events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ' database size'}',
+            '${index.entries} events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ''}',
           ),
           Text(
-            'Quota use: ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}%, including reserved overhead. Up to ${index.entryLimit} events, subject to space.',
+            '${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}% of storage limit used',
           ),
           DropdownButtonFormField<int>(
             initialValue: index.limitMiB,
@@ -331,9 +325,7 @@ class _HistoryIndexWarningGateState extends State<HistoryIndexWarningGate> {
         builder: (context) => AlertDialog(
           title: const Text('Search cache almost full'),
           content: Text(
-            'The search cache has reached 80% of its ${index.limitMiB} MiB budget. '
-            'SeND will prune search context from the oldest messages onward as space is needed. '
-            'Your messages and media on the homeserver will not be deleted.',
+            'Search storage is 80% full. Older search results will be cleared as needed; your chats and uploads won\'t be deleted.',
           ),
           actions: [
             TextButton(

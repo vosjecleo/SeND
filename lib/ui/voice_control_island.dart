@@ -16,7 +16,7 @@ Future<void> toggleVoiceScreenSharing(
       builder: (context) => AlertDialog(
         title: const Text('Connect to the call first'),
         content: const Text(
-          'Wait for the call server to connect before sharing your screen.',
+          'Wait for the call to connect, then share your screen.',
         ),
         actions: [
           TextButton(

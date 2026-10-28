@@ -266,7 +266,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         .toList();
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null || question.isEmpty || answers.length < 2) {
-      throw ArgumentError('A poll needs a question and at least two answers.');
+      throw ArgumentError('Add a question and at least two answers.');
     }
     await _prepareEncryptedSend(room);
     await room.startPoll(

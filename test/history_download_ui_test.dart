@@ -14,6 +14,79 @@ class _Backend extends FakeBackend {
 }
 
 void main() {
+  testWidgets(
+    'failed events show room, sender and event reference before targeted retry',
+    (tester) async {
+      const failed = HistoryDecryptionFailure(
+        roomId: '!r:test',
+        eventId: r'$failed',
+        senderId: '@other:test',
+        timestamp: 42,
+      );
+      final index = HistoryIndex('@me:test')..enabled = true;
+      final job = HistoryDownload(
+        fetch: (_, _) async => const HistoryDownloadPage(
+          rows: [],
+          nextCursor: null,
+          checked: 1,
+          unavailable: 1,
+          failures: [failed],
+        ),
+        append: (_) async => true,
+        load: () async => {
+          'version': 1,
+          'rooms': ['!r:test'],
+          'position': 1,
+          'cursor': null,
+          'checked': 1,
+          'unavailable': 1,
+          'failures': [failed.toMap()],
+        },
+        save: (_) async {},
+        canRun: () => true,
+        pageDelay: Duration.zero,
+        retryEvent: (_, _) async => const HistoryDownloadPage(
+          rows: [
+            {'id': r'$failed', 'room': '!r:test', 'body': 'Recovered'},
+          ],
+          nextCursor: null,
+          checked: 1,
+        ),
+      );
+      await job.open();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: HistoryDownloadPanel(
+                backend: _Backend(),
+                index: index,
+                download: job,
+                increaseLimit: (_) async => true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Review failed events (1)'));
+      await tester.tap(find.text('Review failed events (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text(r'$failed'), findsOneWidget);
+      expect(find.text('@other:test'), findsOneWidget);
+      expect(find.text('Alice'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Retry decryption'));
+      await tester.tap(find.text('Retry decryption'));
+      await tester.pumpAndSettle();
+      expect(job.failures, isEmpty);
+      expect(find.text('Review failed events (1)'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      job.dispose();
+      index.dispose();
+    },
+  );
   for (final mobile in [false, true]) {
     testWidgets(
       'history controls confirm, pause at quota and increase/resume, mobile=$mobile',

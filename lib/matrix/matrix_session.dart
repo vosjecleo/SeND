@@ -1114,7 +1114,7 @@ extension _MatrixSession on MatrixBackend {
       notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
       optimizeVideos: content?.tryGet<bool>('optimize_videos') ?? true,
       shareUploadCategories:
-          content?.tryGet<bool>('share_upload_categories') ?? false,
+          content?.tryGet<bool>('share_upload_categories') ?? true,
       imageCompression: ImageCompressionPreset.parse(
         content?['image_compression'],
       ),

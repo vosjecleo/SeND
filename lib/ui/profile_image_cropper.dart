@@ -222,11 +222,7 @@ class _ProfileImageCropperState extends State<_ProfileImageCropper> {
                         widget.title,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Drag the preview or use the position controls. Zooming crops '
-                        'more tightly; only the visible area will be uploaded.',
-                      ),
+
                       const SizedBox(height: 14),
                       SizedBox(
                         height: (MediaQuery.sizeOf(context).height * .45).clamp(

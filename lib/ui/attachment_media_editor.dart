@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
@@ -8,22 +7,25 @@ import '../services/image_markup.dart';
 import '../services/image_preparation.dart';
 import 'lifecycle_memory_image.dart' show LifecycleMemoryImage;
 import 'media_edit_canvas.dart';
+import 'media_editor_layout.dart';
 import 'video_attachment_editor.dart';
 
 Future<AttachmentDraft?> showAttachmentImageEditor(
   BuildContext context,
-  AttachmentDraft draft,
-) => Navigator.of(context).push<AttachmentDraft>(
+  AttachmentDraft draft, {
+  AppPreferences preferences = const AppPreferences(),
+}) => Navigator.of(context).push<AttachmentDraft>(
   MaterialPageRoute(
     fullscreenDialog: true,
     builder: (_) => draft.mimeType.startsWith('video/')
-        ? VideoAttachmentEditor(draft: draft)
-        : _ImageEditor(draft: draft),
+        ? VideoAttachmentEditor(draft: draft, preferences: preferences)
+        : _ImageEditor(draft: draft, preferences: preferences),
   ),
 );
 
 class _ImageEditor extends StatefulWidget {
-  const _ImageEditor({required this.draft});
+  const _ImageEditor({required this.draft, required this.preferences});
+  final AppPreferences preferences;
   final AttachmentDraft draft;
   @override
   State<_ImageEditor> createState() => _ImageEditorState();
@@ -45,38 +47,22 @@ class _ImageEditorState extends State<_ImageEditor> {
   double? _ratio;
   String? _error;
   AttachmentDraft? _preview;
-  ImageCompressionPreset _quality = ImageCompressionPreset.original;
+  late ImageCompressionPreset _quality = widget.preferences.imageCompression;
+  late bool _spoiler = widget.draft.spoiler;
   final _strokes = <MarkupStroke>[], _redo = <MarkupStroke>[];
-  final _panels = List.generate(3, (_) => ExpansibleController());
-  int? _section;
+  int _section = 0;
 
-  void _expand(int section, bool open) {
-    if (open) {
-      _section = section;
-      for (var i = 0; i < _panels.length; i++) {
-        if (i != section) _panels[i].collapse();
-      }
-    } else if (_section == section) {
-      _section = null;
-    }
-    setState(() {
-      _cropMode = _section == 0;
-      _drawMode = _section == 1;
-      _showResult = false;
-    });
-  }
-
-  @override
-  void dispose() {
-    for (final panel in _panels) {
-      panel.dispose();
-    }
-    super.dispose();
-  }
+  void _select(int section) => setState(() {
+    _section = section;
+    _cropMode = section == 0;
+    _drawMode = section == 1;
+    _showResult = false;
+  });
 
   @override
   void initState() {
     super.initState();
+    _cropMode = true;
     _dimensions();
   }
 
@@ -126,7 +112,7 @@ class _ImageEditorState extends State<_ImageEditor> {
       _error = null;
     });
     try {
-      var draft = widget.draft;
+      var draft = widget.draft.copyWith(spoiler: _spoiler);
       if (_turns != 0 || _crop != _full || _strokes.isNotEmpty) {
         final jpeg =
             draft.mimeType == 'image/jpeg' &&
@@ -179,156 +165,147 @@ class _ImageEditorState extends State<_ImageEditor> {
     }
   }
 
-  Widget _tools() => IgnorePointer(
-    ignoring: _busy || _loading || _size == null,
-    child: Column(
-      children: [
-        MediaCropTools(
-          controller: _panels[0],
-          locked: _locked,
-          ratio: _ratio,
-          onLock: (v) => setState(() {
-            _locked = v;
-            if (v && _size != null) {
-              _crop = cropForAspect(
-                _crop,
-                _displaySize,
-                _ratio ?? _displaySize.aspectRatio,
-              );
-            }
-            _changed();
-          }),
-          onRatio: (v) => setState(() {
-            _ratio = v;
-            _locked = true;
-            if (_size != null) {
-              _crop = cropForAspect(
-                _crop,
-                _displaySize,
-                v ?? _displaySize.aspectRatio,
-              );
-            }
-            _changed();
-          }),
-          onRotate: _rotate,
-          onReset: () => setState(() {
-            _crop = _full;
-            _changed();
-          }),
-          onExpand: (v) => _expand(0, v),
-        ),
-        ExpansionTile(
-          controller: _panels[1],
-          title: const Text('Markup'),
-          onExpansionChanged: (v) => _expand(1, v),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          children: [
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  label: Text('Marker'),
-                  icon: Icon(Icons.edit),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text('Highlighter'),
-                  icon: Icon(Icons.highlight),
-                ),
-              ],
-              selected: {_highlighter},
-              onSelectionChanged: (v) =>
-                  setState(() => _highlighter = v.single),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final ink in const {
-                  0xffff5252: 'Red',
-                  0xffffd740: 'Yellow',
-                  0xff69f0ae: 'Green',
-                  0xff40c4ff: 'Blue',
-                  0xffe040fb: 'Purple',
-                  0xffffffff: 'White',
-                  0xff000000: 'Black',
-                }.entries)
-                  IconButton(
+  List<MediaEditorTool> _tools() => [
+    MediaEditorTool(
+      'Crop',
+      Icons.crop,
+      MediaCropTools(
+        locked: _locked,
+        ratio: _ratio,
+        onLock: (v) => setState(() {
+          _locked = v;
+          if (v && _size != null) {
+            _crop = cropForAspect(
+              _crop,
+              _displaySize,
+              _ratio ?? _displaySize.aspectRatio,
+            );
+          }
+          _changed();
+        }),
+        onRatio: (v) => setState(() {
+          _ratio = v;
+          _locked = true;
+          if (_size != null) {
+            _crop = cropForAspect(
+              _crop,
+              _displaySize,
+              v ?? _displaySize.aspectRatio,
+            );
+          }
+          _changed();
+        }),
+        onRotate: _rotate,
+        onReset: () => setState(() {
+          _crop = _full;
+          _changed();
+        }),
+      ),
+    ),
+    MediaEditorTool(
+      'Markup',
+      Icons.edit_outlined,
+      Column(
+        children: [
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Marker'),
+                icon: Icon(Icons.edit),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Highlighter'),
+                icon: Icon(Icons.highlight),
+              ),
+            ],
+            selected: {_highlighter},
+            onSelectionChanged: (v) => setState(() => _highlighter = v.single),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final ink in const {
+                0xffff5252: 'Red',
+                0xffffd740: 'Yellow',
+                0xff69f0ae: 'Green',
+                0xff40c4ff: 'Blue',
+                0xffe040fb: 'Purple',
+                0xffffffff: 'White',
+                0xff000000: 'Black',
+              }.entries)
+                Expanded(
+                  child: IconButton(
                     tooltip: '${ink.value} ink',
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    constraints: const BoxConstraints(minHeight: 44),
                     onPressed: () => setState(() => _color = ink.key),
                     icon: Icon(
                       _color == ink.key ? Icons.check_circle : Icons.circle,
                       color: Color(ink.key),
+                      size: 34,
                     ),
                   ),
-              ],
-            ),
-            Row(
-              children: [
-                const Text('Width'),
-                Expanded(
-                  child: Slider(
-                    value: _brush,
-                    min: 1,
-                    max: 24,
-                    onChanged: (v) => setState(() => _brush = v),
-                  ),
                 ),
-              ],
-            ),
-            const Text(
-              'Draw directly on the image. Undo removes the last stroke.',
-            ),
-          ],
-        ),
-        ExpansionTile(
-          controller: _panels[2],
-          onExpansionChanged: (v) => _expand(2, v),
-          title: const Text('Quality & export'),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          children: [
-            DropdownButtonFormField<ImageCompressionPreset>(
-              initialValue: _quality,
-              decoration: const InputDecoration(labelText: 'Image quality'),
-              items: const [
-                DropdownMenuItem(
-                  value: ImageCompressionPreset.original,
-                  child: Text('High quality'),
+            ],
+          ),
+          Row(
+            children: [
+              const Text('Width'),
+              Expanded(
+                child: Slider(
+                  value: _brush,
+                  min: 1,
+                  max: 24,
+                  onChanged: (v) => setState(() => _brush = v),
                 ),
-                DropdownMenuItem(
-                  value: ImageCompressionPreset.balanced,
-                  child: Text('Balanced, 2048 px'),
-                ),
-                DropdownMenuItem(
-                  value: ImageCompressionPreset.smaller,
-                  child: Text('Smaller, 1280 px'),
-                ),
-              ],
-              onChanged: hasAnimatedImageHeader(widget.draft.bytes)
-                  ? null
-                  : (v) => setState(() {
-                      _quality = v!;
-                      _changed();
-                    }),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Edits export up to 4096 px. Animations keep their frames and timing. Cancel keeps the original.',
-            ),
-            if (_preview != null)
-              Text(
-                '${(_preview!.bytes.length / 1048576).toStringAsFixed(2)} MiB',
               ),
-            TextButton(
-              onPressed: () => _render(),
-              child: const Text('Preview result'),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     ),
-  );
+    MediaEditorTool(
+      'Quality',
+      Icons.hd_outlined,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in const {
+                ImageCompressionPreset.original: 'Original',
+                ImageCompressionPreset.balanced: 'Balanced',
+                ImageCompressionPreset.smaller: 'Smaller',
+              }.entries)
+                ChoiceChip(
+                  label: Text(entry.value),
+                  selected: _quality == entry.key,
+                  onSelected: hasAnimatedImageHeader(widget.draft.bytes)
+                      ? null
+                      : (_) => setState(() {
+                          _quality = entry.key;
+                          _changed();
+                        }),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_preview != null)
+            Text(
+              '${(_preview!.bytes.length / 1048576).toStringAsFixed(2)} MiB',
+            ),
+          TextButton(
+            onPressed: () => _render(),
+            child: const Text('Preview result'),
+          ),
+        ],
+      ),
+    ),
+  ];
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -364,7 +341,10 @@ class _ImageEditorState extends State<_ImageEditor> {
               ? null
               : () {
                   if (_size == null) {
-                    Navigator.pop(context, widget.draft);
+                    Navigator.pop(
+                      context,
+                      widget.draft.copyWith(spoiler: _spoiler),
+                    );
                   } else {
                     _render(save: true);
                   }
@@ -383,7 +363,7 @@ class _ImageEditorState extends State<_ImageEditor> {
             child: LayoutBuilder(
               builder: (context, c) {
                 final preview = Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.zero,
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _size == null
@@ -446,25 +426,17 @@ class _ImageEditorState extends State<_ImageEditor> {
                           ),
                         ),
                 );
-                if (c.maxWidth >= 850) {
-                  return Row(
-                    children: [
-                      Expanded(child: preview),
-                      SizedBox(
-                        width: 340,
-                        child: SingleChildScrollView(child: _tools()),
-                      ),
-                    ],
-                  );
-                }
-                return Column(
-                  children: [
-                    Expanded(child: preview),
-                    SizedBox(
-                      height: math.min(320, c.maxHeight * .45),
-                      child: SingleChildScrollView(child: _tools()),
-                    ),
-                  ],
+                return MediaEditorLayout(
+                  preview: preview,
+                  tools: _tools(),
+                  selected: _section,
+                  onSelect: _select,
+                  spoiler: _spoiler,
+                  disabled: _busy || _loading || _size == null,
+                  onSpoiler: () => setState(() {
+                    _spoiler = !_spoiler;
+                    _changed();
+                  }),
                 );
               },
             ),

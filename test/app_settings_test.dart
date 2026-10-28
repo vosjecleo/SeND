@@ -120,7 +120,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.preferences.fetchDirectLinkPreviews, isFalse);
-    expect(find.textContaining('may expose your IP address'), findsOneWidget);
+    expect(find.textContaining('see your IP address'), findsOneWidget);
     await tester.tap(find.byKey(const Key('direct-link-preview-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Known providers only').last);
@@ -261,10 +261,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('recovery-key'), findsOneWidget);
-    expect(
-      find.text('I saved this recovery key somewhere safe'),
-      findsOneWidget,
-    );
+    expect(find.text('I\'ve saved my recovery key.'), findsOneWidget);
     final done = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Done'),
     );

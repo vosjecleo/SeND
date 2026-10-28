@@ -51,7 +51,7 @@ Future<void> _save(BuildContext context, Future<void> action) async {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Could not save this change. Check device storage and retry.',
+            'Couldn\'t save changes. Check free storage and try again.',
           ),
         ),
       );
@@ -109,9 +109,7 @@ class PersonalOrganisationPanel extends StatelessWidget {
       children: [
         if (data.warning case final warning?) Text(warning),
         Text('Space bar', style: Theme.of(context).textTheme.titleMedium),
-        const Text(
-          'Drag to reorder. Folders and order follow your account across devices.',
-        ),
+
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -167,9 +165,7 @@ class PersonalOrganisationPanel extends StatelessWidget {
           ),
         const Divider(height: 28),
         Text('Archived chats', style: Theme.of(context).textTheme.titleMedium),
-        const Text(
-          'Archived chats stay here until restored. Their notification settings stay the same.',
-        ),
+        const Text('Archiving doesn\'t mute notifications.'),
         if (backend.archivedRooms.isEmpty)
           const Padding(
             padding: EdgeInsets.all(12),

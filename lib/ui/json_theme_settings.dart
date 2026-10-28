@@ -178,9 +178,6 @@ class _JsonThemeSettingsState extends State<JsonThemeSettings> {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: _control(setting, values[setting['id']]!),
             ),
-          const Text(
-            'Theme settings follow your appearance sync choice. High contrast disables glass effects; reduced motion disables blur.',
-          ),
         ],
       ],
     );

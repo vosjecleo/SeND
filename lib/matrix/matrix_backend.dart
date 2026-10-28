@@ -863,6 +863,21 @@ class MatrixBackend extends ChatBackend {
         attemptedBackup,
       ),
       append: index.appendArchive,
+      retryEvent: (event, active) async {
+        if (!active()) throw StateError('Retry paused.');
+        final raw = await client
+            .getOneRoomEvent(event.roomId, event.eventId)
+            .timeout(const Duration(seconds: 15));
+        if (!active()) throw StateError('Retry paused.');
+        return _downloadIndexPage(
+          client,
+          event.roomId,
+          null,
+          active,
+          attemptedBackup,
+          suppliedEvents: [raw],
+        );
+      },
       load: index.loadDownloadState,
       save: index.saveDownloadState,
       onRun: attemptedBackup.clear,
@@ -1381,7 +1396,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   List<ChatMessage> searchMessages(String query) {
-    final normalized = query.trim().toLowerCase();
+    final normalized = query.trim();
     if (normalized.isEmpty) return const [];
     return messages
         .where(

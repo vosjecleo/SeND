@@ -410,7 +410,7 @@ class HeaderMessageMetadata extends StatelessWidget {
         for (final message in scope?.headers[messageId] ?? <ChatMessage>[])
           Tooltip(
             message:
-                'Status of message sent ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}',
+                'Message status · ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}',
             child: Text.rich(
               messageMetadata(
                 context,

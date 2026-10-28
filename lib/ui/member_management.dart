@@ -50,7 +50,7 @@ Future<void> showMemberManagement(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Timeout for 10 minutes'),
               subtitle: const Text(
-                'Restored by an online authorised SeND client; may expire late if all are offline.',
+                'Timeouts can run late if no authorised SeND client is online.',
               ),
               onTap: () => Navigator.pop(context, 'timeout'),
             ),
@@ -111,7 +111,7 @@ Future<void> showMemberManagement(
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Could not apply this action. Check your permissions and connection, then retry.',
+            'Couldn\'t apply this action. Check your connection and permissions.',
           ),
         ),
       );
@@ -141,7 +141,7 @@ Future<void> showMemberRoles(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Saves shared role names and colours. Apply role power in Administration to change room permissions.',
+                  'To change permissions, apply role power in Administration.',
                 ),
                 for (final role in data.roles.roles)
                   CheckboxListTile(
@@ -280,7 +280,7 @@ Future<void> showInviteMember(
           Text(
             server
                 ? 'Private channels may need a separate invitation.'
-                : 'For server channels, this also invites them to the server if they are not already a member.',
+                : 'Also invites them to the server if needed.',
           ),
         ],
       ),
@@ -304,7 +304,7 @@ Future<void> showInviteMember(
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not complete the invitation. Check their ID and your room and server invitation permissions. A server invitation may already have been sent.',
+              'Invite incomplete. Check their ID and your permissions; a server invite may already have been sent.',
             ),
           ),
         );

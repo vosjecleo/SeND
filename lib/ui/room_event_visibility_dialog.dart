@@ -57,7 +57,7 @@ class _EventVisibilityDialogState extends State<_EventVisibilityDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Only changes what you see. Preferences sync with your account. Messages, encryption notices and moderation actions remain visible.',
+              'Only changes your view; messages, security notices and moderation actions stay visible.',
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

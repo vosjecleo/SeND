@@ -20,9 +20,7 @@ class LastFmAuth {
     final token = data['token'];
     if (token is! String ||
         !RegExp(r'^[A-Za-z0-9_-]{16,256}$').hasMatch(token)) {
-      throw const LastFmAuthError(
-        'Last.fm returned an invalid login token. Please try again.',
-      );
+      throw const LastFmAuthError('Couldn\'t sign in to Last.fm. Try again.');
     }
     return token;
   }
@@ -40,7 +38,7 @@ class LastFmAuth {
         (session['name'] as String).isEmpty ||
         session['key'] is! String) {
       throw const LastFmAuthError(
-        'Last.fm did not confirm your account. Please try again.',
+        'Last.fm couldn\'t confirm your account. Try again.',
       );
     }
     // Presence only reads a public feed. Do not retain the write-capable session
@@ -65,9 +63,8 @@ class LastFmAuth {
     final data = await (transport?.call(params) ?? _request(params));
     if (data['error'] != null) {
       throw LastFmAuthError(switch (data['error']) {
-        14 => 'Please approve SeND in your browser first, then try again.',
-        4 || 15 =>
-          'This login attempt expired. Close this window and connect again.',
+        14 => 'Approve SeND in your browser, then try again.',
+        4 || 15 => 'Sign-in expired. Close this window and reconnect.',
         10 || 26 => 'SeND’s Last.fm application credentials need updating.',
         29 => 'Last.fm is rate-limiting requests. Please try again later.',
         _ => 'Last.fm could not complete linking. Please try again.',
@@ -103,7 +100,7 @@ class LastFmAuth {
       return data;
     } catch (_) {
       throw const LastFmAuthError(
-        'Could not reach Last.fm. Check your connection and try again.',
+        'Couldn\'t reach Last.fm. Check your connection and try again.',
       );
     } finally {
       client.close(force: true);

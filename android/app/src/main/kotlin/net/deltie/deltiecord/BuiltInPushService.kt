@@ -252,7 +252,7 @@ class BuiltInPushService : Service() {
 
         fun enable(context: Context, instance: String) {
             check(!NetworkProxyPolicy.blocked(context)) {
-                "Built-in notifications cannot use the SOCKS proxy. Use a system VPN or allow direct traffic."
+                "Built-in notifications can't use SOCKS. Use a VPN or allow direct traffic."
             }
             if (activeInstance(context) != instance) {
                 val random = ByteArray(32).also { SecureRandom().nextBytes(it) }
@@ -274,7 +274,7 @@ class BuiltInPushService : Service() {
             } catch (error: Exception) {
                 setConnectionState(context, "stopped")
                 throw IllegalStateException(
-                    "Android could not start background notifications. Reopen SeND and try again."
+                    "Couldn't start background notifications. Reopen SeND and try again."
                 )
             }
         }

@@ -32,6 +32,11 @@ sources. Its source extension and `FLATPAK-SHA256SUMS` are separate release asse
 see [Flatpak packaging](packaging/flatpak/README.md). Android video preparation
 uses AndroidX Media3 under Apache-2.0; native dependency notices also apply.
 
+PWA video processing includes Mediabunny 1.62.1 under MPL-2.0. Its license,
+source reference and bundled source map are in `web/web-video/`. It is loaded
+locally when a user prepares a video, not from a third-party CDN. The build
+recipe and pinned npm lockfile are in `tool/web-video/`.
+
 Packaging tools such as linuxdeploy and the AppImage runtime are build-time
 tools and are not incorporated as application source. Their upstream projects
 and licences are listed in `CREDITS.md`.

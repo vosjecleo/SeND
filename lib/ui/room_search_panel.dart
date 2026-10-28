@@ -52,8 +52,8 @@ Future<void> showRoomSearchSheet(
   ),
 );
 
-/// Opening search loads one page. A query continues through empty pages until
-/// it finds results or the user stops it; scrolling loads subsequent matches.
+/// Results use explicit ten-item pages. A query can continue through empty
+/// history pages until it finds a match or the user stops it.
 class RoomSearchPanel extends StatefulWidget {
   const RoomSearchPanel({
     required this.backend,
@@ -110,13 +110,6 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) showHistoryIndexPrompt(context, widget.backend);
-    });
-    _resultsScroll.addListener(() {
-      if (_tabs.index == RoomSearchSection.messages.index &&
-          _resultsScroll.hasClients &&
-          _resultsScroll.position.extentAfter < 400) {
-        unawaited(_loadOlder());
-      }
     });
     _tabs = TabController(
       length: RoomSearchSection.values.length,
@@ -422,10 +415,12 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   @override
   Widget build(BuildContext context) {
     final all = _results;
-    final catalog = _kind != null;
-    final results = catalog
-        ? all.skip(_page * _pageSize).take(_pageSize).toList()
-        : all;
+    final results = all.skip(_page * _pageSize).take(_pageSize).toList();
+    final pageCount = ((all.length + _pageSize - 1) ~/ _pageSize).clamp(
+      1,
+      100000,
+    );
+    final busy = _navigating || _searching || _loadingOlder;
     final media = _tabs.index == RoomSearchSection.media.index;
     return SafeArea(
       child: Column(
@@ -547,55 +542,48 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
               },
               child: const Text('Stop searching older messages'),
             ),
-          if (catalog)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-              child: Column(
-                children: [
-                  Text(
-                    'Items ${results.isEmpty ? 0 : _page * _pageSize + 1} to ${_page * _pageSize + results.length} (${all.length} loaded)',
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        tooltip: 'Previous page',
-                        onPressed: _navigating || _page == 0
-                            ? null
-                            : () => _goPage(_page - 1),
-                        icon: const Icon(Icons.chevron_left),
-                      ),
-                      TextButton(
-                        onPressed: _navigating ? null : _jumpPage,
-                        child: Text('Page ${_page + 1}'),
-                      ),
-                      IconButton(
-                        tooltip: 'Next page',
-                        onPressed:
-                            _navigating ||
-                                (_page + 1) * _pageSize >= all.length &&
-                                    !_canLoadOlder
-                            ? null
-                            : () => _goPage(_page + 1),
-                        icon: const Icon(Icons.chevron_right),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          if (!catalog && _canLoadOlder)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-              child: OutlinedButton.icon(
-                onPressed: _loadingOlder ? null : _loadOlder,
-                icon: const Icon(Icons.history),
-                label: Text(
-                  _paginationPasses == 0
-                      ? 'Search older messages'
-                      : 'Load older results',
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+            child: Column(
+              children: [
+                Text(
+                  '${results.isEmpty ? 0 : _page * _pageSize + 1}–${_page * _pageSize + results.length} · ${all.length} loaded',
                 ),
-              ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: 'Previous page',
+                      onPressed: busy || _page == 0
+                          ? null
+                          : () => _goPage(_page - 1),
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    TextButton(
+                      onPressed: busy ? null : _jumpPage,
+                      child: Text(
+                        'Page ${_page + 1} of $pageCount${_canLoadOlder ? '+' : ''}',
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Next page',
+                      onPressed:
+                          busy ||
+                              (_page + 1) * _pageSize >= all.length &&
+                                  !_canLoadOlder
+                          ? null
+                          : () => _goPage(_page + 1),
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (_canLoadOlder)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('+ More history remains.'),
             ),
         ],
       ),

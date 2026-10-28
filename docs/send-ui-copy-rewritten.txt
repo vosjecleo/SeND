@@ -1,0 +1,3404 @@
+SeND — UI copy rewrite
+28 October 2026
+
+450 / 450 entries reviewed.
+174 rewritten | 43 removed | 233 unchanged
+
+This replaces the earlier copy review. It is a copy plan, not a source-code patch.
+The companion CSV preserves every original ID, source location, context and text.
+
+HOW TO APPLY
+SHORTEN: replace with the text under AFTER. This also covers plain-English rewrites.
+REMOVE: remove the prose block and its unused spacing, not the feature, control or validation.
+KEEP: leave the existing text unchanged.
+Read Implementation notes before applying a change with conditions or nested strings.
+Final text in the CSV is UI copy only: unchanged text for KEEP, proposed text for SHORTEN,
+and blank for REMOVE. Reviewer instructions are in separate columns.
+These are text values, not escaped Dart/Kotlin/JavaScript source literals.
+
+BOUNDARIES
+Existing 1–3-word UI labels are unchanged. Longer labels are edited only where useful.
+Do not remove screen-reader labels, dynamic counts, validation, error handling or controls.
+Do not rewrite executable source, structured log fields, Open Graph keys or licence notices.
+Non-UI resources and platform/web metadata are identified separately in Review scope.
+The supplied catalog is the basis for this review; the running app and source tree were not inspected.
+Keep existing conditional visibility and safety checks; verify any platform-gating notes in code.
+Duplicate literals must stay consistent. A nested literal is not a second independent UI block.
+
+SUMMARY OF THE ACTUAL PROSE
+207 entries are classified as UI prose: 156 rewrites, 43 removals and 8 already-brief messages kept.
+Other rewrites affect 12 dynamic displays/tooltips and 6 longer labels.
+The 8 unchanged prose entries are existing short confirmations, validation messages, file limits
+and the instruction to save a recovery key—not retained explanatory paragraphs.
+
+========================================================================================
+lib/ui/server_storage_settings.dart
+========================================================================================
+
+[COPY-B7F705140E] SHORTEN | UI prose
+Source: lib/ui/server_storage_settings.dart:97
+BEFORE:
+Remove ${storageSize(preview['bytes'] as num)} from your homeserver. These attachments will stop working for everyone who received them. This cannot be undone. Messages stay in chat history. Copies on other servers or devices may remain. This preview includes at most 100 files; profile images and protected assets are excluded.
+AFTER:
+Delete ${storageSize(preview['bytes'] as num)} from your homeserver? Shared attachments will stop working; messages stay. This can't be undone, and copies elsewhere may remain.
+Preview: up to 100 files, excluding profile images and protected files.
+NOTE: Keep the preview limit separate from the warning; do not imply that copies on other devices or servers are erased.
+
+[COPY-D8E44DB51D] SHORTEN | UI prose
+Source: lib/ui/server_storage_settings.dart:122
+BEFORE:
+Preview only: ${result['would_delete']} uploads would be deleted. Nothing was removed.
+AFTER:
+Preview: ${result['would_delete']} uploads would be deleted. Nothing was removed.
+NOTE: Keep the dry-run result explicit while preview mode exists.
+
+[COPY-DA020AE69E] KEEP | UI label
+Source: lib/ui/server_storage_settings.dart:142
+UNCHANGED:
+Server storage
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-2DECE08544] SHORTEN | UI prose
+Source: lib/ui/server_storage_settings.dart:147
+BEFORE:
+The displayed allowance is not enforced during this preview.
+AFTER:
+Preview only — storage limits aren't enforced.
+NOTE: Show only in preview mode; remove this notice when limits are actually enforced.
+
+[COPY-FA46A360F4] SHORTEN | UI prose
+Source: lib/ui/server_storage_settings.dart:150
+BEFORE:
+Deletion is a dry run. No uploads will be removed.
+AFTER:
+Preview only — nothing will be deleted.
+NOTE: Show before the action while deletion is a dry run; a result message alone is too late.
+
+[COPY-60A7CDCC36] KEEP | UI label
+Source: lib/ui/server_storage_settings.dart:153
+UNCHANGED:
+Categorize encrypted uploads
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-BCA1AB370B] SHORTEN | UI prose
+Source: lib/ui/server_storage_settings.dart:155
+BEFORE:
+Share upload types and GIF sources with your homeserver. Message text, filenames and encryption keys are not sent.
+AFTER:
+Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.
+NOTE: Use the same disclosure at COPY-775306B289; make no claim about the current default.
+
+[COPY-05E521E910] KEEP | Dynamic UI
+Source: lib/ui/server_storage_settings.dart:185
+UNCHANGED:
+${storageSize(usage['used_bytes'] as num)} of ${storageSize(usage['quota_bytes'] as num)} used
+NOTE: Storage usage, not explanatory prose.
+
+[COPY-FB1838B1E6] REMOVE | UI prose
+Source: lib/ui/server_storage_settings.dart:250
+BEFORE:
+This is uploaded media, not your message database or local cache. Encrypted uploads without a type label appear under Other. Optional categorization shares media types and source labels with your homeserver, never message text or encryption keys.
+AFTER: [Remove this text block.]
+NOTE: Repeats the categorization disclosure beside its switch. The flags also identify outdated category/default details; do not retain those claims.
+
+[COPY-B2FE9DF91A] KEEP | UI label
+Source: lib/ui/server_storage_settings.dart:256
+UNCHANGED:
+Prune old uploads
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/first_run_tour.dart
+========================================================================================
+
+[COPY-FE945F0C78] REMOVE | UI prose
+Source: lib/ui/first_run_tour.dart:118
+BEFORE:
+SeND connects to Matrix on desktop and phone. You can chat with people using other Matrix clients. Some SeND preferences can sync between your devices.
+AFTER: [Remove this text block.]
+NOTE: Introductory feature pitch; no setup action or consequence. Remove the text block, not any independent controls.
+
+[COPY-49B0F389ED] SHORTEN | UI prose
+Source: lib/ui/first_run_tour.dart:126
+BEFORE:
+SeND asks your Matrix homeserver for link previews first. If you allow direct previews, linked websites can see your IP address and request details.
+AFTER:
+Direct previews let websites see your IP address and request details.
+NOTE: Keep beside the direct-preview choice; the server-first implementation detail is unnecessary.
+
+[COPY-A44ACF425A] SHORTEN | UI prose
+Source: lib/ui/first_run_tour.dart:164
+BEFORE:
+On iPhone or iPad, open this site in Safari, choose Share, then Add to Home Screen. Open the installed SeND app and enable browser notifications in Settings > Notifications. Push requires iOS 16.4 or later and your permission. Android and desktop browsers can install it from their browser menu too.
+
+This browser stores your session and encryption keys. Keep your Matrix recovery key safe: clearing site data, private browsing, or storage eviction can remove the local session. Only one SeND tab may use this session at a time.
+AFTER:
+Browser storage can be cleared, taking your session and encryption keys with it. Keep your recovery key safe.
+NOTE: Keep this browser-only warning. Installation instructions already belong in notification settings; do not remove the iOS version requirement or single-tab check from the implementation.
+
+[COPY-8C638DAB70] REMOVE | UI prose
+Source: lib/ui/first_run_tour.dart:178
+BEFORE:
+A text index makes repeat searches faster. It uses extra space on this device and is optional. Media indexing keeps event details only; it does not download all your media.
+AFTER: [Remove this text block.]
+NOTE: Repeats the search settings explanation. Keep indexing controls and the opt-in warning at COPY-F84D4E9D51.
+
+[COPY-D67415E80E] SHORTEN | UI prose
+Source: lib/ui/first_run_tour.dart:187
+BEFORE:
+Choose how SeND receives messages when it is closed. Built-in delivery uses push.deltie.net. Messages are decrypted on your device; the push server receives room and event IDs, not message text or encryption keys.
+AFTER:
+Built-in notifications use push.deltie.net, which receives room and event IDs, not messages or encryption keys.
+NOTE: Retain the destination and metadata disclosure beside the delivery choice.
+
+========================================================================================
+lib/ui/settings_screen.dart
+========================================================================================
+
+[COPY-01C75D0259] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:169
+BEFORE:
+Are you sure? Make sure you have your recovery key before logging out.
+AFTER:
+Save your recovery key before logging out.
+NOTE: Keep in the logout confirmation.
+
+[COPY-8BB8683B9F] KEEP | UI label
+Source: lib/ui/settings_screen.dart:228
+UNCHANGED:
+Settings
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9377B37621] KEEP | UI label
+Source: lib/ui/settings_screen.dart:382
+UNCHANGED:
+Log out
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-2A49BCBB10] KEEP | UI label
+Source: lib/ui/settings_screen.dart:416
+UNCHANGED:
+Change account password
+NOTE: Existing section label.
+
+[COPY-1659E737AC] KEEP | UI label
+Source: lib/ui/settings_screen.dart:419
+UNCHANGED:
+Encryption & recovery
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-B3BC9FFBC4] KEEP | UI label
+Source: lib/ui/settings_screen.dart:420
+UNCHANGED:
+Status
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-912E3E8CD4] KEEP | UI label
+Source: lib/ui/settings_screen.dart:423
+UNCHANGED:
+Enabled
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-AC920A0F40] KEEP | UI label
+Source: lib/ui/settings_screen.dart:427
+UNCHANGED:
+Verified
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-96E9D23864] KEEP | UI label
+Source: lib/ui/settings_screen.dart:443
+UNCHANGED:
+Microphone
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-481A19DEF4] KEEP | UI label
+Source: lib/ui/settings_screen.dart:449; 474; 490
+UNCHANGED:
+System default
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-373A5386DE] KEEP | UI label
+Source: lib/ui/settings_screen.dart:486
+UNCHANGED:
+Camera
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-13AF47B67B] KEEP | Dynamic UI
+Source: lib/ui/settings_screen.dart:499
+UNCHANGED:
+Microphone volume — ${(backend.preferences.microphoneVolume * 100).round()}%
+NOTE: Volume control label and live value.
+
+[COPY-D2A764C958] KEEP | UI label
+Source: lib/ui/settings_screen.dart:605
+UNCHANGED:
+Echo cancellation
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-1E2D3B3561] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:661
+BEFORE:
+Local H.264/AAC compression: desktop up to 1080p, Android up to 1280 px, 30 fps and 24 MiB. Desktop requires FFmpeg. Disable to send originals. Captions, spoilers, replies and encryption are preserved. PWA uploads are unchanged.
+AFTER: [Remove this text block.]
+NOTE: Remove the codec, platform-limit and implementation paragraph. Upload-quality controls explain the choice; failures should remain visible when they happen.
+
+[COPY-50E57108EE] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:671
+BEFORE:
+Screen selection uses the standard desktop portal on Linux/Wayland.
+AFTER: [Remove this text block.]
+NOTE: How the system picker is implemented is not useful interface copy.
+
+[COPY-802C07696A] KEEP | UI label
+Source: lib/ui/settings_screen.dart:675
+UNCHANGED:
+Notifications
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8AB8227B8D] KEEP | UI label
+Source: lib/ui/settings_screen.dart:678
+UNCHANGED:
+Settings
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-28C445DBDD] KEEP | UI label
+Source: lib/ui/settings_screen.dart:679
+UNCHANGED:
+Diagnostics
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-DA590865EB] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:711
+BEFORE:
+On iPhone/iPad, add SeND to your Home Screen from Safari, open that installed app, then enable notifications here (iOS 16.4 or later). Web alerts are generic unless device-side previews are enabled below.
+AFTER:
+On iPhone or iPad, use Safari → Share → Add to Home Screen, then open SeND there to enable notifications.
+NOTE: Show only where applicable. Preserve the existing iOS 16.4 requirement in availability checks; do not promise support to an unsupported browser.
+
+[COPY-CDCDB76CBA] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:733
+BEFORE:
+Could not enable notifications. Check permission and Home Screen installation, then try again.
+AFTER:
+Couldn't enable notifications. Check browser permissions.
+NOTE: Keep the Home Screen instruction at COPY-DA590865EB visible when relevant.
+
+[COPY-1AE81FD588] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:750
+BEFORE:
+Could not read browser setup. Reload the app and try again.
+AFTER:
+Couldn't read browser settings. Reload SeND.
+
+[COPY-31DDF627EE] KEEP | UI label
+Source: lib/ui/settings_screen.dart:761
+UNCHANGED:
+Close
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-BE3414E27A] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:773
+BEFORE:
+Test sent. Check Notification Centre. If it is missing, check iOS notification permissions and Focus settings.
+AFTER:
+Test sent. No alert? Check notification permissions and Focus.
+
+[COPY-1DF33FDCB2] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:814
+BEFORE:
+Store recent encryption keys and your session in a separate encrypted local store so notifications can show messages while SeND is closed. Content may appear on the lock screen. Missing keys show a generic alert. Keys never go to the push server.
+AFTER:
+Saves encrypted keys on this device for message previews, which may appear on your lock screen.
+NOTE: Keep beside the opt-in. Do not imply previews are handled by the push server.
+
+[COPY-4C19608D16] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:825
+BEFORE:
+Could not save browser preview settings. Please try again.
+AFTER:
+Couldn't save preview settings. Try again.
+
+[COPY-95580E8D2A] KEEP | Dynamic UI
+Source: lib/ui/settings_screen.dart:894
+UNCHANGED:
+Notification volume: ${(backend.preferences.notificationVolume * 100).round()}%
+NOTE: Volume control label and live value.
+
+[COPY-1C774C187E] KEEP | UI label
+Source: lib/ui/settings_screen.dart:906
+UNCHANGED:
+Background notifications
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-0732A3FEB6] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:962
+BEFORE:
+The private push endpoint is stored by Android and is never shown or written to logs. Notification content is fetched from Matrix.
+AFTER: [Remove this text block.]
+NOTE: Internal endpoint storage and logging details; no action for the user.
+
+[COPY-115750C288] KEEP | UI label
+Source: lib/ui/settings_screen.dart:971
+UNCHANGED:
+Server storage
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-246F326D79] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:980
+BEFORE:
+Favourites, frequently used emoji, stickers and GIFs, pinned chats and space folders sync with your Matrix account. They contain media references, not media files. Account data is visible to your homeserver.
+AFTER:
+Your homeserver can see your synced favourites, frequently used emoji and chat layout.
+NOTE: Keep the privacy consequence; remove the synchronization feature list and media-reference explanation.
+
+[COPY-00A8436A0B] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:989
+BEFORE:
+Older favourites were saved for this device, not a particular account. Import them into your current account?
+AFTER:
+Import this device's favourites into your current account?
+
+[COPY-A7FCB20A7F] KEEP | UI label
+Source: lib/ui/settings_screen.dart:994
+UNCHANGED:
+Cancel
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4EF9BB34C5] KEEP | UI label
+Source: lib/ui/settings_screen.dart:998
+UNCHANGED:
+Import
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8E4C36CA58] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1022
+UNCHANGED:
+Chats and spaces
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-83F3CBCD89] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1025
+BEFORE:
+Encrypted session data, room keys, thumbnails, and timeline caches are stored in SeND’s private per-user application-data directory.
+AFTER: [Remove this text block.]
+NOTE: Private directory layout and cache contents are implementation details.
+
+[COPY-8F4A49BBFB] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1031
+BEFORE:
+This includes the encrypted Matrix database and locally cached media. Clearing media cache does not remove room keys or your signed-in session.
+AFTER:
+Clearing cached media won't sign you out or remove encryption keys.
+
+[COPY-BCEF9A4E93] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1074
+BEFORE:
+Could not add the launcher. Check the AppImage location and permissions.
+AFTER:
+Couldn't add the launcher. Check the AppImage location and permissions.
+
+[COPY-E1E85B49F7] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1083
+BEFORE:
+SeND v${deltiecordVersion}+${deltiecordBuildNumber}
+SeND is a recursive acronym: SeND is Not Discord.
+A compact, old-school ${defaultTargetPlatform == TargetPlatform.android ? 'mobile' : 'desktop'} Matrix client built with Flutter.
+AFTER:
+SeND v${deltiecordVersion}+${deltiecordBuildNumber}
+SeND is Not Discord.
+NOTE: Keep version/build information. Remove the platform-dependent marketing sentence.
+
+[COPY-80542DF559] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1088
+UNCHANGED:
+Diagnostics
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4E6F001BA1] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1091
+UNCHANGED:
+Voice
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C4D56E787E] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1111
+BEFORE:
+Diagnostics exclude access tokens, recovery material, decrypted messages, and media encryption keys.
+AFTER:
+Reports exclude access tokens, recovery details, decrypted messages and media keys.
+NOTE: Keep beside diagnostics export/sharing; do not replace this with a blanket claim that reports contain no personal data.
+
+[COPY-1BFB923E4F] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1144
+BEFORE:
+Matrix connectivity and encryption use matrix-dart-sdk. MatrixRTC, media_kit, Flutter WebRTC, Flutter Quill, KLIPY, Element, and FluffyChat informed or support parts of the implementation.
+AFTER: [Remove this text block.]
+NOTE: Remove the dependency paragraph from the settings page, not the acknowledgements or licence notices themselves; retain access through Credits and licences.
+
+[COPY-6D67A25F2C] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1150
+BEFORE:
+Full acknowledgements and upstream license links are in CREDITS.md.
+AFTER:
+Credits and licences
+NOTE: Use as the label for access to CREDITS.md; preserve the actual acknowledgements and licence links.
+
+[COPY-E34E95261A] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1154
+BEFORE:
+Made for dense desktops, strange little computers, and friends.
+AFTER: [Remove this text block.]
+NOTE: Decorative tagline; not needed in the interface.
+
+[COPY-723F3DEB10] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1172
+UNCHANGED:
+Configurable shortcuts
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-1F49BA19E5] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1205
+UNCHANGED:
+Fixed shortcuts
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-468F3035FD] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1219
+UNCHANGED:
+Account
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-ABD313C758] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1251
+UNCHANGED:
+Homeserver
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-2FC9BB3473] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1259
+BEFORE:
+Permanently deactivate this Matrix account and request data erasure.
+AFTER: [Remove this text block.]
+NOTE: The deactivation control and its confirmation carry this consequence; keep COPY-53B759366B.
+
+[COPY-C9AE8B0D05] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1276
+BEFORE:
+Theme, accent, sizing and accessibility appearance follow your Matrix account.
+AFTER: [Remove this text block.]
+NOTE: The appearance-sync control already states the feature; no extra catalogue of settings.
+
+[COPY-C66766D734] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1300
+BEFORE:
+Could not apply the theme. Settings may still be synchronizing; please try again.
+AFTER:
+Couldn't apply the theme. Try again shortly.
+
+[COPY-5E7A25BDB9] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1323
+BEFORE:
+Scales panels, controls, icons, media, and text together. Text-only scaling is under Accessibility.
+AFTER: [Remove this text block.]
+NOTE: Exhaustive description of scaling is unnecessary beside the UI-scale and text-size controls.
+
+[COPY-6270534869] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1364
+BEFORE:
+Off by default to prevent accidental room and category moves. Permission checks still apply.
+AFTER: [Remove this text block.]
+NOTE: Default-state narration and 'permission checks still apply' are unnecessary.
+
+[COPY-8E6D5805F9] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1393
+UNCHANGED:
+Accent colour
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-D774B6C4BD] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1409
+BEFORE:
+Show GTK window decorations on Linux. Applies after restart.
+AFTER:
+Restart for changes to take effect.
+NOTE: The control supplies the window-decoration label; keep only its delayed effect.
+
+[COPY-2F448656D9] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1438
+BEFORE:
+Choose which appearance should become the synced account setting.
+AFTER:
+Which appearance should sync across your devices?
+
+[COPY-CCD017547A] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1468
+UNCHANGED:
+Categorize encrypted uploads
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-775306B289] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1470
+BEFORE:
+Share upload types and GIF sources with your homeserver for storage management. Off by default. Message text, filenames and encryption keys are not sent.
+AFTER:
+Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.
+NOTE: Match COPY-BCA1AB370B. The supplied flags identify a changing default; omit 'Off by default' rather than guessing.
+
+[COPY-BC07C2E9D2] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1486
+BEFORE:
+Direct previews contact websites from your device and may expose your IP address and browsing metadata. Matrix homeserver previews are always attempted first.
+AFTER:
+Direct previews let websites see your IP address and request details.
+NOTE: Match the first-run disclosure. Remove the server-first implementation explanation.
+
+[COPY-B83FE18D70] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1497
+UNCHANGED:
+Known providers only
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9735F78E0D] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1501
+UNCHANGED:
+All public websites
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-885F91902D] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1531
+BEFORE:
+Show per-message receipts up to ${preferences.readReceiptMemberThreshold} members
+AFTER:
+Read receipts in rooms of up to ${preferences.readReceiptMemberThreshold} members
+NOTE: Retain the actual configured threshold.
+
+[COPY-0B4D34090D] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1568
+BEFORE:
+Away after 10 minutes without keyboard or mouse activity anywhere on your PC. Browsers and unsupported desktop sessions use activity in SeND instead.
+AFTER:
+Set you as away after 10 minutes of inactivity on your PC, or in SeND when system activity isn't available.
+NOTE: Keep both activity scopes; do not claim that all platforms monitor the whole computer.
+
+[COPY-89617C3B9F] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1576
+BEFORE:
+Uses FxTwitter for previews and rewrites newly sent X/Twitter links. Disable this to preserve the original host.
+AFTER:
+Use FxTwitter for previews and links you send.
+NOTE: Keep the outgoing-link change explicit; this is not just a preview setting.
+
+[COPY-636AD6A74A] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1585
+UNCHANGED:
+Blocked users
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-73546EC6BA] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1597
+UNCHANGED:
+Unblock
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-22BA9D2A97] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1638
+BEFORE:
+The distributor has not returned an endpoint yet. Check its account and connection, then refresh registration.
+AFTER:
+Your notification app hasn't connected yet. Check its account and connection, then retry.
+NOTE: Keep the existing registration/refresh action; 'notification app' refers to the selected distributor.
+
+[COPY-DC7FA44C5A] KEEP | UI label
+Source: lib/ui/settings_screen.dart:1685
+UNCHANGED:
+Verified
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6072158F73] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1714
+BEFORE:
+Verification uses Matrix SAS. Signing out a device does not delete local data until that device next connects.
+AFTER:
+Signing out a device won't clear its local data until it reconnects.
+NOTE: Remove the SAS implementation label, not the delayed-clear caveat.
+
+[COPY-0D87E70167] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1734
+BEFORE:
+Changes text size without enlarging the rest of the UI.
+AFTER: [Remove this text block.]
+NOTE: Text size already names the control; this sentence just restates it.
+
+[COPY-09076592AF] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1750
+BEFORE:
+Off by default. Desktop hover still animates avatars unless Reduce motion is on.
+AFTER: [Remove this text block.]
+NOTE: Default and hover exceptions do not need permanent helper text; keep the actual Reduce motion behaviour unchanged.
+
+[COPY-22D21A7CF3] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1761
+BEFORE:
+Snap UI transitions instantly and pause automatic GIF playback.
+AFTER: [Remove this text block.]
+NOTE: The Reduce motion control already communicates the purpose; remove this implementation description, not the setting.
+
+[COPY-F90B9DB000] REMOVE | UI prose
+Source: lib/ui/settings_screen.dart:1779
+BEFORE:
+All primary workflows remain keyboard reachable and use visible focus indicators. SeND does not communicate status by colour alone.
+AFTER: [Remove this text block.]
+NOTE: Accessibility should work, not announce itself. Keep keyboard access, focus indicators and non-colour status cues.
+
+[COPY-934A323E09] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1819
+BEFORE:
+This signs that device out and removes its Matrix device keys. Encrypted history stored only on that device may become unavailable.
+AFTER:
+Signs this device out and removes its encryption keys. History stored only there may be lost.
+NOTE: Keep in the device-removal confirmation; do not promise an immediate remote wipe.
+
+[COPY-53B759366B] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:1830
+BEFORE:
+This deactivates ${backend.userId}, signs out all devices, and requests server-side data erasure. This cannot be undone.
+AFTER:
+Permanently deactivate ${backend.userId}, sign out all devices and request data deletion? This can't be undone.
+NOTE: Preserve 'request': do not promise erasure of all copies.
+
+[COPY-06C4E395AC] KEEP | UI prose
+Source: lib/ui/settings_screen.dart:2039
+UNCHANGED:
+Password changed.
+NOTE: Already a natural, brief confirmation.
+
+[COPY-21772B6021] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2056
+UNCHANGED:
+Change password
+NOTE: Existing action or input label.
+
+[COPY-6B5FA3D481] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2063
+UNCHANGED:
+Current password
+NOTE: Existing action or input label.
+
+[COPY-F3476FC48A] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2064
+UNCHANGED:
+New password
+NOTE: Existing action or input label.
+
+[COPY-79526860EF] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2065
+UNCHANGED:
+Confirm new password
+NOTE: Existing action or input label.
+
+[COPY-927912894C] SHORTEN | UI prose
+Source: lib/ui/settings_screen.dart:2080
+BEFORE:
+Other sessions may be signed out by your homeserver.
+AFTER:
+This may sign you out on other devices.
+
+[COPY-672BA29404] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2098
+UNCHANGED:
+Change password
+NOTE: Existing action or input label.
+
+[COPY-C77FF0D8F3] KEEP | UI label
+Source: lib/ui/settings_screen.dart:2144
+UNCHANGED:
+Matrix account password
+NOTE: Existing action or input label.
+
+========================================================================================
+lib/ui/space_settings_screen.dart
+========================================================================================
+
+[COPY-C7F6272631] SHORTEN | UI prose
+Source: lib/ui/space_settings_screen.dart:19
+BEFORE:
+Choose the default for channels created in this server. Encrypted messages can only be read by participants with the keys. Without encryption, homeserver operators can read messages. Existing encrypted rooms cannot be made unencrypted.
+AFTER:
+Applies to new channels. Without encryption, homeserver operators can read messages. Encryption can't be turned off in existing encrypted channels.
+NOTE: Keep scope, privacy consequence and irreversibility; remove the generic explanation of encryption.
+
+[COPY-1BD8B377B6] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:259
+UNCHANGED:
+Space settings
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-E64C7DB7BF] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:336
+UNCHANGED:
+Choose picture
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-620C08C93B] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:341
+UNCHANGED:
+Name
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-F0116A9AB1] KEEP | Dynamic UI
+Source: lib/ui/space_settings_screen.dart:352
+UNCHANGED:
+${backend.rooms.where((room) => !room.isVoice).length} text rooms  •  ${backend.rooms.where((room) => room.isVoice).length} voice rooms  •  ${backend.selectedSpaceCategories.length} categories
+NOTE: Room and category counts, not helper prose.
+
+[COPY-257BFAC955] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:365
+UNCHANGED:
+Copy Space link
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-539E277FE9] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:371
+UNCHANGED:
+Mute Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-19E5ECBCC3] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:382
+UNCHANGED:
+Save changes
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-B523E4D0CA] REMOVE | UI prose
+Source: lib/ui/space_settings_screen.dart:397
+BEFORE:
+This uses the same interoperable Space order as the normal channel panel. ${canManage ? 'Drag the grips to move channels or categories. ' : ''}Arrow buttons remain available for keyboard and touch users.
+AFTER: [Remove this text block.]
+NOTE: Remove the entire ordering explanation. Drag grips and arrow controls should remain usable and labelled; keep accessibility semantics.
+
+[COPY-48D6C85289] REMOVE | UI prose
+Source: lib/ui/space_settings_screen.dart:398
+BEFORE:
+Drag the grips to move channels or categories. 
+AFTER: [Remove this text block.]
+NOTE: Nested string inside COPY-B523E4D0CA, not a second visible block. Remove with its parent explanation.
+
+[COPY-0802E16DAC] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:403
+UNCHANGED:
+Uncategorised
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-81E46F3DBF] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:409
+UNCHANGED:
+Uncategorised
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-5E619BD247] KEEP | UI label
+Source: lib/ui/space_settings_screen.dart:639
+UNCHANGED:
+Server profile
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-77293D5549] SHORTEN | UI label
+Source: lib/ui/space_settings_screen.dart:659
+BEFORE:
+Reset every field to general profile
+AFTER:
+Reset to general profile
+NOTE: Same action; shorter label.
+
+========================================================================================
+lib/ui/history_download_panel.dart
+========================================================================================
+
+[COPY-AFD2B54598] SHORTEN | UI prose
+Source: lib/ui/history_download_panel.dart:50
+BEFORE:
+Fetch all accessible message events for ${selected.length} ${selected.length == 1 ? 'chat' : 'chats'}. Photos, videos and other attachment files will not be downloaded. ${widget.index.encryptedAtRest ? '' : 'The search database stores decrypted text without separate encryption. '}Large histories can use a lot of data; use Wi-Fi if needed. The download pauses at your search-cache limit. Progress stays on this device, and no messages are marked read. On mobile, leaving SeND pauses the download. You can resume in Storage settings.
+AFTER:
+Download messages from ${selected.length} ${selected.length == 1 ? 'chat' : 'chats'} for search? Attachments won't be downloaded. ${widget.index.encryptedAtRest ? '' : 'Message text will be stored unencrypted on this device. '}On mobile, keep SeND open; resume paused downloads in Storage.
+NOTE: Preserve the encryption-at-rest condition. Keep data/storage limits enforced, but remove implementation and read-receipt reassurance from the confirmation.
+
+[COPY-6F9FCE796C] SHORTEN | UI prose
+Source: lib/ui/history_download_panel.dart:52
+BEFORE:
+The search database stores decrypted text without separate encryption. 
+AFTER:
+Message text will be stored unencrypted on this device. 
+NOTE: Nested literal in COPY-AFD2B54598: update that branch, not an additional warning. Show only when encryptedAtRest is false.
+
+[COPY-CBF417E439] SHORTEN | UI prose
+Source: lib/ui/history_download_panel.dart:106
+BEFORE:
+Raise the limit from ${widget.index.limitMiB} MiB to ${next} MiB and resume the saved download.
+AFTER:
+Increase storage from ${widget.index.limitMiB} MiB to ${next} MiB and resume?
+
+[COPY-6E54140471] KEEP | UI label
+Source: lib/ui/history_download_panel.dart:156
+UNCHANGED:
+Download history for search
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-AD61E53111] SHORTEN | UI prose
+Source: lib/ui/history_download_panel.dart:161
+BEFORE:
+Download message text and media references without fetching the attachment files. Search results stay available locally. Missing encryption keys can leave gaps.
+AFTER:
+Download messages for offline search, without attachments.
+NOTE: Missing-key failures already have contextual status messages; do not remove those.
+
+[COPY-C6FA4836D9] SHORTEN | UI prose
+Source: lib/ui/history_download_panel.dart:167
+BEFORE:
+The local search database stores decrypted text without separate encryption.
+AFTER:
+Message text is stored unencrypted on this device.
+NOTE: Keep this warning only in the existing unencrypted-storage condition.
+
+[COPY-AC35A8DE72] SHORTEN | Dynamic UI
+Source: lib/ui/history_download_panel.dart:207
+BEFORE:
+${job.completedRooms}/${job.totalRooms} chats complete · ${job.checked} events processed
+AFTER:
+${job.completedRooms}/${job.totalRooms} chats · ${job.checked} events processed
+NOTE: Keep event counts distinct from message counts.
+
+[COPY-A5063AAAF7] REMOVE | UI prose
+Source: lib/ui/history_download_panel.dart:215
+BEFORE:
+Older downloads only stored a count. Failures without saved references: ${job.untrackedUnavailable}. Run a new history download to collect those references.
+AFTER: [Remove this text block.]
+NOTE: Legacy bookkeeping is not useful permanent UI copy. Keep the existing failure counts and download controls; do not clear failure records.
+
+========================================================================================
+lib/ui/history_index_settings.dart
+========================================================================================
+
+[COPY-F84D4E9D51] SHORTEN | UI prose
+Source: lib/ui/history_index_settings.dart:30
+BEFORE:
+A text index makes repeat searches faster and uses extra storage on this device. It starts with a 100 MiB limit. You can change the limit or clear it in Storage settings. Media indexing saves event references, not the images or videos. Indexed message text is decrypted on this device. This is separate from the normal chat cache. ${index.encryptedAtRest ? '' : 'The search database is not separately encrypted.'}
+AFTER:
+Save messages on this device for faster searches? ${index.encryptedAtRest ? '' : 'Message text will be stored unencrypted.'}
+NOTE: Retain the encryption-at-rest condition. Storage limits and media downloads belong to their controls, not this opt-in paragraph.
+
+[COPY-E951641FC9] SHORTEN | UI prose
+Source: lib/ui/history_index_settings.dart:151
+BEFORE:
+This applies to history downloads and incoming messages. Search entries outside the chosen scope will be removed from this device, and saved download progress will reset. Your messages and uploaded media stay intact.
+AFTER:
+Remove excluded messages from local search and reset download progress? Your chats and uploads won't be deleted.
+NOTE: Keep this change-of-scope confirmation; removal is local search data only.
+
+[COPY-EE970948B5] SHORTEN | UI prose
+Source: lib/ui/history_index_settings.dart:197
+BEFORE:
+Off by default. Turning it off removes indexed message text. Your chat history stays intact.
+AFTER:
+Turning this off clears saved search text, not your chats.
+
+[COPY-3838F35133] REMOVE | UI prose
+Source: lib/ui/history_index_settings.dart:203
+BEFORE:
+Media indexing stores event IDs and media types. It does not download image, video or audio files.
+AFTER: [Remove this text block.]
+NOTE: Repeats the no-attachment-download explanation at COPY-AD61E53111; remove this extra block.
+
+[COPY-903C78F012] SHORTEN | Dynamic UI
+Source: lib/ui/history_index_settings.dart:225
+BEFORE:
+${index.entries} indexed events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ' database size'}
+AFTER:
+${index.entries} events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ''}
+NOTE: Retain the browser estimate qualifier; replace only the redundant 'database size' branch.
+
+[COPY-ED04C8CF33] SHORTEN | Dynamic UI
+Source: lib/ui/history_index_settings.dart:228
+BEFORE:
+Quota use: ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}%, including reserved overhead. Up to ${index.entryLimit} events, subject to space.
+AFTER:
+${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}% of storage limit used
+NOTE: The capacity ratio still includes reserved overhead. Remove the secondary event ceiling, not the actual limit.
+
+[COPY-0E173238BE] SHORTEN | UI prose
+Source: lib/ui/history_index_settings.dart:334
+BEFORE:
+The search cache has reached 80% of its ${index.limitMiB} MiB budget. SeND will prune search context from the oldest messages onward as space is needed. Your messages and media on the homeserver will not be deleted.
+AFTER:
+Search storage is 80% full. Older search results will be cleared as needed; your chats and uploads won't be deleted.
+NOTE: Keep this contextual notice, not as a permanent settings paragraph.
+
+========================================================================================
+lib/ui/update_dialog.dart
+========================================================================================
+
+[COPY-71C24125E9] SHORTEN | UI prose
+Source: lib/ui/update_dialog.dart:52
+BEFORE:
+Finish recordings and uploads before reloading. Unsent drafts may be lost.
+AFTER:
+Finish recordings and uploads before reloading; unsent drafts may be lost.
+
+[COPY-69A54C8800] SHORTEN | UI prose
+Source: lib/ui/update_dialog.dart:58
+BEFORE:
+Finish recordings and uploads first. SeND will download and verify the installer, then open Windows setup. Setup may ask you to close SeND; it keeps your account data.
+AFTER:
+Finish recordings and uploads before installing. Your account data will be kept.
+NOTE: Installer verification remains unchanged; do not describe its internal steps in this prompt.
+
+[COPY-30289429B4] SHORTEN | UI prose
+Source: lib/ui/update_dialog.dart:66
+BEFORE:
+Download and verify the update, then restart when ready. SeND keeps one previous AppImage for rollback. Finish calls, recordings and uploads, and save unsent drafts before restarting.
+AFTER:
+Finish calls, recordings and uploads, and save your drafts before restarting.
+NOTE: Keep the interruption warning; verification and rollback remain implementation details.
+
+[COPY-EFAA851560] SHORTEN | UI prose
+Source: lib/ui/update_dialog.dart:67
+BEFORE:
+SeND will download and verify the package. Your desktop will ask for administrator authentication. The package manager may download dependencies outside your SOCKS proxy. Finish calls, recordings and uploads, and save unsent drafts before restarting.
+AFTER:
+Finish calls, recordings and uploads, and save your drafts before restarting. Installation needs administrator approval and may download files outside your SOCKS proxy.
+NOTE: One of the necessary longer warnings: preserve the proxy bypass and interruption risks.
+
+========================================================================================
+lib/ui/accent_color_picker.dart
+========================================================================================
+
+[COPY-F91F95B8BE] KEEP | UI label
+Source: lib/ui/accent_color_picker.dart:63
+UNCHANGED:
+Accent colour
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-E0928C2D35] REMOVE | UI prose
+Source: lib/ui/accent_color_picker.dart:262
+BEFORE:
+Drag around the wheel for hue and saturation, or enter an exact six-digit hex value.
+AFTER: [Remove this text block.]
+NOTE: The colour wheel and hex input are self-explanatory; keep their labels and accessibility controls.
+
+========================================================================================
+lib/ui/activity_settings.dart
+========================================================================================
+
+[COPY-47BCB2B3F9] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:27
+BEFORE:
+Could not save activity preferences to this device’s secure storage.
+AFTER:
+Couldn't save activity settings on this device.
+
+[COPY-AD68F21A58] REMOVE | UI prose
+Source: lib/ui/activity_settings.dart:64
+BEFORE:
+This rule stays on this device. The executable path is never published.
+AFTER: [Remove this text block.]
+NOTE: Local rule storage and unpublished executable paths need no repeated explanation; the main activity-sharing disclosure remains.
+
+[COPY-397D611C23] KEEP | UI label
+Source: lib/ui/activity_settings.dart:122
+UNCHANGED:
+Link Libre.fm
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-BE3F97BF73] REMOVE | UI prose
+Source: lib/ui/activity_settings.dart:127
+BEFORE:
+Enter your Libre.fm username. SeND reads your public listening history without logging in or submitting scrobbles. Account ownership is not verified.
+AFTER: [Remove this text block.]
+NOTE: The username field already asks for the username. Remove authentication/scrobbling implementation prose; do not add a verified-account claim.
+
+[COPY-5397216A9C] KEEP | UI label
+Source: lib/ui/activity_settings.dart:188
+UNCHANGED:
+Activity sharing
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-7D33B90903] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:192
+BEFORE:
+Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.
+AFTER:
+Shared activity is public, unencrypted and may be saved by others. Invisible mode or turning off online presence stops sharing.
+NOTE: Keep the actual privacy consequence and visibility controls; remove local detector implementation details.
+
+[COPY-1030484729] REMOVE | UI prose
+Source: lib/ui/activity_settings.dart:195
+BEFORE:
+Your profile combines game/program activity, music and listening history from your devices. Linked services refresh while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.
+AFTER: [Remove this text block.]
+NOTE: The overview repeats the individual activity controls; the offline-history caveat stays at COPY-80270C881D.
+
+[COPY-80270C881D] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:218
+BEFORE:
+Share the last completed track and album, with artwork when available. It stays visible while offline. Turning this off removes this device’s contribution, not tracks shared by other devices.
+AFTER:
+Your last track stays visible offline. Turning this off only removes tracks shared by this device.
+NOTE: Do not imply it removes contributions from other devices.
+
+[COPY-87B16F0CDE] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:230
+BEFORE:
+Uses MusicBrainz and Cover Art Archive. Sends artist and album names, not your username.
+AFTER:
+Sends artist and album names to MusicBrainz and Cover Art Archive, not your username.
+NOTE: Keep the external-service disclosure beside the artwork choice.
+
+[COPY-485B8DAAB7] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:269
+BEFORE:
+Available on Linux and Windows. Close Discord to free its IPC connection. SeND recovers abandoned Linux sockets but never replaces active listeners. It does not use join secrets or access your Discord account.
+AFTER:
+Close Discord to let SeND receive game activity.
+NOTE: Retain existing platform availability checks; remove IPC/socket implementation details.
+
+[COPY-CC0E1B5701] SHORTEN | UI prose
+Source: lib/ui/activity_settings.dart:283
+BEFORE:
+No matching program yet. Scanning every 5 seconds. Add an executable below to classify it manually.
+AFTER:
+No matching apps found. Add one below.
+
+[COPY-FB268E69C1] KEEP | Dynamic UI
+Source: lib/ui/activity_settings.dart:301
+UNCHANGED:
+${settings.rules[item.id]?.kind.name ?? item.kind?.name ?? "Unclassified — not shared"}${item.running ? "" : " · not running"}
+NOTE: Useful classification and running state, not explanatory prose.
+
+========================================================================================
+lib/ui/activity_widgets.dart
+========================================================================================
+
+[COPY-C724A8F36B] KEEP | Dynamic UI
+Source: lib/ui/activity_widgets.dart:250
+UNCHANGED:
+${elapsed.inHours.toString().padLeft(2, '0')}:${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}
+NOTE: Elapsed-time display.
+
+[COPY-2BDA0F44D0] KEEP | Dynamic UI
+Source: lib/ui/activity_widgets.dart:438
+UNCHANGED:
+${track.name}
+${track.artist}
+${track.album}
+NOTE: Track information shown on demand in a tooltip.
+
+[COPY-BA4D9274D2] KEEP | Accessibility
+Source: lib/ui/activity_widgets.dart:594
+UNCHANGED:
+${playback.playing ? 'Song progress' : 'Song paused'}: ${activityClock(position)} of ${activityClock(playback.durationMs)}
+NOTE: Screen-reader progress label; do not remove accessibility text as visual clutter.
+
+========================================================================================
+lib/ui/advanced_chat_dialogs.dart
+========================================================================================
+
+[COPY-F711450368] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:87
+UNCHANGED:
+Mute
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-0D15461785] KEEP | Dynamic UI
+Source: lib/ui/advanced_chat_dialogs.dart:340
+UNCHANGED:
+${sticker.name}
+Hold to ${favourite ? 'unfavourite' : 'favourite'}
+NOTE: Concise on-demand gesture hint, including the sticker name.
+
+[COPY-963C31F5EB] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:635
+BEFORE:
+This message does not expose an accessible Matrix image pack. The media can still be viewed in the timeline.
+AFTER:
+Can't open this pack; the attachment is still available in chat.
+
+[COPY-346D301722] KEEP | Dynamic UI
+Source: lib/ui/advanced_chat_dialogs.dart:668
+UNCHANGED:
+${pack.stickers.length} items
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-CBC06D2007] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:726
+BEFORE:
+Could not update this pack. Check your connection and try again.
+AFTER:
+Couldn't update the pack. Check your connection and try again.
+
+[COPY-8720767766] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:870
+BEFORE:
+Personal packs use the Matrix image-pack format and work in compatible clients such as FluffyChat. Pack media is uploaded to your homeserver and is not room end-to-end encrypted.
+AFTER:
+Pack images are uploaded to your homeserver without end-to-end encryption.
+NOTE: Keep beside pack creation; remove compatibility marketing.
+
+[COPY-28AAE2EF92] KEEP | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:883
+UNCHANGED:
+Up to 150 PNG, JPEG, GIF or WebP files
+NOTE: Compact file-type and quantity limits help prevent failed uploads.
+
+[COPY-C5C0AAFBEE] KEEP | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:895
+UNCHANGED:
+Up to 150 images, 128×128 and 256 KiB each
+NOTE: Compact size and quantity limits help prevent failed uploads.
+
+[COPY-315EA746E3] SHORTEN | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:901
+BEFORE:
+Edit sticker or emoji pack
+AFTER:
+Edit pack
+NOTE: The dialog context already identifies stickers or emoji.
+
+[COPY-1B46EEB1EE] REMOVE | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:913
+BEFORE:
+Move a pack to a server so members can add it
+AFTER: [Remove this text block.]
+NOTE: Repeats the publish/move control; membership and update behaviour are explained where the user chooses to publish.
+
+[COPY-38CB997D1E] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:987
+BEFORE:
+Server sticker pack published. Members can add it and receive future pack updates.
+AFTER:
+Pack published.
+NOTE: Success toast does not need to repeat how pack updates work.
+
+[COPY-335BC52BDA] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:1072
+UNCHANGED:
+Pack name
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-DB664217FE] SHORTEN | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:1113
+BEFORE:
+Edit sticker or emoji pack
+AFTER:
+Edit pack
+NOTE: The dialog context already identifies stickers or emoji.
+
+[COPY-A33BF22A89] KEEP | Dynamic UI
+Source: lib/ui/advanced_chat_dialogs.dart:1123
+UNCHANGED:
+${pack.stickers.length} items
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-92D1C9EC11] REMOVE | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1259
+BEFORE:
+Set the :alias: used in messages, search and autocomplete.
+AFTER: [Remove this text block.]
+NOTE: Remove the explanation of where aliases are used; keep the alias input and its :alias: syntax/example.
+
+[COPY-57E5A578F7] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1411
+BEFORE:
+Images larger than 128×128 will keep their aspect ratio, fit inside a centred 128×128 canvas, and never be stretched.
+AFTER:
+Images will be resized to fit 128×128 without stretching.
+
+[COPY-94BF799626] REMOVE | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1414
+BEFORE:
+These images already meet the 128×128 limit. You can keep their original canvas or trim transparent padding.
+AFTER: [Remove this text block.]
+NOTE: The size-compliance explanation is unnecessary beside the keep/trim choices.
+
+[COPY-AC44EE5D03] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:1461
+UNCHANGED:
+Trim transparent padding
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-5E08340AA5] REMOVE | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1463
+BEFORE:
+Optional. Enlarges visible artwork without stretching. Animation uses one shared crop across all frames to avoid jumping.
+AFTER: [Remove this text block.]
+NOTE: Remove the crop algorithm and animation-frame explanation; keep the Trim transparent padding control.
+
+[COPY-426D64A9DD] REMOVE | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1475
+BEFORE:
+Edited animations stay animated and are encoded as GIF. Images that exceed safe processing limits fail without being flattened.
+AFTER: [Remove this text block.]
+NOTE: Remove the animation-processing reassurance. Keep actual processing errors and the colour-loss warning at the batch-edit choice.
+
+[COPY-C83FFA67FB] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1515
+BEFORE:
+Private to this account and available in every conversation
+AFTER:
+For this account, in any chat.
+NOTE: Describes destination, not a guarantee that uploaded pack images are confidential.
+
+[COPY-0714C6CEFB] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1524
+BEFORE:
+Publish to this server; members can add it and updates sync
+AFTER:
+Members can add it and get updates.
+
+[COPY-DC285063A9] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:1553
+UNCHANGED:
+Delete pack
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-DE81F8D47C] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:1608
+UNCHANGED:
+Publish to server
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C9DAF06F0C] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1610
+BEFORE:
+The server copy becomes canonical. Members can add it, and future owner edits update their copy automatically.
+AFTER:
+Your changes sync to members who add the pack.
+NOTE: Keep the publishing consequence; remove 'canonical' and implementation terminology.
+
+[COPY-DA91CC9819] SHORTEN | UI prose
+Source: lib/ui/advanced_chat_dialogs.dart:1648
+BEFORE:
+Existing messages keep their fallback emoji names, but the media will no longer be offered by this pack.
+AFTER:
+Existing messages keep their emoji names.
+NOTE: Shown inside the Delete pack confirmation, not as permanent helper text.
+
+[COPY-09D41C231D] KEEP | Dynamic UI
+Source: lib/ui/advanced_chat_dialogs.dart:1762
+UNCHANGED:
+Imported ${selected.length} ${assetType == StickerAssetType.emoji ? 'emoji' : 'stickers'} from ${pack.title}.
+NOTE: Already a natural one-sentence import result with useful quantity and source.
+
+[COPY-B91895C419] SHORTEN | Dynamic UI
+Source: lib/ui/advanced_chat_dialogs.dart:1855
+BEFORE:
+${selected.length} of ${pack.stickers.length} selected${pack.unsupportedCount == 0 ? '' : ' · ${pack.unsupportedCount} animated/video skipped'}
+AFTER:
+${selected.length}/${pack.stickers.length} selected${pack.unsupportedCount == 0 ? '' : ' · ${pack.unsupportedCount} unsupported items skipped'}
+NOTE: Preserve the skipped-item count and conditional branch.
+
+[COPY-6B859F970F] KEEP | UI label
+Source: lib/ui/advanced_chat_dialogs.dart:2059
+UNCHANGED:
+Create poll
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/advanced_chat_views.dart
+========================================================================================
+
+[COPY-60BCF29C2C] KEEP | UI label
+Source: lib/ui/advanced_chat_views.dart:105
+UNCHANGED:
+Pinned messages
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-201388C21D] KEEP | UI label
+Source: lib/ui/advanced_chat_views.dart:155
+UNCHANGED:
+Inbox
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/android_notification_setup.dart
+========================================================================================
+
+[COPY-4377F65A12] SHORTEN | UI prose
+Source: lib/ui/android_notification_setup.dart:180
+BEFORE:
+No extra app needed. SeND keeps a quiet notification while listening for messages. Allow background battery use for reliable delivery. This may use more battery. Force-stopping SeND stops alerts until you reopen it.
+AFTER:
+Allow background use for reliable alerts; SeND keeps a quiet notification visible and may use more battery.
+NOTE: Keep the background-use action and battery/persistent-notification trade-off; remove generic force-stop explanation.
+
+[COPY-E871DC132C] SHORTEN | UI prose
+Source: lib/ui/android_notification_setup.dart:184
+BEFORE:
+Use ntfy or Sunup if you already have one installed. Allow it to run in the background. Sunup uses Deltie’s gateway to forward room and event IDs to Mozilla, not message text. ntfy uses its own server’s gateway.
+AFTER:
+Allow ntfy or Sunup to run in the background. Sunup sends room and event IDs through Deltie's gateway to Mozilla, not message text; ntfy uses its own server.
+NOTE: Retain both service routes; do not collapse this into an inaccurate 'nothing is shared' claim.
+
+[COPY-4D1C2FF640] SHORTEN | UI prose
+Source: lib/ui/android_notification_setup.dart:188
+BEFORE:
+You may miss messages while SeND is closed. You can change this in Settings > Notifications.
+AFTER:
+You may miss notifications while SeND is closed.
+
+========================================================================================
+lib/ui/browser_login_dialog.dart
+========================================================================================
+
+[COPY-4E40A59890] REMOVE | UI prose
+Source: lib/ui/browser_login_dialog.dart:101
+BEFORE:
+Use the sign-in methods offered by your homeserver. You will still need to verify this device or recover your encryption keys afterwards.
+AFTER: [Remove this text block.]
+NOTE: The sign-in choices explain themselves; device verification is a later step. Keep that verification flow, not this advance walkthrough.
+
+[COPY-A84189F6F9] SHORTEN | UI prose
+Source: lib/ui/browser_login_dialog.dart:127
+BEFORE:
+This server currently offers password sign-in only. Use the main sign-in form.
+AFTER:
+This server only supports password sign-in. Use the main sign-in form.
+
+[COPY-17C4E937AF] SHORTEN | UI prose
+Source: lib/ui/browser_login_dialog.dart:128
+BEFORE:
+This server does not advertise a supported interactive sign-in method.
+AFTER:
+Browser sign-in isn't available for this server.
+NOTE: Retain as the unsupported-method error, not a permanent sign-in paragraph.
+
+========================================================================================
+lib/ui/chat_navigation.dart
+========================================================================================
+
+[COPY-9CA3B500C3] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:14
+UNCHANGED:
+Create Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-16B78E75ED] KEEP | Dynamic UI
+Source: lib/ui/chat_navigation.dart:208
+UNCHANGED:
+${textRoomCount} text rooms  •  ${voiceRoomCount} voice rooms  •  ${categoryCount} categories
+NOTE: Room and category counts.
+
+[COPY-8A478A74B6] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:233
+UNCHANGED:
+Mute Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-7B2E78EFBA] REMOVE | UI prose
+Source: lib/ui/chat_navigation.dart:260
+BEFORE:
+Controls who may reorder rooms and manage SeND categories. The permission is synced through Matrix room power levels.
+AFTER: [Remove this text block.]
+NOTE: Keep the layout-permission selector and its label; remove the explanation of Matrix power-level synchronization.
+
+[COPY-CBEF969B14] KEEP | Dynamic UI
+Source: lib/ui/chat_navigation.dart:360
+UNCHANGED:
+Leave ${space.name}?
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-13E980208B] SHORTEN | UI prose
+Source: lib/ui/chat_navigation.dart:362
+BEFORE:
+You will also leave all joined channels and nested servers, including channels shared with other servers. You may need new invitations to rejoin.
+AFTER:
+You'll also leave all joined channels and nested servers, including channels shared elsewhere. You may need new invitations to rejoin.
+NOTE: Keep the surprising shared-channel and nested-server scope explicit, on desktop and mobile leave confirmations.
+
+[COPY-3262FCADEB] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:395
+UNCHANGED:
+Mute Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-3D0F2DC1FC] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:687
+UNCHANGED:
+Search for Spaces
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-F9DDBF6636] SHORTEN | UI prose
+Source: lib/ui/chat_navigation.dart:715
+BEFORE:
+No published Spaces found. Try #alias:server or a Matrix server name; unpublished Spaces cannot be discovered through Matrix directories.
+AFTER:
+No listed Spaces found. Try #alias:server or a server name.
+NOTE: Do not change 'listed' to 'public': discoverability and access are different.
+
+[COPY-037173F0C9] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:942
+UNCHANGED:
+End-to-end encryption
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C55E1D1236] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:1125
+UNCHANGED:
+Start direct message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-ABE3B4C2AB] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:1138
+UNCHANGED:
+Create room
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-DFE7240F68] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:1154
+UNCHANGED:
+Create category
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-93152DEE3D] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:1448
+UNCHANGED:
+Start direct message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C0FEB36031] KEEP | UI label
+Source: lib/ui/chat_navigation.dart:1844
+UNCHANGED:
+Create category
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-F50F30E524] SHORTEN | UI prose
+Source: lib/ui/chat_navigation.dart:2043
+BEFORE:
+You may need another invitation to return to this room.
+AFTER:
+You may need another invitation to rejoin.
+
+========================================================================================
+lib/ui/conversation_view.dart
+========================================================================================
+
+[COPY-DD7E9C48CE] SHORTEN | UI prose
+Source: lib/ui/conversation_view.dart:380
+BEFORE:
+This removes the message for everyone in the room.
+AFTER:
+Delete this message for everyone?
+NOTE: Keep the deletion scope in the confirmation.
+
+[COPY-DAD3B8A4AB] KEEP | UI label
+Source: lib/ui/conversation_view.dart:424
+UNCHANGED:
+Pinned messages
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/emoji_details.dart
+========================================================================================
+
+[COPY-6309BD20D7] KEEP | UI label
+Source: lib/ui/emoji_details.dart:9
+UNCHANGED:
+Emoji
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/emoji_picker_dialog.dart
+========================================================================================
+
+[COPY-5DB322ECF0] KEEP | UI label
+Source: lib/ui/emoji_picker_dialog.dart:225
+UNCHANGED:
+Emoji
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-370AFDB668] SHORTEN | Dynamic UI
+Source: lib/ui/emoji_picker_dialog.dart:243
+BEFORE:
+${entry.name}  :${entry.shortcode}:
+Long-press to ${favourite ? 'unfavourite' : 'favourite'}
+AFTER:
+${entry.name}  :${entry.shortcode}:
+Hold to ${favourite ? 'unfavourite' : 'favourite'}
+NOTE: Match the sticker gesture hint; keep this on-demand tooltip.
+
+========================================================================================
+lib/ui/encryption_attention_banner.dart
+========================================================================================
+
+[COPY-A025DEF25C] SHORTEN | UI prose
+Source: lib/ui/encryption_attention_banner.dart:25
+BEFORE:
+This device is not verified. Encrypted history may be unavailable.
+AFTER:
+This device isn't verified. Encrypted history may be missing.
+
+========================================================================================
+lib/ui/forum_view.dart
+========================================================================================
+
+[COPY-9215807E5B] SHORTEN | UI prose
+Source: lib/ui/forum_view.dart:78
+BEFORE:
+This removes the opening post. Existing replies are not deleted.
+AFTER:
+Deletes the opening post, not the replies.
+NOTE: Keep the limited deletion scope explicit.
+
+========================================================================================
+lib/ui/gif_favourite_button.dart
+========================================================================================
+
+[COPY-4122A1CEBB] KEEP | UI label
+Source: lib/ui/gif_favourite_button.dart:115
+UNCHANGED:
+GIF
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/giphy_dialog.dart
+========================================================================================
+
+[COPY-2940DDD9CC] KEEP | UI label
+Source: lib/ui/giphy_dialog.dart:295
+UNCHANGED:
+GIFs
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/json_theme_settings.dart
+========================================================================================
+
+[COPY-9C3ADF9919] REMOVE | UI prose
+Source: lib/ui/json_theme_settings.dart:182
+BEFORE:
+Theme settings follow your appearance sync choice. High contrast disables glass effects; reduced motion disables blur.
+AFTER: [Remove this text block.]
+NOTE: Appearance synchronization and accessibility effect rules do not need another explanatory paragraph.
+
+========================================================================================
+lib/ui/lastfm_connect_dialog.dart
+========================================================================================
+
+[COPY-EA224E5870] KEEP | UI label
+Source: lib/ui/lastfm_connect_dialog.dart:61
+UNCHANGED:
+Connect Last.fm
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-DD21E72E43] SHORTEN | UI prose
+Source: lib/ui/lastfm_connect_dialog.dart:68
+BEFORE:
+Browser linking needs SeND’s own Last.fm application registration. It is not configured in this local preview. You do not need to create an API key. Local music detection still works without Last.fm.
+AFTER:
+Last.fm linking isn't set up in this build.
+NOTE: Only show for the existing missing-configuration state; do not ask users to create an API key.
+
+[COPY-B76E58E34A] SHORTEN | UI prose
+Source: lib/ui/lastfm_connect_dialog.dart:70
+BEFORE:
+Sign in and approve SeND on Last.fm in your browser. We read your public now-playing feed and, if enabled, your last completed track. We do not scrobble, change your library, or keep your password. You control publication through Activity settings.
+AFTER:
+SeND only reads your public listening activity; it won't scrobble, change your library or save your password.
+NOTE: Keep service access scope. Public activity publication remains controlled by the existing Activity settings.
+
+[COPY-A94AEF2BF3] SHORTEN | UI prose
+Source: lib/ui/lastfm_connect_dialog.dart:71
+BEFORE:
+Approve SeND in your browser, then finish linking here. Activity sharing remains controlled by your Activity settings.
+AFTER:
+Approve SeND in your browser, then return here.
+
+========================================================================================
+lib/ui/login_screen.dart
+========================================================================================
+
+[COPY-C8681E1DB7] KEEP | UI label
+Source: lib/ui/login_screen.dart:85
+UNCHANGED:
+SeND
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C39004639A] KEEP | UI label
+Source: lib/ui/login_screen.dart:197
+UNCHANGED:
+Password
+NOTE: Existing input or tooltip label.
+
+[COPY-E8FADC81BD] KEEP | UI label
+Source: lib/ui/login_screen.dart:201
+UNCHANGED:
+Hide password
+NOTE: Existing input or tooltip label.
+
+[COPY-4E99307737] KEEP | UI label
+Source: lib/ui/login_screen.dart:202
+UNCHANGED:
+Show password
+NOTE: Existing input or tooltip label.
+
+[COPY-6C824CAB5C] KEEP | UI prose
+Source: lib/ui/login_screen.dart:214
+UNCHANGED:
+Enter your password.
+NOTE: Already a brief, direct validation message.
+
+[COPY-005E4BC1EA] KEEP | UI label
+Source: lib/ui/login_screen.dart:228
+UNCHANGED:
+Confirm password
+NOTE: Existing input or tooltip label.
+
+[COPY-B6F028BBAF] KEEP | UI prose
+Source: lib/ui/login_screen.dart:232
+UNCHANGED:
+Passwords do not match.
+NOTE: Already a brief validation message.
+
+[COPY-2878E8E2AB] REMOVE | UI prose
+Source: lib/ui/login_screen.dart:286
+BEFORE:
+You can sign in with another Matrix homeserver. Its upload limits and account features may differ. SeND’s push, media conversion and link-preview services may not be available there.
+AFTER: [Remove this text block.]
+NOTE: Remove the general homeserver caveats from sign-in. Preserve actual upload limits and feature-specific unavailable/error states.
+
+========================================================================================
+lib/ui/media_compression_settings.dart
+========================================================================================
+
+[COPY-B583613D24] KEEP | UI label
+Source: lib/ui/media_compression_settings.dart:14
+UNCHANGED:
+Upload quality
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C3EF5C4C1C] REMOVE | UI prose
+Source: lib/ui/media_compression_settings.dart:79
+BEFORE:
+Video compression runs in your browser. Unsupported files can be sent as originals.
+AFTER: [Remove this text block.]
+NOTE: The browser implementation and original-file fallback do not need permanent helper text; keep the Original choice and specific failure messages.
+
+[COPY-1664AF2710] SHORTEN | UI prose
+Source: lib/ui/media_compression_settings.dart:80
+BEFORE:
+This browser sends original videos. Image presets still apply.
+AFTER:
+This browser sends videos without compression.
+NOTE: Keep only on the unsupported-compression branch; image quality controls remain unchanged.
+
+[COPY-B72BCC648E] REMOVE | UI prose
+Source: lib/ui/media_compression_settings.dart:81
+BEFORE:
+Compression runs on your device. Long clips may need trimming or an explicit choice to send the original. Captions, spoilers and encryption are preserved.
+AFTER: [Remove this text block.]
+NOTE: Remove the local-processing and preserved-caption/encryption paragraph. Keep trimming/original choices and any per-file errors.
+
+========================================================================================
+lib/ui/member_management.dart
+========================================================================================
+
+[COPY-79D9C01886] SHORTEN | UI prose
+Source: lib/ui/member_management.dart:53
+BEFORE:
+Restored by an online authorised SeND client; may expire late if all are offline.
+AFTER:
+Timeouts can run late if no authorised SeND client is online.
+NOTE: Keep this non-obvious limitation of the timeout feature.
+
+[COPY-BD992D1E53] SHORTEN | UI prose
+Source: lib/ui/member_management.dart:114
+BEFORE:
+Could not apply this action. Check your permissions and connection, then retry.
+AFTER:
+Couldn't apply this action. Check your connection and permissions.
+
+[COPY-82087FD9E6] SHORTEN | UI prose
+Source: lib/ui/member_management.dart:144
+BEFORE:
+Saves shared role names and colours. Apply role power in Administration to change room permissions.
+AFTER:
+To change permissions, apply role power in Administration.
+NOTE: Keep the distinction between profile role labels and actual room permissions.
+
+[COPY-D085B6C6AD] KEEP | UI label
+Source: lib/ui/member_management.dart:199
+UNCHANGED:
+Banned members
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-5B2C8A3ECF] KEEP | UI label
+Source: lib/ui/member_management.dart:267
+UNCHANGED:
+Invite to server
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-99164A5AE5] SHORTEN | UI prose
+Source: lib/ui/member_management.dart:283
+BEFORE:
+For server channels, this also invites them to the server if they are not already a member.
+AFTER:
+Also invites them to the server if needed.
+NOTE: Keep the extra invitation scope beside the invite action.
+
+[COPY-0F426F4E6D] SHORTEN | UI prose
+Source: lib/ui/member_management.dart:307
+BEFORE:
+Could not complete the invitation. Check their ID and your room and server invitation permissions. A server invitation may already have been sent.
+AFTER:
+Invite incomplete. Check their ID and your permissions; a server invite may already have been sent.
+NOTE: Preserve the possible partial success; do not imply nothing was sent.
+
+[COPY-0C632F66F2] KEEP | UI label
+Source: lib/ui/member_management.dart:329
+UNCHANGED:
+Room aliases
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-B0CACA353C] KEEP | UI label
+Source: lib/ui/member_management.dart:402
+UNCHANGED:
+Power level
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/message_composer.dart
+========================================================================================
+
+[COPY-8047782588] KEEP | UI label
+Source: lib/ui/message_composer.dart:511
+UNCHANGED:
+Emoji
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-F031CC7124] KEEP | UI label
+Source: lib/ui/message_composer.dart:825
+UNCHANGED:
+Spoiler
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6B5424D158] KEEP | UI label
+Source: lib/ui/message_composer.dart:825
+UNCHANGED:
+Remove spoiler
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-7FA2DAC045] KEEP | UI label
+Source: lib/ui/message_composer.dart:833
+UNCHANGED:
+Remove attachment
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-79D5880EEA] KEEP | Dynamic UI
+Source: lib/ui/message_composer.dart:852
+UNCHANGED:
+${attachment.name}
+Right-click for options
+NOTE: Concise on-demand context-menu hint and attachment name.
+
+========================================================================================
+lib/ui/message_metadata.dart
+========================================================================================
+
+[COPY-2E59D87B1D] SHORTEN | Dynamic UI
+Source: lib/ui/message_metadata.dart:413
+BEFORE:
+Status of message sent ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}
+AFTER:
+Message status · ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}
+NOTE: Keep the status purpose and localized timestamp.
+
+========================================================================================
+lib/ui/mobile/mobile_channel_manager.dart
+========================================================================================
+
+[COPY-E162EE1A5C] SHORTEN | UI prose
+Source: lib/ui/mobile/mobile_channel_manager.dart:147
+BEFORE:
+Your power level does not permit changing this Space layout.
+AFTER:
+You don't have permission to change this layout.
+
+[COPY-6D77B4C0C5] KEEP | UI label
+Source: lib/ui/mobile/mobile_channel_manager.dart:156
+UNCHANGED:
+Categories
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-96C9B7ABB4] KEEP | UI label
+Source: lib/ui/mobile/mobile_channel_manager.dart:181
+UNCHANGED:
+Rooms
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4992F31420] REMOVE | UI prose
+Source: lib/ui/mobile/mobile_channel_manager.dart:183
+BEFORE:
+Drag the handles to reorder, then tap the checkmark to save. Assign a category below.
+AFTER: [Remove this text block.]
+NOTE: Remove the walkthrough of handles, save and category controls; keep the controls and their accessible names.
+
+[COPY-EC27CB1894] SHORTEN | UI prose
+Source: lib/ui/mobile/mobile_channel_manager.dart:240
+BEFORE:
+The default is Administrator (100). Space admins can change this from the desktop Space settings.
+AFTER:
+Space admins can change this in Space settings on desktop.
+NOTE: Keep the route to the desktop-only setting; remove the numeric default.
+
+========================================================================================
+lib/ui/mobile/mobile_details_panel.dart
+========================================================================================
+
+[COPY-C2C92363BE] KEEP | UI label
+Source: lib/ui/mobile/mobile_details_panel.dart:55
+UNCHANGED:
+Notifications
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4B04DA44B3] KEEP | UI label
+Source: lib/ui/mobile/mobile_details_panel.dart:56
+UNCHANGED:
+Enabled
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-E045145C4E] KEEP | UI label
+Source: lib/ui/mobile/mobile_details_panel.dart:62
+UNCHANGED:
+Invite member
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-5C678DD564] KEEP | UI label
+Source: lib/ui/mobile/mobile_details_panel.dart:67
+UNCHANGED:
+Room aliases
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-BD61147907] KEEP | Dynamic UI
+Source: lib/ui/mobile/mobile_details_panel.dart:72
+UNCHANGED:
+Members — ${backend.selectedRoomMembers.length}
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/mobile/mobile_media.dart
+========================================================================================
+
+[COPY-C4415C747A] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:169
+UNCHANGED:
+Copy image
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-A8F0DA04CF] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:175
+UNCHANGED:
+Copy media reference
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-166FAF3BEC] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:175
+UNCHANGED:
+Copy image reference
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9CA7428D46] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:181
+UNCHANGED:
+Save media
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-997A8949DE] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:186
+UNCHANGED:
+Open externally
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-613C549168] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:192
+UNCHANGED:
+View fullscreen
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4AC59D6CE4] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:497
+UNCHANGED:
+Save media
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-0EE15D9377] KEEP | UI label
+Source: lib/ui/mobile/mobile_media.dart:502
+UNCHANGED:
+Copy media reference
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/mobile/mobile_navigation.dart
+========================================================================================
+
+[COPY-B3E9A0C507] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:124
+UNCHANGED:
+Home
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-FCE017FEF6] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:133
+UNCHANGED:
+Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-EB7BFA8F5F] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:267
+UNCHANGED:
+Create room
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-7662D8BE16] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:273
+UNCHANGED:
+Create category
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-A5A14C2CAF] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:336
+UNCHANGED:
+Create room
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4B211E928E] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:347
+UNCHANGED:
+End-to-end encryption
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-14D539A8F8] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:474
+UNCHANGED:
+Create Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6E609708E4] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:517
+UNCHANGED:
+Invite to server
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-084B285C6D] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:526
+UNCHANGED:
+Mute Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-3DDCD1AC9F] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:531
+UNCHANGED:
+Space settings
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-071A5324DB] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:536
+UNCHANGED:
+Server profile
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-D58BE770B4] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:545
+UNCHANGED:
+Leave Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-CF624108B0] KEEP | Dynamic UI
+Source: lib/ui/mobile/mobile_navigation.dart:581
+UNCHANGED:
+Leave ${space.name}?
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-1A0C241396] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:615
+UNCHANGED:
+Space settings
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-25B1ED3DC8] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:665
+UNCHANGED:
+Mute Space
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-82100C35CA] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:725
+UNCHANGED:
+Discover Spaces
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-778C407AB5] KEEP | UI label
+Source: lib/ui/mobile/mobile_navigation.dart:1136
+UNCHANGED:
+Nobody connected
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/mobile/mobile_timeline.dart
+========================================================================================
+
+[COPY-39ADD28EBD] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2048
+UNCHANGED:
+Retry send
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-CFB0F81F57] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2059
+UNCHANGED:
+Reply
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-11C8F0F290] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2065
+UNCHANGED:
+Open discussion
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-5ECE07A9E1] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2070
+UNCHANGED:
+React
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-FE9AAA3FBF] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2076
+UNCHANGED:
+Edit
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6FE1BE036F] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2082
+UNCHANGED:
+Delete
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-98679849C3] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2087
+UNCHANGED:
+Copy text
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-EE876A107A] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2095
+UNCHANGED:
+Remove bookmark
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-CA62972790] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2095
+UNCHANGED:
+Save message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9C9F7ED65F] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2104
+UNCHANGED:
+Pin message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8AD2A47FEA] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2469
+UNCHANGED:
+Editing message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-93A1BCB7E7] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2654
+UNCHANGED:
+Edit media
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-2126A1548B] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2664
+UNCHANGED:
+Remove spoiler
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8A9940CB73] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2664
+UNCHANGED:
+Mark as spoiler
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-081E99239A] KEEP | UI label
+Source: lib/ui/mobile/mobile_timeline.dart:2670
+UNCHANGED:
+Remove attachment
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/mobile/mobile_voice_view.dart
+========================================================================================
+
+[COPY-A75C388292] KEEP | UI label
+Source: lib/ui/mobile/mobile_voice_view.dart:246
+UNCHANGED:
+Microphone
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9D3442D0D5] KEEP | UI label
+Source: lib/ui/mobile/mobile_voice_view.dart:264
+UNCHANGED:
+Speaker
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-36C9EFC483] KEEP | UI label
+Source: lib/ui/mobile/mobile_voice_view.dart:282
+UNCHANGED:
+Camera
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-4BAEFF5802] KEEP | UI label
+Source: lib/ui/mobile/mobile_voice_view.dart:309
+UNCHANGED:
+Echo cancellation
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/notification_diagnostics.dart
+========================================================================================
+
+[COPY-AD5E975616] SHORTEN | Dynamic UI
+Source: lib/ui/notification_diagnostics.dart:19
+BEFORE:
+System notification permission: ${s.notificationsAllowed == null ? 'Unknown' : s.notificationsAllowed! ? 'Allowed' : 'Blocked'}
+AFTER:
+System notifications: ${s.notificationsAllowed == null ? 'Unknown' : s.notificationsAllowed! ? 'Allowed' : 'Blocked'}
+NOTE: Preserve unknown, allowed and blocked states.
+
+[COPY-55E84BE3F9] SHORTEN | UI prose
+Source: lib/ui/notification_diagnostics.dart:68
+BEFORE:
+Push test did not finish. See the stages below.
+AFTER:
+Push test didn't finish.
+NOTE: The diagnostic stages remain below; no need to narrate them.
+
+[COPY-3830A66567] SHORTEN | UI prose
+Source: lib/ui/notification_diagnostics.dart:76
+BEFORE:
+Android received the push. A test notification was requested.
+AFTER:
+Push received; a test notification was requested.
+NOTE: Do not change this to 'shown' or 'delivered': only the push and notification request are confirmed.
+
+[COPY-A38E0FBCD9] SHORTEN | UI prose
+Source: lib/ui/notification_diagnostics.dart:84
+BEFORE:
+The check failed. Check your connection and notification permissions.
+AFTER:
+Test failed. Check your connection and notification permissions.
+
+[COPY-021BD73A52] SHORTEN | UI prose
+Source: lib/ui/notification_diagnostics.dart:99
+BEFORE:
+Test delivery without sending a chat message. Tests do not check message decryption. For that, ask someone to send an encrypted message while SeND is closed.
+AFTER:
+Tests check delivery, not message decryption.
+NOTE: Keep this limitation on the diagnostic screen so a passing test is not mistaken for working encrypted-message previews.
+
+[COPY-7CDC1CBCAF] SHORTEN | UI prose
+Source: lib/ui/notification_diagnostics.dart:131
+BEFORE:
+Push tests are limited to one per minute on Android. Reports omit your private push address and message content.
+AFTER:
+Reports exclude your push address and message content.
+NOTE: Keep the privacy scope. The rate limit is already explained by the contextual cooldown error; enforcement remains unchanged.
+
+========================================================================================
+lib/ui/personal_organisation.dart
+========================================================================================
+
+[COPY-56BC020C02] KEEP | UI label
+Source: lib/ui/personal_organisation.dart:24
+UNCHANGED:
+Chats and spaces
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-16DFBFD9A7] SHORTEN | UI prose
+Source: lib/ui/personal_organisation.dart:54
+BEFORE:
+Could not save this change. Check device storage and retry.
+AFTER:
+Couldn't save changes. Check free storage and try again.
+
+[COPY-84DCE3ECB0] KEEP | UI label
+Source: lib/ui/personal_organisation.dart:74
+UNCHANGED:
+Rename folder
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-662EC3A900] KEEP | UI label
+Source: lib/ui/personal_organisation.dart:111
+UNCHANGED:
+Space bar
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-A75696B458] REMOVE | UI prose
+Source: lib/ui/personal_organisation.dart:113
+BEFORE:
+Drag to reorder. Folders and order follow your account across devices.
+AFTER: [Remove this text block.]
+NOTE: Drag behaviour and account-sync narration are unnecessary beside the organization controls.
+
+[COPY-ADF28063EF] KEEP | UI label
+Source: lib/ui/personal_organisation.dart:169
+UNCHANGED:
+Archived chats
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-7C2FA8F304] SHORTEN | UI prose
+Source: lib/ui/personal_organisation.dart:171
+BEFORE:
+Archived chats stay here until restored. Their notification settings stay the same.
+AFTER:
+Archiving doesn't mute notifications.
+NOTE: Keep the non-obvious consequence, not the definition of archiving.
+
+[COPY-7E87F5888B] KEEP | UI label
+Source: lib/ui/personal_organisation.dart:259
+UNCHANGED:
+Rename folder
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/poll_card.dart
+========================================================================================
+
+[COPY-27F0ADCCE0] KEEP | Dynamic UI
+Source: lib/ui/poll_card.dart:110
+UNCHANGED:
+${poll.disclosed || poll.ended ? '$total vote${total == 1 ? '' : 's'}' : 'Results hidden'}${poll.ended ? ' · Ended' : ''}
+NOTE: Poll count, disclosure state and ended state.
+
+========================================================================================
+lib/ui/profile_card.dart
+========================================================================================
+
+[COPY-8611EC0762] KEEP | Dynamic UI
+Source: lib/ui/profile_card.dart:124
+UNCHANGED:
+${profile.userId}${profile.pronouns?.trim().isNotEmpty == true ? '  •  ${profile.pronouns!.characters.take(16)}' : ''}
+NOTE: User identity and pronouns, not helper prose.
+
+[COPY-92FDC6D1DD] KEEP | Dynamic UI
+Source: lib/ui/profile_card.dart:169
+UNCHANGED:
+${TimezoneCatalog.offsetLabel(timezone)}  •  ${TimezoneCatalog.localTimeLabel(timezone)}
+NOTE: Timezone offset and local time.
+
+========================================================================================
+lib/ui/profile_editor_dialog.dart
+========================================================================================
+
+[COPY-5AAC7ED1C1] SHORTEN | UI label
+Source: lib/ui/profile_editor_dialog.dart:405
+BEFORE:
+Edit server profile — live preview
+AFTER:
+Edit server profile
+NOTE: The preview is already visible; no need to announce it in the title.
+
+[COPY-4D843C23EA] SHORTEN | UI label
+Source: lib/ui/profile_editor_dialog.dart:406
+BEFORE:
+Edit profile — live preview
+AFTER:
+Edit profile
+NOTE: The preview is already visible; no need to announce it in the title.
+
+[COPY-9220C0F3D4] KEEP | UI label
+Source: lib/ui/profile_editor_dialog.dart:667
+UNCHANGED:
+Voice tile
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-D64E881ACB] REMOVE | UI prose
+Source: lib/ui/profile_editor_dialog.dart:672
+BEFORE:
+Uses the average avatar colour by default. You can override it with a colour or a separately cropped background.
+AFTER: [Remove this text block.]
+NOTE: The background controls show the available choices; remove the average-avatar-colour algorithm.
+
+[COPY-414788AA4E] SHORTEN | UI prose
+Source: lib/ui/profile_editor_dialog.dart:798
+BEFORE:
+This homeserver does not advertise extensible profile fields. Basic name and avatar editing remain available.
+AFTER:
+This homeserver only supports name and avatar changes.
+NOTE: Keep this explanation when extended profile fields are unavailable.
+
+========================================================================================
+lib/ui/profile_image_cropper.dart
+========================================================================================
+
+[COPY-C91D5C8CF5] REMOVE | UI prose
+Source: lib/ui/profile_image_cropper.dart:227
+BEFORE:
+Drag the preview or use the position controls. Zooming crops more tightly; only the visible area will be uploaded.
+AFTER: [Remove this text block.]
+NOTE: The crop preview and position controls explain the interaction; remove the walkthrough.
+
+========================================================================================
+lib/ui/room_access_dialog.dart
+========================================================================================
+
+[COPY-FA09594047] SHORTEN | UI prose
+Source: lib/ui/room_access_dialog.dart:123
+BEFORE:
+Apply "${_default}" to all ${widget.children.length} listed channels? This includes private channels. Cancel to preserve private exceptions and edit channels individually instead. This does not join members automatically or change history visibility.
+AFTER:
+Apply "${_default}" to all ${widget.children.length} channels, including private ones? This won't join members or change history access.
+NOTE: Keep the private-channel scope explicit; cancel and per-channel editing remain available.
+
+[COPY-19C17E243E] SHORTEN | UI prose
+Source: lib/ui/room_access_dialog.dart:224
+BEFORE:
+Off: general room. This classification follows your account across devices; other members keep their own choice.
+AFTER:
+This choice only affects your account.
+NOTE: Preserve the personal scope without explaining synchronization.
+
+[COPY-D6E0229024] SHORTEN | UI prose
+Source: lib/ui/room_access_dialog.dart:270
+BEFORE:
+Access and directory listing are separate. Space membership allows joining; it does not automatically join every channel.
+AFTER:
+Listing a room doesn't change who can join it.
+NOTE: Keep the directory/access distinction; remove the general Space-membership walkthrough.
+
+[COPY-FCFD3AF226] SHORTEN | UI prose
+Source: lib/ui/room_access_dialog.dart:293
+BEFORE:
+History changes affect future events. Encryption key availability can further limit readable history.
+AFTER:
+Only affects future messages; missing encryption keys may still limit history.
+NOTE: Retain the future-only scope and separate encryption limitation.
+
+[COPY-396377FFD4] KEEP | UI label
+Source: lib/ui/room_access_dialog.dart:317
+UNCHANGED:
+Shared timeline visibility
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-A4DAF7B36E] SHORTEN | UI prose
+Source: lib/ui/room_access_dialog.dart:321
+BEFORE:
+Applies to all SeND members; channel settings override Space defaults. Other clients may still show these events. Messages, security and moderation events cannot be hidden here.
+AFTER:
+Applies to everyone using SeND; channel settings override Space defaults. Other clients may still show these events.
+NOTE: Do not imply the preference deletes events or changes other clients. Protected event types must remain non-hideable.
+
+========================================================================================
+lib/ui/room_event_visibility_dialog.dart
+========================================================================================
+
+[COPY-808D55EF51] KEEP | UI label
+Source: lib/ui/room_event_visibility_dialog.dart:52
+UNCHANGED:
+Timeline events
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-FBC22A670D] SHORTEN | UI prose
+Source: lib/ui/room_event_visibility_dialog.dart:60
+BEFORE:
+Only changes what you see. Preferences sync with your account. Messages, encryption notices and moderation actions remain visible.
+AFTER:
+Only changes your view; messages, security notices and moderation actions stay visible.
+NOTE: Keep the personal scope distinct from shared timeline settings.
+
+========================================================================================
+lib/ui/room_search_panel.dart
+========================================================================================
+
+[COPY-6ADE0E8EA6] SHORTEN | Dynamic UI
+Source: lib/ui/room_search_panel.dart:550
+BEFORE:
+Items ${results.isEmpty ? 0 : _page * _pageSize + 1} to ${_page * _pageSize + results.length} (${all.length} loaded)
+AFTER:
+${results.isEmpty ? 0 : _page * _pageSize + 1}–${_page * _pageSize + results.length} · ${all.length} loaded
+NOTE: Keep the visible range and loaded count, including the empty state.
+
+[COPY-8FFB4F34D8] KEEP | Dynamic UI
+Source: lib/ui/room_search_panel.dart:565
+UNCHANGED:
+Page ${_page + 1} of ${pageCount}${_canLoadOlder ? '+' : ''}
+NOTE: Compact pagination status with the existing additional-pages indicator.
+
+========================================================================================
+lib/ui/security_center.dart
+========================================================================================
+
+[COPY-4D33CC45E6] KEEP | UI label
+Source: lib/ui/security_center.dart:92
+UNCHANGED:
+Replace recovery key?
+NOTE: Existing confirmation title.
+
+[COPY-10A5D0875F] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:94
+BEFORE:
+Your existing recovery key will stop working. Cross-signing and encrypted key backup will be kept, but you must save the new key before closing SeND.
+AFTER:
+Your old recovery key will stop working. Save the new one before closing SeND.
+NOTE: Keep invalidation and the save-before-closing requirement; backup/cross-signing implementation stays unchanged.
+
+[COPY-820DE60BBB] KEEP | UI label
+Source: lib/ui/security_center.dart:143
+UNCHANGED:
+Encryption & recovery
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-B5117EEC80] KEEP | UI label
+Source: lib/ui/security_center.dart:187
+UNCHANGED:
+Recovery key or passphrase
+NOTE: Exact credential label; key and passphrase are both supported.
+
+[COPY-030706B16F] REMOVE | UI prose
+Source: lib/ui/security_center.dart:205
+BEFORE:
+This credential is used only to unlock Matrix Secure Secret Storage. SeND does not save the text you enter.
+AFTER: [Remove this text block.]
+NOTE: The credential field already gives the task; Secure Secret Storage internals need no helper paragraph.
+
+[COPY-5B00963B1F] KEEP | UI label
+Source: lib/ui/security_center.dart:248
+UNCHANGED:
+Replace recovery key
+NOTE: Existing action label.
+
+[COPY-4E09511D43] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:279
+BEFORE:
+Cross-signing is connected and encrypted message keys can be backed up and recovered.
+AFTER:
+Ready to back up and recover message keys.
+NOTE: Do not claim keys have already been backed up; the source only says backup/recovery are available.
+
+[COPY-9C2477E241] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:285
+BEFORE:
+Enter the recovery key or security passphrase from another Matrix client to authorize this device and unlock key backup.
+AFTER:
+Enter your existing recovery key or passphrase to verify this device and unlock backups.
+
+[COPY-6CC745CD72] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:291
+BEFORE:
+Existing secure storage was found. Unlock it to repair missing cross-signing or key-backup components without replacing your recovery key.
+AFTER:
+Repair encryption setup with your existing recovery key or passphrase.
+NOTE: Keep the existing credentials; this repair flow must not be described as creating or replacing a recovery key.
+
+[COPY-E16A0F17EE] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:297
+BEFORE:
+This appears to be a new encryption identity. Setup will create cross-signing, encrypted key backup, and a recovery key that you must save.
+AFTER:
+Set up encryption and save the recovery key you'll be given.
+NOTE: A setup instruction, not a stronger claim that the account definitely has no prior encryption identity.
+
+[COPY-01B2A399E5] KEEP | UI prose
+Source: lib/ui/security_center.dart:388
+UNCHANGED:
+Save this recovery key now
+NOTE: Already a brief, direct instruction at the point where the key must be saved.
+
+[COPY-BDC90CC13B] SHORTEN | UI prose
+Source: lib/ui/security_center.dart:396
+BEFORE:
+It is the only way to recover encrypted message history if all authorized devices are lost. SeND will not show it again.
+AFTER:
+You'll need this key if you lose all authorised devices. SeND won't show it again.
+NOTE: Keep both the recovery consequence and one-time display warning.
+
+[COPY-AC39DCAF40] KEEP | UI label
+Source: lib/ui/security_center.dart:418
+UNCHANGED:
+Copy recovery key
+NOTE: Existing action label.
+
+[COPY-3D6609C7C5] SHORTEN | UI label
+Source: lib/ui/security_center.dart:426
+BEFORE:
+I saved this recovery key somewhere safe
+AFTER:
+I've saved my recovery key.
+NOTE: Keep as an explicit acknowledgement, not an automatic or pre-ticked confirmation.
+
+========================================================================================
+lib/ui/socks_proxy_settings.dart
+========================================================================================
+
+[COPY-3F3DEE2506] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:10
+UNCHANGED:
+SOCKS5 proxy
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8772C6D439] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:14
+BEFORE:
+Use your browser or system proxy settings. PWAs cannot select a SOCKS proxy.
+AFTER:
+Use your browser or system proxy settings.
+NOTE: Keep on the browser/PWA branch where in-app proxy selection is unavailable.
+
+[COPY-649E6F3CFA] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:90
+BEFORE:
+Test failed at the last stage. Check the proxy, credentials and server. No direct fallback was used.
+AFTER:
+Proxy test failed. Check proxy and server settings; no direct connection was used.
+NOTE: Keep the no-direct-fallback result; do not imply the test used an unprotected connection.
+
+[COPY-35E8C8D724] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:151
+BEFORE:
+Saved. Fully close and reopen SeND to apply the connection settings.
+AFTER:
+Saved. Restart SeND to apply changes.
+NOTE: Restart means quit and reopen the app, not merely close a window left running in the tray.
+
+[COPY-AD2CA4CBC4] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:177
+UNCHANGED:
+SOCKS5 proxy
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-10C18DEE02] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:188
+BEFORE:
+Routes messaging and media downloads through SOCKS5. The proxy resolves destination names. No direct fallback if it fails.
+AFTER:
+Messages and media downloads use the proxy and stop if it fails.
+NOTE: Keep the limited traffic scope and fail-closed behaviour; do not claim all app traffic uses the proxy.
+
+[COPY-CAF1151A71] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:203
+UNCHANGED:
+Proxy hostname or IP address
+NOTE: Precise input label; hostname and IP address are both valid.
+
+[COPY-42ED7284E7] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:237
+UNCHANGED:
+Password (optional)
+NOTE: Existing input or tooltip label.
+
+[COPY-EE9C5F33A8] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:240
+UNCHANGED:
+Hide password
+NOTE: Existing input or tooltip label.
+
+[COPY-537C4DAD33] KEEP | UI label
+Source: lib/ui/socks_proxy_settings.dart:241
+UNCHANGED:
+Show password
+NOTE: Existing input or tooltip label.
+
+[COPY-9D7BD16D14] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:257
+BEFORE:
+Calls and some previews, artwork and streams bypass SOCKS and may expose your IP address.
+AFTER:
+Calls and some previews, artwork and streams bypass the proxy and may expose your IP.
+NOTE: Keep every affected category and the IP risk. This rewrite prioritizes plain wording, not a large length reduction.
+
+[COPY-7FB0F25AAB] SHORTEN | UI prose
+Source: lib/ui/socks_proxy_settings.dart:266
+BEFORE:
+This is not a VPN. External browsers, other apps and OS/distributor push delivery use their own connections. The built-in Android notification listener is blocked in strict mode. SOCKS passwords are not encrypted between your device and the proxy; use a trusted local tunnel or VPN for remote proxies.
+AFTER:
+This isn't a VPN: external browsers, other apps and push services use their own connections. Strict mode blocks built-in Android notifications. SOCKS passwords aren't encrypted in transit; use a trusted tunnel or VPN for remote proxies.
+NOTE: Necessary longer warning. Do not remove the plaintext-credential warning or silently allow traffic in strict mode.
+
+[COPY-7E7153E893] SHORTEN | Dynamic UI
+Source: lib/ui/socks_proxy_settings.dart:270
+BEFORE:
+Current session: ${SocksProxy.configurationError ? "blocked, proxy settings could not be loaded" : SocksProxy.enabled ? "proxy enabled" : "direct connection"}. Existing connections change only after restart.
+AFTER:
+Current session: ${SocksProxy.configurationError ? "blocked, proxy settings could not be loaded" : SocksProxy.enabled ? "proxy enabled" : "direct connection"}. Restart for changes to take effect.
+NOTE: Use the user's wording; preserve all three live connection states.
+
+========================================================================================
+lib/ui/space_administration_panel.dart
+========================================================================================
+
+[COPY-DEA30A0BD2] SHORTEN | UI prose
+Source: lib/ui/space_administration_panel.dart:276
+BEFORE:
+${rule?.label ?? 'Role power levels'} will be applied to ${targets.length} room(s). Each room is independent; failures will be reported. Unrelated permissions stay unchanged. Existing manual member power is preserved when applying roles.
+AFTER:
+Apply ${rule?.label ?? 'Role power levels'} to ${targets.length} ${targets.length == 1 ? 'room' : 'rooms'}? Other permissions stay unchanged; role changes keep manual member overrides.
+NOTE: Keep the target count and limited scope. The added singular/plural branch uses the existing targets.length value; preserve per-room failure reporting.
+
+[COPY-F19CDAD851] KEEP | UI label
+Source: lib/ui/space_administration_panel.dart:365
+UNCHANGED:
+Roles
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-AD42CFA8E8] SHORTEN | UI prose
+Source: lib/ui/space_administration_panel.dart:367
+BEFORE:
+Topmost assigned colour wins; the highest assigned power level controls privileges. Role badges belong to server profiles, not direct messages.
+AFTER:
+The top assigned role sets the colour; the highest power level sets permissions.
+NOTE: Preserve the distinction between display order and permission strength.
+
+[COPY-1C98F352EC] KEEP | UI label
+Source: lib/ui/space_administration_panel.dart:462
+UNCHANGED:
+Rules
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8A5CEFC610] SHORTEN | UI prose
+Source: lib/ui/space_administration_panel.dart:464
+BEFORE:
+Matrix power levels apply per room. Threads share their room’s permissions. Creating a room itself is governed by the homeserver; linking it here is controlled below. Pack actions and channel actions sharing an event type share a permission. A timeout changes member power; there is no independent Matrix mute capability. Encrypted messages use the encrypted-event permission: the server cannot inspect their inner message type. Alias registration, media uploads and account creation also follow homeserver policy.
+AFTER:
+Some actions share permissions; encrypted messages can't have separate rules for each message type.
+NOTE: Keep the non-obvious permission limits. Remove the protocol tutorial; preserve actual per-room checks, timeout behaviour and homeserver restrictions.
+
+========================================================================================
+lib/ui/sticker_pack_editor.dart
+========================================================================================
+
+[COPY-A227CEB872] REMOVE | UI prose
+Source: lib/ui/sticker_pack_editor.dart:65
+BEFORE:
+Original packs stay available. Duplicate aliases receive a numbered suffix. Save changes to finish.
+AFTER: [Remove this text block.]
+NOTE: Remove merge internals and automatic alias-numbering prose; keep the original packs and explicit Save action unchanged.
+
+[COPY-FB3FFF4CAA] KEEP | Dynamic UI
+Source: lib/ui/sticker_pack_editor.dart:73
+UNCHANGED:
+${pack.stickers.length} items
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-47498FFFBD] SHORTEN | UI prose
+Source: lib/ui/sticker_pack_editor.dart:117
+BEFORE:
+The new pack is saved first, then these items are removed from the original. Other edits are saved too. If the second save fails, both copies are kept.
+AFTER:
+Move these items to a new pack and save your other edits?
+NOTE: Keep the fact that this also saves unrelated pending edits; do not remove the safe save order or duplicate-on-failure handling.
+
+[COPY-77A0D18C0F] KEEP | UI label
+Source: lib/ui/sticker_pack_editor.dart:354
+UNCHANGED:
+Edit pack
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-B013D3D02D] SHORTEN | Dynamic UI
+Source: lib/ui/sticker_pack_editor.dart:438
+BEFORE:
+${_items.length}/150 items · aliases and removals do not re-upload media
+AFTER:
+${_items.length}/150 items
+NOTE: Keep the useful count; remove the re-upload implementation detail.
+
+[COPY-6C6FFB1D10] KEEP | UI label
+Source: lib/ui/sticker_pack_editor.dart:590
+UNCHANGED:
+Crop / resize selected
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-458F92FF50] SHORTEN | UI prose
+Source: lib/ui/sticker_pack_editor.dart:598
+BEFORE:
+Preview of the first selected item. All selected items use these settings. Aspect ratio and animation are preserved; GIF conversion may reduce colours.
+AFTER:
+Preview shows the first item; changes apply to all selected items. GIF conversion may reduce colours.
+NOTE: Keep batch scope and the quality trade-off; remove aspect-ratio and animation reassurance.
+
+[COPY-A39D27B22D] KEEP | UI label
+Source: lib/ui/sticker_pack_editor.dart:639
+UNCHANGED:
+Trim transparent padding
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/thread_view.dart
+========================================================================================
+
+[COPY-CE973A259B] KEEP | UI label
+Source: lib/ui/thread_view.dart:214
+UNCHANGED:
+React
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-74D63E8286] KEEP | UI label
+Source: lib/ui/thread_view.dart:220
+UNCHANGED:
+Edit
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-9C7DDFAFC2] KEEP | UI label
+Source: lib/ui/thread_view.dart:231
+UNCHANGED:
+Copy text
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-8FD6EF8E21] KEEP | Dynamic UI
+Source: lib/ui/thread_view.dart:279
+UNCHANGED:
+${max(0, messages.length - 1)} loaded replies · ${participants.length} participants
+NOTE: Already a compact reply/participant count. 'Loaded' avoids implying this is the total history.
+
+[COPY-F1E7FCD221] KEEP | UI label
+Source: lib/ui/thread_view.dart:425
+UNCHANGED:
+Editing message
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/ui/timezone_picker_dialog.dart
+========================================================================================
+
+[COPY-3D8B096755] KEEP | UI label
+Source: lib/ui/timezone_picker_dialog.dart:50
+UNCHANGED:
+Choose timezone
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-EFFA99D35B] SHORTEN | UI prose
+Source: lib/ui/timezone_picker_dialog.dart:99
+BEFORE:
+Could not detect your timezone. Choose it from the list.
+AFTER:
+Couldn't detect your timezone. Choose one below.
+
+========================================================================================
+lib/ui/video_preparation_overlay.dart
+========================================================================================
+
+[COPY-CAD981C04A] REMOVE | UI prose
+Source: lib/ui/video_preparation_overlay.dart:76
+BEFORE:
+Original quality may use more data. Nothing has been uploaded yet.
+AFTER: [Remove this text block.]
+NOTE: Original quality using more data is obvious from the quality/size choice; remove this reassurance, not the upload confirmation.
+
+========================================================================================
+lib/ui/voice_control_island.dart
+========================================================================================
+
+[COPY-6C8A012F19] SHORTEN | UI prose
+Source: lib/ui/voice_control_island.dart:19
+BEFORE:
+Wait for the call server to connect before sharing your screen.
+AFTER:
+Wait for the call to connect, then share your screen.
+
+========================================================================================
+lib/ui/voice_room_view.dart
+========================================================================================
+
+[COPY-A528416529] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:264
+UNCHANGED:
+Mute
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-C1A00458FF] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:264
+UNCHANGED:
+Unmute
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-D8D2118A76] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:274
+UNCHANGED:
+Deafen
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-36519E34E6] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:274
+UNCHANGED:
+Undeafen
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-016EC862C7] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:287
+UNCHANGED:
+Camera off
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6602723245] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:287
+UNCHANGED:
+Camera on
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-0C959701A3] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:303
+UNCHANGED:
+Share screen
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-AB6F0DA9AF] KEEP | UI label
+Source: lib/ui/voice_room_view.dart:327
+UNCHANGED:
+Disconnect
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-6183D78928] KEEP | Dynamic UI
+Source: lib/ui/voice_room_view.dart:1112
+UNCHANGED:
+${widget.stream.displayName}${widget.stream.screenShare ? ' · screen share' : ''}
+NOTE: Participant name and screen-sharing state.
+
+========================================================================================
+android/app/src/main/AndroidManifest.xml
+========================================================================================
+
+[COPY-D785DC2C90] KEEP | Platform metadata
+Source: android/app/src/main/AndroidManifest.xml:123
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Manifest service-description metadata, not ordinary interface prose. Leave unchanged unless source inspection establishes a user-visible rendering.
+
+========================================================================================
+android/app/src/main/kotlin/net/deltie/deltiecord/BuiltInPushService.kt
+========================================================================================
+
+[COPY-29115B7244] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/BuiltInPushService.kt:255
+BEFORE:
+Built-in notifications cannot use the SOCKS proxy. Use a system VPN or allow direct traffic.
+AFTER:
+Built-in notifications can't use SOCKS. Use a VPN or allow direct traffic.
+NOTE: Keep the explicit choice; do not silently bypass strict proxy policy.
+
+[COPY-A2E5E91E29] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/BuiltInPushService.kt:277
+BEFORE:
+Android could not start background notifications. Reopen SeND and try again.
+AFTER:
+Couldn't start background notifications. Reopen SeND and try again.
+NOTE: Match COPY-E51FA41C5D.
+
+========================================================================================
+android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt
+========================================================================================
+
+[COPY-03187790EF] SHORTEN | Dynamic UI
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:32
+BEFORE:
+The diagnostic is cooling down; retry in ${(remaining + 999) / 1000} seconds.
+AFTER:
+Try again in ${(remaining + 999) / 1000} seconds.
+NOTE: Retain the calculated cooldown.
+
+[COPY-75F70EE392] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:79
+BEFORE:
+Notification gateway diagnostics are blocked by the proxy policy.
+AFTER:
+Your proxy settings block notification tests.
+
+[COPY-054B377A3C] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/DeltiecordPushDiagnostics.kt:119
+BEFORE:
+The gateway accepted the test, but Android did not receive it within 15 seconds.
+AFTER:
+Push test accepted, but Android didn't receive it within 15 seconds.
+NOTE: Acceptance is not delivery; keep the timeout result distinct.
+
+========================================================================================
+android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt
+========================================================================================
+
+[COPY-E51FA41C5D] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:189
+BEFORE:
+Could not start background notifications. Reopen SeND and try again.
+AFTER:
+Couldn't start background notifications. Reopen SeND and try again.
+NOTE: Match COPY-A2E5E91E29.
+
+[COPY-14E96175E0] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:197
+BEFORE:
+Open Android Settings and allow SeND to run in the background.
+AFTER:
+Allow SeND to run in the background in Android Settings.
+
+[COPY-53E00876B2] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt:592
+BEFORE:
+The UnifiedPush distributor did not return an endpoint within 30 seconds.
+AFTER:
+Your notification app didn't finish setup within 30 seconds.
+NOTE: Use the existing timeout; 'notification app' means the selected UnifiedPush distributor.
+
+========================================================================================
+android/app/src/main/kotlin/net/deltie/deltiecord/VideoPreparationBridge.kt
+========================================================================================
+
+[COPY-8F62601A48] SHORTEN | UI prose
+Source: android/app/src/main/kotlin/net/deltie/deltiecord/VideoPreparationBridge.kt:98
+BEFORE:
+This device could not optimize the video. Try original quality.
+AFTER:
+Couldn't process this video. Try Original.
+
+========================================================================================
+lib/app.dart
+========================================================================================
+
+[COPY-AEEF47D23B] KEEP | UI label
+Source: lib/app.dart:412
+UNCHANGED:
+SeND
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/main.dart
+========================================================================================
+
+[COPY-997D299A71] SHORTEN | UI prose
+Source: lib/main.dart:32
+BEFORE:
+SeND is already open in another tab, or browser storage is unavailable.
+Close other SeND tabs and reopen this page over HTTPS.
+AFTER:
+SeND is open in another tab or can't access browser storage. Close other SeND tabs and reopen over HTTPS.
+NOTE: Keep both possible causes and the original recovery steps; do not misdiagnose every case as a second tab.
+
+========================================================================================
+lib/matrix/matrix_advanced_features.dart
+========================================================================================
+
+[COPY-57CF6B3F03] SHORTEN | UI prose
+Source: lib/matrix/matrix_advanced_features.dart:269
+BEFORE:
+A poll needs a question and at least two answers.
+AFTER:
+Add a question and at least two answers.
+
+========================================================================================
+lib/matrix/matrix_crypto.dart
+========================================================================================
+
+[COPY-80A2CC46F5] KEEP | UI prose
+Source: lib/matrix/matrix_crypto.dart:69
+UNCHANGED:
+Enter a recovery key.
+NOTE: Already a brief, direct validation message.
+
+========================================================================================
+lib/matrix/matrix_session.dart
+========================================================================================
+
+[COPY-7283CB516C] KEEP | UI prose
+Source: lib/matrix/matrix_session.dart:642
+UNCHANGED:
+Enter your account password.
+NOTE: Already a brief, direct validation message.
+
+========================================================================================
+lib/models/rtc_connectivity.dart
+========================================================================================
+
+[COPY-95A3C147F9] SHORTEN | Dynamic UI
+Source: lib/models/rtc_connectivity.dart:19
+BEFORE:
+${detail}
+${pingMilliseconds == null ? 'RTC ping unavailable' : 'RTC ping: $pingMilliseconds ms (slowest connection)'}
+AFTER:
+${detail}
+${pingMilliseconds == null ? 'Ping unavailable' : 'Ping: $pingMilliseconds ms (slowest connection)'}
+NOTE: Keep the missing-value branch and worst-connection qualifier; remove the internal RTC acronym.
+
+========================================================================================
+lib/models/socks_proxy_config.dart
+========================================================================================
+
+[COPY-E4520DA71F] SHORTEN | UI prose
+Source: lib/models/socks_proxy_config.dart:25
+BEFORE:
+Enter a proxy hostname or IP address, without a URL or port.
+AFTER:
+Use a hostname or IP address, not a URL or port.
+NOTE: Keep both input restrictions.
+
+[COPY-1676224D79] SHORTEN | UI prose
+Source: lib/models/socks_proxy_config.dart:30
+BEFORE:
+Proxy usernames and passwords must each fit in 255 UTF-8 bytes.
+AFTER:
+Use up to 255 UTF-8 bytes per username or password.
+NOTE: The limit is bytes, not characters; do not turn it into a misleading character limit.
+
+========================================================================================
+lib/models/user_activity.dart
+========================================================================================
+
+[COPY-1A57E796D2] KEEP | Dynamic UI
+Source: lib/models/user_activity.dart:314
+UNCHANGED:
+${switch (kind) {ActivityKind.game => 'Playing', ActivityKind.music => 'Listening to', ActivityKind.application => 'Using'}} ${name}
+NOTE: Existing activity verb and app/track name.
+
+========================================================================================
+lib/services/activity_source_native.dart
+========================================================================================
+
+[COPY-7FE60DA982] KEEP | Source only
+Source: lib/services/activity_source_native.dart:820
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Executable PowerShell source, not UI copy. Do not rewrite or delete it.
+
+========================================================================================
+lib/services/android_push_bridge.dart
+========================================================================================
+
+[COPY-CA3A452FEA] SHORTEN | UI prose
+Source: lib/services/android_push_bridge.dart:291
+BEFORE:
+You were invited to a conversation. Open your inbox to accept or ignore.
+AFTER:
+New chat invitation. Open your inbox to respond.
+
+========================================================================================
+lib/services/browser_image_paste_web.dart
+========================================================================================
+
+[COPY-215532AAD4] SHORTEN | UI prose
+Source: lib/services/browser_image_paste_web.dart:35
+BEFORE:
+Paste at most 20 images, up to 64 MiB in total.
+AFTER:
+Paste up to 20 images (64 MiB total).
+NOTE: Keep both the quantity limit and the combined, not per-image, size limit.
+
+[COPY-78D006AABB] SHORTEN | UI prose
+Source: lib/services/browser_image_paste_web.dart:59
+BEFORE:
+Could not paste this image. Try attaching the original from Photos or Files.
+AFTER:
+Couldn't paste the image. Attach it from Photos or Files.
+
+========================================================================================
+lib/services/frame_diagnostics.dart
+========================================================================================
+
+[COPY-280B50F35D] KEEP | Source only
+Source: lib/services/frame_diagnostics.dart:30
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Structured performance diagnostics, not normal app prose. Preserve field names and data formatting.
+
+[COPY-651E2239CD] KEEP | Source only
+Source: lib/services/frame_diagnostics.dart:49
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Structured event diagnostics, not normal app prose. Preserve field names and data formatting.
+
+========================================================================================
+lib/services/gif_service.dart
+========================================================================================
+
+[COPY-292C15E6FE] KEEP | UI label
+Source: lib/services/gif_service.dart:54
+UNCHANGED:
+GIF
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-572FC8AAE4] KEEP | UI label
+Source: lib/services/gif_service.dart:84
+UNCHANGED:
+GIF
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+[COPY-ACB026CE19] KEEP | UI label
+Source: lib/services/gif_service.dart:107
+UNCHANGED:
+GIF
+NOTE: Existing concise heading, control label or status; retain wording and accessibility label.
+
+========================================================================================
+lib/services/history_download.dart
+========================================================================================
+
+[COPY-8B0C1B16A0] SHORTEN | UI prose
+Source: lib/services/history_download.dart:269; 354
+BEFORE:
+Paused until text indexing is enabled and SeND is open.
+AFTER:
+Paused. Enable text indexing and keep SeND open.
+
+========================================================================================
+lib/services/lastfm_auth.dart
+========================================================================================
+
+[COPY-B66DBAB4E5] SHORTEN | UI prose
+Source: lib/services/lastfm_auth.dart:24
+BEFORE:
+Last.fm returned an invalid login token. Please try again.
+AFTER:
+Couldn't sign in to Last.fm. Try again.
+NOTE: Remove the internal token detail from the user-facing error; keep the underlying diagnostic/error handling.
+
+[COPY-9EF417C3A9] SHORTEN | UI prose
+Source: lib/services/lastfm_auth.dart:43
+BEFORE:
+Last.fm did not confirm your account. Please try again.
+AFTER:
+Last.fm couldn't confirm your account. Try again.
+
+[COPY-008C005566] SHORTEN | UI prose
+Source: lib/services/lastfm_auth.dart:68
+BEFORE:
+Please approve SeND in your browser first, then try again.
+AFTER:
+Approve SeND in your browser, then try again.
+
+[COPY-CBB0CF4810] SHORTEN | UI prose
+Source: lib/services/lastfm_auth.dart:70
+BEFORE:
+This login attempt expired. Close this window and connect again.
+AFTER:
+Sign-in expired. Close this window and reconnect.
+
+[COPY-8BFE7481EA] SHORTEN | UI prose
+Source: lib/services/lastfm_auth.dart:106
+BEFORE:
+Could not reach Last.fm. Check your connection and try again.
+AFTER:
+Couldn't reach Last.fm. Check your connection and try again.
+
+========================================================================================
+lib/services/link_preview_service.dart
+========================================================================================
+
+[COPY-45F750515E] KEEP | Source only
+Source: lib/services/link_preview_service.dart:129
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Machine-readable title/Open Graph lookup key, not a visible heading. Do not translate, rewrite or delete it.
+
+[COPY-5825F9C7D8] KEEP | Source only
+Source: lib/services/link_preview_service.dart:129
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Machine-readable title/Open Graph lookup key, not a visible heading. Do not translate, rewrite or delete it.
+
+[COPY-78AF6FABFE] KEEP | Source only
+Source: lib/services/link_preview_service.dart:652
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Machine-readable title/Open Graph lookup key, not a visible heading. Do not translate, rewrite or delete it.
+
+[COPY-3D50F838C7] KEEP | Source only
+Source: lib/services/link_preview_service.dart:653
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Machine-readable title/Open Graph lookup key, not a visible heading. Do not translate, rewrite or delete it.
+
+========================================================================================
+lib/services/secret_redaction.dart
+========================================================================================
+
+[COPY-8E4F2E17AE] SHORTEN | UI prose
+Source: lib/services/secret_redaction.dart:53
+BEFORE:
+That recovery key is invalid or was entered incorrectly.
+AFTER:
+Invalid recovery key. Check it and try again.
+
+========================================================================================
+lib/services/unavailable_history.dart
+========================================================================================
+
+[COPY-7034EED920] SHORTEN | UI prose
+Source: lib/services/unavailable_history.dart:22
+BEFORE:
+${count} earlier messages could not be decrypted. They will appear if their keys become available.
+AFTER:
+Can't read ${count} earlier messages without their encryption keys.
+NOTE: Keep the count; do not promise automatic recovery or instruct users to reset their keys.
+
+========================================================================================
+linux/runner/ext-idle-notify-v1.xml
+========================================================================================
+
+[COPY-B72CB1BAB3] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:3
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Source copyright and licence notice, not interface copy. Preserve verbatim.
+
+[COPY-71DB42C8CB] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:28
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-D796E7C857] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:36
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-2751AF6A9D] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:43
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-1848953891] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:61
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-81E50DCC83] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:81
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-1CBE7F8077] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:113
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+[COPY-91EAEA7BDB] KEEP | Source only
+Source: linux/runner/ext-idle-notify-v1.xml:122
+UNCHANGED: Original resource retained verbatim in the companion CSV.
+NOTE: Wayland protocol documentation, not interface prose. Leave the source resource unchanged.
+
+========================================================================================
+tool/web-video/worker.mjs
+========================================================================================
+
+[COPY-33FC4EBAF3] SHORTEN | UI prose
+Source: tool/web-video/worker.mjs:30
+BEFORE:
+This video or edit is too large or invalid for browser export.
+AFTER:
+Can't export: the video or edit is too large or invalid.
+NOTE: Preserve both possible causes; this message must not claim every failure is just a size limit.
+
+[COPY-F044AAD7FB] SHORTEN | UI prose
+Source: tool/web-video/worker.mjs:38
+BEFORE:
+This video is too long for the selected size limit. Trim it or choose Original.
+AFTER:
+Too long for this size limit. Trim the video or choose Original.
+
+[COPY-C5493ADB03] SHORTEN | UI prose
+Source: tool/web-video/worker.mjs:44
+BEFORE:
+Browser editing supports videos up to 256 MiB. Choose Original or use the native app.
+AFTER:
+Over 256 MiB. Choose Original or use the native app.
+NOTE: Keep the browser-editing size limit and both available alternatives.
+
+[COPY-26DB718E6B] SHORTEN | UI prose
+Source: tool/web-video/worker.mjs:50
+BEFORE:
+This video exceeds the browser editing resolution limit. Choose Original.
+AFTER:
+Resolution too high for browser editing. Choose Original.
+
+[COPY-BB35C3734B] SHORTEN | UI prose
+Source: tool/web-video/worker.mjs:52
+BEFORE:
+This browser cannot encode this video as H.264. Choose Original.
+AFTER:
+This browser can't encode the video. Choose Original.
+NOTE: Remove the H.264 implementation detail, not the original-upload option.
+
+========================================================================================
+web/auth.html
+========================================================================================
+
+[COPY-CCCEC1611B] SHORTEN | UI prose
+Source: web/auth.html:7
+BEFORE:
+Return to SeND to finish signing in. You can close this tab.
+AFTER:
+Return to SeND to finish signing in.
+
+========================================================================================
+web/browser_bridge.js
+========================================================================================
+
+[COPY-80F6A90954] SHORTEN | UI prose
+Source: web/browser_bridge.js:135
+BEFORE:
+Media is unavailable or exceeds the browser playback limit.
+AFTER:
+This file is unavailable or too large to play here.
+NOTE: Slightly longer but plainer; retain both possibilities without claiming which one caused the failure.
+
+[COPY-54F29C5C01] SHORTEN | UI prose
+Source: web/browser_bridge.js:191
+BEFORE:
+Install SeND to your Home Screen to enable notifications on supported iOS versions.
+AFTER:
+Add SeND to your Home Screen to enable notifications.
+NOTE: Show for supported iOS configurations only; preserve the original support/version checks.
+
+========================================================================================
+web/index.html
+========================================================================================
+
+[COPY-70CF85ECA4] KEEP | Web metadata
+Source: web/index.html:8
+UNCHANGED:
+SeND — encrypted Matrix chat on your phone and desktop.
+NOTE: Already a short web-page description, not an explanatory paragraph in the app.
+
+========================================================================================
+web/sw.js
+========================================================================================
+
+[COPY-EE4114361F] SHORTEN | UI prose
+Source: web/sw.js:25
+BEFORE:
+Test notification received. Web Push is working on this device.
+AFTER:
+Test notification received.
+NOTE: Do not imply this checks decryption of real messages.
+
+========================================================================================
+web/video_processing.js
+========================================================================================
+
+[COPY-1566215783] SHORTEN | UI prose
+Source: web/video_processing.js:8
+BEFORE:
+Video encoding is unavailable in this browser. Choose Original.
+AFTER:
+This browser can't encode videos. Choose Original.
+
+[COPY-A28764C263] SHORTEN | UI prose
+Source: web/video_processing.js:12
+BEFORE:
+Video export stopped while SeND was backgrounded. Retry with the app open.
+AFTER:
+Video export stopped. Keep SeND open and try again.
+
+[COPY-C88289DCFB] SHORTEN | UI prose
+Source: web/video_processing.js:15
+BEFORE:
+Video export timed out. Choose Original or a shorter clip.
+AFTER:
+Export timed out. Choose Original or a shorter clip.
+
+[COPY-DF424B25BC] SHORTEN | UI prose
+Source: web/video_processing.js:22
+BEFORE:
+The video worker could not run. Retry or choose Original.
+AFTER:
+Couldn't process the video. Retry or choose Original.
+
+[COPY-5D0AD98AB4] SHORTEN | UI prose
+Source: web/video_processing.js:24
+BEFORE:
+Could not pass this video to the worker. Choose Original.
+AFTER:
+Couldn't process the video. Choose Original.

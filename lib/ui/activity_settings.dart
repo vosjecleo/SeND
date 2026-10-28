@@ -23,9 +23,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Could not save activity preferences to this device’s secure storage.',
-            ),
+            content: Text('Couldn\'t save activity settings on this device.'),
           ),
         );
       }
@@ -59,9 +57,6 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
                     DropdownMenuItem(value: value, child: Text(value.name)),
                 ],
                 onChanged: (value) => change(() => kind = value!),
-              ),
-              const Text(
-                'This rule stays on this device. The executable path is never published.',
               ),
             ],
           ),
@@ -123,10 +118,6 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Enter your Libre.fm username. SeND reads your public listening history without logging in or submitting scrobbles. Account ownership is not verified.',
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: controller,
               autofocus: true,
@@ -189,11 +180,9 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const Text(
-          'Detection is local and optional. No process lists, paths, usage statistics or catalogue contributions are uploaded. Shared activity is public profile data, not encrypted; others may retain it. Invisible mode or disabling online presence suppresses sharing.',
+          'Shared activity is public, unencrypted and may be saved by others. Invisible mode or turning off online presence stops sharing.',
         ),
-        const Text(
-          'Your profile combines game/program activity, music and listening history from your devices. Linked services refresh while SeND is open and you are online. Live activities are hidden when you are offline; shared listening history stays visible.',
-        ),
+
         if (backend.supportsActivityDetection)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -215,7 +204,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
             'Show ${settings.listeningProviderName} last listened track on my profile',
           ),
           subtitle: const Text(
-            'Share the last completed track and album, with artwork when available. It stays visible while offline. Turning this off removes this device’s contribution, not tracks shared by other devices.',
+            'Your last track stays visible offline. Turning this off only removes tracks shared by this device.',
           ),
           value: settings.showLastFmRecent,
           onChanged: _saving
@@ -227,7 +216,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Look up missing album covers'),
             subtitle: const Text(
-              'Uses MusicBrainz and Cover Art Archive. Sends artist and album names, not your username.',
+              'Sends artist and album names to MusicBrainz and Cover Art Archive, not your username.',
             ),
             value: settings.lookupListeningArtwork,
             onChanged: _saving
@@ -266,7 +255,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Discord Rich Presence compatibility (preview)'),
             subtitle: const Text(
-              'Available on Linux and Windows. Close Discord to free its IPC connection. SeND recovers abandoned Linux sockets but never replaces active listeners. It does not use join secrets or access your Discord account.',
+              'Close Discord to let SeND receive game activity.',
             ),
             value: settings.rpc,
             onChanged: _saving ? null : (v) => save(settings.copyWith(rpc: v)),
@@ -279,9 +268,7 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
         if (settings.detect && candidates.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'No matching program yet. Scanning every 5 seconds. Add an executable below to classify it manually.',
-            ),
+            child: Text('No matching apps found. Add one below.'),
           ),
         for (final item
             in backend.supportsActivityDetection

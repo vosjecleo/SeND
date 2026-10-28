@@ -273,9 +273,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       builder: (context) => AlertDialog(
         title: const Text('Apply permissions?'),
         content: Text(
-          '${rule?.label ?? 'Role power levels'} will be applied to ${targets.length} room(s). '
-          'Each room is independent; failures will be reported. Unrelated permissions stay unchanged. '
-          'Existing manual member power is preserved when applying roles.',
+          'Apply ${rule?.label ?? 'Role power levels'} to ${targets.length} ${targets.length == 1 ? 'room' : 'rooms'}? Other permissions stay unchanged; role changes keep manual member overrides.',
         ),
         actions: [
           TextButton(
@@ -364,7 +362,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
         ),
         Text('Roles', style: Theme.of(context).textTheme.titleLarge),
         const Text(
-          'Topmost assigned colour wins; the highest assigned power level controls privileges. Role badges belong to server profiles, not direct messages.',
+          'The top assigned role sets the colour; the highest power level sets permissions.',
         ),
         for (final (index, role) in _roles.roles.indexed)
           ListTile(
@@ -461,12 +459,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
         const Divider(height: 32),
         Text('Rules', style: Theme.of(context).textTheme.titleLarge),
         const Text(
-          'Matrix power levels apply per room. Threads share their room’s permissions. '
-          'Creating a room itself is governed by the homeserver; linking it here is controlled below. '
-          'Pack actions and channel actions sharing an event type share a permission. '
-          'A timeout changes member power; there is no independent Matrix mute capability. '
-          'Encrypted messages use the encrypted-event permission: the server cannot inspect their inner message type. '
-          'Alias registration, media uploads and account creation also follow homeserver policy.',
+          'Some actions share permissions; encrypted messages can\'t have separate rules for each message type.',
         ),
         const SizedBox(height: 20),
         DropdownButtonFormField<String>(

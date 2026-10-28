@@ -11,7 +11,7 @@ class SocksProxySettingsTile extends StatelessWidget {
     subtitle: Text(
       SocksProxy.supported
           ? 'Device-only connection settings. Restart SeND after changing them.'
-          : 'Use your browser or system proxy settings. PWAs cannot select a SOCKS proxy.',
+          : 'Use your browser or system proxy settings.',
     ),
     trailing: SocksProxy.supported ? const Icon(Icons.chevron_right) : null,
     onTap: SocksProxy.supported
@@ -87,7 +87,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
       if (mounted) {
         setState(
           () => _testSteps.add(
-            'Test failed at the last stage. Check the proxy, credentials and server. No direct fallback was used.',
+            'Proxy test failed. Check proxy and server settings; no direct connection was used.',
           ),
         );
       }
@@ -146,11 +146,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Saved. Fully close and reopen SeND to apply the connection settings.',
-          ),
-        ),
+        const SnackBar(content: Text('Saved. Restart SeND to apply changes.')),
       );
     } catch (_) {
       if (mounted) {
@@ -185,7 +181,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Routes messaging and media downloads through SOCKS5. The proxy resolves destination names. No direct fallback if it fails.',
+                    'Messages and media downloads use the proxy and stop if it fails.',
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -254,7 +250,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Allow unsupported traffic directly'),
                     subtitle: const Text(
-                      'Calls and some previews, artwork and streams bypass SOCKS and may expose your IP address.',
+                      'Calls and some previews, artwork and streams bypass the proxy and may expose your IP.',
                     ),
                     value: _allowDirect,
                     onChanged: _saving
@@ -263,7 +259,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'This is not a VPN. External browsers, other apps and OS/distributor push delivery use their own connections. The built-in Android notification listener is blocked in strict mode. SOCKS passwords are not encrypted between your device and the proxy; use a trusted local tunnel or VPN for remote proxies.',
+                    'This isn\'t a VPN: external browsers, other apps and push services use their own connections. Strict mode blocks built-in Android notifications. SOCKS passwords aren\'t encrypted in transit; use a trusted tunnel or VPN for remote proxies.',
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -271,7 +267,7 @@ class _ProxyDialogState extends State<_ProxyDialog> {
                         ? "blocked, proxy settings could not be loaded"
                         : SocksProxy.enabled
                         ? "proxy enabled"
-                        : "direct connection"}. Existing connections change only after restart.',
+                        : "direct connection"}. Restart for changes to take effect.',
                   ),
                   if (_error != null)
                     Padding(

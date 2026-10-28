@@ -65,10 +65,10 @@ class _LastFmConnectDialogState extends State<LastFmConnectDialog> {
         children: [
           Text(
             !widget.auth.configured
-                ? 'Browser linking needs SeND’s own Last.fm application registration. It is not configured in this local preview. You do not need to create an API key. Local music detection still works without Last.fm.'
+                ? 'Last.fm linking isn\'t set up in this build.'
                 : _token == null
-                ? 'Sign in and approve SeND on Last.fm in your browser. We read your public now-playing feed and, if enabled, your last completed track. We do not scrobble, change your library, or keep your password. You control publication through Activity settings.'
-                : 'Approve SeND in your browser, then finish linking here. Activity sharing remains controlled by your Activity settings.',
+                ? 'SeND only reads your public listening activity; it won\'t scrobble, change your library or save your password.'
+                : 'Approve SeND in your browser, then return here.',
           ),
           if (_error != null)
             Padding(

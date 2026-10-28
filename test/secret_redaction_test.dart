@@ -25,7 +25,7 @@ void main() {
       friendlyRecoveryErrorMessage(
         const FormatException('Base58 decode failed: invalid character'),
       ),
-      'That recovery key is invalid or was entered incorrectly.',
+      'Invalid recovery key. Check it and try again.',
     );
   });
 }

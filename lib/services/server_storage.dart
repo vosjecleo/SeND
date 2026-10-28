@@ -21,7 +21,7 @@ Map<String, dynamic> normalizeServerStorageUsage(Map<String, dynamic> raw) {
     throw const FormatException('Invalid storage usage.');
   }
   final categories = <String, Map<String, int>>{
-    for (final key in ['images', 'videos', 'gifs', 'audio', 'other'])
+    for (final key in ['images', 'videos', 'gifs', 'audio', 'legacy', 'other'])
       key: {'bytes': 0, 'files': 0},
   };
   for (final entry in (raw['categories'] as Map).entries) {

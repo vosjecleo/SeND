@@ -129,6 +129,12 @@ It backs up configuration privately and recreates only Synapse. It never changes
 nginx or certificates. Forward `/_synapse/client/send/v1/` through the Matrix
 HTTPS proxy before testing clients. Keep the source bundle together.
 
+Setup detects either the Compose v2 plugin or `docker-compose`. It verifies the
+configured image is cached and matches the running image, disables builds, and
+uses `--pull never` only when supported. A forced recreate reloads module/config
+changes even when Compose's service definition is unchanged. Module-directory
+permissions are set explicitly so a restrictive umask cannot block imports.
+
 For account-limited testing, add `--preview-user @alice:example.org` to the checks
 and installation command. Only those accounts can use the API. Pruning is a dry
 run, and the default quota is not enforced. Existing per-account quota overrides
@@ -138,6 +144,12 @@ After testing, `--activate --apply` opens an installed preview to all accounts,
 enables the allowance and permits confirmed pruning. Plan a maintenance window
 for either installation or activation. Both recreate Synapse.
 
+When upgrading a recognized preview to the next storage module, run checks with
+`--upgrade --activate`, then add `--apply` during the deployment window. Use
+`--upgrade --preview-user @alice:example.org` instead to keep preview policy.
+Unknown local module changes are not overwritten. Module code, configuration
+and the previous quota policy are retained for rollback.
+
 The installer refuses to overwrite a different adapter or an existing schema
 without explicit activation. Use `--rollback BACKUP_DIRECTORY` with the same
 stack/configuration arguments to restore configuration and the previous quota
@@ -145,11 +157,17 @@ policy, or disable the new admission trigger after a first installation.
 Classification records and media are retained. Review and back up the database
 before deployment; configuration backups are not database backups.
 
-Clients opt into encrypted-upload categorization. Labels contain media ID, type
+New/unset client preferences enable upload categorization; a saved opt-out is
+preserved. Labels contain media ID, type
 and source, never content or keys. Pruning requires an expiring owner-bound
 preview and confirmation, and can break attachments in recipients' histories.
 Unclassified old files are not bulk-deleted. The server never decrypts files to
 guess their type.
+
+Older unclassified media is shown as Legacy, using the server-side cutoff saved
+when this classification is introduced. Known image/video/audio types retain
+their normal categories. New unclassified uploads remain Other. Legacy media
+is not automatically included in bulk pruning.
 
 For an upgraded account, an operator can set a different allowance in PostgreSQL:
 

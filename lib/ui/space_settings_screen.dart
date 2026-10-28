@@ -16,10 +16,7 @@ Future<bool?> chooseSpaceEncryption(BuildContext context) => showDialog<bool>(
   builder: (context) => AlertDialog(
     title: const Text('Encrypt new channels?'),
     content: const Text(
-      'Choose the default for channels created in this server. '
-      'Encrypted messages can only be read by participants with the keys. '
-      'Without encryption, homeserver operators can read messages. '
-      'Existing encrypted rooms cannot be made unencrypted.',
+      'Applies to new channels. Without encryption, homeserver operators can read messages. Encryption can\'t be turned off in existing encrypted channels.',
     ),
     actions: [
       TextButton(
@@ -393,12 +390,6 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
         .toList();
     final canManage = backend.canManageSpaceChannelLayout(widget.space.id);
     return _section('Channels', [
-      Text(
-        'This uses the same interoperable Space order as the normal channel '
-        'panel. ${canManage ? 'Drag the grips to move channels or categories. ' : ''}'
-        'Arrow buttons remain available for keyboard and touch users.',
-      ),
-      const SizedBox(height: 12),
       if (loose.isNotEmpty) ...[
         const ListTile(title: Text('Uncategorised')),
         for (var index = 0; index < loose.length; index++)
@@ -656,7 +647,7 @@ class _SpaceSettingsViewState extends State<_SpaceSettingsView> {
                 await _reloadServerProfile();
               },
         icon: const Icon(Icons.restart_alt),
-        label: const Text('Reset every field to general profile'),
+        label: const Text('Reset to general profile'),
       ),
     ] else
       const Center(child: CircularProgressIndicator()),

@@ -8,7 +8,31 @@ import '../models/chat_models.dart';
 import '../models/media_compression.dart';
 import '../models/video_edit.dart';
 
-bool get videoOptimizationSupported => false;
+@JS('sendWebVideoSupported')
+external JSBoolean _supported();
+@JS('sendWebVideoProcess')
+external JSPromise<JSObject> _process(
+  JSUint8Array bytes,
+  JSAny? options,
+  JSFunction progress,
+);
+@JS('sendWebVideoCancel')
+external void _cancel(JSNumber id);
+
+extension type _ExportedVideo(JSObject _) implements JSObject {
+  external JSUint8Array? get bytes;
+  external JSString? get error;
+}
+
+bool get videoOptimizationSupported {
+  try {
+    return _supported().toDart;
+  } catch (_) {
+    return false;
+  }
+}
+
+int _nextJob = 0;
 
 /// Read local metadata and a small poster without re-encoding the upload.
 /// The temporary Blob never sends the video to another service.
@@ -126,8 +150,56 @@ Future<AttachmentDraft> optimizeVideo(
   bool optimize = true,
   VideoEditPlan? edit,
 }) async {
-  if (edit?.hasChanges == true) {
-    throw UnsupportedError('Video editing requires the native app.');
+  if (!optimize && edit?.hasChanges != true) return probeVideo(draft);
+  if (!videoOptimizationSupported) {
+    throw UnsupportedError(
+      'This browser cannot export video. Choose Original.',
+    );
   }
-  return probeVideo(draft);
+  if (canceled()) throw StateError('Video preparation canceled.');
+  final job = ++_nextJob;
+  final timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+    if (canceled()) _cancel(job.toJS);
+  });
+  try {
+    final raw = await _process(
+      draft.bytes.toJS,
+      {
+        'jobId': job,
+        'optimize': optimize,
+        'preset': preset.name,
+        if (edit != null) 'edit': edit.toMap(),
+      }.jsify(),
+      ((JSNumber value) => progress(value.toDartDouble.clamp(0, .99))).toJS,
+    ).toDart;
+    final result = _ExportedVideo(raw);
+    if (canceled()) throw StateError('Video preparation canceled.');
+    if (result.error case final error?) throw StateError(error.toDart);
+    final bytes = result.bytes?.toDart;
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('The browser returned an empty video.');
+    }
+    final exported = await probeVideo(
+      AttachmentDraft(
+        bytes: bytes,
+        name: '${draft.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.mp4',
+        mimeType: 'video/mp4',
+        spoiler: draft.spoiler,
+        caption: draft.caption,
+        gifSource: draft.gifSource,
+        videoPrepared: true,
+      ),
+    );
+    if (exported.videoWidth == null ||
+        exported.videoHeight == null ||
+        exported.durationMilliseconds == null) {
+      throw StateError(
+        'The exported video could not be verified. Choose Original.',
+      );
+    }
+    progress(1);
+    return exported.copyWith(videoPrepared: true);
+  } finally {
+    timer.cancel();
+  }
 }

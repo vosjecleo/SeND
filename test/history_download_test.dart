@@ -19,6 +19,11 @@ class Harness {
   int capacity = 100;
   bool enabled = true, saveFails = false;
   late Future<HistoryDownloadPage> Function(String, String?) page;
+  Future<HistoryDownloadPage> Function(
+    HistoryDecryptionFailure,
+    bool Function(),
+  )?
+  retry;
   HistoryDownload create() => HistoryDownload(
     fetch: (room, cursor) {
       calls.add((room, cursor));
@@ -43,10 +48,125 @@ class Harness {
     },
     canRun: () => enabled,
     pageDelay: Duration.zero,
+    retryEvent: (event, active) => retry!(event, active),
   );
 }
 
 void main() {
+  const failed = HistoryDecryptionFailure(
+    roomId: '!r:test',
+    eventId: r'$failed',
+    senderId: '@other:test',
+    timestamp: 42,
+  );
+  HistoryDownloadPage failurePage() => const HistoryDownloadPage(
+    rows: [],
+    nextCursor: null,
+    checked: 1,
+    unavailable: 1,
+    failures: [failed],
+  );
+  test(
+    'failed event references survive reopening and targeted retry indexes them',
+    () async {
+      final h = Harness()..page = (_, _) async => failurePage();
+      var job = h.create();
+      await job.start(['!r:test']);
+      await job.done;
+      expect(job.failures.single.eventId, failed.eventId);
+      expect(jsonEncode(h.saved), isNot(contains('ciphertext')));
+      job.dispose();
+      job = h.create();
+      await job.open();
+      expect(job.unavailable, 1);
+      h.retry = (event, active) async {
+        expect(event.eventId, failed.eventId);
+        expect(active(), true);
+        return HistoryDownloadPage(
+          rows: [row(event.eventId)],
+          nextCursor: null,
+          checked: 1,
+        );
+      };
+      final pages = h.calls.length;
+      await job.retryFailed();
+      await job.done;
+      expect(
+        h.calls.length,
+        pages,
+        reason: 'Retry does not rescan history pages',
+      );
+      expect(h.writes.keys, [failed.eventId]);
+      expect(job.unavailable, 0);
+      expect(job.failures, isEmpty);
+      expect(h.saved!['failures'], isEmpty);
+      job.dispose();
+    },
+  );
+  test('quota and pause keep failed references until admitted', () async {
+    final h = Harness()
+      ..capacity = 0
+      ..page = (_, _) async => failurePage();
+    final job = h.create();
+    await job.start(['!r:test']);
+    await job.done;
+    h.retry = (event, _) async => HistoryDownloadPage(
+      rows: [row(event.eventId)],
+      nextCursor: null,
+      checked: 1,
+    );
+    await job.retryFailed();
+    await job.done;
+    expect(job.status, HistoryDownloadStatus.full);
+    expect(job.unavailable, 1);
+    final reopened = h.create();
+    await reopened.open();
+    expect(reopened.status, HistoryDownloadStatus.full);
+    expect(reopened.unavailable, 1);
+    reopened.dispose();
+    h.capacity = 1;
+    final gate = Completer<HistoryDownloadPage>();
+    h.retry = (_, _) => gate.future;
+    await job.retryFailed();
+    await Future<void>.delayed(Duration.zero);
+    job.pause();
+    gate.complete(
+      HistoryDownloadPage(
+        rows: [row(failed.eventId)],
+        nextCursor: null,
+        checked: 1,
+      ),
+    );
+    await job.done;
+    expect(job.unavailable, 1);
+    expect(h.writes, isEmpty);
+    job.dispose();
+  });
+  test(
+    'still-encrypted and inaccessible events remain listed; non-message events resolve honestly',
+    () async {
+      final h = Harness()..page = (_, _) async => failurePage();
+      final job = h.create();
+      await job.start(['!r:test']);
+      await job.done;
+      h.retry = (_, _) async => failurePage();
+      await job.retryFailed();
+      await job.done;
+      expect(job.unavailable, 1);
+      h.retry = (_, _) async => throw StateError('not accessible');
+      await job.retryFailed();
+      await job.done;
+      expect(job.unavailable, 1);
+      h.retry = (_, _) async =>
+          const HistoryDownloadPage(rows: [], nextCursor: null, checked: 1);
+      await job.retryFailed();
+      await job.done;
+      expect(job.unavailable, 0);
+      expect(job.message, contains('Redacted or non-message: 1'));
+      expect(h.writes, isEmpty);
+      job.dispose();
+    },
+  );
   test(
     'paginates every selected room, including empty advancing pages',
     () async {

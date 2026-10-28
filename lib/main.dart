@@ -29,8 +29,7 @@ Future<void> main() async {
         home: Scaffold(
           body: Center(
             child: Text(
-              'SeND is already open in another tab, or browser storage is unavailable.\n'
-              'Close other SeND tabs and reopen this page over HTTPS.',
+              'SeND is open in another tab or can\'t access browser storage. Close other SeND tabs and reopen over HTTPS.',
               textAlign: TextAlign.center,
             ),
           ),

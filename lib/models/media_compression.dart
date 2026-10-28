@@ -4,7 +4,7 @@ enum ImageCompressionPreset {
   smaller;
 
   static ImageCompressionPreset parse(Object? value) =>
-      values.where((preset) => preset.name == value).firstOrNull ?? original;
+      values.where((preset) => preset.name == value).firstOrNull ?? balanced;
 }
 
 enum VideoCompressionPreset {

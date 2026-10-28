@@ -91,9 +91,7 @@ class _SecurityDialogState extends State<_SecurityDialog> {
       builder: (context) => AlertDialog(
         title: const Text('Replace recovery key?'),
         content: const Text(
-          'Your existing recovery key will stop working. Cross-signing and '
-          'encrypted key backup will be kept, but you must save the new key '
-          'before closing SeND.',
+          'Your old recovery key will stop working. Save the new one before closing SeND.',
         ),
         actions: [
           TextButton(
@@ -200,13 +198,6 @@ class _SecurityDialogState extends State<_SecurityDialog> {
                           ),
                           onSubmitted: (_) => _working ? null : _recover(),
                         ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'This credential is used only to unlock Matrix Secure Secret Storage. SeND does not save the text you enter.',
-                          style: TextStyle(
-                            fontSize: DeltiecordTypeScale.normal,
-                          ),
-                        ),
                       ],
                       if (_localError case final error?) ...[
                         const SizedBox(height: 12),
@@ -276,25 +267,25 @@ class _SecurityStatus extends StatelessWidget {
       ),
       EncryptionSetupStatus.ready => (
         'This device is verified',
-        'Cross-signing is connected and encrypted message keys can be backed up and recovered.',
+        'Ready to back up and recover message keys.',
         Icons.verified_user,
         Colors.green,
       ),
       EncryptionSetupStatus.needsRecovery => (
         'Recovery required',
-        'Enter the recovery key or security passphrase from another Matrix client to authorize this device and unlock key backup.',
+        'Enter your existing recovery key or passphrase to verify this device and unlock backups.',
         Icons.key,
         Colors.amber,
       ),
       EncryptionSetupStatus.needsRepair => (
         'Encryption setup is incomplete',
-        'Existing secure storage was found. Unlock it to repair missing cross-signing or key-backup components without replacing your recovery key.',
+        'Repair encryption setup with your existing recovery key or passphrase.',
         Icons.build_circle_outlined,
         Colors.amber,
       ),
       EncryptionSetupStatus.needsSetup => (
         'No encrypted backup is configured',
-        'This appears to be a new encryption identity. Setup will create cross-signing, encrypted key backup, and a recovery key that you must save.',
+        'Set up encryption and save the recovery key you\'ll be given.',
         Icons.shield_outlined,
         Colors.amber,
       ),
@@ -393,7 +384,7 @@ class _GeneratedKey extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       const Text(
-        'It is the only way to recover encrypted message history if all authorized devices are lost. SeND will not show it again.',
+        'You\'ll need this key if you lose all authorised devices. SeND won\'t show it again.',
       ),
       const SizedBox(height: 14),
       Container(
@@ -423,7 +414,7 @@ class _GeneratedKey extends StatelessWidget {
         onChanged: onSavedChanged,
         contentPadding: EdgeInsets.zero,
         controlAffinity: ListTileControlAffinity.leading,
-        title: const Text('I saved this recovery key somewhere safe'),
+        title: const Text('I\'ve saved my recovery key.'),
       ),
     ],
   );

@@ -281,15 +281,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : 'Create a deltie.net account',
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'You can sign in with another Matrix homeserver. '
-                          'Its upload limits and account features may differ. '
-                          'SeND’s push, media conversion and link-preview '
-                          'services may not be available there.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
                       ],
                     ),
                   ),

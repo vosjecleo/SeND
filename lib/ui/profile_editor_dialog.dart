@@ -401,9 +401,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      _spaceProfile
-                          ? 'Edit server profile — live preview'
-                          : 'Edit profile — live preview',
+                      _spaceProfile ? 'Edit server profile' : 'Edit profile',
                       maxLines: compact ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge,
@@ -667,12 +665,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                               'Voice tile',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Uses the average avatar colour by default. You can '
-                              'override it with a colour or a separately cropped '
-                              'background.',
-                            ),
+
                             const SizedBox(height: 8),
                             AccentColorPickerButton(
                               color: _voiceColor,
@@ -795,9 +788,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                                 .extensibleFieldsSupported) ...[
                               const SizedBox(height: 12),
                               const Text(
-                                'This homeserver does not advertise extensible '
-                                'profile fields. Basic name and avatar editing '
-                                'remain available.',
+                                'This homeserver only supports name and avatar changes.',
                               ),
                             ],
                             if (_error case final error?) ...[

@@ -11,6 +11,20 @@ test lists below do not mean those platforms have gone untested.
 
 ## Open investigations
 
+- **Build 133 search coverage:** each device keeps its own index. Events received
+  on reconnect are indexed, but omitted limited-sync gaps are not automatically
+  backfilled yet. Use the history-download tool within the selected scope and
+  cache limit. Failed decryption now retains reviewable references and supports
+  targeted retry; older downloads saved only a count and need a fresh scan.
+- **Build 133 browser video:** WebCodecs export passed real Chromium H.264/AAC
+  checks, but physical iOS PWA codec/memory acceptance is still outstanding.
+  Browser editing is limited to 256 MiB inputs, 4K coded/display dimensions and
+  one hour; high-quality edits have a 128 MiB output cap. Unsupported clips retain
+  an explicit original-upload path. Backgrounding cancels browser export.
+- **Build 133 device checks:** Android clipboard actions and the gallery editor
+  were confirmed by Cleo. Sunup closed-app notifications remain untested for this
+  build. Keyboard language switching/resume and sustained performance still need
+  further reporting-device checks; they are not marked fixed by test counts.
 - **October 26 pass:** build 131 covers mobile editing,
   metadata-only media indexing, optional bounded text indexing, receipt layout,
   personal chat/space organisation, activity refresh and Libre.fm artwork.
@@ -62,7 +76,9 @@ paths; an item still needs a matching device/test result before it can be closed
   long clips and low storage are separate cases. Recovery offers an explicit
   original-quality upload, not an automatic compression bypass.
 - **Desktop video:** FFmpeg/ffprobe must be available for native compression;
-  PWA sends originals and browser playback depends on codec and size limits.
+  PWA compression uses available WebCodecs and falls back only through an explicit
+  original-upload choice when processing fails. Browsers without the required
+  APIs send originals. Playback depends on codec and size limits.
 - **Animated banner colours:** build 121 fixes the supplied GIF's colour loss.
   Uploads damaged by earlier conversions need re-uploading. See the
   [investigation](docs/archive/gif-banner-investigation.md).

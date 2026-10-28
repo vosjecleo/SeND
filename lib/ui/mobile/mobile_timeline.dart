@@ -1079,6 +1079,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                   final edited = await showAttachmentImageEditor(
                     context,
                     attachment,
+                    preferences: widget.backend.preferences,
                   );
                   if (!mounted || edited == null) return;
                   final index = _attachments.indexOf(attachment);

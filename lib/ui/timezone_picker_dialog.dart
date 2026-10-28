@@ -96,7 +96,7 @@ class _TimezonePickerDialogState extends State<TimezonePickerDialog> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Could not detect your timezone. Choose it from the list.',
+                  'Couldn\'t detect your timezone. Choose one below.',
                 ),
               ),
             );

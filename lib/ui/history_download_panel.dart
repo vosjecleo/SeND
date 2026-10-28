@@ -47,12 +47,7 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
         scrollable: true,
         title: const Text('Download message history?'),
         content: Text(
-          'Fetch all accessible message events for ${selected.length} ${selected.length == 1 ? 'chat' : 'chats'}. '
-          'Photos, videos and other attachment files will not be downloaded. '
-          '${widget.index.encryptedAtRest ? '' : 'The search database stores decrypted text without separate encryption. '}'
-          'Large histories can use a lot of data; use Wi-Fi if needed. '
-          'The download pauses at your search-cache limit. Progress stays on this device, and no messages are marked read. '
-          'On mobile, leaving SeND pauses the download. You can resume in Storage settings.',
+          'Download messages from ${selected.length} ${selected.length == 1 ? 'chat' : 'chats'} for search? Attachments won\'t be downloaded. ${widget.index.encryptedAtRest ? '' : 'Message text will be stored unencrypted on this device. '}On mobile, keep SeND open; resume paused downloads in Storage.',
         ),
         actions: [
           TextButton(
@@ -103,7 +98,7 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
         scrollable: true,
         title: const Text('Increase the search cache?'),
         content: Text(
-          'Raise the limit from ${widget.index.limitMiB} MiB to $next MiB and resume the saved download.',
+          'Increase storage from ${widget.index.limitMiB} MiB to $next MiB and resume?',
         ),
         actions: [
           TextButton(
@@ -119,7 +114,13 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
     );
     if (approved != true || !mounted) return;
     await _run(() async {
-      if (await widget.increaseLimit(next)) await widget.download.resume();
+      if (await widget.increaseLimit(next)) {
+        if (widget.download.hasCheckpoint) {
+          await widget.download.resume();
+        } else {
+          await widget.download.retryFailed();
+        }
+      }
     });
   }
 
@@ -152,14 +153,12 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Download message text and media references without fetching the attachment files. Search results stay available locally. Missing encryption keys can leave gaps.',
+            'Download messages for offline search, without attachments.',
           ),
           if (!widget.index.encryptedAtRest)
             const Padding(
               padding: EdgeInsets.only(top: 6),
-              child: Text(
-                'The local search database stores decrypted text without separate encryption.',
-              ),
+              child: Text('Message text is stored unencrypted on this device.'),
             ),
           if (!widget.index.enabled)
             const Padding(
@@ -168,7 +167,7 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
                 'Enable local text indexing above to download history.',
               ),
             ),
-          if (!job.running)
+          if (!job.running && !job.retrying)
             DropdownButtonFormField<String>(
               key: ValueKey('history-download-scope-$scope-${current?.id}'),
               initialValue: scope,
@@ -198,20 +197,30 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
           if (job.totalRooms > 0) ...[
             const SizedBox(height: 10),
             Text(
-              '${job.completedRooms}/${job.totalRooms} chats complete · ${job.checked} events processed',
+              '${job.completedRooms}/${job.totalRooms} chats · ${job.checked} events processed',
             ),
             if (job.running && room != null)
               Text(room.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             if (job.unavailable > 0)
-              Text(
-                '${job.unavailable} encrypted events could not be decrypted.',
+              Text('Encrypted events missing from search: ${job.unavailable}.'),
+
+            if (job.failures.isNotEmpty)
+              TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => _FailedEventsDialog(
+                    backend: widget.backend,
+                    download: job,
+                  ),
+                ),
+                child: Text('Review failed events (${job.failures.length})'),
               ),
             if (notice != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(notice),
               ),
-            if (job.running)
+            if (job.running || job.retrying)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: LinearProgressIndicator(),
@@ -222,12 +231,19 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (job.running)
+              if (job.running || job.retrying)
                 OutlinedButton(
                   onPressed: job.pause,
-                  child: const Text('Pause download'),
+                  child: Text(job.retrying ? 'Pause retry' : 'Pause download'),
                 )
               else ...[
+                if (job.failures.isNotEmpty)
+                  OutlinedButton(
+                    onPressed: _busy || !widget.index.enabled
+                        ? null
+                        : () => _run(job.retryFailed),
+                    child: const Text('Retry decryption'),
+                  ),
                 if (job.hasCheckpoint)
                   FilledButton(
                     onPressed: _busy || !widget.index.enabled
@@ -253,6 +269,82 @@ class _HistoryDownloadPanelState extends State<HistoryDownloadPanel> {
             ],
           ),
           if (_error != null) Text(_error!),
+        ],
+      );
+    },
+  );
+}
+
+class _FailedEventsDialog extends StatefulWidget {
+  const _FailedEventsDialog({required this.backend, required this.download});
+  final ChatBackend backend;
+  final HistoryDownload download;
+  @override
+  State<_FailedEventsDialog> createState() => _FailedEventsDialogState();
+}
+
+class _FailedEventsDialogState extends State<_FailedEventsDialog> {
+  int _page = 0;
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.download,
+    builder: (context, _) {
+      final events = widget.download.failures;
+      final count = ((events.length + 19) ~/ 20).clamp(1, 500);
+      final page = _page.clamp(0, count - 1);
+      final rooms = {
+        for (final room in widget.backend.historyDownloadRooms)
+          room.id: room.name,
+      };
+      return AlertDialog(
+        title: Text('Events missing from search (${events.length})'),
+        content: SizedBox(
+          width: 600,
+          height: MediaQuery.sizeOf(context).height * .45,
+          child: events.isEmpty
+              ? const Text('No failed events remain.')
+              : ListView(
+                  children: [
+                    for (final event in events.skip(page * 20).take(20))
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(rooms[event.roomId] ?? event.roomId),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (event.senderId.isNotEmpty) Text(event.senderId),
+                            if (event.timestamp > 0)
+                              Text(
+                                DateTime.fromMillisecondsSinceEpoch(
+                                  event.timestamp,
+                                ).toLocal().toString(),
+                              ),
+                            SelectableText(event.eventId),
+                            const Text('Encrypted content unavailable.'),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Previous failed events',
+            onPressed: page > 0 ? () => setState(() => _page = page - 1) : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text('${page + 1}/$count'),
+          IconButton(
+            tooltip: 'Next failed events',
+            onPressed: page + 1 < count
+                ? () => setState(() => _page = page + 1)
+                : null,
+            icon: const Icon(Icons.chevron_right),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
         ],
       );
     },

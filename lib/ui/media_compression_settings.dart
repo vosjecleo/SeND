@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../backend/chat_backend.dart';
 import '../models/media_compression.dart';
+import '../services/video_optimizer.dart' show videoOptimizationSupported;
 
 class MediaCompressionSettings extends StatelessWidget {
   const MediaCompressionSettings({required this.backend, super.key});
@@ -71,12 +72,10 @@ class MediaCompressionSettings extends StatelessWidget {
           }
         },
       ),
-      const SizedBox(height: 8),
-      Text(
-        kIsWeb
-            ? 'Browser videos keep their original quality. Image presets still apply.'
-            : 'Compression runs on your device. Long clips may need trimming or an explicit choice to send the original. Captions, spoilers and encryption are preserved.',
-      ),
+      if (kIsWeb && !videoOptimizationSupported) ...[
+        const SizedBox(height: 8),
+        const Text('This browser sends videos without compression.'),
+      ],
     ],
   );
 }

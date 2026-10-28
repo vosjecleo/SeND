@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'history_scope.dart';
+import 'history_decryption_failure.dart';
+export 'history_decryption_failure.dart';
 
 enum HistoryDownloadStatus { idle, running, paused, full, complete, error }
 
@@ -20,10 +23,12 @@ class HistoryDownloadPage {
     required this.nextCursor,
     required this.checked,
     this.unavailable = 0,
+    this.failures = const [],
   });
   final List<Map<String, Object?>> rows;
   final String? nextCursor;
   final int checked, unavailable;
+  final List<HistoryDecryptionFailure> failures;
 }
 
 /// Foreground, event-only backfill. Checkpoint only after an admitted page;
@@ -36,6 +41,7 @@ class HistoryDownload extends ChangeNotifier {
     required this.save,
     required this.canRun,
     this.onRun,
+    this.retryEvent,
     this.pageDelay = const Duration(milliseconds: 50),
   });
   final Future<HistoryDownloadPage> Function(String room, String? cursor) fetch;
@@ -44,11 +50,22 @@ class HistoryDownload extends ChangeNotifier {
   final Future<void> Function(Map<String, Object?>? value) save;
   final bool Function() canRun;
   final VoidCallback? onRun;
+  final Future<HistoryDownloadPage> Function(
+    HistoryDecryptionFailure event,
+    bool Function() active,
+  )?
+  retryEvent;
   final Duration pageDelay;
   HistoryDownloadStatus status = HistoryDownloadStatus.idle;
   String? message;
   List<String> _rooms = [];
-  int _position = 0, checked = 0, unavailable = 0, _generation = 0;
+  int _position = 0, checked = 0, _untrackedUnavailable = 0, _generation = 0;
+  final _failures = <String, HistoryDecryptionFailure>{};
+  List<HistoryDecryptionFailure> get failures =>
+      List.unmodifiable(_failures.values);
+  int get unavailable => _untrackedUnavailable + _failures.length;
+  int get untrackedUnavailable => _untrackedUnavailable;
+  bool retrying = false;
   String? _cursor;
   final _seen = <String>[];
   bool _closed = false;
@@ -63,7 +80,7 @@ class HistoryDownload extends ChangeNotifier {
   Future<void> get done => _work ?? Future.value();
   bool Function() guardForCurrentRun() {
     final generation = _generation;
-    return () => _alive(generation) && running && canRun();
+    return () => _alive(generation) && (running || retrying) && canRun();
   }
 
   void _changed() {
@@ -99,12 +116,31 @@ class HistoryDownload extends ChangeNotifier {
         0,
         9007199254740991,
       );
-      unavailable = ((data['unavailable'] as num?)?.toInt() ?? 0).clamp(
-        0,
-        checked,
-      );
+      final oldUnavailable = ((data['unavailable'] as num?)?.toInt() ?? 0)
+          .clamp(0, checked);
+      final failed = (data['failures'] as List? ?? const [])
+          .map(
+            (entry) => HistoryDecryptionFailure.fromMap(
+              Map<String, Object?>.from(entry as Map),
+            ),
+          )
+          .toList();
+      if (failed.length > 10000 ||
+          utf8
+                  .encode(jsonEncode(failed.map((e) => e.toMap()).toList()))
+                  .length >
+              2 * 1048576) {
+        throw const FormatException('Failed-event list too large');
+      }
+      _failures.addEntries(failed.map((event) => MapEntry(event.key, event)));
+      _untrackedUnavailable = data['untrackedUnavailable'] is num
+          ? (data['untrackedUnavailable'] as num).toInt().clamp(
+              0,
+              oldUnavailable,
+            )
+          : (oldUnavailable - _failures.length).clamp(0, oldUnavailable);
       _atQuota = data['atQuota'] == true;
-      status = hasCheckpoint && _atQuota
+      status = _atQuota && (hasCheckpoint || _failures.isNotEmpty)
           ? HistoryDownloadStatus.full
           : hasCheckpoint
           ? HistoryDownloadStatus.paused
@@ -115,6 +151,10 @@ class HistoryDownload extends ChangeNotifier {
           ? 'Saved progress is ready to resume.'
           : null;
     } catch (_) {
+      _rooms = [];
+      _cursor = null;
+      _failures.clear();
+      _untrackedUnavailable = 0;
       status = HistoryDownloadStatus.error;
       message =
           'Saved history progress could not be read. Start a new download.';
@@ -130,6 +170,8 @@ class HistoryDownload extends ChangeNotifier {
     'seen': List.of(_seen),
     'checked': checked,
     'unavailable': unavailable,
+    'untrackedUnavailable': _untrackedUnavailable,
+    'failures': [for (final event in _failures.values) event.toMap()],
     'atQuota': _atQuota,
   };
 
@@ -150,6 +192,11 @@ class HistoryDownload extends ChangeNotifier {
 
   Future<void> start(Iterable<String> rooms) async {
     if (_closed) return;
+    if (retrying) {
+      throw StateError(
+        'Pause the decryption retry before starting a new download.',
+      );
+    }
     final selected = rooms.toSet().toList();
     if (selected.isEmpty ||
         selected.length > 4096 ||
@@ -161,14 +208,15 @@ class HistoryDownload extends ChangeNotifier {
     _position = 0;
     _cursor = null;
     _seen.clear();
-    checked = unavailable = 0;
+    checked = 0;
+    _untrackedUnavailable = 0;
     _atQuota = false;
     status = HistoryDownloadStatus.paused;
     if (await _persist()) await resume();
   }
 
   Future<void> resume() async {
-    if (_closed || running || !hasCheckpoint) return;
+    if (_closed || running || retrying || !hasCheckpoint) return;
     if (!canRun()) {
       status = HistoryDownloadStatus.paused;
       message = 'Enable text indexing and keep SeND open to download history.';
@@ -190,8 +238,9 @@ class HistoryDownload extends ChangeNotifier {
   }
 
   void pause({String? reason}) {
-    if (_closed || !running) return;
+    if (_closed || (!running && !retrying)) return;
     _generation++;
+    retrying = false;
     status = HistoryDownloadStatus.paused;
     message = reason ?? 'Paused. The last completed page is saved.';
     _changed();
@@ -200,7 +249,9 @@ class HistoryDownload extends ChangeNotifier {
   Future<void> reset() async {
     _generation++;
     _rooms = [];
-    _position = checked = unavailable = 0;
+    _position = checked = _untrackedUnavailable = 0;
+    _failures.clear();
+    retrying = false;
     _atQuota = false;
     _cursor = null;
     _seen.clear();
@@ -214,9 +265,7 @@ class HistoryDownload extends ChangeNotifier {
     try {
       while (_alive(generation) && currentRoom != null) {
         if (!canRun()) {
-          pause(
-            reason: 'Paused until text indexing is enabled and SeND is open.',
-          );
+          pause(reason: 'Paused. Enable text indexing and keep SeND open.');
           return;
         }
         final page = await fetch(currentRoom!, _cursor);
@@ -225,8 +274,28 @@ class HistoryDownload extends ChangeNotifier {
         if ((next?.length ?? 0) > 4096 ||
             page.checked < 0 ||
             page.unavailable < 0 ||
+            page.failures.length > page.unavailable ||
             page.unavailable > page.checked) {
           throw StateError('Invalid history page');
+        }
+        final pendingFailures = {
+          ..._failures,
+          for (final event in page.failures) event.key: event,
+        };
+        if (pendingFailures.length > 10000 ||
+            utf8
+                    .encode(
+                      jsonEncode(
+                        pendingFailures.values.map((e) => e.toMap()).toList(),
+                      ),
+                    )
+                    .length >
+                2 * 1048576) {
+          status = HistoryDownloadStatus.paused;
+          message =
+              'The failed-event list is full. Retry decryption before resuming. This page has not been skipped.';
+          _changed();
+          return;
         }
         if (next != null &&
             (next == _cursor || _seen.contains(next)) &&
@@ -248,7 +317,14 @@ class HistoryDownload extends ChangeNotifier {
         }
         if (!_alive(generation)) return;
         checked += page.checked;
-        unavailable += page.unavailable;
+        for (final row in page.rows) {
+          _failures.remove('${row['room']}\u0000${row['id']}');
+        }
+        for (final event in page.failures) {
+          _failures[event.key] = event;
+        }
+        _untrackedUnavailable += (page.unavailable - page.failures.length)
+            .clamp(0, page.checked);
         if (next == null || next == _cursor) {
           _position++;
           _cursor = null;
@@ -266,15 +342,13 @@ class HistoryDownload extends ChangeNotifier {
         status = HistoryDownloadStatus.complete;
         message = unavailable == 0
             ? 'Finished downloading accessible message history.'
-            : 'Finished. Some encrypted events need keys. Restore the keys and scan again.';
+            : 'Finished. Encrypted events missing from search: $unavailable. Review them and retry decryption.';
         _changed();
       }
     } catch (_) {
       if (_alive(generation)) {
         if (!canRun()) {
-          pause(
-            reason: 'Paused until text indexing is enabled and SeND is open.',
-          );
+          pause(reason: 'Paused. Enable text indexing and keep SeND open.');
           return;
         }
         status = HistoryDownloadStatus.error;
@@ -283,6 +357,77 @@ class HistoryDownload extends ChangeNotifier {
         _changed();
       }
     }
+  }
+
+  Future<void> retryFailed() async {
+    if (_closed ||
+        running ||
+        retrying ||
+        _failures.isEmpty ||
+        retryEvent == null) {
+      return;
+    }
+    if (!canRun()) {
+      throw StateError(
+        'Enable text indexing and keep SeND open to retry decryption.',
+      );
+    }
+    retrying = true;
+    _atQuota = false;
+    if (status == HistoryDownloadStatus.full) {
+      status = hasCheckpoint
+          ? HistoryDownloadStatus.paused
+          : HistoryDownloadStatus.complete;
+    }
+    final generation = ++_generation;
+    final previous = _work;
+    onRun?.call();
+    message = 'Retrying decryption...';
+    _work = () async {
+      if (previous != null) await previous;
+      var recovered = 0, nonMessage = 0;
+      try {
+        for (final event in List.of(_failures.values)) {
+          if (!_alive(generation) || !retrying || !canRun()) break;
+          try {
+            final page = await retryEvent!(event, guardForCurrentRun());
+            if (!_alive(generation) || !retrying || !canRun()) break;
+            if (page.unavailable > 0) continue;
+            if (page.rows.isNotEmpty && !await append(page.rows)) {
+              status = HistoryDownloadStatus.full;
+              _atQuota = true;
+              message =
+                  'Search storage is full. Increase the limit, then retry decryption.';
+              await _persist();
+              return;
+            }
+            if (!_alive(generation) || !retrying) break;
+            if (page.rows.any((row) => row['deleted'] != true)) {
+              recovered++;
+            } else {
+              nonMessage++;
+            }
+            _failures.remove(event.key);
+            if (!await _persist()) return;
+            _changed();
+          } catch (_) {
+            /* Keep inaccessible events for the next explicit retry. */
+          }
+          await Future<void>.delayed(pageDelay);
+        }
+        if (_alive(generation)) {
+          message =
+              'Recovered and indexed: $recovered. Redacted or non-message: $nonMessage. Still unavailable: $unavailable.';
+          await _persist();
+        }
+      } finally {
+        if (_alive(generation)) {
+          retrying = false;
+          _changed();
+        }
+      }
+    }();
+    _changed();
   }
 
   @override

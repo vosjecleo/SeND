@@ -74,9 +74,7 @@ class _ForumViewState extends State<ForumView> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete forum post?'),
-        content: const Text(
-          'This removes the opening post. Existing replies are not deleted.',
-        ),
+        content: const Text('Deletes the opening post, not the replies.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

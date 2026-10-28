@@ -632,8 +632,7 @@ Future<void> _showStickerPackDetails(
               ),
               const SizedBox(height: 8),
               const Text(
-                'This message does not expose an accessible Matrix image '
-                'pack. The media can still be viewed in the timeline.',
+                'Can\'t open this pack; the attachment is still available in chat.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -723,7 +722,7 @@ Future<void> _showStickerPackDetails(
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not update this pack. Check your connection and try again.',
+              'Couldn\'t update the pack. Check your connection and try again.',
             ),
           ),
         );
@@ -867,9 +866,7 @@ Future<void> _manageStickerPacks(
           const ListTile(
             title: Text('Sticker packs'),
             subtitle: Text(
-              'Personal packs use the Matrix image-pack format and work in '
-              'compatible clients such as FluffyChat. Pack media is uploaded '
-              'to your homeserver and is not room end-to-end encrypted.',
+              'Pack images are uploaded to your homeserver without end-to-end encryption.',
             ),
           ),
           ListTile(
@@ -898,7 +895,7 @@ Future<void> _manageStickerPacks(
           if (backend.stickerPacks.any(_isEditableEmojiPack))
             ListTile(
               leading: const ThemeIcon(Icons.edit_outlined),
-              title: const Text('Edit sticker or emoji pack'),
+              title: const Text('Edit pack'),
               subtitle: const Text('Add, remove, crop or change aliases'),
               onTap: () => Navigator.pop(context, 'edit-emoji'),
             ),
@@ -909,9 +906,7 @@ Future<void> _manageStickerPacks(
             ListTile(
               leading: const ThemeIcon(Icons.public_outlined),
               title: const Text('Publish a personal pack'),
-              subtitle: const Text(
-                'Move a pack to a server so members can add it',
-              ),
+
               onTap: () => Navigator.pop(context, 'publish'),
             ),
           ListTile(
@@ -984,8 +979,7 @@ Future<void> _manageStickerPacks(
           content: Text(
             destination == null
                 ? 'Personal sticker pack saved.'
-                : 'Server sticker pack published. Members can add it and '
-                      'receive future pack updates.',
+                : 'Pack published.',
           ),
         ),
       );
@@ -1110,7 +1104,7 @@ Future<void> _editExistingEmojiPack(
       child: ListView(
         children: [
           const ListTile(
-            title: Text('Edit sticker or emoji pack'),
+            title: Text('Edit pack'),
             subtitle: Text(
               'Add, remove, rename aliases or crop selected items.',
             ),
@@ -1255,9 +1249,7 @@ class _EmojiAliasEditorState extends State<_EmojiAliasEditor> {
       children: [
         ListTile(
           title: const Text('Name custom emoji'),
-          subtitle: const Text(
-            'Set the :alias: used in messages, search and autocomplete.',
-          ),
+
           trailing: IconButton(
             tooltip: 'Close',
             onPressed: () => Navigator.pop(context),
@@ -1406,15 +1398,12 @@ class _EmojiResizeDialogState extends State<_EmojiResizeDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            widget.resizingRequired
-                ? 'Images larger than 128×128 will keep their aspect ratio, '
-                      'fit inside a centred 128×128 canvas, and never be '
-                      'stretched.'
-                : 'These images already meet the 128×128 limit. You can keep '
-                      'their original canvas or trim transparent padding.',
-          ),
-          const SizedBox(height: 12),
+          if (widget.resizingRequired) ...[
+            const Text(
+              'Images will be resized to fit 128×128 without stretching.',
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox.square(
             dimension: 128,
             child: FutureBuilder<PreparedCustomEmoji>(
@@ -1459,23 +1448,11 @@ class _EmojiResizeDialogState extends State<_EmojiResizeDialog> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Trim transparent padding'),
-            subtitle: const Text(
-              'Optional. Enlarges visible artwork without stretching. Animation '
-              'uses one shared crop across all frames to avoid jumping.',
-            ),
+
             value: _trimTransparentPadding,
             onChanged: (value) =>
                 _refreshPreview(() => _trimTransparentPadding = value),
           ),
-          if (const {
-            'image/gif',
-            'image/webp',
-          }.contains(widget.example.mimeType))
-            const Text(
-              'Edited animations stay animated and are encoded as GIF. Images '
-              'that exceed safe processing limits fail without being flattened.',
-              style: TextStyle(fontSize: DeltiecordTypeScale.normal),
-            ),
         ],
       ),
     ),
@@ -1511,18 +1488,14 @@ Future<String?> _chooseStickerPackDestination(
           ListTile(
             leading: const ThemeIcon(Icons.person_outline),
             title: const Text('My account'),
-            subtitle: const Text(
-              'Private to this account and available in every conversation',
-            ),
+            subtitle: const Text('For this account, in any chat.'),
             onTap: () => Navigator.pop(context, 'personal'),
           ),
           for (final space in manageableSpaces)
             ListTile(
               leading: const ThemeIcon(Icons.hub_outlined),
               title: Text(space.name),
-              subtitle: const Text(
-                'Publish to this server; members can add it and updates sync',
-              ),
+              subtitle: const Text('Members can add it and get updates.'),
               onTap: () => Navigator.pop(context, space.id),
             ),
         ],
@@ -1606,10 +1579,7 @@ Future<void> _publishPersonalStickerPack(
         children: [
           const ListTile(
             title: Text('Publish to server'),
-            subtitle: Text(
-              'The server copy becomes canonical. Members can add it, and '
-              'future owner edits update their copy automatically.',
-            ),
+            subtitle: Text('Your changes sync to members who add the pack.'),
           ),
           for (final space in spaces)
             ListTile(
@@ -1644,10 +1614,7 @@ Future<void> _confirmDeleteStickerPack(
     context: context,
     builder: (context) => AlertDialog(
       title: Text('Delete ${selected.name}?'),
-      content: const Text(
-        'Existing messages keep their fallback emoji names, but the media '
-        'will no longer be offered by this pack.',
-      ),
+      content: const Text('Existing messages keep their emoji names.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
@@ -1852,8 +1819,7 @@ Future<Set<int>?> _selectTelegramStickers(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '${selected.length} of ${pack.stickers.length} selected'
-                '${pack.unsupportedCount == 0 ? '' : ' · ${pack.unsupportedCount} animated/video skipped'}',
+                '${selected.length}/${pack.stickers.length} selected${pack.unsupportedCount == 0 ? '' : ' · ${pack.unsupportedCount} unsupported items skipped'}',
               ),
               const SizedBox(height: 8),
               Expanded(

@@ -32,7 +32,7 @@ void Function() listenBrowserImagePaste({
     if (files.length > 20 ||
         files.fold<int>(0, (total, file) => total + file.size) >
             64 * 1024 * 1024) {
-      onError('Paste at most 20 images, up to 64 MiB in total.');
+      onError('Paste up to 20 images (64 MiB total).');
       return;
     }
     () async {
@@ -55,9 +55,7 @@ void Function() listenBrowserImagePaste({
         }
       } catch (_) {
         if (!disposed) {
-          onError(
-            'Could not paste this image. Try attaching the original from Photos or Files.',
-          );
+          onError('Couldn\'t paste the image. Attach it from Photos or Files.');
         }
       }
     }();

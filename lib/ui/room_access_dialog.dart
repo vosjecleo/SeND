@@ -120,7 +120,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
       builder: (context) => AlertDialog(
         title: const Text('Replace access rules for existing channels?'),
         content: Text(
-          'Apply "$_default" to all ${widget.children.length} listed channels? This includes private channels. Cancel to preserve private exceptions and edit channels individually instead. This does not join members automatically or change history visibility.',
+          'Apply "$_default" to all ${widget.children.length} channels, including private ones? This won\'t join members or change history access.',
         ),
         actions: [
           TextButton(
@@ -221,7 +221,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Treat as direct message'),
                   subtitle: const Text(
-                    'Off: general room. This classification follows your account across devices; other members keep their own choice.',
+                    'This choice only affects your account.',
                   ),
                   value: _direct,
                   onChanged: _busy
@@ -266,9 +266,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
                   data.canEditAccess,
                   (v) => _access = v,
                 ),
-                const Text(
-                  'Access and directory listing are separate. Space membership allows joining; it does not automatically join every channel.',
-                ),
+                const Text('Listing a room doesn\'t change who can join it.'),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('List in the public room directory'),
@@ -290,7 +288,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
                   (v) => _history = v,
                 ),
                 const Text(
-                  'History changes affect future events. Encryption key availability can further limit readable history.',
+                  'Only affects future messages; missing encryption keys may still limit history.',
                 ),
                 if (widget.isSpace) ...[
                   _choice(
@@ -318,7 +316,7 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Text(
-                  'Applies to all SeND members; channel settings override Space defaults. Other clients may still show these events. Messages, security and moderation events cannot be hidden here.',
+                  'Applies to everyone using SeND; channel settings override Space defaults. Other clients may still show these events.',
                 ),
                 for (final event in CosmeticRoomEvent.values)
                   _choice(

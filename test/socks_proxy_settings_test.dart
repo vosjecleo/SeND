@@ -48,7 +48,7 @@ void main() {
           saved = value;
         },
       );
-      expect(find.textContaining('may expose your IP address'), findsOneWidget);
+      expect(find.textContaining('may expose your IP'), findsOneWidget);
       final switches = tester
           .widgetList<SwitchListTile>(find.byType(SwitchListTile))
           .toList();
@@ -69,7 +69,10 @@ void main() {
       expect(saved?.port, 9050);
       expect(saved?.password, 'proxy-password');
       expect(saved?.allowDirectTraffic, isTrue);
-      expect(find.textContaining('Fully close and reopen'), findsOneWidget);
+      expect(
+        find.textContaining('Restart SeND to apply changes'),
+        findsOneWidget,
+      );
     },
   );
 

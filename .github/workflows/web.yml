@@ -55,12 +55,17 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: tool/browser-tests/package-lock.json
+          cache-dependency-path: |
+            tool/browser-tests/package-lock.json
+            tool/web-video/package-lock.json
       - name: Browser autofill regression
         shell: bash
         run: |
           set -euo pipefail
           npm ci --prefix tool/browser-tests --ignore-scripts
+          npm ci --prefix tool/web-video --ignore-scripts
+          npm run build --prefix tool/web-video
+          git diff --exit-code -- web/web-video
           python3 tool/serve_web.py >/tmp/deltiecord-preview.log 2>&1 &
           preview_pid=$!
           trap 'kill "$preview_pid"' EXIT
@@ -69,6 +74,15 @@ jobs:
           flutter test --no-pub --platform chrome test/browser_inline_animation_test.dart test/browser_file_picker_test.dart test/browser_image_paste_test.dart test/web_login_form_test.dart test/video_optimizer_browser_test.dart test/browser_visibility_test.dart test/browser_keyboard_geometry_test.dart
           node tool/web_autofill_test.mjs
           node tool/web_push_preview_browser_test.mjs
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          mkdir -p .dart_tool/webcodecs
+          ffmpeg -v error -f lavfi -i testsrc2=size=160x96:rate=30:duration=2 \
+            -f lavfi -i sine=frequency=440:duration=2 -c:v libx264 -pix_fmt yuv420p \
+            -c:a aac -movflags +faststart -y .dart_tool/webcodecs/source.mp4
+          node tool/web_video_browser_test.mjs
       - name: Upload browser regression diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

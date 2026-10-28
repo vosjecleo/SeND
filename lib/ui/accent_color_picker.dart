@@ -258,10 +258,6 @@ class _AccentColorPickerState extends State<AccentColorPicker> {
                 max: 1,
                 onChanged: (value) => _setHsv(_hsv.withValue(value)),
               ),
-              const Text(
-                'Drag around the wheel for hue and saturation, or enter an '
-                'exact six-digit hex value.',
-              ),
             ],
           ),
         ),

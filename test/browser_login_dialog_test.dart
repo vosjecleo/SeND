@@ -30,7 +30,10 @@ void main() {
     );
     await tester.tap(find.text('Check server'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('password sign-in only'), findsOneWidget);
+    expect(
+      find.textContaining('only supports password sign-in'),
+      findsOneWidget,
+    );
     expect(find.text('Continue with OIDC'), findsNothing);
     expect(find.text('Continue with SSO'), findsNothing);
     backend.offerOidc = true;

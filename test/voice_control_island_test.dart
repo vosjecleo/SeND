@@ -72,7 +72,7 @@ void main() {
       expect(find.byIcon(Icons.help), findsOneWidget);
       await tester.tap(find.byIcon(Icons.help));
       await tester.pumpAndSettle();
-      expect(find.textContaining('RTC ping unavailable'), findsOneWidget);
+      expect(find.textContaining('Ping unavailable'), findsOneWidget);
       backend.health = const RtcConnectivity(
         state: RtcConnectivityState.connected,
         pingMilliseconds: 42,

@@ -144,7 +144,7 @@ class _MobileChannelManagerState extends State<_MobileChannelManager> {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Your power level does not permit changing this Space layout.',
+                  'You don\'t have permission to change this layout.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -179,10 +179,7 @@ class _MobileChannelManagerState extends State<_MobileChannelManager> {
                 ),
                 const Divider(height: 28),
                 Text('Rooms', style: Theme.of(context).textTheme.titleMedium),
-                const Text(
-                  'Drag the handles to reorder, then tap the checkmark to '
-                  'save. Assign a category below.',
-                ),
+
                 const SizedBox(height: 6),
                 ReorderableListView.builder(
                   key: const ValueKey('mobile-room-order'),
@@ -237,8 +234,7 @@ class _MobileChannelManagerState extends State<_MobileChannelManager> {
                   '${backend.spaceChannelLayoutPowerLevel(spaceId)}',
                 ),
                 const Text(
-                  'The default is Administrator (100). Space admins can '
-                  'change this from the desktop Space settings.',
+                  'Space admins can change this in Space settings on desktop.',
                 ),
               ],
             ),

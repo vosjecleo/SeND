@@ -72,11 +72,26 @@ void main() {
     },
   );
   test(
-    'compression defaults preserve existing image behavior and bounded video profiles',
+    'compression defaults use Balanced images and bounded Balanced videos',
     () {
       const prefs = AppPreferences();
-      expect(prefs.imageCompression, ImageCompressionPreset.original);
-      expect(prefs.shareUploadCategories, false);
+      expect(prefs.imageCompression, ImageCompressionPreset.balanced);
+      expect(
+        ImageCompressionPreset.parse(null),
+        ImageCompressionPreset.balanced,
+      );
+      expect(
+        ImageCompressionPreset.parse('original'),
+        ImageCompressionPreset.original,
+      );
+      expect(prefs.shareUploadCategories, true);
+      expect(
+        prefs
+            .copyWith(shareUploadCategories: false)
+            .copyWith(fontScale: 1.1)
+            .shareUploadCategories,
+        false,
+      );
       expect(prefs.videoCompression, VideoCompressionPreset.balanced);
       expect(VideoCompressionPreset.smaller.maximumBytes, 12 * 1024 * 1024);
       expect(VideoCompressionPreset.balanced.maximumBytes, 24 * 1024 * 1024);

@@ -88,6 +88,19 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
+## Build 133 preflight
+
+The local 0.9.42+133 inspection build passed 837 Flutter tests, with four skips,
+clean static analysis and the 450-entry UI-copy audit. Chromium checks exercised
+real H.264 export, AAC preservation, trim/crop/rotation, cancellation and browser
+adapter metadata. Server tests and isolated Synapse/PostgreSQL checks covered
+quota enforcement, confirmed deletion, legacy-schema migration and preview-to-
+production activation. Cleo approved the installed laptop preview for release.
+
+Physical iOS WebCodecs, Sunup closed-app delivery, automatic limited-sync gap
+recovery and the existing performance/avatar investigations remain separate
+open items. CI publication and deployment results must be recorded after release.
+
 ## Recorded release: 0.9.39+126
 
 Published as Latest on 2026-10-10, with Deltie's PWA and download mirror updated.

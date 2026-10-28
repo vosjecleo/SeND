@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:deltiecord/services/history_index_native.dart';
 import 'package:deltiecord/services/history_index_limits.dart';
+import 'package:deltiecord/services/message_search.dart';
 
 // SQLCipher on Android can return numeric PRAGMA results as text.
 class _TextPragmaDatabase implements Database {
@@ -361,6 +362,21 @@ void main() {
     expect(await query(), isEmpty);
     expect((await store.settings())['enabled'], false);
     expect((await store.settings())['prompted'], true);
+  });
+  test('UI phrase queries match contiguous text in the native index', () async {
+    await store.configure(true, 25);
+    await store.put(
+      [
+        row('exact', body: 'Well, here you go!'),
+        row('separated', body: 'here is something you can go to'),
+        row('partial', body: 'lets go'),
+      ],
+      true,
+      25,
+    );
+    expect(await query(terms: MessageSearchQuery.parse('here you go').terms), [
+      'exact',
+    ]);
   });
   test(
     'media-only and text opt-out remove all text from both stores',

@@ -3,8 +3,12 @@
 CREATE TABLE IF NOT EXISTS send_storage_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     default_bytes BIGINT NOT NULL CHECK (default_bytes > 0),
-    enforce_all BOOLEAN NOT NULL DEFAULT TRUE
+    enforce_all BOOLEAN NOT NULL DEFAULT TRUE,
+    classification_since BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
 );
+ALTER TABLE send_storage_policy ADD COLUMN IF NOT EXISTS classification_since BIGINT
+    NOT NULL DEFAULT (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT;
+ALTER TABLE send_storage_policy ADD COLUMN IF NOT EXISTS enforce_all BOOLEAN NOT NULL DEFAULT TRUE;
 INSERT INTO send_storage_policy(id,default_bytes) VALUES (1, 12884901888) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS send_storage_limits (
     user_id TEXT PRIMARY KEY,

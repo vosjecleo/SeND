@@ -3,6 +3,61 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 133 (2026-10-28)
+
+- Fix Android clipboard-toolbar taps and search-storage opening with SQLCipher.
+  Keep mobile navigation and timeline widgets mounted during drawer gestures;
+  avoid repeated keyboard-geometry work. Further mobile performance and keyboard
+  language-switch/resume checks remain open.
+- Add bounded history downloads for local search, with pause/resume, saved
+  progress and a larger-limit choice when full. Apply DMs-only, DM/group-chat or
+  all-chat scope to downloads and incoming indexing. Download events, not media.
+- Search for a contiguous, case-insensitive phrase after filters. Give Messages,
+  Files, Links and Media explicit ten-item pages, page-number navigation and
+  current/total counters; mark incomplete totals while history remains. Files
+  and Links use independent history cursors, and From offers room members.
+- Keep references to encrypted events missing from downloaded search history.
+  Review their room, sender, timestamp and event ID, then retry only those
+  events. Preserve failures across restarts and quota pauses. Older downloads
+  need a new scan to collect references they did not originally save.
+- Add fullscreen attachment editing. Images have crop/aspect locks, rotation,
+  marker/highlighter, undo/redo, quality and spoiler controls. Videos have trim,
+  crop, rotation, mute, quality and spoilers. Desktop sections stay open; mobile
+  has a large fixed preview and bottom tool controls. Preview/export use the
+  same rounded marker paths. Keep animated image frames and timing.
+- Match editor quality to settings, with Balanced defaults and saved choices
+  preserved. Export edited native videos through FFmpeg or Android Media3 without
+  recompressing the result again during send. Preserve captions and spoilers.
+- Add browser-local WebCodecs video editing/compression with a self-hosted
+  worker and fast-start H.264/AAC MP4 output. Preserve compatible audio and reject
+  unsupported tracks instead of silently dropping sound. Offer explicit original
+  upload on failure. Cancel work on request or backgrounding. Real iOS PWA codec
+  and memory validation is still needed.
+- Split Local storage from Server storage. Add an authenticated Synapse module
+  for uploaded-media usage, category graphs, a 12 GiB default allowance and
+  owner-confirmed pruning with protected-asset checks. Existing over-quota media
+  is retained. Older unclassified uploads appear as Legacy; new categorization
+  defaults on while saved opt-outs remain respected. Other homeservers need the
+  module installed separately.
+- Support Compose v1/v2 storage setup, cached-image checks, explicit module
+  permissions under restrictive umasks and Synapse-only recreation. Back up code,
+  configuration and quota policy for upgrades/rollback. Production activation
+  enables enforcement and real confirmed deletion; preview mode remains explicit.
+- Refresh visible profile metadata in tiers and reuse unchanged media. Bound
+  profile/preview caches, avoid eager offscreen avatar downloads and open profile
+  banners/avatars fullscreen on request.
+- Fix outgoing replies being highlighted as though they pinged their own author;
+  keep quoted fallback links separate from actual mentions. Centre mobile avatars
+  against single-line messages. Tighten Android notification-worker cleanup.
+- Apply Cleo's UI-copy review: 174 rewrites, 43 prose removals and 233 retained
+  entries. Preserve controls, accessibility, privacy/deletion/recovery warnings
+  and platform gating. Keep credits and licences accessible from About.
+
+Automatic recovery of history omitted by a limited reconnect sync is designed
+but not included. Sunup closed-app delivery, long-session avatar flicker and the
+remaining mobile performance reports still need device checks. See
+[Known issues](KNOWN_ISSUES.md).
+
 ## SeND 0.9.41 build 132 (2026-10-26)
 
 - Highlight whole mention messages, including your own messages and self-chats,

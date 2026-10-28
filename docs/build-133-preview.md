@@ -1,9 +1,10 @@
-# 0.9.42+133 preview
+# 0.9.42+133 local acceptance record
 
-Local pre-production build, not published. The first Arch and signed arm64
-Android previews were installed over the existing apps. Accounts and data were
-retained. The editor/search follow-up needs a new preview installation.
-Android's ABI-specific installer code is 2133.
+This records the local inspection builds before publication. Arch and signed
+arm64 Android previews were installed over the existing apps, retaining accounts
+and data. Android's ABI-specific installer code is 2133. Cleo approved the final
+laptop build after the UI-copy rewrite. See the [changelog](../CHANGELOG.md) for
+release scope; CI and deployment are separate from these local results.
 
 ## Included
 
@@ -23,9 +24,13 @@ Android's ABI-specific installer code is 2133.
   reference comparison. Offscreen room avatars are no longer eagerly fetched.
 - Fullscreen profile images, bounded profile-media reuse and a byte budget for
   shared link-preview images.
-- Tapping a pending image opens a fullscreen editor with folded crop, rotation,
-  aspect-ratio lock, markup and quality controls. Marker and highlighter strokes
-  export into the image. Animated images keep their animation.
+- Tapping a pending image opens a fullscreen editor with crop, rotation,
+  aspect-ratio lock, markup and quality controls. Desktop sections stay open;
+  mobile uses bottom tool icons. Image and video quality follow settings, with
+  Balanced as the default. Crop corners have larger hit targets. The eye button
+  toggles a spoiler haze without baking it into the uploaded image.
+- Marker and highlighter export use the same rounded paths as the preview.
+  Animated images keep their animation.
 - Pending videos open a fullscreen trim, crop, rotation, mute and quality editor.
   Native exports use high quality or 12 MiB/24 MiB presets. Video editing is not
   available in the PWA; it can still send the unchanged original.
@@ -43,6 +48,9 @@ Android's ABI-specific installer code is 2133.
 
 ## Validation
 
+Android clipboard actions and the corrected marker export are user-confirmed.
+Sunup notifications have not been device-tested for this preview.
+
 - 809 native Flutter tests passed, four skipped.
 - Three Chromium storage tests passed, including a multi-gigabyte quota regression
   that caught a JavaScript bit-shift bound before the final preview rebuild.
@@ -55,11 +63,13 @@ Android's ABI-specific installer code is 2133.
   arm64 ABI and signing identity were verified against the previous preview.
 - Static analysis and whitespace checks passed before packaging.
 
-Production Synapse, the public PWA, CI publication and the download mirror are
-unchanged. Server storage is not enabled on live Deltie yet; that page reports
-unavailable until deployment. The API tests used synthetic accounts and isolated
-containers, not the production database. The staged installer requires privileged
-operator checks before applying it during the deployment window.
+At the first preview, production Synapse, the PWA and download mirror were
+unchanged, and Server storage reported unavailable until module installation.
+The API tests used synthetic accounts and isolated containers. The operator
+subsequently installed and activated storage on Deltie: the 12 GiB default is
+enforced, API access is no longer preview-restricted and deletion is not dry-run.
+These settings were checked read-only before publication; no additional server
+activation is needed for this release.
 
 ## Preview checks
 
@@ -84,6 +94,67 @@ crop, rotation and muting, phone/desktop editor layout and drawing, catalog pagi
 rich-link and selected-member filtering tests, and browser index checks. An
 isolated account-limited storage preview passed with quota enforcement off and
 pruning in dry-run mode. These are local tests, not a live server installation.
+
+The gallery-style editor revision passed 827 native tests, with four skipped,
+and clean static analysis. Tests cover settings-backed quality, saved spoilers,
+crop drags outside the image boundary and diagonal/translucent stroke pixels
+matching the preview renderer.
+
+## Follow-up acceptance
+
+Search text now matches a contiguous, case-insensitive phrase in the message
+body, after removing filters. Text results use ten-item pages. Page totals show
+`+` while older history remains unsearched. These changes passed 29 targeted
+tests, browser-index checks and static analysis before the final laptop build.
+
+WebCodecs video processing now runs in a same-origin worker, with a pinned,
+self-hosted Mediabunny dependency for MP4/MOV/WebM parsing and MP4 writing.
+Supported clips export as fast-start H.264/AAC MP4. Compatible audio is copied;
+unsupported tracks cause an error, not a silent audio drop. Compression uses
+the selected 12/24 MiB preset. Browser editing accepts inputs up to 256 MiB,
+4K coded/display dimensions and one hour; high-quality edits have a 128 MiB
+output cap. Cancellation or backgrounding terminates the worker. The original
+draft stays available. Real Chromium exports and Dart/browser adapter tests
+passed; a real iOS PWA check is still required. These checks do not establish
+physical-device codec support.
+
+Validation for the WebCodecs/retry changes: 836 native tests passed, four skipped;
+the browser adapter and real H.264/AAC export checks passed, as did the release
+web validation build. The final quota-reopen guard passed the targeted download
+tests. Static analysis is clean. These are test builds, not preview installs.
+
+The final inspected laptop build passed 837 native tests, with four skips,
+clean static analysis and all 450 UI-copy decisions: 174 rewrites, 43 removals
+and 233 unchanged entries. Codecs passed real Chromium export checks after the
+copy changes. The generated module worker uses `.js` for nginx MIME compatibility.
+
+History downloads now retain failed event IDs, rooms, senders and timestamps
+in their local checkpoint. Review is paginated, and Retry decryption fetches
+only those events, retries key recovery and indexes successes. Pauses, quota
+refusals and fetch/decryption failures retain unresolved references. The list
+is bounded; reaching its limit pauses before skipping a page. Old downloads
+stored only a count and need a fresh scan to collect event references.
+
+The index remains device-local. Reconnect indexes received timeline events, but
+does not automatically backfill a gap omitted from a limited Matrix sync. A long
+offline period can leave missing search context until history is fetched. The
+history-download tool can fill it within the selected scope and cache limit;
+automatic checkpoint-based gap recovery is not implemented yet.
+
+### Proposed automatic gap recovery
+
+Keep a per-room contiguous coverage boundary, identified by event ID rather
+than device time. When a limited sync omits history, save its pagination token
+and the previous boundary as a pending gap before advancing coverage. Fetch
+backward in small, rate-limited event-only batches until that boundary is found.
+Save each cursor only after index admission and failed-event bookkeeping succeed.
+
+Use a separate checkpoint from manual history downloads. Run one foreground job
+at a time, yielding to manual downloads and retries. Respect the chosen chat
+scope and pause at the cache limit without pruning context to make room for a
+backfill. Leave unresolved gaps visible if access, keys or history visibility
+prevent recovery. A newly joined room without a boundary should not trigger an
+automatic download of its entire history.
 
 Further performance, GPU and comprehensive cache/traffic profiling is deferred
 by request. No sustained-frame-rate or total-cache-size fix is claimed.

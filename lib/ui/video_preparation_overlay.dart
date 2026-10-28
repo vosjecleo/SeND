@@ -72,9 +72,6 @@ class VideoPreparationOverlay extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              const Text(
-                                'Original quality may use more data. Nothing has been uploaded yet.',
-                              ),
                             ] else ...[
                               LinearProgressIndicator(
                                 value: state.progress == 0

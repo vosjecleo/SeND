@@ -57,7 +57,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Preview Name'), findsWidgets);
-    expect(find.text('Edit profile — live preview'), findsOneWidget);
+    expect(find.text('Edit profile'), findsOneWidget);
     expect(find.text('Profile outline & gradient — top'), findsOneWidget);
     expect(find.text('Profile gradient — bottom'), findsOneWidget);
   });
@@ -80,7 +80,7 @@ void main() {
       await tester.tap(find.byTooltip('Edit profile'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Edit profile — live preview'), findsOneWidget);
+      expect(find.text('Edit profile'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Display name'), findsOneWidget);
       expect(find.byType(SingleChildScrollView), findsWidgets);
       expect(tester.takeException(), isNull);

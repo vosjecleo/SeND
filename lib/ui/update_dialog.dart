@@ -49,13 +49,13 @@ Future<void> showReleaseUpdate(
               ),
               if (kIsWeb)
                 const Text(
-                  'Finish recordings and uploads before reloading. Unsent drafts may be lost.',
+                  'Finish recordings and uploads before reloading; unsent drafts may be lost.',
                 ),
               if (canInstall)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
                   child: Text(
-                    'Finish recordings and uploads first. SeND will download and verify the installer, then open Windows setup. Setup may ask you to close SeND; it keeps your account data.',
+                    'Finish recordings and uploads before installing. Your account data will be kept.',
                   ),
                 ),
               if (canInstallLinux)
@@ -63,8 +63,8 @@ Future<void> showReleaseUpdate(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     suffix == '-linux-appimage-x86_64.AppImage'
-                        ? 'Download and verify the update, then restart when ready. SeND keeps one previous AppImage for rollback. Finish calls, recordings and uploads, and save unsent drafts before restarting.'
-                        : 'SeND will download and verify the package. Your desktop will ask for administrator authentication. The package manager may download dependencies outside your SOCKS proxy. Finish calls, recordings and uploads, and save unsent drafts before restarting.',
+                        ? 'Finish calls, recordings and uploads, and save your drafts before restarting.'
+                        : 'Finish calls, recordings and uploads, and save your drafts before restarting. Installation needs administrator approval and may download files outside your SOCKS proxy.',
                   ),
                 ),
               if (busy)

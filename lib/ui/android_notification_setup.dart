@@ -177,15 +177,10 @@ class _AndroidNotificationSetupState extends State<AndroidNotificationSetup> {
       const SizedBox(height: 12),
       Text(switch (_choice) {
         'builtin' =>
-          'No extra app needed. SeND keeps a quiet notification while listening for messages. '
-              'Allow background battery use for reliable delivery. This may use more battery. '
-              'Force-stopping SeND stops alerts until you reopen it.',
+          'Allow background use for reliable alerts; SeND keeps a quiet notification visible and may use more battery.',
         'unified' =>
-          'Use ntfy or Sunup if you already have one installed. Allow it to run in the background. '
-              'Sunup uses Deltie’s gateway to forward room and event IDs to Mozilla, not message text. '
-              'ntfy uses its own server’s gateway.',
-        _ =>
-          'You may miss messages while SeND is closed. You can change this in Settings > Notifications.',
+          'Allow ntfy or Sunup to run in the background. Sunup sends room and event IDs through Deltie\'s gateway to Mozilla, not message text; ntfy uses its own server.',
+        _ => 'You may miss notifications while SeND is closed.',
       }),
       const SizedBox(height: 12),
       Wrap(

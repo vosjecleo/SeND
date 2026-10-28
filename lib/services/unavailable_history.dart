@@ -19,8 +19,7 @@ List<ChatMessage> collapseUnavailableHistory(
       id: first.id,
       sender: '',
       body:
-          '$count earlier messages could not be decrypted. '
-          'They will appear if their keys become available.',
+          'Can\'t read $count earlier messages without their encryption keys.',
       timestamp: first.timestamp,
       pending: false,
       system: true,

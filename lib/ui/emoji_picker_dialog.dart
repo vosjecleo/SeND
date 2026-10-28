@@ -240,8 +240,7 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
       );
       return Tooltip(
         message:
-            '${entry.name}  :${entry.shortcode}:\n'
-            'Long-press to ${favourite ? 'unfavourite' : 'favourite'}',
+            '${entry.name}  :${entry.shortcode}:\nHold to ${favourite ? 'unfavourite' : 'favourite'}',
         child: InkWell(
           key: ValueKey('emoji-picker-result-${entry.favouriteKey}'),
           onTap: () {

@@ -95,7 +95,7 @@ internal class VideoPreparationBridge(private val context: Context, messenger: B
                                         val callback = pending
                                         pending = null
                                         transformer = null
-                                        callback?.error("encode", "This device could not optimize the video. Try original quality.", null)
+                                        callback?.error("encode", "Couldn't process this video. Try Original.", null)
                                     }
                                 }).build()
                             val media = MediaItem.Builder().setUri(input.toURI().toString())
