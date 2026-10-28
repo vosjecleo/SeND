@@ -28,6 +28,8 @@ import 'profile_editor_dialog.dart';
 import 'deltiecord_theme.dart';
 import 'android_notification_setup.dart';
 import 'history_index_settings.dart';
+import 'server_storage_settings.dart';
+import 'media_compression_settings.dart';
 import 'notification_diagnostics.dart';
 import '../services/favourite_reactions_store.dart';
 import '../services/gif_service.dart';
@@ -45,6 +47,7 @@ enum _SettingsPage {
   appearance,
   accessibility,
   storage,
+  serverStorage,
   shortcuts,
   about,
 }
@@ -320,6 +323,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       children: [
         Expanded(
           child: ListView(
+            key: const ValueKey('settings-navigation-list'),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             children: [
               for (final group in const <String, List<_SettingsPage>>{
@@ -339,6 +343,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                 'App': [
                   _SettingsPage.notifications,
                   _SettingsPage.storage,
+                  _SettingsPage.serverStorage,
                   _SettingsPage.about,
                 ],
               }.entries) ...[
@@ -963,7 +968,12 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     _SettingsPage.privacy => _privacy(),
     _SettingsPage.appearance => _appearance(),
     _SettingsPage.accessibility => _accessibility(),
-    _SettingsPage.storage => _section('Storage', [
+    _SettingsPage.serverStorage => _section('Server storage', [
+      ServerStorageSettings(backend: backend),
+    ]),
+    _SettingsPage.storage => _section('Local storage', [
+      MediaCompressionSettings(backend: backend),
+      const Divider(height: 28),
       HistoryIndexSettings(backend: backend),
       const Divider(height: 28),
       const Text(
@@ -1220,6 +1230,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           }
           return DeltiecordProfileCard(
             profile: profile,
+            loadImage: (banner) =>
+                backend.getProfileImage(profile.userId, banner: banner),
             onEdit: () async {
               final changed = await showProfileEditor(
                 context,
@@ -1451,6 +1463,17 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _privacy() {
     final preferences = backend.preferences;
     return _section('Privacy & presence', [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Categorize encrypted uploads'),
+        subtitle: const Text(
+          'Share upload types and GIF sources with your homeserver for storage management. Off by default. Message text, filenames and encryption keys are not sent.',
+        ),
+        value: preferences.shareUploadCategories,
+        onChanged: (value) => backend.updatePreferences(
+          preferences.copyWith(shareUploadCategories: value),
+        ),
+      ),
       SocksProxySettingsTile(homeserver: backend.homeserver),
       const Divider(height: 28),
       DropdownButtonFormField<DirectLinkPreviewMode>(
@@ -2152,6 +2175,7 @@ IconData _iconFor(_SettingsPage page) => switch (page) {
   _SettingsPage.appearance => Icons.palette_outlined,
   _SettingsPage.accessibility => Icons.accessibility_new,
   _SettingsPage.storage => Icons.storage_outlined,
+  _SettingsPage.serverStorage => Icons.cloud_outlined,
   _SettingsPage.shortcuts => Icons.keyboard_outlined,
   _SettingsPage.about => Icons.info_outline,
 };
@@ -2167,6 +2191,7 @@ String _labelFor(_SettingsPage page) => switch (page) {
   _SettingsPage.appearance => 'Appearance',
   _SettingsPage.accessibility => 'Accessibility',
   _SettingsPage.storage => 'Storage',
+  _SettingsPage.serverStorage => 'Server storage',
   _SettingsPage.shortcuts => 'Shortcuts',
   _SettingsPage.about => 'About',
 };

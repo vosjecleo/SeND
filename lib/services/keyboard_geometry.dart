@@ -18,6 +18,24 @@ class KeyboardGeometry {
   final double? physicalViewportHeight;
   final int? inputSubtype;
   bool get settled => visible != null && focused && !animating;
+  @override
+  bool operator ==(Object other) =>
+      other is KeyboardGeometry &&
+      other.visible == visible &&
+      other.physicalBottom == physicalBottom &&
+      other.focused == focused &&
+      other.animating == animating &&
+      other.physicalViewportHeight == physicalViewportHeight &&
+      other.inputSubtype == inputSubtype;
+  @override
+  int get hashCode => Object.hash(
+    visible,
+    physicalBottom,
+    focused,
+    animating,
+    physicalViewportHeight,
+    inputSubtype,
+  );
 
   double bottomForView(double physicalHeight, double logicalHeight) {
     if (visible != true || physicalHeight <= 0) return 0;

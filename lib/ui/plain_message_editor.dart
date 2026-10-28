@@ -9,6 +9,7 @@ import '../services/composer_editing.dart';
 import 'composer_emoji_span.dart';
 import 'rich_message.dart';
 import 'inline_composer_preview.dart';
+import 'selection_toolbar.dart';
 
 /// Plain text input. The legacy document is only a draft/emoji-offset codec;
 /// no rich editor, automatic formatting, HTML paste or formatting shortcuts.
@@ -110,6 +111,26 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
     );
   }
 
+  Widget _buildSelectionToolbar(
+    BuildContext context,
+    EditableTextState state,
+  ) => SelectionToolbar(
+    anchors: state.contextMenuAnchors,
+    items: state.contextMenuButtonItems
+        .map(
+          (item) => item.type == ContextMenuButtonType.paste
+              ? ContextMenuButtonItem(
+                  type: ContextMenuButtonType.paste,
+                  onPressed: () {
+                    state.hideToolbar();
+                    _paste();
+                  },
+                )
+              : item,
+        )
+        .toList(),
+  );
+
   @override
   void dispose() {
     widget.controller.removeListener(_fromDocument);
@@ -153,24 +174,7 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
           hintText: widget.placeholder,
           hintStyle: widget.hintStyle,
         ),
-        contextMenuBuilder: (context, state) => TextFieldTapRegion(
-          child: AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: state.contextMenuAnchors,
-            buttonItems: state.contextMenuButtonItems
-                .map(
-                  (item) => item.type == ContextMenuButtonType.paste
-                      ? ContextMenuButtonItem(
-                          type: ContextMenuButtonType.paste,
-                          onPressed: () {
-                            state.hideToolbar();
-                            _paste();
-                          },
-                        )
-                      : item,
-                )
-                .toList(),
-          ),
-        ),
+        contextMenuBuilder: _buildSelectionToolbar,
       ),
     ),
   );

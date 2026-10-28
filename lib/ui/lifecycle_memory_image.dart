@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import '../services/image_animation.dart';
+export '../services/image_animation.dart' show hasAnimatedImageHeader;
 
 bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
     state == null ||
@@ -10,35 +12,6 @@ bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
     // Desktop loses input focus while remaining visible (also when popups or
     // the Windows clipboard own focus). Only hidden/paused stops playback.
     state == AppLifecycleState.inactive;
-
-bool hasAnimatedImageHeader(Uint8List bytes) {
-  bool at(int offset, String value) =>
-      bytes.length >= offset + value.length &&
-      List.generate(
-        value.length,
-        (i) => bytes[offset + i] == value.codeUnitAt(i),
-      ).every((match) => match);
-  if (at(0, 'GIF87a') || at(0, 'GIF89a')) return true;
-  // Cropped animated profile images are APNG, not GIF. Stop at the first
-  // pixel-data chunk; animation control must precede it in a valid APNG.
-  if (bytes.length >= 8 && bytes[0] == 137 && at(1, 'PNG\r\n\u001a\n')) {
-    final data = ByteData.sublistView(bytes);
-    for (var offset = 8; offset + 12 <= bytes.length;) {
-      final length = data.getUint32(offset);
-      if (length > bytes.length - offset - 12) return false;
-      if (at(offset + 4, 'acTL')) return length == 8;
-      if (at(offset + 4, 'IDAT') || at(offset + 4, 'IEND')) return false;
-      offset += length + 12;
-    }
-  }
-  // WebP extended-header feature bit 1 indicates animation. Imported Telegram
-  // animations often arrive as WebP even when the message omits MIME metadata.
-  return bytes.length >= 21 &&
-      at(0, 'RIFF') &&
-      at(8, 'WEBP') &&
-      at(12, 'VP8X') &&
-      (bytes[20] & 2) != 0;
-}
 
 /// GIF providers also serve looping MP4/WebM renditions.
 bool shouldLoopLinkPreview(Uri pageUrl) {

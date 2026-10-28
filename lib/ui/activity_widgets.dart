@@ -6,6 +6,7 @@ import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../models/user_activity.dart';
 import 'deltiecord_theme.dart';
+import 'profile_watch.dart';
 
 class ActivityScope extends InheritedWidget {
   const ActivityScope({required this.backend, required super.child, super.key});
@@ -30,12 +31,14 @@ class ActivityWatch extends StatefulWidget {
     required this.userId,
     required this.presence,
     required this.child,
+    this.roomId,
     super.key,
   });
   final ChatBackend backend;
   final String? userId;
   final UserPresence presence;
   final Widget child;
+  final String? roomId;
 
   @override
   State<ActivityWatch> createState() => _ActivityWatchState();
@@ -97,7 +100,13 @@ class _ActivityWatchState extends State<ActivityWatch> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) => (widget.userId ?? widget.roomId) == null
+      ? widget.child
+      : ProfileWatch(
+          backend: widget.backend,
+          id: (widget.userId ?? widget.roomId)!,
+          child: widget.child,
+        );
 }
 
 /// Compact activity in the timeline header only; other presence surfaces and

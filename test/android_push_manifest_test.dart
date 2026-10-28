@@ -3,6 +3,26 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'keyboard geometry reads cannot trigger another Android inset layout',
+    () {
+      final source = File(
+        'android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt',
+      ).readAsStringSync();
+      final branch = source
+          .split('call.method == "keyboardGeometry"')
+          .last
+          .split('call.method == "keyboardVisible"')
+          .first;
+      expect(branch, contains('keyboardGeometry?.snapshot()'));
+      expect(branch, isNot(contains('.refresh(')));
+      expect(branch, isNot(contains('requestApplyInsets')));
+      expect(
+        source,
+        contains('keyboardGeometry?.refresh(resetAnimation = true)'),
+      );
+    },
+  );
   test('local shell profiling does not enable debugging', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
@@ -91,6 +111,9 @@ void main() {
     expect(receiver, contains('DeltiecordPushWorker.enqueue'));
     expect(worker, contains('deltiecordPushBackgroundMain'));
     expect(worker, contains('resolveNotification'));
+    expect(worker, contains('NonCancellable + Dispatchers.Main'));
+    expect(worker, contains('releaseOwnedEngine(engine)'));
+    expect(worker, contains('"shutdown"'));
     expect(publisher, contains('Notification.MessagingStyle'));
     expect(publisher, contains('setData(mime, uri)'));
     expect(

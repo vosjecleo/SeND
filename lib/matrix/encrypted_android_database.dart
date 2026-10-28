@@ -53,11 +53,12 @@ Future<cipher.Database> openEncryptedAndroidDatabase(String path) async {
         await database.close();
         rethrow;
       }
-    } catch (_) {
+    } catch (error) {
       // SQL plugin exceptions may include bound arguments (including the key).
       // Never surface those through the app's generic startup error reporting.
       throw StateError(
-        'Could not open or migrate the protected local database. Existing data has not been reset.',
+        'Could not open or migrate the protected local database. Existing data has not been reset. '
+        'SQLITE_${error is cipher.DatabaseException ? error.getResultCode() ?? 0 : 0}',
       );
     }
   } finally {

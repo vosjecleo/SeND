@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:web/web.dart' as web;
 
 import '../models/chat_models.dart';
+import '../models/media_compression.dart';
 
 bool get videoOptimizationSupported => false;
 
@@ -120,4 +121,5 @@ Future<AttachmentDraft> optimizeVideo(
   AttachmentDraft draft, {
   required void Function(double) progress,
   required bool Function() canceled,
+  VideoCompressionPreset preset = VideoCompressionPreset.balanced,
 }) => probeVideo(draft);

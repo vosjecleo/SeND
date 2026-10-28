@@ -160,11 +160,15 @@ bool hasUsefulPreview(LinkPreview preview) =>
 class LinkPreviewCache {
   LinkPreviewCache({
     this.maximumEntries = 128,
+    this.maximumImageBytes = 16 * 1024 * 1024,
     this.successLifetime = const Duration(hours: 6),
     this.failureLifetime = const Duration(minutes: 2),
   });
 
   final int maximumEntries;
+  final int maximumImageBytes;
+  int _imageBytes = 0;
+  int get cachedImageBytes => _imageBytes;
   final Duration successLifetime;
 
   /// How long an unavailable preview suppresses another network attempt.
@@ -183,24 +187,35 @@ class LinkPreviewCache {
     final key = _cacheKey(url);
     final entry = _entries.remove(key);
     if (entry == null) return (false, null);
-    if (DateTime.now().isAfter(entry.expiresAt)) return (false, null);
+    if (DateTime.now().isAfter(entry.expiresAt)) {
+      _imageBytes -= entry.preview?.imageBytes?.length ?? 0;
+      return (false, null);
+    }
     _entries[key] = entry;
     return (true, entry.preview);
   }
 
   void put(Uri url, LinkPreview? preview) {
     final key = _cacheKey(url);
-    _entries.remove(key);
+    _imageBytes -= _entries.remove(key)?.preview?.imageBytes?.length ?? 0;
+    if ((preview?.imageBytes?.length ?? 0) > maximumImageBytes) return;
     _entries[key] = _CachedPreview(
       preview,
       DateTime.now().add(preview == null ? failureLifetime : successLifetime),
     );
-    while (_entries.length > maximumEntries) {
-      _entries.remove(_entries.keys.first);
+    _imageBytes += preview?.imageBytes?.length ?? 0;
+    while (_entries.isNotEmpty &&
+        (_entries.length > maximumEntries || _imageBytes > maximumImageBytes)) {
+      _imageBytes -=
+          _entries.remove(_entries.keys.first)?.preview?.imageBytes?.length ??
+          0;
     }
   }
 
-  void clear() => _entries.clear();
+  void clear() {
+    _entries.clear();
+    _imageBytes = 0;
+  }
 
   String _cacheKey(Uri url) => url.replace(fragment: '').toString();
 }

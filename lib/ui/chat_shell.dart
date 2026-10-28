@@ -3,6 +3,7 @@ import '../services/socks_proxy.dart';
 import 'dart:async';
 import 'video_playback_status.dart';
 import 'activity_widgets.dart';
+import 'attachment_image_editor.dart';
 import 'navigation_polish.dart';
 import 'gif_favourite_button.dart';
 import 'voice_message_composer.dart';
@@ -479,11 +480,7 @@ class _ChatShellState extends State<ChatShell> {
           for (var index = 0; index < attachments.length; index++) {
             final attachment = attachments[index];
             await widget.backend.sendAttachment(
-              AttachmentDraft(
-                bytes: attachment.bytes,
-                name: attachment.name,
-                mimeType: attachment.mimeType,
-                spoiler: attachment.spoiler,
+              attachment.copyWith(
                 caption: index == 0 && text.isNotEmpty ? text : null,
               ),
               roomId: sendingRoomId,
@@ -773,10 +770,7 @@ class _ChatShellState extends State<ChatShell> {
   void _togglePendingSpoiler(int index) {
     final attachment = _pendingAttachments[index];
     setState(() {
-      _pendingAttachments[index] = AttachmentDraft(
-        bytes: attachment.bytes,
-        name: attachment.name,
-        mimeType: attachment.mimeType,
+      _pendingAttachments[index] = attachment.copyWith(
         spoiler: !attachment.spoiler,
       );
     });
@@ -953,6 +947,27 @@ class _ChatShellState extends State<ChatShell> {
                                               _pendingAttachments,
                                           onRemoveAttachment:
                                               _removePendingAttachment,
+                                          onEditAttachment: (index) async {
+                                            final old =
+                                                _pendingAttachments[index];
+                                            final edited =
+                                                await showAttachmentImageEditor(
+                                                  context,
+                                                  old,
+                                                );
+                                            if (!mounted || edited == null) {
+                                              return;
+                                            }
+                                            final current = _pendingAttachments
+                                                .indexOf(old);
+                                            if (current >= 0) {
+                                              setState(
+                                                () =>
+                                                    _pendingAttachments[current] =
+                                                        edited,
+                                              );
+                                            }
+                                          },
                                           onToggleAttachmentSpoiler:
                                               _togglePendingSpoiler,
                                           mentionSuggestions:

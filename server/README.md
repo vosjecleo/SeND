@@ -103,3 +103,51 @@ The original 106 deployment left this privileged rule for the operator;
 verify the live configuration before making any changes. Historical scripts
 must not be applied blindly after subsequent hosting updates.
 See [deployment guidance](../docs/web-deployment.md).
+
+## Account storage and profile metadata
+
+`send_storage.py` adds authenticated storage controls and batched profile
+metadata to Synapse 1.159.0. `storage_schema.sql` provides a 12 GiB original-upload
+allowance, per-account overrides and concurrent PostgreSQL admission checks.
+It does not count message databases, generated thumbnails, URL-preview caches
+or backups toward that allowance. Existing over-quota uploads are retained.
+
+The adapter and installer target a monolithic Synapse service. Split-worker
+deployments need separate module and routing review before installation.
+
+For an existing Docker Compose stack, start with the read-only checks:
+
+```sh
+sudo python3 server/install_storage.py \
+  --compose /path/to/matrix/compose.yaml
+```
+
+Use `--config /path/to/homeserver.yaml` when the configuration is mounted
+separately from `/data`. The installer discovers the data mount, or accepts an
+explicit `--data` path. Add `--apply` only during the planned deployment window.
+It backs up configuration privately and recreates only Synapse. It never changes
+nginx or certificates. Forward `/_synapse/client/send/v1/` through the Matrix
+HTTPS proxy before testing clients. Keep the source bundle together.
+
+The installer is for a first storage-module installation. It refuses to overwrite
+an existing adapter or storage schema. Use `--rollback BACKUP_DIRECTORY` with the
+same stack/configuration arguments to restore configuration and disable the new
+admission trigger. Classification records and media are retained. Review and back
+up the database before deployment; configuration backups are not database backups.
+
+Clients opt into encrypted-upload categorization. Labels contain media ID, type
+and source, never content or keys. Pruning requires an expiring owner-bound
+preview and confirmation, and can break attachments in recipients' histories.
+Unclassified old files are not bulk-deleted. The server never decrypts files to
+guess their type.
+
+For an upgraded account, an operator can set a different allowance in PostgreSQL:
+
+```sql
+INSERT INTO send_storage_limits(user_id, quota_bytes)
+VALUES ('@alice:example.org', 24::bigint * 1024 * 1024 * 1024)
+ON CONFLICT(user_id) DO UPDATE SET quota_bytes=excluded.quota_bytes;
+```
+
+The isolated API and concurrency tests do not deploy this module to production.
+See the [storage investigation](../docs/storage-and-bandwidth-investigation.md).

@@ -869,6 +869,7 @@ class _RoomList extends StatelessWidget {
       return ActivityWatch(
         key: _RoomRowKey(room.id),
         backend: backend,
+        roomId: room.id,
         userId: room.isDirect ? room.directUserId : null,
         presence: room.presence,
         child: _SelectedRoomSurface(

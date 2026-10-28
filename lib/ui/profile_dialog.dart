@@ -306,6 +306,10 @@ class _ProfilePopoverState extends State<_ProfilePopover> {
               child: DeltiecordProfileCard(
                 scrollable: true,
                 profile: profile,
+                loadImage: (banner) => widget.backend.getProfileImage(
+                  profile.userId,
+                  banner: banner,
+                ),
                 onEdit: widget.own ? () => _edit(profile) : null,
                 onMessage: widget.own
                     ? null
@@ -421,6 +425,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
           return DeltiecordProfileCard(
             scrollable: true,
             profile: profile,
+            loadImage: (banner) =>
+                widget.backend.getProfileImage(profile.userId, banner: banner),
             onEdit: widget.own ? () => _edit(profile) : null,
             onClose: Navigator.of(context).pop,
             onMessage: widget.own

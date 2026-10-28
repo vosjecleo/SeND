@@ -11,6 +11,13 @@ import '../services/pack_reorganization.dart';
 import '../services/socks_proxy.dart';
 import '../services/personal_data.dart';
 import '../services/history_index.dart';
+import '../services/history_download.dart';
+import '../services/history_scope.dart';
+import '../services/server_storage.dart';
+import '../services/image_preparation.dart';
+import '../services/image_animation.dart';
+import '../services/upload_labels.dart';
+import '../services/frame_diagnostics.dart';
 import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
 import 'dart:collection';
@@ -41,6 +48,7 @@ import '../models/login_methods.dart';
 import '../services/auth_browser.dart';
 import '../services/auth_callback.dart';
 import '../models/chat_models.dart';
+import '../models/media_compression.dart';
 import '../models/room_event_visibility.dart';
 import '../services/receipt_positions.dart';
 import '../models/space_administration.dart';
@@ -84,6 +92,7 @@ part 'matrix_crypto.dart';
 part 'matrix_room_operations.dart';
 part 'matrix_administration.dart';
 part 'matrix_messages.dart';
+part 'matrix_history_download.dart';
 part 'matrix_threads.dart';
 part 'matrix_media.dart';
 part 'matrix_profiles.dart';
@@ -445,10 +454,13 @@ class MatrixBackend extends ChatBackend {
     DirectLinkPreviewFetcher? directPreviewFetcher,
     AvatarMediaPool? avatarMediaPool,
     DeviceAppearanceStore? deviceAppearanceStore,
+    HistoryIndex Function(String account)? historyIndexFactory,
   }) : _notifications = notifications ?? const SilentChatNotificationSink(),
        _directPreviewFetcher =
            directPreviewFetcher ?? DirectLinkPreviewFetcher(),
        _avatarMediaPool = avatarMediaPool ?? AvatarMediaPool(),
+       _historyIndexFactory =
+           historyIndexFactory ?? ((account) => HistoryIndex(account)),
        _deviceAppearanceStore =
            deviceAppearanceStore ?? DeviceAppearanceStore();
 
@@ -480,14 +492,152 @@ class MatrixBackend extends ChatBackend {
   final DirectLinkPreviewFetcher _directPreviewFetcher;
   final AvatarMediaPool _avatarMediaPool;
   final DeviceAppearanceStore _deviceAppearanceStore;
+  final HistoryIndex Function(String account) _historyIndexFactory;
+  UploadLabels? _uploadLabels;
+  Future<UploadLabels?>? _openingUploadLabels;
+  final _labelledEvents = <String>{};
+  @override
+  String? get serverStorageWarning => _uploadLabels?.warning;
+  Future<UploadLabels?> _openUploadLabels() {
+    final client = _client;
+    if (client == null ||
+        client.userID == null ||
+        client.homeserver == null ||
+        client.accessToken == null) {
+      return Future.value();
+    }
+    if (_uploadLabels?.account == client.userID) {
+      return Future.value(_uploadLabels);
+    }
+    return _openingUploadLabels ??= (() async {
+      final service = ServerStorageClient(
+        client.httpClient,
+        client.homeserver!,
+        client.accessToken!,
+      );
+      final labels = UploadLabels(client.userID!, (rows) async {
+        if (!identical(client, _client)) throw StateError('Session changed.');
+        if (!_preferences.shareUploadCategories) {
+          throw StateError('Upload categorization is disabled.');
+        }
+        await service.call('labels', {'items': rows});
+      });
+      await labels.open();
+      if (!identical(client, _client)) return null;
+      return _uploadLabels = labels;
+    })().whenComplete(() => _openingUploadLabels = null);
+  }
+
+  Future<void> _recordUploadLabel(Event event) async {
+    if (!_preferences.shareUploadCategories) return;
+    if (event.type == EventTypes.Sticker ||
+        event.senderId != _client?.userID ||
+        !event.hasAttachment ||
+        !_labelledEvents.add(event.eventId)) {
+      return;
+    }
+    while (_labelledEvents.length > 4096) {
+      _labelledEvents.remove(_labelledEvents.first);
+    }
+    final file = event.content.tryGetMap<String, Object?>('file');
+    final reference = file?['url'] ?? event.content['url'];
+    if (reference is! String) return;
+    final uri = Uri.tryParse(reference);
+    final owner = _client?.userID;
+    if (uri == null ||
+        owner == null ||
+        !uri.isScheme('mxc') ||
+        uri.pathSegments.length != 1 ||
+        !RegExp(r'^[A-Za-z0-9_-]{1,255}$').hasMatch(uri.pathSegments.single) ||
+        uri.authority != owner.substring(owner.indexOf(':') + 1)) {
+      return;
+    }
+    final kind = event.content['net.send.animated'] == true
+        ? 'gifs'
+        : switch (event.attachmentMimetype) {
+            'image/gif' => 'gifs',
+            final mime when mime.startsWith('image/') => 'images',
+            final mime when mime.startsWith('video/') => 'videos',
+            final mime when mime.startsWith('audio/') => 'audio',
+            _ => 'other',
+          };
+    final source = Uri.tryParse(
+      event.content['net.deltiecord.gif_source'] as String? ?? '',
+    );
+    try {
+      final labels = await _openUploadLabels();
+      await labels?.add(
+        uri.pathSegments.single,
+        kind,
+        source?.host == 'static.klipy.com' || source?.host == 'klipy.com'
+            ? 'klipy'
+            : 'upload',
+      );
+      // Thumbnails are protected assets, not a second prunable photo.
+      final info = event.content.tryGetMap<String, Object?>('info');
+      final thumbnail = Uri.tryParse(
+        (info?.tryGetMap<String, Object?>('thumbnail_file')?['url'] ??
+                    info?['thumbnail_url'])
+                as String? ??
+            '',
+      );
+      if (thumbnail?.isScheme('mxc') == true &&
+          thumbnail!.authority == uri.authority &&
+          thumbnail.pathSegments.length == 1) {
+        await labels?.add(thumbnail.pathSegments.single, 'images', 'asset');
+      }
+      unawaited(labels?.flush());
+    } catch (_) {
+      _labelledEvents.remove(event.eventId);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> serverStorage(
+    String action, [
+    Map<String, Object?>? body,
+  ]) async {
+    final client = _matrix;
+    final homeserver = client.homeserver;
+    final token = client.accessToken;
+    if (homeserver == null || token == null) {
+      throw StateError('Sign in to manage server storage.');
+    }
+    if (action == 'usage' && _preferences.shareUploadCategories) {
+      await (await _openUploadLabels())?.flush(force: true);
+    }
+    if (!identical(client, _client)) throw StateError('Session changed.');
+    return ServerStorageClient(
+      client.httpClient,
+      homeserver,
+      token,
+    ).call(action, body);
+  }
+
+  Future<void> _recordAssetUpload(Uri uri, Uint8List bytes) async {
+    if (!_preferences.shareUploadCategories) return;
+    try {
+      if (uri.pathSegments.length != 1) return;
+      final labels = await _openUploadLabels();
+      await labels?.add(
+        uri.pathSegments.single,
+        hasAnimatedImageHeader(bytes) ? 'gifs' : 'images',
+        'asset',
+      );
+      unawaited(labels?.flush());
+    } catch (_) {
+      // Upload success must not turn into a duplicate send on a label failure.
+    }
+  }
+
   Client? _client;
   Timeline? _timeline;
   MatrixVoiceController? _voice;
   Timer? _typingStopTimer;
-  late final _backendUpdates = CoalescedCallback(
-    notifyListeners,
-    enabled: kIsWeb,
-  );
+  late final _backendUpdates = CoalescedCallback(() {
+    countUiDiagnostic('backend.notify');
+    notifyListeners();
+  }, enabled: kIsWeb);
   int _inboxRequestRevision = 0;
   @override
   int get inboxRequestRevision => _inboxRequestRevision;
@@ -554,6 +704,51 @@ class MatrixBackend extends ChatBackend {
   final LinkedHashMap<String, _ProfileCacheEntry> _profileCache =
       LinkedHashMap();
   final Map<String, Future<UserProfileSummary>> _profileRequests = {};
+  final _profileWatchers =
+      <String, Map<Object, ({bool Function() visible, bool expanded})>>{};
+  final _profileCheckedThisSession = <String>{};
+  final _profileLastChecked = <String, DateTime>{};
+  @override
+  Future<void> refreshVisibleAvatar(String id) async {
+    final client = _client;
+    if (client == null || !_applicationForeground) return;
+    final room =
+        client.getRoomById(id) ??
+        _homeRooms.where((r) => r.directChatMatrixID == id).firstOrNull;
+    if (room == null) return;
+    try {
+      await room.postLoad();
+      if (!room.isSpace && !_roomHeroUsersLoaded.contains(room.id)) {
+        await room.loadHeroUsers();
+        _roomHeroUsersLoaded.add(room.id);
+      }
+      if (identical(client, _client) && await _refreshAvatar(room)) {
+        _notifyBackendListeners();
+      }
+    } catch (_) {
+      // The initial placeholder remains usable while a media fetch is unavailable.
+    }
+  }
+
+  DateTime? _profileBatchRetryAfter;
+  @override
+  void Function() watchProfile(
+    String id, {
+    required bool Function() isVisible,
+    bool expanded = false,
+  }) {
+    final key = Object();
+    (_profileWatchers[id] ??= {})[key] = (
+      visible: isVisible,
+      expanded: expanded,
+    );
+    return () {
+      final entries = _profileWatchers[id];
+      entries?.remove(key);
+      if (entries?.isEmpty == true) _profileWatchers.remove(id);
+    };
+  }
+
   final LinkedHashSet<String> _avatarValidatedEventIds = LinkedHashSet();
   final Set<String> _outboundSessionsReset = {};
   final Set<String> _roomHeroUsersLoaded = {};
@@ -580,10 +775,118 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _offlineSendRooms = {};
   String? _historySearchRoom, _historySearchQuery, _historySearchCursor;
   bool _historySearchComplete = false;
+  bool _historySearchOffline = false;
   int _historySearchGeneration = 0;
   final Map<String, ChatMessage> _historySearchMessages = {};
   HistoryIndex? _historyIndex;
+  HistoryDownload? _historyDownload;
+  Future<HistoryDownload?>? _openingDownload;
+  @override
+  List<HistoryDownloadRoom> get historyDownloadRooms => _joinedRooms
+      .where((r) => !r.isSpace)
+      .map(
+        (r) => HistoryDownloadRoom(
+          r.id,
+          r.getLocalizedDisplayname(),
+          kind: _historyRoomKind(r),
+        ),
+      )
+      .toList();
+
+  HistoryRoomKind _historyRoomKind(Room room) {
+    if (_spaceForRoom(room) != null) return HistoryRoomKind.server;
+    final memberCount = max(
+      (room.summary.mJoinedMemberCount ?? 0) +
+          (room.summary.mInvitedMemberCount ?? 0),
+      room
+          .getParticipants()
+          .where(
+            (p) =>
+                p.membership == Membership.join ||
+                p.membership == Membership.invite,
+          )
+          .length,
+    );
+    return room.isDirectChat && memberCount <= 2
+        ? HistoryRoomKind.dm
+        : HistoryRoomKind.group;
+  }
+
+  @override
+  Future<void> configureHistoryScope(HistoryScope scope) async {
+    final index = await openHistoryIndex();
+    if (index == null || _client == null || status != SessionStatus.signedIn) {
+      throw StateError('Sign in before changing the search scope.');
+    }
+    await _historyDownload?.reset();
+    await index.setScope(
+      scope,
+      historyDownloadRooms
+          .where((r) => scope.includes(r.kind))
+          .map((r) => r.id)
+          .toSet(),
+    );
+    _resetIndexedSearch();
+    _indexFingerprints.clear();
+    _mediaHistory.clear();
+    _mediaIndexOffset.clear();
+    if (_timeline case final timeline?) await _indexEvents(timeline.events);
+  }
+
+  @override
+  Future<HistoryDownload?> openHistoryDownload() {
+    if (_historyDownload != null) return Future.value(_historyDownload);
+    return _openingDownload ??= _openHistoryDownload().then((value) {
+      if (value == null) _openingDownload = null;
+      return value;
+    });
+  }
+
+  Future<HistoryDownload?> _openHistoryDownload() async {
+    final client = _client;
+    final index = await openHistoryIndex();
+    if (client == null || index == null || !identical(client, _client)) {
+      return null;
+    }
+    late final HistoryDownload download;
+    final attemptedBackup = <String>{};
+    download = HistoryDownload(
+      fetch: (room, cursor) => _downloadIndexPage(
+        client,
+        room,
+        cursor,
+        download.guardForCurrentRun(),
+        attemptedBackup,
+      ),
+      append: index.appendArchive,
+      load: index.loadDownloadState,
+      save: index.saveDownloadState,
+      onRun: attemptedBackup.clear,
+      canRun: () =>
+          identical(client, _client) &&
+          index.enabled &&
+          (!(kIsWeb || Platform.isAndroid || Platform.isIOS) ||
+              _applicationForeground),
+    );
+    await download.open();
+    if (!identical(client, _client) || !identical(index, _historyIndex)) {
+      download.dispose();
+      return null;
+    }
+    return _historyDownload = download;
+  }
+
   Future<HistoryIndex?>? _openingIndex;
+  DateTime? _indexRetryAfter;
+  String? _indexError;
+  @override
+  String? get historyIndexError => _indexError;
+  @override
+  Future<HistoryIndex?> retryHistoryIndex() {
+    _indexRetryAfter = null;
+    return openHistoryIndex();
+  }
+
   int _indexSearchOffset = 0;
   bool _indexSearchDone = false;
   StreamSubscription<Event>? _indexEventSubscription;
@@ -600,6 +903,9 @@ class MatrixBackend extends ChatBackend {
   Future<HistoryIndex?> openHistoryIndex() {
     if (_historyIndex != null) return Future.value(_historyIndex);
     if (_client?.userID == null) return Future.value();
+    if (_indexRetryAfter?.isAfter(DateTime.now()) == true) {
+      return Future.value();
+    }
     return _openingIndex ??= _openHistoryIndex().then((value) {
       if (value == null) _openingIndex = null;
       return value;
@@ -608,28 +914,42 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
+    _historyDownload?.pause(reason: 'Paused while the cache settings change.');
+    if (!enabled) await _historyDownload?.reset();
     final index = await openHistoryIndex();
     if (index == null) {
       throw StateError('Local search storage could not be opened.');
     }
     await index.configure(text: enabled, limit: limitMiB);
+    if (!enabled) _resetIndexedSearch();
     _indexFingerprints.clear();
     if (_timeline case final timeline?) await _indexEvents(timeline.events);
   }
 
   @override
   Future<void> clearHistoryIndex() async {
+    await _historyDownload?.reset();
     await _historyIndex?.clear();
+    _resetIndexedSearch();
     _indexFingerprints.clear();
     _indexSearchOffset = 0;
     _indexSearchDone = false;
     _mediaIndexOffset.clear();
   }
 
+  void _resetIndexedSearch() {
+    _historySearchGeneration++;
+    _historySearchMessages.clear();
+    _historySearchRoom = _historySearchQuery = _historySearchCursor = null;
+    _historySearchComplete = _historySearchOffline = false;
+    _indexSearchOffset = 0;
+    _indexSearchDone = false;
+  }
+
   Future<HistoryIndex?> _openHistoryIndex() async {
     final client = _client;
     if (client?.userID == null) return null;
-    final index = HistoryIndex(client!.userID!);
+    final index = _historyIndexFactory(client!.userID!);
     try {
       await index.open();
       if (!identical(client, _client)) {
@@ -637,6 +957,8 @@ class MatrixBackend extends ChatBackend {
         return null;
       }
       _historyIndex = index;
+      _indexRetryAfter = null;
+      _indexError = null;
       index.addListener(_indexWarningChanged);
       await _indexEventSubscription?.cancel();
       _indexEventSubscription = client.onTimelineEvent.stream.listen((event) {
@@ -644,7 +966,11 @@ class MatrixBackend extends ChatBackend {
       });
       _notifyBackendListeners();
       return index;
-    } catch (_) {
+    } catch (error) {
+      _indexRetryAfter = DateTime.now().add(const Duration(minutes: 1));
+      _indexError =
+          'Search storage failed at ${index.openStage} (${index.failureCode(error)}). '
+          'Existing data has not been reset.';
       await index.close();
       return null;
     }
@@ -685,7 +1011,8 @@ class MatrixBackend extends ChatBackend {
       );
   @override
   bool get canLoadMoreSearchResults =>
-      _historySearchRoom == _selectedRoomId && !_historySearchComplete;
+      _historySearchRoom == _selectedRoomId &&
+      (!_indexSearchDone || !_historySearchComplete);
   final Set<String> _dismissedLocalEchoIds = {};
   final ScheduledMessageStore _scheduledMessageStore = ScheduledMessageStore();
   Timer? _scheduledMessageTimer;
@@ -1209,6 +1536,7 @@ class MatrixBackend extends ChatBackend {
   }
 
   void _notifyBackendListeners() {
+    countUiDiagnostic('backend.request', source: () => StackTrace.current);
     // Key restoration can emit many synthetic syncs in a single frame. Publish
     // the latest state once per frame-sized window, yielding to browser input.
     _backendUpdates.request();
@@ -1236,6 +1564,11 @@ class MatrixBackend extends ChatBackend {
     }
     final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    if (!foreground && (kIsWeb || Platform.isAndroid || Platform.isIOS)) {
+      _historyDownload?.pause(
+        reason: 'Paused while SeND is in the background.',
+      );
+    }
     _configureClientPresence();
     if (previousPresence != _effectiveClientPresence) {
       unawaited(_refreshDesktopPresence());
@@ -1273,7 +1606,15 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void setConversationVisible(bool visible) {
+    final changed = _conversationVisible != visible;
     _conversationVisible = visible;
+    if (changed && _applicationForeground && _client?.isLogged() == true) {
+      unawaited(
+        Future<void>.delayed(
+          Duration.zero,
+        ).then((_) => _refreshActiveProfileCache()).catchError((Object _) {}),
+      );
+    }
     _dismissVisibleRoomNotification();
     if (_mayAdvanceReadMarker) unawaited(_markSelectedRoomRead());
   }
@@ -1791,6 +2132,42 @@ class MatrixBackend extends ChatBackend {
   }) => _getUserProfile(userId, refresh: refresh);
 
   @override
+  Future<Uint8List?> getProfileImage(
+    String userId, {
+    required bool banner,
+  }) async {
+    final spaceId = selectedRoomSpaceId;
+    final member = spaceId == null
+        ? null
+        : _matrix
+              .getRoomById(spaceId)
+              ?.getState(EventTypes.RoomMember, userId)
+              ?.content;
+    final override = member == null
+        ? null
+        : member[banner ? _profileBannerField : 'avatar_url'] ??
+              (banner ? member['banner_url'] : null);
+    final overrideUri = override is String ? Uri.tryParse(override) : null;
+    if (overrideUri?.isScheme('mxc') == true) {
+      return (await _matrix.getContent(
+        overrideUri!.host,
+        overrideUri.pathSegments.join('/'),
+      )).data;
+    }
+    final profile = await _matrix.getUserProfile(userId);
+    final uri = banner
+        ? Uri.tryParse(
+            profile.additionalProperties[_profileBannerField] as String? ?? '',
+          )
+        : profile.avatarUrl;
+    if (uri == null || !uri.isScheme('mxc')) return null;
+    return (await _matrix.getContent(
+      uri.host,
+      uri.pathSegments.join('/'),
+    )).data;
+  }
+
+  @override
   Future<void> updateOwnProfileFields({
     String? bio,
     String? pronouns,
@@ -2064,6 +2441,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _historyDownload?.dispose();
     _personal?.removeListener(_notifyBackendListeners);
     _historyIndex?.removeListener(_indexWarningChanged);
     unawaited(_indexEventSubscription?.cancel());

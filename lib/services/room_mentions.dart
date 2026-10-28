@@ -1,3 +1,5 @@
+import 'package:html/parser.dart' as html_parser;
+
 /// Keep room-wide aliases out of URLs, escaped text and longer identifiers.
 final roomMentionPattern = RegExp(
   r'(?<![A-Za-z0-9_@/\\])@(everyone|room)(?![A-Za-z0-9_:/-]|\.[A-Za-z0-9])',
@@ -31,9 +33,12 @@ bool messageHasVisualMention({
   required String body,
   Map<String, Object?>? mentions,
   String? formattedBody,
+  bool isReply = false,
 }) {
   final users = mentions?['user_ids'];
-  return (users is List && users.whereType<String>().isNotEmpty) ||
+  // Reply recipient metadata is not an authored mention. The actual recipient
+  // gets their reply highlight through pingedCurrentUser instead.
+  return (!isReply && users is List && users.whereType<String>().isNotEmpty) ||
       mentions?['room'] == true ||
       containsRoomMention(body) ||
       RegExp(
@@ -44,10 +49,14 @@ bool messageHasVisualMention({
 
 bool _hasFormattedUserMention(String? html) {
   if (html == null) return false;
+  final fragment = html_parser.parseFragment(html);
+  for (final reply in fragment.querySelectorAll('mx-reply')) {
+    reply.remove();
+  }
   for (final link in RegExp(
     r'''href\s*=\s*["']([^"']+)["']''',
     caseSensitive: false,
-  ).allMatches(html)) {
+  ).allMatches(fragment.outerHtml)) {
     final uri = Uri.tryParse(link.group(1)!);
     if (uri?.host != 'matrix.to' || !{'https', 'http'}.contains(uri?.scheme)) {
       continue;

@@ -88,12 +88,22 @@ extension _MatrixMedia on MatrixBackend {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
     try {
+      attachment = await prepareImage(
+        attachment,
+        _preferences.imageCompression,
+      );
       if (_preferences.optimizeVideos) {
-        attachment = await VideoPreparation.instance.prepare(attachment);
+        attachment = await VideoPreparation.instance.prepare(
+          attachment,
+          preset: _preferences.videoCompression,
+        );
       } else {
         attachment = await VideoPreparation.probe(attachment);
       }
       await _validateUploadSize(attachment.bytes.length);
+      final animatedImage =
+          attachment.mimeType.startsWith('image/') &&
+          hasAnimatedImageHeader(attachment.bytes);
       // Standard Matrix info travels with the (encrypted) event, so receivers
       // can lay out images before downloading them, including animated GIFs.
       final imageDimensions = attachment.mimeType.startsWith('image/')
@@ -188,12 +198,14 @@ extension _MatrixMedia on MatrixBackend {
               shrinkImageMaxDimension: null,
               extraContent:
                   additionalContent != null ||
+                      animatedImage ||
                       attachment.spoiler ||
                       attachment.gifSource != null ||
                       replyEvent != null ||
                       attachment.caption?.trim().isNotEmpty == true
                   ? {
                       ...?additionalContent,
+                      if (animatedImage) 'net.send.animated': true,
                       ..._mentionsFor(
                         attachment.caption ?? '',
                         replyEvent,

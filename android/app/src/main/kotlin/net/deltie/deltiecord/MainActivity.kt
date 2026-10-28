@@ -123,7 +123,8 @@ class MainActivity : FlutterActivity() {
                 }
                 result.success(null)
             } else if (call.method == "keyboardGeometry") {
-                keyboardGeometry?.refresh()
+                // A metrics callback reads this snapshot. Reapplying insets here
+                // feeds another metrics callback back into Dart indefinitely.
                 result.success(keyboardGeometry?.snapshot())
             } else if (call.method == "keyboardVisible") {
                 if (!window.decorView.hasWindowFocus()) {

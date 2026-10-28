@@ -1,7 +1,128 @@
 # Next bugfix pass
 
-The current intake is the [2026-10-26 index](#intake-2026-10-26) below.
-Earlier sections retain their original release and validation records.
+The current intake is the [2026-10-27 follow-up](#intake-2026-10-27) below.
+Older sections retain their original release and validation records.
+
+## Intake 2026-10-27
+
+Baseline: published 0.9.41+132. Changes below are local previews, not a new
+release. The user approved same-signature Android diagnostic updates in place;
+the account, room keys and existing data were retained. Private phone captures
+and aggregate diagnostic files remain outside Git.
+
+- **B53 / B22, search storage fails silently. Fixed in the phone preview.**
+  Android SQLCipher returns the page-size PRAGMA value as text. A forced integer
+  cast aborted index opening after schema setup, and the backend hid the error
+  behind a null result. Parse integer/text numeric results for page-size and
+  page-count reads. Show a safe failure stage/code without SQL, keys or paths,
+  back off automatic failed opens and keep explicit Retry available. The user
+  confirmed the index choice now works. A regression test covers text PRAGMAs.
+- **B39, dead clipboard buttons. Fixed in the phone preview.**
+  Real touch-down/up events reached the toolbar without actions firing. A backend
+  refresh during a press reproduced this in a widget test. Flutter's overflow
+  toolbar replaces its keyed button subtree when given new button widgets.
+  Stable builder callbacks alone were insufficient. Retain button widgets while
+  their action/appearance is unchanged, invoking current callbacks. The race
+  test now taps real buttons with movement and a sync refresh between down/up.
+  The user confirmed Copy/Paste/Select all work with their finger. The repeated
+  clipboard/indexing entries in the later report were clarified as old notes.
+- **B54, mobile lag and slow Home-menu animations. Preview under device testing.**
+  Surface presentation sampled around 50 ms median intervals. Flutter build
+  durations were substantially higher than raster durations. Local diagnostic
+  counters found roughly 60 keyboard samples and full-shell rebuilds every two
+  seconds while idle. Reading geometry asked Android to reapply insets, which
+  produced another metrics event and another geometry read. Make reads pure and
+  avoid rebuilding on equal geometry. Preserve explicit native resume refreshes.
+  Regression tests cover read-only queries, duplicate samples, real geometry
+  changes and existing focus/keyboard restoration. With the phone awake and SeND
+  foregrounded, the idle loop stopped and sampled CPU settled to zero. Controlled
+  timeline scrolling presented at a 16.6 ms median, compared with about 50 ms
+  before the fix. The menu still rebuilt its contents during each drag update,
+  producing a 24.9 ms median in that sample. A second change moves only panel
+  transforms and retains their child widgets. Device counters then recorded
+  roughly 57–60 rendered frames/second during controlled menu gestures, with
+  slow-frame build durations down from about 26 ms to 7–8 ms. These are short
+  samples, not a guarantee for
+  every room or animation. Desktop GPU issue B10 remains open.
+- **B55 / B02 / B31, notification-shade return closes the keyboard. Reported.**
+  Keep separate from real app backgrounding and deliberate keyboard dismissal.
+  Compare retained focus, input connection and IME visibility across shade
+  opening/closing. Recheck after B54 without adding a show/hide retry loop.
+- **B56 / B52, own replies get recipient highlighting until edited. Reported.**
+  The build-132 visual-mention path accepts recipient metadata and formatted
+  user links, which can include the reply fallback rather than an authored
+  mention. Check normal and edited replies, quoted markup, self-chat and explicit
+  mentions. Do not create a self-ping or highlight an ordinary outgoing reply
+  merely because its metadata names the reply recipient.
+- **B23, Sunup positive diagnostics but no closed-app messages. Reported.**
+  A successful test round trip is not proof of real encrypted event delivery or
+  process wake-up. Distinguish swiping Recents, process death and Android Force
+  stop; inspect the retained pusher, distributor battery access, receiver,
+  worker/decryption and notification posting without endpoint tokens or text.
+- **B57, mobile single-line message avatar alignment. Reported.**
+  The row is top-aligned with fixed avatar/reply offsets. Centre the avatar
+  against the appropriate sender/body block for a short message without
+  vertically centring it against a tall image, collage or multiline message.
+- **B58, cache growth, profile latency and data use. Investigation open.**
+  User reports nearly 900 MiB cached and 2.77 GB of mobile traffic since September
+  8, with slow profile/avatar loads. These totals alone do not establish duplicate
+  fetching or a leak. Separate installed code, Matrix DB, media/temporary files,
+  decoded images and the new search index; measure cold/warm requests and cache
+  misses. The failed index was not retaining a full text archive. Do not clear
+  encryption state, preload every media file or silently weaken cache privacy.
+
+### R19: Download history for local search
+
+The user requested mobile/desktop controls to fetch accessible history. They
+chose pausing at the cache limit and offering a larger limit, not an unbounded
+archive. The local implementation adds Storage → Download history for search:
+
+- Select the current chat or all joined chats. Confirm before any download.
+- Fetch message-event pages directly, decrypt locally and index text/media
+  references. Do not download attachment files, mark messages read or bulk-save
+  event bodies into the normal Matrix SDK cache.
+- Save a per-account, device-local pagination checkpoint. Pause/resume and app
+  restart retain the last indexed page. Mobile backgrounding pauses the job.
+- Refuse archive writes that would need to evict existing index entries. Offer
+  a larger budget and resume the same page. Limits extend to 2048 MiB; the entry
+  ceiling scales with larger budgets. Defaults remain 100 MiB/100,000 entries.
+- Restore backup sessions needed by the current page when the backup key is
+  available. Report events that still cannot be decrypted. Do not import years
+  of room keys merely to open a chat.
+- Read indexed text directly for search results, including offline pagination.
+  Opening source events or media may still require a connection.
+
+The sizing test also exposed a full-table scan when removing FTS rows by their
+unindexed event-ID column. Link FTS row IDs to the events table and migrate the
+old layout once, keeping event-ID lookups indexed during updates and eviction.
+
+Desktop SQLite benchmarks after compaction, with trigram FTS enabled and 100,000
+synthetic Matrix-style IDs, senders, rooms and timestamps:
+
+| ASCII body per message | Database size | Conservative quota charge |
+| --- | ---: | ---: |
+| 15 characters | 58.1 MiB | 175.9 MiB |
+| 200 characters | 127.2 MiB | 257.3 MiB |
+
+These are search-database sizes, not memory usage or total app storage. Matrix's
+normal cache, attachment files, installed code and encryption overhead are
+separate. Real text distributions and Android SQLCipher/FTS support can change
+the result. Quota accounting deliberately reserves more space than the current
+database file consumes. This benchmark does not measure real download speed.
+
+Controller, native quota/migration, browser-worker and mobile/desktop widget tests
+cover the new paths. The integration fixture checks event-only pagination,
+absence of media keys and local search without extra event fetches. No real
+account's full archive has been downloaded as a test; encrypted recovery and
+large-room completion still need device coverage.
+
+Final local checks: 789 Flutter tests passed with four skips, analysis and
+formatting were clean, and Linux, Android and web release builds passed. The
+Android preview was installed in place with the existing signing identity and
+installer code 2132. Storage shows the new controls and the downloader remains
+idle. No commit, push, CI publication or server deployment was performed.
+
+## Earlier release records
 
 Collected 2026-10-10. Published as Latest in 0.9.39+126, with Deltie's PWA and
 download mirror updated. Device reports remain separate from automated checks.

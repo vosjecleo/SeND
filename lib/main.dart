@@ -17,9 +17,11 @@ import 'services/temporary_attachment_store.dart';
 import 'services/browser_lifecycle.dart';
 import 'services/browser_push.dart';
 import 'services/socks_proxy.dart';
+import 'services/frame_diagnostics.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  enableFrameDiagnostics();
   await SocksProxy.initialize();
   if (kIsWeb && !await initializeBrowser()) {
     runApp(
@@ -117,6 +119,7 @@ Future<void> deltiecordPushBackgroundMain() async {
     resolve: resolver.resolve,
     performAction: resolver.perform,
     reconcilePusher: resolver.reconcilePusher,
+    shutdown: resolver.close,
   );
   await Completer<void>().future;
 }

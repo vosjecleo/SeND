@@ -41,10 +41,16 @@ extension _MatrixMessages on MatrixBackend {
       _indexSearchDone = false;
     }
     final previousCursor = _historySearchCursor;
+    if (_historySearchOffline && connectionStatus != ConnectionStatus.offline) {
+      _historySearchComplete = false;
+    }
+    _historySearchOffline = connectionStatus == ConnectionStatus.offline;
+    if (_historySearchOffline) _historySearchComplete = true;
     try {
       final parsed = MessageSearchQuery.parse(normalized);
       final index = await openHistoryIndex();
       List<Event> page = const [];
+      var indexedPage = <ChatMessage>[];
       String? nextCursor = previousCursor;
       var networkPage = false;
       if (!_indexSearchDone &&
@@ -63,11 +69,44 @@ extension _MatrixMessages on MatrixBackend {
             .catchError((Object _) => <String>[]);
         _indexSearchOffset += ids.length;
         _indexSearchDone = ids.length < 50;
-        page = await _historyEvents(room, ids);
+        final rows = await index.readRows(ids);
+        if (_selectedRoomId != roomId ||
+            generation != _historySearchGeneration) {
+          return const [];
+        }
+        indexedPage = rows.where((row) => row['room'] == roomId).map((row) {
+          final id = row['id'] as String;
+          final sender = row['sender'] as String? ?? '';
+          final display = room
+              .getState(EventTypes.RoomMember, sender)
+              ?.content
+              .tryGet<String>('displayname');
+          _indexedEventRooms[id] = roomId;
+          final body = row['body'] as String? ?? '';
+          final fallback = switch (row['kind']) {
+            'image' => 'Image message',
+            'video' => 'Video message',
+            'audio' => 'Audio message',
+            'file' => 'File message',
+            _ => '',
+          };
+          return ChatMessage(
+            id: id,
+            sender: display?.trim().isNotEmpty == true ? display! : sender,
+            senderId: sender,
+            body: body.isEmpty ? fallback : body,
+            timestamp: DateTime.fromMillisecondsSinceEpoch(
+              (row['time'] as num).toInt(),
+            ),
+            pending: false,
+            own: sender == room.client.userID,
+            edited: row['revision'] != null,
+          );
+        }).toList();
       } else {
         _indexSearchDone = true;
       }
-      if (page.isEmpty && !_historySearchComplete) {
+      if (page.isEmpty && indexedPage.isEmpty && !_historySearchComplete) {
         final result = await _historyPage(room, previousCursor);
         page = result.$1;
         nextCursor = result.$2;
@@ -82,6 +121,7 @@ extension _MatrixMessages on MatrixBackend {
             nextCursor == null || nextCursor == previousCursor;
       }
       final matches = <String, ChatMessage>{
+        for (final message in indexedPage) message.id: message,
         ..._historySearchMessages,
         for (final message in searchMessages(normalized)) message.id: message,
       };
@@ -235,11 +275,18 @@ extension _MatrixMessages on MatrixBackend {
   Future<void> _indexEvents(Iterable<Event> events) async {
     final list = events.toList();
     if (list.isEmpty || !identical(list.first.room.client, _client)) return;
+    for (final event in list.where((event) => event.status.isSent)) {
+      unawaited(_recordUploadLabel(event));
+    }
     final index = await openHistoryIndex();
     if (index == null || !identical(list.first.room.client, _client)) return;
     final rows = <Map<String, Object?>>[];
     for (var event in list) {
       if (!event.status.isSent) continue;
+      if (event.type != 'm.room.redaction' &&
+          !index.scope.includes(_historyRoomKind(event.room))) {
+        continue;
+      }
       final fingerprint = jsonEncode([
         event.content,
         event.redacted,
@@ -295,6 +342,7 @@ extension _MatrixMessages on MatrixBackend {
       rows.add({
         'id': event.eventId,
         'room': event.room.id,
+        'room_kind': _historyRoomKind(event.room).name,
         'time': event.originServerTs.millisecondsSinceEpoch,
         'sender': event.senderId,
         'kind':

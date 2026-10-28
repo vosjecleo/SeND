@@ -9,6 +9,28 @@ void main() {
   testWidgets(
     'mobile selection toolbar copies, selects, cuts and pastes without losing focus',
     (tester) async {
+      const keyboard = MethodChannel('net.deltie.deltiecord/composer');
+      const geometry = EventChannel('net.deltie.deltiecord/keyboard_geometry');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        keyboard,
+        (call) async => call.method == 'keyboardGeometry'
+            ? {
+                'visible': false,
+                'physicalBottom': 0,
+                'focused': true,
+                'animating': false,
+              }
+            : null,
+      );
+      messenger.setMockStreamHandler(
+        geometry,
+        MockStreamHandler.inline(onListen: (_, _) {}),
+      );
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(keyboard, null);
+        messenger.setMockStreamHandler(geometry, null);
+      });
       var clipboard = 'pasted';
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
@@ -57,9 +79,26 @@ void main() {
         await tester.pumpAndSettle();
         final toolbar = find.byType(AdaptiveTextSelectionToolbar);
         expect(toolbar, findsOneWidget);
-        final built = tester.widget<AdaptiveTextSelectionToolbar>(toolbar);
-        final item = built.buttonItems!.firstWhere((item) => item.type == type);
-        item.onPressed!();
+        final label = switch (type) {
+          ContextMenuButtonType.copy => 'Copy',
+          ContextMenuButtonType.cut => 'Cut',
+          ContextMenuButtonType.paste => 'Paste',
+          ContextMenuButtonType.selectAll => 'Select all',
+          _ => throw StateError('Unexpected toolbar action'),
+        };
+        final oldButton = tester.element(find.text(label).last);
+        final tap = await tester.startGesture(
+          tester.getCenter(find.text(label).last),
+        );
+        await tap.moveBy(const Offset(9, 1));
+        backend.notifyListeners();
+        await tester.pump(const Duration(milliseconds: 80));
+        expect(
+          identical(oldButton, tester.element(find.text(label).last)),
+          isTrue,
+          reason: 'Sync updates must not replace a pressed toolbar button.',
+        );
+        await tap.up();
         await tester.pumpAndSettle();
       }
 

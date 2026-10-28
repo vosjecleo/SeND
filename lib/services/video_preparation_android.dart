@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/chat_models.dart';
+import '../models/media_compression.dart';
 
 const _channel = MethodChannel('net.deltie.deltiecord/video_prepare');
 
 Future<AttachmentDraft> prepareAndroidVideo(
   AttachmentDraft draft, {
   required bool optimize,
+  VideoCompressionPreset preset = VideoCompressionPreset.balanced,
   required void Function(double) progress,
   required bool Function() canceled,
   Future<Directory> Function() cacheDirectory = getTemporaryDirectory,
@@ -37,7 +39,7 @@ Future<AttachmentDraft> prepareAndroidVideo(
           'Could not read video duration. Choose original quality to send it unchanged.',
         );
       }
-      final bitrate = (20 * 1024 * 1024 * 8 / (duration / 1000) - 192000)
+      final bitrate = (preset.targetBytes * 8 / (duration / 1000) - 192000)
           .floor();
       if (bitrate < 250000) {
         throw StateError(
@@ -65,11 +67,11 @@ Future<AttachmentDraft> prepareAndroidVideo(
             'output': output.path,
             'width': metadata['width'],
             'height': metadata['height'],
-            'bitrate': bitrate.clamp(250000, 4000000),
+            'bitrate': bitrate.clamp(250000, preset.maximumBitrate),
           })
           .timeout(const Duration(minutes: 10));
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (await output.length() > 24 * 1024 * 1024) {
+      if (await output.length() > preset.maximumBytes) {
         throw StateError(
           'The optimized clip is still too large. Trim it or choose original quality.',
         );

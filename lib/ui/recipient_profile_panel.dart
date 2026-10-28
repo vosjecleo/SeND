@@ -138,6 +138,8 @@ class _RecipientProfileContents extends StatelessWidget {
               return DeltiecordProfileCard(
                 key: const Key('recipient-profile-gradient'),
                 profile: profile,
+                loadImage: (banner) =>
+                    backend.getProfileImage(profile.userId, banner: banner),
                 scrollable: true,
                 minimumHeight: constraints.maxHeight,
               );

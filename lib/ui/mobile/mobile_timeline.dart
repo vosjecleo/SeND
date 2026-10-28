@@ -1,6 +1,8 @@
 import 'dart:async';
 import '../activity_widgets.dart';
+import '../attachment_image_editor.dart';
 import '../inline_composer_preview.dart';
+import '../selection_toolbar.dart';
 import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
@@ -1073,16 +1075,21 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                 }),
                 onRemoveAttachment: (attachment) =>
                     setState(() => _attachments.remove(attachment)),
+                onEditAttachment: (attachment) async {
+                  final edited = await showAttachmentImageEditor(
+                    context,
+                    attachment,
+                  );
+                  if (!mounted || edited == null) return;
+                  final index = _attachments.indexOf(attachment);
+                  if (index >= 0) setState(() => _attachments[index] = edited);
+                },
                 onToggleAttachmentSpoiler: (attachment) {
                   final index = _attachments.indexOf(attachment);
                   if (index < 0) return;
                   setState(() {
-                    _attachments[index] = AttachmentDraft(
-                      bytes: attachment.bytes,
-                      name: attachment.name,
-                      mimeType: attachment.mimeType,
+                    _attachments[index] = attachment.copyWith(
                       spoiler: !attachment.spoiler,
-                      caption: attachment.caption,
                     );
                   });
                 },
@@ -1202,17 +1209,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           for (var index = 0; index < submittedAttachments.length; index++) {
             final item = submittedAttachments[index];
             await backend.sendAttachment(
-              AttachmentDraft(
-                bytes: item.bytes,
-                name: item.name,
-                mimeType: item.mimeType,
-                spoiler: item.spoiler,
+              item.copyWith(
                 caption: index == 0 && submittedText.isNotEmpty
                     ? submittedText
                     : null,
-                voiceMessage: item.voiceMessage,
-                durationMilliseconds: item.durationMilliseconds,
-                waveform: item.waveform,
               ),
               roomId: roomId,
               replyToMessageId: index == 0 ? reply?.id : null,
@@ -1605,6 +1605,52 @@ class _MobileDaySeparator extends StatelessWidget {
   }
 }
 
+class _MobileMessageBodyRow extends StatelessWidget {
+  const _MobileMessageBodyRow({
+    required this.message,
+    required this.eligible,
+    required this.children,
+  });
+  final ChatMessage message;
+  final bool eligible;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      var center = false;
+      if (eligible &&
+          message.reply == null &&
+          message.attachment == null &&
+          message.poll == null &&
+          message.reactions.isEmpty &&
+          message.linkPreview == null &&
+          message.additionalLinkPreviews.isEmpty &&
+          message.threadReplyCount == 0 &&
+          message.threadRootId == null &&
+          message.formattedBody == null &&
+          !message.body.contains('\n')) {
+        final text = TextPainter(
+          text: TextSpan(
+            text: message.body,
+            style: DefaultTextStyle.of(context).style.copyWith(height: 1.28),
+          ),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 1,
+        )..layout(maxWidth: max(1, constraints.maxWidth - 48));
+        center = !text.didExceedMaxLines;
+        text.dispose();
+      }
+      return Row(
+        crossAxisAlignment: center
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: children,
+      );
+    },
+  );
+}
+
 class _MobileMessageRow extends StatelessWidget {
   const _MobileMessageRow({
     required this.backend,
@@ -1700,8 +1746,9 @@ class _MobileMessageRow extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: _MobileMessageBodyRow(
+              message: message,
+              eligible: !grouped && albumMessages == null,
               children: [
                 SizedBox(
                   width: 40,
@@ -2187,6 +2234,7 @@ class _MobileComposer extends StatefulWidget {
     required this.editing,
     required this.onClearContext,
     required this.onRemoveAttachment,
+    required this.onEditAttachment,
     required this.onToggleAttachmentSpoiler,
     required this.onAdd,
     required this.onEmoji,
@@ -2213,6 +2261,7 @@ class _MobileComposer extends StatefulWidget {
   final bool editing;
   final VoidCallback onClearContext;
   final ValueChanged<AttachmentDraft> onRemoveAttachment;
+  final ValueChanged<AttachmentDraft> onEditAttachment;
   final ValueChanged<AttachmentDraft> onToggleAttachmentSpoiler;
   final VoidCallback onAdd;
   final VoidCallback onEmoji;
@@ -2265,6 +2314,25 @@ class _MobileComposerState extends State<_MobileComposer> {
     super.didUpdateWidget(oldWidget);
     _scheduleEmojiOverlaySync();
   }
+
+  // A new builder closure makes Flutter replace the visible toolbar during
+  // backend refreshes, cancelling a button press between pointer down and up.
+  Widget _buildSelectionToolbar(
+    BuildContext context,
+    EditableTextState state,
+  ) => SelectionToolbar(
+    anchors: state.contextMenuAnchors,
+    items: [
+      ...state.contextMenuButtonItems,
+      ContextMenuButtonItem(
+        label: 'Paste image',
+        onPressed: () {
+          state.hideToolbar();
+          widget.onPasteImage();
+        },
+      ),
+    ],
+  );
 
   void _scheduleEmojiOverlaySync() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2422,6 +2490,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                       final attachment = widget.attachments[index];
                       return _PendingAttachmentPreview(
                         attachment: attachment,
+                        onEdit: () => widget.onEditAttachment(attachment),
                         onRemove: () => widget.onRemoveAttachment(attachment),
                         onToggleSpoiler: () =>
                             widget.onToggleAttachmentSpoiler(attachment),
@@ -2480,22 +2549,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                           // an editing-complete callback must not drop focus.
                           onEditingComplete: () {},
                           textCapitalization: TextCapitalization.sentences,
-                          contextMenuBuilder: (context, state) =>
-                              TextFieldTapRegion(
-                                child: AdaptiveTextSelectionToolbar.buttonItems(
-                                  anchors: state.contextMenuAnchors,
-                                  buttonItems: [
-                                    ...state.contextMenuButtonItems,
-                                    ContextMenuButtonItem(
-                                      label: 'Paste image',
-                                      onPressed: () {
-                                        state.hideToolbar();
-                                        widget.onPasteImage();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
+                          contextMenuBuilder: _buildSelectionToolbar,
                           style: TextStyle(color: context.deltiecord.text),
                           cursorColor: Theme.of(context).colorScheme.primary,
                           contentInsertionConfiguration:
@@ -2577,11 +2631,13 @@ class _PendingAttachmentPreview extends StatelessWidget {
     required this.attachment,
     required this.onRemove,
     required this.onToggleSpoiler,
+    required this.onEdit,
   });
 
   final AttachmentDraft attachment;
   final VoidCallback onRemove;
   final VoidCallback onToggleSpoiler;
+  final VoidCallback onEdit;
 
   Future<void> _showActions(BuildContext context) async {
     final action = await showModalBottomSheet<String>(
@@ -2590,6 +2646,12 @@ class _PendingAttachmentPreview extends StatelessWidget {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
+            if (attachment.mimeType.startsWith('image/'))
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit image'),
+                onTap: () => Navigator.pop(context, 'edit'),
+              ),
             ListTile(
               leading: Icon(
                 attachment.spoiler
@@ -2610,6 +2672,7 @@ class _PendingAttachmentPreview extends StatelessWidget {
         ),
       ),
     );
+    if (action == 'edit') onEdit();
     if (action == 'spoiler') onToggleSpoiler();
     if (action == 'remove') onRemove();
   }

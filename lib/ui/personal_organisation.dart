@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../services/space_organisation.dart';
 import 'hold_move_draggable.dart';
 import 'lifecycle_memory_image.dart';
+import 'profile_watch.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 
@@ -453,7 +454,11 @@ class _SpaceFolderRailState extends State<SpaceFolderRail> {
   Widget _server(SpaceSummary space, {String? folder}) {
     return _target(
       SpaceDragItem.space(space.id, parentFolder: folder),
-      widget.itemBuilder(space),
+      ProfileWatch(
+        backend: widget.backend,
+        id: space.id,
+        child: widget.itemBuilder(space),
+      ),
       widget.onSpaceMenu == null
           ? null
           : (point) => widget.onSpaceMenu!(space, point),

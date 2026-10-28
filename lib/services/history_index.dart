@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'history_index_limits.dart';
+import 'history_scope.dart';
 import 'history_index_native.dart'
     if (dart.library.js_interop) 'history_index_web.dart'
     as platform;
@@ -12,8 +14,14 @@ class HistoryIndex extends ChangeNotifier {
     : _providedStore = store;
   final platform.HistoryStore? _providedStore;
   final String account;
+  bool get encryptedAtRest => platform.historyIndexEncryptedAtRest;
   late final platform.HistoryStore _store;
+  String _openStage = 'database';
+  String get openStage =>
+      _openStage == 'database' ? _store.openStage : _openStage;
+  String failureCode(Object error) => _store.failureCode(error);
   bool enabled = false, prompted = false, ready = false;
+  HistoryScope scope = HistoryScope.all;
   int limitMiB = 100, bytes = 0, entries = 0, budgetBytes = 0;
   bool warningPending = false;
   bool _warned = false, _closed = false;
@@ -21,8 +29,9 @@ class HistoryIndex extends ChangeNotifier {
   Timer? _ingestTimer;
   final _pending = <String, Map<String, Object?>>{};
   final _waiters = <Completer<void>>[];
+  int get entryLimit => historyIndexEntryLimit(limitMiB);
   double get capacityRatio =>
-      max(budgetBytes / (limitMiB * 1048576), entries / 100000);
+      max(budgetBytes / (limitMiB * 1048576), entries / entryLimit);
 
   Future<T> _serial<T>(Future<T> Function() operation) {
     if (_closed) return Future.error(StateError('Index closed'));
@@ -36,22 +45,25 @@ class HistoryIndex extends ChangeNotifier {
         _providedStore ??
         platform.HistoryStore(sha256.convert(utf8.encode(account)).toString());
     await _store.open();
+    _openStage = 'settings';
     final settings = await _store.settings();
     enabled = settings['enabled'] == true;
     prompted = settings['prompted'] == true;
-    limitMiB = (settings['limit'] as int? ?? 100).clamp(16, 250);
+    scope = HistoryScope.parse(await _store.loadScope());
+    limitMiB = (settings['limit'] as int? ?? 100).clamp(16, historyIndexMaxMiB);
     if (!enabled && settings['limit'] == 50) {
       limitMiB = 100;
       await _store.configure(false, 100);
     }
     ready = true;
+    _openStage = 'usage';
     await refreshStats();
   }
 
   Future<void> configure({required bool text, int? limit}) async {
     await flush();
     await _serial(() async {
-      final budget = (limit ?? limitMiB).clamp(16, 250);
+      final budget = (limit ?? limitMiB).clamp(16, historyIndexMaxMiB);
       await _store.configure(text, budget);
       enabled = text;
       prompted = true;
@@ -78,6 +90,17 @@ class HistoryIndex extends ChangeNotifier {
     return waiter.future;
   }
 
+  /// Called only after an explicit scope choice with a loaded room list.
+  /// Removing local search entries never removes Matrix events or media.
+  Future<void> setScope(HistoryScope value, Set<String> allowedRooms) async {
+    await flush();
+    await _serial(() async {
+      await _store.setScope(value.name, allowedRooms);
+      scope = value;
+      await refreshStats(force: true);
+    });
+  }
+
   Future<void> flush() {
     _ingestTimer?.cancel();
     _ingestTimer = null;
@@ -86,7 +109,16 @@ class HistoryIndex extends ChangeNotifier {
     _pending.clear();
     _waiters.clear();
     final work = _serial(() async {
-      await _store.put(rows, enabled, limitMiB);
+      // Recheck at admission: an event may have been prepared while the user
+      // was changing scope, before the asynchronous write reached this queue.
+      final admitted = rows.where((row) {
+        if (row['deleted'] == true) return true;
+        final kind = HistoryRoomKind.values
+            .where((k) => k.name == row['room_kind'])
+            .firstOrNull;
+        return kind == null || scope.includes(kind);
+      }).toList();
+      await _store.put(admitted, enabled, limitMiB);
       await refreshStats();
     });
     unawaited(
@@ -132,6 +164,24 @@ class HistoryIndex extends ChangeNotifier {
   }
 
   Future<String?> revision(String id) => _serial(() => _store.revision(id));
+  Future<List<Map<String, Object?>>> readRows(List<String> ids) =>
+      _serial(() => _store.readRows(ids));
+  Future<Map<String, Object?>?> loadDownloadState() =>
+      _serial(_store.loadDownloadState);
+  Future<void> saveDownloadState(Map<String, Object?>? value) =>
+      _serial(() => _store.saveDownloadState(value));
+
+  Future<bool> appendArchive(List<Map<String, Object?>> rows) async {
+    await flush();
+    return _serial(() async {
+      if (!enabled) {
+        throw StateError('Enable text indexing before downloading history.');
+      }
+      final added = await _store.putArchive(rows, true, limitMiB);
+      await refreshStats();
+      return added;
+    });
+  }
 
   Future<void> clear() async {
     await flush();

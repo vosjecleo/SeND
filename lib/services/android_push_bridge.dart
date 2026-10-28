@@ -42,9 +42,14 @@ final class AndroidPushBridge {
     AndroidPushActivation? activate,
     AndroidPushAction? performAction,
     AndroidPushPusherReconcile? reconcilePusher,
+    Future<void> Function()? shutdown,
   }) async {
     if (!_supported) return;
     _channel.setMethodCallHandler((call) async {
+      if (call.method == 'shutdown' && shutdown != null) {
+        await shutdown();
+        return true;
+      }
       if (call.method == 'resolveNotification') {
         final arguments = call.arguments;
         if (arguments is! Map) return null;
@@ -332,6 +337,12 @@ final class HeadlessAndroidPushResolver {
   final Future<Client> Function() _createClient;
   Client? _client;
   final AvatarMediaPool _avatarPool = AvatarMediaPool();
+  Future<void> close() async {
+    final client = _client;
+    _client = null;
+    await client?.dispose();
+    await _avatarPool.clear(disk: false);
+  }
 
   Future<Map<String, Object?>?> resolve(String roomId, String eventId) async {
     final client = await _readyClient();
@@ -399,7 +410,12 @@ final class HeadlessAndroidPushResolver {
     // Headless notification work must never advertise user activity.
     client.syncPresence = PresenceType.offline;
     client.backgroundSync = false;
-    await client.init();
+    try {
+      await client.init();
+    } catch (_) {
+      await client.dispose();
+      rethrow;
+    }
     if (!client.isLogged()) {
       await client.dispose();
       return null;

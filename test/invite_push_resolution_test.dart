@@ -46,6 +46,12 @@ class _HeadlessClient extends InviteClient {
   @override
   set syncPresence(PresenceType? value) => _presence = value;
   final initializedWith = <PresenceType?>[];
+  int disposed = 0;
+  @override
+  Future<void> dispose({bool closeDatabase = true}) async {
+    disposed++;
+  }
+
   @override
   set backgroundSync(bool value) {}
   @override
@@ -68,6 +74,10 @@ void main() {
       );
       await resolver.resolve('!invite:example.org', r'$event');
       expect(client.initializedWith, [PresenceType.offline]);
+      await resolver.close();
+      expect(client.disposed, 1);
+      await resolver.close();
+      expect(client.disposed, 1);
       expect(client.syncPresence, PresenceType.offline);
     },
   );

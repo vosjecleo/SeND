@@ -17,9 +17,14 @@ extension _MatrixSession on MatrixBackend {
       _personal = null;
       _openingPersonal = null;
       await _indexEventSubscription?.cancel();
+      _historyDownload?.dispose();
+      _historyDownload = null;
+      _openingDownload = null;
       await _historyIndex?.close();
       _historyIndex = null;
       _openingIndex = null;
+      _indexRetryAfter = null;
+      _indexError = null;
       _mediaHistory.clear();
       _mediaCursor.clear();
       _mediaEnded.clear();
@@ -289,10 +294,15 @@ extension _MatrixSession on MatrixBackend {
   Future<void> _logoutSession() async {
     cancelQueuedSends();
     await _indexEventSubscription?.cancel();
+    _historyDownload?.dispose();
+    _historyDownload = null;
+    _openingDownload = null;
     await _historyIndex?.clear();
     await _historyIndex?.close();
     _historyIndex = null;
     _openingIndex = null;
+    _indexRetryAfter = null;
+    _indexError = null;
     _indexFingerprints.clear();
     _indexedEventRooms.clear();
     _mediaHistory.clear();
@@ -364,6 +374,7 @@ extension _MatrixSession on MatrixBackend {
       _historySearchQuery = null;
       _historySearchCursor = null;
       _historySearchComplete = false;
+      _historySearchOffline = false;
       _historySearchGeneration++;
       _discoveredSpaceRooms.clear();
       _reviewedSpaceRoles.clear();
@@ -407,6 +418,11 @@ extension _MatrixSession on MatrixBackend {
       _unifiedPushRestoreRunning = false;
       _profileColor = null;
       _profileCache.clear();
+      _profileCheckedThisSession.clear();
+      _profileLastChecked.clear();
+      _profileBatchRetryAfter = null;
+      _labelledEvents.clear();
+      _uploadLabels = null;
       _profileRequests.clear();
       _accountPreferences = null;
       _deviceAppearance = null;
@@ -1095,6 +1111,14 @@ extension _MatrixSession on MatrixBackend {
           content?.tryGet<bool>('notifications_enabled') ?? true,
       notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
       optimizeVideos: content?.tryGet<bool>('optimize_videos') ?? true,
+      shareUploadCategories:
+          content?.tryGet<bool>('share_upload_categories') ?? false,
+      imageCompression: ImageCompressionPreset.parse(
+        content?['image_compression'],
+      ),
+      videoCompression: VideoCompressionPreset.parse(
+        content?['video_compression'],
+      ),
       notificationVolume: readNotificationVolume(content),
       callVolume:
           (content?['call_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
@@ -1223,6 +1247,8 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
+    final categoryChoiceChanged =
+        preferences.shareUploadCategories != _preferences.shareUploadCategories;
     final activityPrivacyChanged =
         preferences.sharePresence != _preferences.sharePresence;
     if (_matrix.userID == null) return;
@@ -1260,6 +1286,12 @@ extension _MatrixSession on MatrixBackend {
     final receiptPrivacyChanged =
         preferences.sendReadReceipts != _preferences.sendReadReceipts;
     _preferences = preferences;
+    if (categoryChoiceChanged && preferences.shareUploadCategories) {
+      _labelledEvents.clear();
+      if (_timeline case final timeline?) {
+        unawaited(_indexEvents(timeline.events));
+      }
+    }
     _configureClientPresence();
     _matrix.receiptsPublicByDefault = preferences.sendReadReceipts;
     if (receiptPrivacyChanged) _lastMarkedReadEventIds.clear();
@@ -1358,6 +1390,9 @@ extension _MatrixSession on MatrixBackend {
         'notifications_enabled': preferences.notificationsEnabled,
         'notification_sound': preferences.notificationSound,
         'optimize_videos': preferences.optimizeVideos,
+        'share_upload_categories': preferences.shareUploadCategories,
+        'video_compression': preferences.videoCompression.name,
+        'image_compression': preferences.imageCompression.name,
         notificationVolumeSettingKey: preferences.notificationVolume,
         'call_volume': preferences.callVolume,
         'notification_vibration': preferences.notificationVibration,

@@ -2,6 +2,8 @@ import 'dart:ui' show ViewFocusEvent, ViewFocusState, ViewFocusDirection;
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/mobile/mobile_chat_shell.dart';
+import 'package:deltiecord/ui/mobile/mobile_navigation.dart';
+import 'package:deltiecord/ui/mobile/mobile_timeline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,6 +134,90 @@ Iterable<MethodCall> _keyboardCommands(WidgetTester tester) =>
     );
 
 void main() {
+  testWidgets(
+    'notification shade return restores a dismissed keyboard once without losing its draft',
+    (tester) async {
+      final keyboard = _KeyboardFeed();
+      final composer = await _openComposer(tester, keyboard);
+      tester.testTextInput.log.clear();
+      _lifecycle(tester, [AppLifecycleState.inactive]);
+      _viewFocus(tester, ViewFocusState.unfocused);
+      keyboard.emit(visible: null, focused: false);
+      await tester.pump();
+      keyboard.emit(visible: false);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      _viewFocus(tester, ViewFocusState.focused);
+      _lifecycle(tester, [AppLifecycleState.resumed]);
+      await tester.pumpAndSettle();
+      expect(
+        _keyboardCommands(
+          tester,
+        ).where((c) => c.method == 'TextInput.show').length,
+        1,
+      );
+      expect(
+        _keyboardCommands(tester).where((c) => c.method == 'TextInput.hide'),
+        isEmpty,
+      );
+      expect(
+        tester.widget<TextField>(composer).controller!.text,
+        'Keep this draft',
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets('drawer drag frames retain the timeline and navigation widgets', (
+    tester,
+  ) async {
+    final keyboard = _KeyboardFeed();
+    await _openComposer(tester, keyboard);
+    final gesture = await tester.startGesture(const Offset(100, 300));
+    await gesture.moveTo(const Offset(145, 300));
+    await tester.pump(const Duration(milliseconds: 16));
+    final timeline = tester.widget(find.byType(MobileTimelineView));
+    final navigation = tester.widget(find.byType(MobileNavigationPanel));
+    for (final x in [175.0, 205.0, 235.0, 265.0]) {
+      await gesture.moveTo(Offset(x, 300));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        identical(timeline, tester.widget(find.byType(MobileTimelineView))),
+        isTrue,
+      );
+      expect(
+        identical(
+          navigation,
+          tester.widget(find.byType(MobileNavigationPanel)),
+        ),
+        isTrue,
+      );
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('Keep this draft'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets(
+    'duplicate keyboard samples do not rebuild the whole mobile shell',
+    (tester) async {
+      final keyboard = _KeyboardFeed();
+      await _openComposer(tester, keyboard);
+      final scaffold = find
+          .descendant(
+            of: find.byType(MobileChatShell),
+            matching: find.byType(Scaffold),
+          )
+          .first;
+      final before = tester.widget(scaffold);
+      keyboard.emit(visible: true, bottom: 300);
+      await tester.pumpAndSettle();
+      expect(identical(before, tester.widget(scaffold)), isTrue);
+      keyboard.emit(visible: true, bottom: 280);
+      await tester.pumpAndSettle();
+      expect(identical(before, tester.widget(scaffold)), isFalse);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'timeline swipe opens Home after keyboard closes with focus retained',
     (tester) async {

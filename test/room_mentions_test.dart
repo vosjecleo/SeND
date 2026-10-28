@@ -4,6 +4,36 @@ import 'package:deltiecord/services/room_mentions.dart';
 import 'package:deltiecord/ui/matrix_html_text.dart';
 
 void main() {
+  test(
+    'reply fallback links and recipient metadata do not create authored mentions',
+    () {
+      expect(
+        messageHasVisualMention(
+          body: 'hello',
+          isReply: true,
+          mentions: {
+            'user_ids': ['@friend:test'],
+          },
+          formattedBody:
+              '<mx-reply><blockquote><a href="https://matrix.to/#/@friend:test">Friend</a></blockquote></mx-reply>hello',
+        ),
+        false,
+      );
+      expect(
+        messageHasVisualMention(body: 'hello @friend:test', isReply: true),
+        true,
+      );
+      expect(
+        messageHasVisualMention(
+          body: 'hello Friend',
+          isReply: true,
+          formattedBody:
+              '<a href="https://matrix.to/#/@friend:test">Friend</a>',
+        ),
+        true,
+      );
+    },
+  );
   test('malformed mention recipients are ignored, not cast into a crash', () {
     for (final value in ['bad', 7, <String, Object?>{}, null]) {
       expect(

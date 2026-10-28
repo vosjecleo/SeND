@@ -152,6 +152,25 @@ The configuration generator and helper tests are automated. A fresh-host live
 installation and end-to-end calling/push still need operator testing; the installer
 does not certify them merely because containers start.
 
+## Storage controls
+
+After initial startup, the wizard offers SeND storage controls and a 12 GiB
+original-upload allowance. This step runs only after Synapse has created its
+database tables. It recreates Synapse, not the other services. Declining leaves
+the installer in `storage/` for later use:
+
+```sh
+sudo python3 /opt/send/storage/install_storage.py \
+  --compose /opt/send/compose.yaml --config /opt/send/homeserver.yaml
+```
+
+The command above checks without changing anything. Add `--apply` during a
+maintenance window after reviewing the configuration and database backup.
+Existing media is never deleted to meet the allowance. Type/source categorization
+is optional in clients; encrypted files remain Other until labelled. Pruning
+requires a preview and confirmation and can break shared attachments.
+See [module setup and rollback](README.md#account-storage-and-profile-metadata).
+
 ## Updates, backups and recovery
 
 Never rerun the wizard over an existing server or change its server name. Keep the

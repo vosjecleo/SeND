@@ -17,6 +17,7 @@ class _MessageComposer extends StatefulWidget {
     required this.onPasteImage,
     required this.pendingAttachments,
     required this.onRemoveAttachment,
+    required this.onEditAttachment,
     required this.onToggleAttachmentSpoiler,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
@@ -44,6 +45,7 @@ class _MessageComposer extends StatefulWidget {
   final Future<bool> Function() onPasteImage;
   final List<AttachmentDraft> pendingAttachments;
   final ValueChanged<int> onRemoveAttachment;
+  final ValueChanged<int> onEditAttachment;
   final ValueChanged<int> onToggleAttachmentSpoiler;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
@@ -575,6 +577,8 @@ class _MessageComposerState extends State<_MessageComposer> {
                                               widget.pendingAttachments[index],
                                           onRemove: () =>
                                               widget.onRemoveAttachment(index),
+                                          onEdit: () =>
+                                              widget.onEditAttachment(index),
                                           onToggleSpoiler: () => widget
                                               .onToggleAttachmentSpoiler(index),
                                         ),
@@ -788,11 +792,13 @@ class _PendingAttachmentTile extends StatelessWidget {
     required this.attachment,
     required this.onRemove,
     required this.onToggleSpoiler,
+    required this.onEdit,
   });
 
   final AttachmentDraft attachment;
   final VoidCallback onRemove;
   final VoidCallback onToggleSpoiler;
+  final VoidCallback onEdit;
 
   Future<void> _showMenu(BuildContext context, Offset position) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -804,6 +810,8 @@ class _PendingAttachmentTile extends StatelessWidget {
         Offset.zero & overlay.size,
       ),
       items: [
+        if (attachment.mimeType.startsWith('image/'))
+          const PopupMenuItem(value: 'edit', child: Text('Edit image')),
         PopupMenuItem(
           value: 'spoiler',
           child: ListTile(
@@ -826,6 +834,7 @@ class _PendingAttachmentTile extends StatelessWidget {
         ),
       ],
     );
+    if (action == 'edit') onEdit();
     if (action == 'spoiler') onToggleSpoiler();
     if (action == 'remove') onRemove();
   }

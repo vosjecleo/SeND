@@ -128,6 +128,10 @@ class _MobileProfileCardState extends State<_MobileProfileCard> {
                   child: DeltiecordProfileCard(
                     scrollController: _scrollController,
                     profile: profile,
+                    loadImage: (banner) => widget.backend.getProfileImage(
+                      profile.userId,
+                      banner: banner,
+                    ),
                     onClose: () => Navigator.pop(context),
                     onEdit: own && widget.onEditOwnProfile != null
                         ? () {

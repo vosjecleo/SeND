@@ -2393,6 +2393,7 @@ class _HomeRoomListTile extends StatelessWidget {
     final age = compactActivityAge(room.lastActivityAt);
     return ActivityWatch(
       backend: backend,
+      roomId: room.id,
       userId: room.isDirect ? room.directUserId : null,
       presence: room.presence,
       child: NavigationHover(

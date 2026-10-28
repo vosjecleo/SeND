@@ -56,6 +56,14 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Accessibility'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('About'),
+      100,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('settings-navigation-list')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('About', skipOffstage: false), findsOneWidget);
     expect(find.text('Advanced', skipOffstage: false), findsNothing);
     expect(find.text('@deltie:example.org'), findsWidgets);

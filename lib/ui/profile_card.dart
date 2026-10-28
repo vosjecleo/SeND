@@ -7,6 +7,8 @@ import 'deltiecord_theme.dart';
 import 'json_theme.dart';
 import 'activity_widgets.dart';
 import 'lifecycle_memory_image.dart';
+import 'profile_media_viewer.dart';
+import 'profile_watch.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -23,6 +25,7 @@ class DeltiecordProfileCard extends StatelessWidget {
     this.scrollController,
     this.scrollable = false,
     this.footer,
+    this.loadImage,
     super.key,
   });
 
@@ -44,6 +47,7 @@ class DeltiecordProfileCard extends StatelessWidget {
   final ScrollController? scrollController;
   final bool scrollable;
   final Widget? footer;
+  final Future<Uint8List?> Function(bool banner)? loadImage;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +68,7 @@ class DeltiecordProfileCard extends StatelessWidget {
       palette.surface,
     );
     final timezone = profile.timezone;
-    return Container(
+    final card = Container(
       key: const Key('profile-card'),
       constraints: BoxConstraints(minHeight: minimumHeight),
       foregroundDecoration: BoxDecoration(
@@ -98,6 +102,8 @@ class DeltiecordProfileCard extends StatelessWidget {
               onClose: onClose,
               avatarPreview: avatarPreview,
               bannerPreview: bannerPreview,
+              loadImage: preview ? null : loadImage,
+              viewImages: !preview,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -213,6 +219,14 @@ class DeltiecordProfileCard extends StatelessWidget {
         ),
       ),
     );
+    return preview
+        ? card
+        : ProfileWatch(
+            backend: ActivityScope.of(context),
+            id: profile.userId,
+            expanded: true,
+            child: card,
+          );
   }
 }
 
@@ -318,6 +332,8 @@ class _ProfileHeader extends StatelessWidget {
     required this.onClose,
     this.avatarPreview,
     this.bannerPreview,
+    this.loadImage,
+    this.viewImages = true,
   });
 
   final UserProfileSummary profile;
@@ -327,6 +343,29 @@ class _ProfileHeader extends StatelessWidget {
   final VoidCallback? onClose;
   final Widget? avatarPreview;
   final Widget? bannerPreview;
+  final Future<Uint8List?> Function(bool banner)? loadImage;
+  final bool viewImages;
+
+  Widget _viewable(
+    BuildContext context,
+    Widget child,
+    Uint8List? bytes,
+    bool banner,
+  ) {
+    if (!viewImages || bytes == null) return child;
+    return Semantics(
+      button: true,
+      label: banner ? 'View banner' : 'View avatar',
+      child: GestureDetector(
+        onTap: () => showProfileMedia(
+          context,
+          bytes,
+          loadImage == null ? null : () => loadImage!(banner),
+        ),
+        child: MouseRegion(cursor: SystemMouseCursors.click, child: child),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -348,91 +387,100 @@ class _ProfileHeader extends StatelessWidget {
                 top: 0,
                 right: 0,
                 height: bannerHeight,
-                child:
-                    bannerPreview ??
-                    (profile.bannerBytes == null
-                        ? DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  accent.withValues(alpha: 0.72),
-                                  secondaryAccent.withValues(alpha: 0.8),
-                                ],
+                child: _viewable(
+                  context,
+                  bannerPreview ??
+                      (profile.bannerBytes == null
+                          ? DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    accent.withValues(alpha: 0.72),
+                                    secondaryAccent.withValues(alpha: 0.8),
+                                  ],
+                                ),
                               ),
-                            ),
-                          )
-                        : Image.memory(
-                            profile.bannerBytes!,
-                            fit: BoxFit.cover,
-                            cacheWidth: 1440,
-                            gaplessPlayback: true,
-                            filterQuality: FilterQuality.high,
-                          )),
+                            )
+                          : Image.memory(
+                              profile.bannerBytes!,
+                              fit: BoxFit.cover,
+                              cacheWidth: 1440,
+                              gaplessPlayback: true,
+                              filterQuality: FilterQuality.high,
+                            )),
+                  profile.bannerBytes,
+                  true,
+                ),
               ),
               Positioned(
                 left: 16,
                 bottom: 0,
-                child: Container(
-                  width: avatarSize,
-                  height: avatarSize,
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape:
-                        Theme.of(
-                              context,
-                            ).extension<ThemeChrome>()?.glassAvatars ==
-                            true
-                        ? BoxShape.rectangle
-                        : BoxShape.circle,
-                    borderRadius:
-                        Theme.of(
-                              context,
-                            ).extension<ThemeChrome>()?.glassAvatars ==
-                            true
-                        ? BorderRadius.circular(10)
-                        : null,
-                    color: palette.surface,
-                  ),
-                  child: ThemeAvatarClip(
-                    clipBehavior: Clip.antiAlias,
-                    child: ColoredBox(
-                      color: palette.elevated,
-                      child:
-                          avatarPreview ??
-                          (profile.avatarBytes == null
-                              ? Center(
-                                  child: Text(
-                                    profile.displayName.characters.firstOrNull
-                                            ?.toUpperCase() ??
-                                        '?',
-                                    style: const TextStyle(
-                                      fontSize: 42,
-                                      fontWeight: FontWeight.w700,
+                child: _viewable(
+                  context,
+                  Container(
+                    width: avatarSize,
+                    height: avatarSize,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape:
+                          Theme.of(
+                                context,
+                              ).extension<ThemeChrome>()?.glassAvatars ==
+                              true
+                          ? BoxShape.rectangle
+                          : BoxShape.circle,
+                      borderRadius:
+                          Theme.of(
+                                context,
+                              ).extension<ThemeChrome>()?.glassAvatars ==
+                              true
+                          ? BorderRadius.circular(10)
+                          : null,
+                      color: palette.surface,
+                    ),
+                    child: ThemeAvatarClip(
+                      clipBehavior: Clip.antiAlias,
+                      child: ColoredBox(
+                        color: palette.elevated,
+                        child:
+                            avatarPreview ??
+                            (profile.avatarBytes == null
+                                ? Center(
+                                    child: Text(
+                                      profile.displayName.characters.firstOrNull
+                                              ?.toUpperCase() ??
+                                          '?',
+                                      style: const TextStyle(
+                                        fontSize: 42,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : hasAnimatedImageHeader(profile.avatarBytes!)
-                              ? LifecycleMemoryImage(
-                                  bytes: profile.avatarBytes!,
-                                  animated: true,
-                                  decodeWidth: 512,
-                                  autoplay: !MediaQuery.disableAnimationsOf(
-                                    context,
-                                  ),
-                                  fit: BoxFit.cover,
-                                )
-                              : Image.memory(
-                                  profile.avatarBytes!,
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 256,
-                                  cacheHeight: 256,
-                                  gaplessPlayback: true,
-                                  filterQuality: FilterQuality.high,
-                                )),
+                                  )
+                                : hasAnimatedImageHeader(profile.avatarBytes!)
+                                ? LifecycleMemoryImage(
+                                    bytes: profile.avatarBytes!,
+                                    animated: true,
+                                    decodeWidth: 512,
+                                    autoplay: !MediaQuery.disableAnimationsOf(
+                                      context,
+                                    ),
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.memory(
+                                    profile.avatarBytes!,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 256,
+                                    cacheHeight: 256,
+                                    gaplessPlayback: true,
+                                    filterQuality: FilterQuality.high,
+                                  )),
+                      ),
                     ),
                   ),
+                  profile.avatarBytes,
+                  false,
                 ),
               ),
               Positioned(

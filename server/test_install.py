@@ -36,6 +36,8 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(synapse['url_preview_enabled'])
             self.assertIn('ffmpeg', (root / 'helpers/Dockerfile').read_text())
             self.assertIn('hosting_config.py', [p.name for p in (root / 'helpers').iterdir()])
+            for name in ('install_storage.py', 'send_storage.py', 'storage_schema.sql'):
+                self.assertTrue((root / 'storage' / name).is_file())
             with self.assertRaises(ValueError):
                 install.generate(root, self.config(), {})
             self.assertEqual(synapse, json.loads((root / 'homeserver.yaml').read_text()))

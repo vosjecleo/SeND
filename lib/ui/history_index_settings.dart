@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../backend/chat_backend.dart';
 import '../services/history_index.dart';
+import '../services/history_download.dart';
+import '../services/history_scope.dart';
+import 'history_download_panel.dart';
 
 final _indexPrompts = Expando<bool>();
 
@@ -22,11 +26,12 @@ Future<void> showHistoryIndexPrompt(
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Keep a local search index?'),
-        content: const Text(
+        content: Text(
           'A text index makes repeat searches faster and uses extra storage on this device. '
           'It starts with a 100 MiB limit. You can change the limit or clear it in Storage settings. '
           'Media indexing saves event references, not the images or videos. '
-          'Indexed message text is decrypted on this device. This is separate from the normal chat cache.',
+          'Indexed message text is decrypted on this device. This is separate from the normal chat cache. '
+          '${index.encryptedAtRest ? '' : 'The search database is not separately encrypted.'}',
         ),
         actions: [
           TextButton(
@@ -55,7 +60,9 @@ class HistoryIndexSettings extends StatefulWidget {
 
 class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
   HistoryIndex? _index;
+  HistoryDownload? _download;
   bool _busy = true;
+  int _scopeChoiceRevision = 0;
   String? _error;
   void _updated() {
     if (mounted) setState(() {});
@@ -87,12 +94,17 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
       });
     }
     try {
-      final index = await widget.backend.openHistoryIndex();
+      final index = await widget.backend.retryHistoryIndex();
+      final download = index == null
+          ? null
+          : await widget.backend.openHistoryDownload();
       if (mounted) {
         setState(() {
           _bind(index);
+          _download = download;
           if (index == null) {
             _error =
+                widget.backend.historyIndexError ??
                 'Local indexing is unavailable. Check storage and reopen Settings to retry.';
           }
         });
@@ -103,11 +115,12 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<void> _change(bool enabled, {int? limit, bool clear = false}) async {
+  Future<bool> _change(bool enabled, {int? limit, bool clear = false}) async {
     setState(() {
       _busy = true;
       _error = null;
     });
+    var changed = false;
     try {
       if (clear) {
         await widget.backend.clearHistoryIndex();
@@ -116,6 +129,7 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
       }
       final index = await widget.backend.openHistoryIndex();
       if (mounted) setState(() => _bind(index));
+      changed = true;
     } catch (_) {
       if (mounted) {
         setState(
@@ -124,6 +138,50 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
       }
     }
     if (mounted) setState(() => _busy = false);
+    return changed;
+  }
+
+  Future<void> _changeScope(HistoryScope scope) async {
+    if (scope == _index?.scope) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change search scope?'),
+        content: const Text(
+          'This applies to history downloads and incoming messages. Search entries outside the chosen scope will be removed from this device, and saved download progress will reset. Your messages and uploaded media stay intact.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Change scope'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (accepted != true) {
+      setState(() => _scopeChoiceRevision++);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.backend.configureHistoryScope(scope);
+    } catch (_) {
+      if (mounted) _error = 'Could not change the search scope. Try again.';
+    }
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _scopeChoiceRevision++;
+      });
+    }
   }
 
   @override
@@ -145,8 +203,29 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
           'Media indexing stores event IDs and media types. It does not download image, video or audio files.',
         ),
         if (index != null) ...[
+          DropdownButtonFormField<HistoryScope>(
+            key: ValueKey(
+              'history-scope-${index.scope.name}-$_scopeChoiceRevision',
+            ),
+            initialValue: index.scope,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Keep history from'),
+            items: [
+              for (final scope in HistoryScope.values)
+                DropdownMenuItem(value: scope, child: Text(scope.label)),
+            ],
+            onChanged: _busy
+                ? null
+                : (scope) {
+                    if (scope != null) _changeScope(scope);
+                  },
+          ),
+          const SizedBox(height: 12),
           Text(
-            '${index.entries} indexed events · ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}% of cache budget used',
+            '${index.entries} indexed events · ${(index.bytes / 1048576).toStringAsFixed(1)} MiB${kIsWeb ? ' estimated' : ' database size'}',
+          ),
+          Text(
+            'Quota use: ${(index.capacityRatio * 100).clamp(0, 100).toStringAsFixed(0)}%, including reserved overhead. Up to ${index.entryLimit} events, subject to space.',
           ),
           DropdownButtonFormField<int>(
             initialValue: index.limitMiB,
@@ -158,6 +237,9 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
                 50,
                 100,
                 250,
+                500,
+                1024,
+                2048,
                 index.limitMiB,
               }.toList()..sort())
                 DropdownMenuItem(value: n, child: Text('$n MiB')),
@@ -172,6 +254,13 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
             onPressed: _busy ? null : () => _change(index.enabled, clear: true),
             child: const Text('Clear search and media index'),
           ),
+          if (_download case final download?)
+            HistoryDownloadPanel(
+              backend: widget.backend,
+              index: index,
+              download: download,
+              increaseLimit: (limit) => _change(true, limit: limit),
+            ),
         ],
         if (_busy) const LinearProgressIndicator(),
         if (_error != null) ...[

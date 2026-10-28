@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/chat_models.dart';
+import '../models/media_compression.dart';
 import 'video_optimizer.dart';
 
 enum VideoRecovery { retry, original, cancel }
@@ -14,9 +15,10 @@ typedef VideoOptimizer =
 
 class VideoPreparation extends ChangeNotifier {
   VideoPreparation({VideoOptimizer? optimizer, bool? supported})
-    : _optimizer = optimizer ?? optimizeVideo,
+    // ignore: prefer_initializing_formals
+    : _optimizer = optimizer,
       _supported = supported ?? videoOptimizationSupported;
-  final VideoOptimizer _optimizer;
+  final VideoOptimizer? _optimizer;
   final bool _supported;
   static Future<AttachmentDraft> probe(AttachmentDraft draft) =>
       probeVideo(draft);
@@ -38,7 +40,10 @@ class VideoPreparation extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<AttachmentDraft> prepare(AttachmentDraft draft) async {
+  Future<AttachmentDraft> prepare(
+    AttachmentDraft draft, {
+    VideoCompressionPreset preset = VideoCompressionPreset.balanced,
+  }) async {
     if (!draft.mimeType.startsWith('video/')) {
       return draft;
     }
@@ -56,7 +61,15 @@ class VideoPreparation extends ChangeNotifier {
       while (true) {
         if (_canceled) throw StateError('Video preparation canceled.');
         try {
-          final result = await _optimizer(
+          final VideoOptimizer optimizer =
+              _optimizer ??
+              (value, {required progress, required canceled}) => optimizeVideo(
+                value,
+                progress: progress,
+                canceled: canceled,
+                preset: preset,
+              );
+          final result = await optimizer(
             draft,
             progress: (v) {
               progress = v;

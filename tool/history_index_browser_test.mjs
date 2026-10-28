@@ -42,9 +42,21 @@ try {
     await call('ackWarning');await call('close');await call('open');
     const acknowledged=(await call('stats')).warning;
     await call('clear');const clearedWarning=(await call('stats')).warning;
-    return {mediaOnly,noText,words,edited,redacted,isolated,reopened,disabled,empty,unique:new Set(pages).size,warning,acknowledged,clearedWarning};
+    await call('put',{rows:[row('kept','x'.repeat(4000000))],text:true,limit:16,preserve:true});
+    const quotaAccepted=await call('put',{rows:[row('reject','z'.repeat(2000000))],text:true,limit:16,preserve:true});
+    const quotaIds=await query(), storedRows=await call('rows',{ids:['kept']});
+    await call('saveDownloadState',{state:{version:1,rooms:['!r:test'],position:0,cursor:'opaque'}});
+    await call('close');await call('open');const savedCursor=(await call('downloadState')).cursor;
+    await call('saveDownloadState',{state:null});const resetJob=await call('downloadState');
+    await call('put',{rows:[{...row('excluded','server text','video'),room:'!server:test'}],text:true,limit:16});
+    await call('setScope',{scope:'dms',rooms:['!r:test']});
+    const scoped=await call('query',{room:'!server:test',terms:[],limit:50,offset:0});
+    if(scoped.length) throw new Error('Excluded room survived scope pruning');
+    await call('configure',{enabled:true,limit:25});await call('close');await call('open');
+    if(await call('scope')!=='dms') throw new Error('Scope did not survive settings/reopen');
+    return {mediaOnly,noText,words,edited,redacted,isolated,reopened,disabled,empty,unique:new Set(pages).size,warning,acknowledged,clearedWarning,quotaAccepted,quotaIds,storedBodyLength:storedRows[0].body.length,savedCursor,resetJob};
   });
-  assert.deepEqual(results,{mediaOnly:['image'],noText:[],words:['new','text'],edited:['text'],redacted:[],isolated:[],reopened:['text'],disabled:['image'],empty:{bytes:0,entries:0,budgetBytes:0,warning:0},unique:120,warning:2,acknowledged:1,clearedWarning:0});
+  assert.deepEqual(results,{mediaOnly:['image'],noText:[],words:['new','text'],edited:['text'],redacted:[],isolated:[],reopened:['text'],disabled:['image'],empty:{bytes:0,entries:0,budgetBytes:0,warning:0},unique:120,warning:2,acknowledged:1,clearedWarning:0,quotaAccepted:false,quotaIds:['kept'],storedBodyLength:4000000,savedCursor:'opaque',resetJob:null});
   assert(requests.every(url=>url.startsWith(`http://127.0.0.1:${server.address().port}/`)));
   console.log('Browser index: metadata-only mode, opt-in, terms, edits, redactions, account isolation, restart, opt-out and clearing passed. No media/network requests.');
 } finally {await browser.close();server.close();}

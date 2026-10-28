@@ -21,6 +21,7 @@ class _Conversation extends StatefulWidget {
     required this.onDropAttachments,
     required this.pendingAttachments,
     required this.onRemoveAttachment,
+    required this.onEditAttachment,
     required this.onToggleAttachmentSpoiler,
     required this.mentionSuggestions,
     required this.mentionSelectionIndex,
@@ -51,6 +52,7 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<List<AttachmentDraft>> onDropAttachments;
   final List<AttachmentDraft> pendingAttachments;
   final ValueChanged<int> onRemoveAttachment;
+  final ValueChanged<int> onEditAttachment;
   final ValueChanged<int> onToggleAttachmentSpoiler;
   final List<MentionSuggestion> mentionSuggestions;
   final int mentionSelectionIndex;
@@ -1191,6 +1193,7 @@ class _ConversationState extends State<_Conversation> {
                       onPasteImage: widget.onPasteImage,
                       pendingAttachments: widget.pendingAttachments,
                       onRemoveAttachment: widget.onRemoveAttachment,
+                      onEditAttachment: widget.onEditAttachment,
                       onToggleAttachmentSpoiler:
                           widget.onToggleAttachmentSpoiler,
                       mentionSuggestions: widget.mentionSuggestions,

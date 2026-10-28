@@ -210,7 +210,18 @@ extension _MatrixRoomMetadata on MatrixBackend {
               await room.loadHeroUsers();
               _roomHeroUsersLoaded.add(room.id);
             }
-            changed = await _refreshAvatar(room) || changed;
+            final visible =
+                room.id == _selectedRoomId ||
+                room.id == _selectedSpaceId ||
+                (_profileWatchers[room.id]?.values.any(
+                      (watch) => watch.visible(),
+                    ) ??
+                    false) ||
+                (_profileWatchers[room.directChatMatrixID]?.values.any(
+                      (watch) => watch.visible(),
+                    ) ??
+                    false);
+            if (visible) changed = await _refreshAvatar(room) || changed;
             if (!room.isSpace) {
               changed = await _refreshPreview(room) || changed;
             }

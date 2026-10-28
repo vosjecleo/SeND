@@ -10,6 +10,7 @@ import '../../services/draft_store.dart';
 import '../../services/custom_emoji.dart';
 import '../../services/browser_lifecycle.dart' as browser;
 import '../../services/keyboard_geometry.dart';
+import '../../services/frame_diagnostics.dart';
 import '../settings_screen.dart';
 import '../call_and_chat_layout.dart';
 import '../incoming_call_banner.dart';
@@ -47,13 +48,16 @@ class _MobileChatShellState extends State<MobileChatShell>
   String? _lastSpaceId;
   int _roomOpenGeneration = 0;
   final Map<int, Offset> _pointerStarts = {};
-  double? _navigationDragProgress;
+  final _navigationMotion = ValueNotifier<double?>(null);
+  double? get _navigationDragProgress => _navigationMotion.value;
+  set _navigationDragProgress(double? value) => _navigationMotion.value = value;
   bool? _dragStartedWithNavigation;
   bool? _reportedConversationVisible;
   int _resumeGeneration = 0;
   DateTime? _backgroundedAt;
   KeyboardGeometry? _keyboardGeometry;
   FocusNode? _focusedWithKeyboard;
+  FocusNode? _transientKeyboard;
   FocusNode? _keyboardToRestore;
   bool _restoreOnResume = false;
   bool _keyboardBackgrounded = false;
@@ -168,12 +172,16 @@ class _MobileChatShellState extends State<MobileChatShell>
     backend.removeListener(_backendChanged);
     unawaited(_draftStore.dispose());
     _timelineGestureReset?.cancel();
+    _navigationMotion.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive) _rememberKeyboard();
+    if (state == AppLifecycleState.inactive) {
+      _rememberKeyboard();
+      _transientKeyboard = _focusedWithKeyboard;
+    }
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       _backgroundKeyboard();
@@ -182,6 +190,15 @@ class _MobileChatShellState extends State<MobileChatShell>
       _backgroundedAt ??= DateTime.now();
     }
     if (state != AppLifecycleState.resumed) return;
+    final transient = _transientKeyboard;
+    _transientKeyboard = null;
+    if (!_keyboardBackgrounded &&
+        transient?.hasFocus == true &&
+        transient?.context != null) {
+      _keyboardToRestore = transient;
+      _restoreOnResume = true;
+      _queueKeyboardRefresh();
+    }
     _resumeKeyboard();
     final backgroundedAt = _backgroundedAt;
     _backgroundedAt = null;
@@ -246,6 +263,7 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   void _acceptKeyboardGeometry(KeyboardGeometry geometry) {
+    countUiDiagnostic('keyboard.geometry');
     if (!mounted) return;
     final oldSubtype = _keyboardGeometry?.inputSubtype;
     final languageChanged =
@@ -264,7 +282,9 @@ class _MobileChatShellState extends State<MobileChatShell>
         if (mounted) unawaited(_refreshKeyboardGeometry());
       });
     }
-    setState(() => _keyboardGeometry = geometry);
+    if (_keyboardGeometry != geometry) {
+      setState(() => _keyboardGeometry = geometry);
+    }
     _rememberKeyboard();
     if (!_restoreOnResume ||
         !_keyboardIsForeground ||
@@ -360,6 +380,7 @@ class _MobileChatShellState extends State<MobileChatShell>
 
   @override
   Widget build(BuildContext context) {
+    countUiDiagnostic('shell.build');
     final room = backend.selectedRoom;
     _reportConversationVisibility(
       room != null &&
@@ -385,6 +406,7 @@ class _MobileChatShellState extends State<MobileChatShell>
           // gesture arena. Message rows may still claim a left drag for reply,
           // while a right drag on the timeline opens navigation.
           onPointerDown: (event) {
+            _transientKeyboard = null;
             _languageEditor = null;
             _languageRecoveryUntil = null;
             _languageRecovery?.cancel();
@@ -426,19 +448,18 @@ class _MobileChatShellState extends State<MobileChatShell>
                 (!startedVisible && delta.dx <= 0)) {
               return;
             }
-            if (_navigationDragProgress == null) {
+            final startingDrag = _navigationDragProgress == null;
+            if (startingDrag) {
               FocusManager.instance.primaryFocus?.unfocus();
               _timelineGestureReset?.cancel();
-              _suppressTimelineGestures = true;
             }
             final width = MediaQuery.sizeOf(context).width;
             final progress = startedVisible
                 ? (1 + delta.dx / width).clamp(0.0, 1.0)
                 : (delta.dx / width).clamp(0.0, 1.0);
-            setState(() {
-              _dragStartedWithNavigation = startedVisible;
-              _navigationDragProgress = progress;
-            });
+            _dragStartedWithNavigation = startedVisible;
+            _navigationDragProgress = progress;
+            if (startingDrag) setState(() => _suppressTimelineGestures = true);
           },
           onPointerCancel: (event) {
             _pointerStarts.remove(event.pointer);
@@ -477,14 +498,12 @@ class _MobileChatShellState extends State<MobileChatShell>
           child: Stack(
             children: [
               Positioned.fill(
-                child: AnimatedSlide(
-                  offset: room == null
-                      ? Offset.zero
-                      : Offset(0.12 * _navigationProgress, 0),
-                  duration: _navigationDragProgress == null
-                      ? _duration
-                      : Duration.zero,
-                  curve: Curves.easeOutCubic,
+                child: _NavigationSlide(
+                  motion: _navigationMotion,
+                  visible: _navigationVisible,
+                  closedX: 0,
+                  openX: room == null ? 0 : .12,
+                  duration: _duration,
                   child: room == null
                       ? const _NoRoomSelected()
                       : room.isVoice
@@ -557,12 +576,12 @@ class _MobileChatShellState extends State<MobileChatShell>
                 ),
               ),
               Positioned.fill(
-                child: AnimatedSlide(
-                  offset: Offset(-1 + _navigationProgress, 0),
-                  duration: _navigationDragProgress == null
-                      ? _duration
-                      : Duration.zero,
-                  curve: Curves.easeOutCubic,
+                child: _NavigationSlide(
+                  motion: _navigationMotion,
+                  visible: _navigationVisible,
+                  closedX: -1,
+                  openX: 0,
+                  duration: _duration,
                   child: IgnorePointer(
                     ignoring: _navigationProgress < 0.02,
                     child: Material(
@@ -703,6 +722,38 @@ class _MobileChatShellState extends State<MobileChatShell>
       backend.setConversationVisible(visible);
     });
   }
+}
+
+/// Drag frames update only the panel transform, not its room/list contents.
+class _NavigationSlide extends StatelessWidget {
+  const _NavigationSlide({
+    required this.motion,
+    required this.visible,
+    required this.closedX,
+    required this.openX,
+    required this.duration,
+    required this.child,
+  });
+  final ValueListenable<double?> motion;
+  final bool visible;
+  final double closedX, openX;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<double?>(
+    valueListenable: motion,
+    child: child,
+    builder: (context, drag, child) {
+      final progress = drag ?? (visible ? 1.0 : 0.0);
+      return AnimatedSlide(
+        offset: Offset(closedX + (openX - closedX) * progress, 0),
+        duration: drag == null ? duration : Duration.zero,
+        curve: Curves.easeOutCubic,
+        child: child,
+      );
+    },
+  );
 }
 
 class _NoRoomSelected extends StatelessWidget {

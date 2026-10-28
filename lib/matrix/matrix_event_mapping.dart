@@ -201,6 +201,11 @@ extension _MatrixEventMapping on MatrixBackend {
                 ),
                 hasVisualMention: messageHasVisualMention(
                   body: body,
+                  isReply:
+                      displayEvent.content
+                          .tryGetMap<String, Object?>('m.relates_to')
+                          ?.containsKey('m.in_reply_to') ==
+                      true,
                   formattedBody: displayEvent.isRichMessage
                       ? displayEvent.formattedText
                       : null,

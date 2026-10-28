@@ -9,11 +9,20 @@ class MemoryIndexStore extends HistoryStore {
   MemoryIndexStore() : super('test');
   final rows = <String, Map<String, Object?>>{};
   bool text = false;
+  String? scope;
   int budget = 100, warning = 0, used = 0, writes = 0;
   @override
   Future<void> open() async {}
   @override
   Future<void> close() async {}
+  @override
+  Future<String?> loadScope() async => scope;
+  @override
+  Future<void> setScope(String value, Set<String> allowedRooms) async {
+    scope = value;
+    rows.removeWhere((_, row) => !allowedRooms.contains(row['room']));
+  }
+
   @override
   Future<Map<String, Object?>> settings() async => {
     'enabled': text,

@@ -20,6 +20,7 @@ import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -194,7 +195,7 @@ class DeltiecordPushWorker(
             )
             DeltiecordPushWakeService.stop(applicationContext)
             if (ownsEngine && engine != null) {
-                withContext(Dispatchers.Main) { engine.destroy() }
+                releaseOwnedEngine(engine)
             }
         }
     }
@@ -262,7 +263,7 @@ class DeltiecordPushWorker(
             return if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.success()
         } finally {
             if (ownsEngine && engine != null) {
-                withContext(Dispatchers.Main) { engine.destroy() }
+                releaseOwnedEngine(engine)
             }
         }
     }
@@ -283,6 +284,7 @@ class DeltiecordPushWorker(
                 result.notImplemented()
             }
         }
+        try {
         engine.dartExecutor.executeDartEntrypoint(
             DartExecutor.DartEntrypoint(
                 loader.findAppBundlePath(),
@@ -291,7 +293,33 @@ class DeltiecordPushWorker(
         )
         withTimeout(20_000) { ready.await() }
         engine
+        } catch (error: Throwable) {
+            // Failure before returning must not leave an unowned engine alive.
+            engine.destroy()
+            throw error
+        }
     }
+
+    private suspend fun releaseOwnedEngine(engine: FlutterEngine) =
+        withContext(NonCancellable + Dispatchers.Main) {
+            // REPLACE cancels older work. Cleanup must still close its Matrix
+            // database before another worker opens the same encrypted store.
+            try {
+                val closed = CompletableDeferred<Unit>()
+                MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod(
+                    "shutdown", null, object : MethodChannel.Result {
+                        override fun success(result: Any?) { closed.complete(Unit) }
+                        override fun error(code: String, message: String?, details: Any?) { closed.complete(Unit) }
+                        override fun notImplemented() { closed.complete(Unit) }
+                    },
+                )
+                withTimeout(3_000) { closed.await() }
+            } catch (_: Throwable) {
+                // Native engine teardown is required even if Dart is unresponsive.
+            } finally {
+                engine.destroy()
+            }
+        }
 
     private suspend fun invokeResolver(
         engine: FlutterEngine,

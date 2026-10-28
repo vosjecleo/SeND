@@ -10,6 +10,8 @@ import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
 import '../services/personal_data.dart';
 import '../services/history_index.dart';
+import '../services/history_download.dart';
+import '../services/history_scope.dart';
 import '../services/room_send_queue.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
@@ -28,13 +30,32 @@ abstract class ChatBackend extends ChangeNotifier {
   }
 
   PersonalData? get personalData => null;
+  String? get serverStorageWarning => null;
+  Future<Map<String, dynamic>> serverStorage(
+    String action, [
+    Map<String, Object?>? body,
+  ]) async => throw UnsupportedError(
+    'Your homeserver does not support SeND storage controls.',
+  );
   HistoryIndex? get historyIndex => null;
+  List<HistoryDownloadRoom> get historyDownloadRooms => const [];
+  Future<HistoryDownload?> openHistoryDownload() async => null;
+  String? get historyIndexError => null;
+  Future<HistoryIndex?> retryHistoryIndex() => openHistoryIndex();
   Future<HistoryIndex?> openHistoryIndex() async => historyIndex;
   Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
     await (await openHistoryIndex())?.configure(text: enabled, limit: limitMiB);
   }
 
   Future<void> clearHistoryIndex() async => historyIndex?.clear();
+  Future<void> configureHistoryScope(HistoryScope scope) async {
+    final allowed = historyDownloadRooms
+        .where((r) => scope.includes(r.kind))
+        .map((r) => r.id)
+        .toSet();
+    await (await openHistoryIndex())?.setScope(scope, allowed);
+  }
+
   List<ChatMessage> mediaMessagesForRoom(String roomId) => messages
       .where(
         (m) =>
@@ -88,6 +109,12 @@ abstract class ChatBackend extends ChangeNotifier {
   /// Profile surfaces use this to replace their resolved Future without
   /// coupling widgets to Matrix streams or polling independently.
   int get profileRevision => 0;
+  VoidCallback watchProfile(
+    String id, {
+    required bool Function() isVisible,
+    bool expanded = false,
+  }) => () {};
+  Future<void> refreshVisibleAvatar(String id) async {}
   bool get shouldShowFirstRunTour => false;
   AppPreferences get preferences;
   EncryptionSetupState get encryptionSetup;
@@ -366,6 +393,14 @@ abstract class ChatBackend extends ChangeNotifier {
     String userId, {
     bool refresh = false,
   });
+  Future<Uint8List?> getProfileImage(
+    String userId, {
+    required bool banner,
+  }) async {
+    final profile = await getUserProfile(userId);
+    return banner ? profile.bannerBytes : profile.avatarBytes;
+  }
+
   Future<void> updateOwnProfileFields({
     String? bio,
     String? pronouns,

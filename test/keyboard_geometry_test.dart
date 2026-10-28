@@ -2,6 +2,31 @@ import 'package:deltiecord/services/keyboard_geometry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('identical geometry compares equal, real field changes do not', () {
+    final base = <String, Object?>{
+      'visible': false,
+      'physicalBottom': 0,
+      'focused': true,
+      'animating': false,
+    };
+    final a = KeyboardGeometry.fromMap(base)!;
+    final b = KeyboardGeometry.fromMap({...base})!;
+    expect(a, b);
+    expect(a.hashCode, b.hashCode);
+    for (final change in <String, Object?>{
+      'visible': true,
+      'physicalBottom': 300,
+      'focused': false,
+      'animating': true,
+      'physicalViewportHeight': 1200,
+      'inputSubtype': 1,
+    }.entries) {
+      expect(
+        KeyboardGeometry.fromMap({...base, change.key: change.value}),
+        isNot(a),
+      );
+    }
+  });
   test('only focused, settled geometry is authoritative', () {
     for (final visible in [null, false, true]) {
       for (final focused in [false, true]) {

@@ -97,6 +97,8 @@ def generate(root, config, credentials):
         write(root, 'secrets/' + name, value + '\n')
     write(root, 'operator.json', {**config, **names})
     write(root, '.gitignore', '*\n')
+    for name in ('install_storage.py', 'send_storage.py', 'storage_schema.sql', 'storage_audit.py'):
+        write(root, 'storage/' + name, (SOURCE / name).read_text())
     helper_files = ('giphy_proxy.py', 'web_preview.py', 'web_push.py', 'hosting_config.py',
                     'requirements-web-push.txt', 'requirements-conversion.txt')
     for name in helper_files:
@@ -402,6 +404,9 @@ def main():
     subprocess.run(command + ['build'], check=True)
     subprocess.run(command + ['run', '--rm', '--no-deps', 'caddy', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile'], check=True)
     subprocess.run(command + ['up', '-d', '--wait', '--wait-timeout', '180'], check=True)
+    if confirm('Enable SeND storage controls and the 12 GiB upload allowance?'):
+        subprocess.run([sys.executable, str(root / 'storage/install_storage.py'),
+            '--compose', str(root / 'compose.yaml'), '--config', str(root / 'homeserver.yaml'), '--apply'], check=True)
     if confirm('Create the first Matrix administrator now?'):
         subprocess.run(command + ['exec', 'synapse', 'register_new_matrix_user',
             '-c', '/config/homeserver.yaml', 'http://localhost:8008', '--admin'], check=True)

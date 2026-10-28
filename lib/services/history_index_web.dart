@@ -1,5 +1,7 @@
 import 'dart:js_interop';
 
+bool get historyIndexEncryptedAtRest => false;
+
 @JS('sendHistoryIndexCall')
 external JSPromise<JSAny?> _request(
   JSString account,
@@ -8,6 +10,8 @@ external JSPromise<JSAny?> _request(
 );
 
 class HistoryStore {
+  String get openStage => 'browser-store';
+  String failureCode(Object error) => error.runtimeType.toString();
   HistoryStore(this.account);
   final String account;
   Future<dynamic> _call(String op, [Object? args]) async =>
@@ -24,11 +28,37 @@ class HistoryStore {
 
   Future<void> configure(bool enabled, int limit) async =>
       _call('configure', {'enabled': enabled, 'limit': limit});
+  Future<String?> loadScope() async => await _call('scope') as String?;
+  Future<void> setScope(String scope, Set<String> allowedRooms) async =>
+      _call('setScope', {'scope': scope, 'rooms': allowedRooms.toList()});
   Future<void> put(
     List<Map<String, Object?>> rows,
     bool text,
     int limit,
   ) async => _call('put', {'rows': rows, 'text': text, 'limit': limit});
+  Future<bool> putArchive(
+    List<Map<String, Object?>> rows,
+    bool text,
+    int limit,
+  ) async =>
+      await _call('put', {
+        'rows': rows,
+        'text': text,
+        'limit': limit,
+        'preserve': true,
+      }) ==
+      true;
+  Future<Map<String, Object?>?> loadDownloadState() async {
+    final value = await _call('downloadState');
+    return value == null ? null : Map<String, Object?>.from(value as Map);
+  }
+
+  Future<void> saveDownloadState(Map<String, Object?>? value) async =>
+      _call('saveDownloadState', {'state': value});
+  Future<List<Map<String, Object?>>> readRows(List<String> ids) async =>
+      (await _call('rows', {'ids': ids}) as List)
+          .map((value) => Map<String, Object?>.from(value as Map))
+          .toList();
   Future<List<String>> query(
     String room, {
     required List<String> terms,

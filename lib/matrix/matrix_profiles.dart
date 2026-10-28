@@ -15,10 +15,13 @@ class _ProfileCacheEntry {
     required this.metadataFetchedAt,
     required this.statusFetchedAt,
     required this.lastAccessedAt,
+    this.bannerUri,
+    this.voiceBackgroundUri,
   });
 
   UserProfileSummary profile;
   Uri? avatarUri;
+  Uri? bannerUri, voiceBackgroundUri;
   DateTime metadataFetchedAt;
   DateTime statusFetchedAt;
   DateTime lastAccessedAt;
@@ -46,10 +49,10 @@ extension _MatrixProfiles on MatrixBackend {
         cached.metadataFetchedAt,
         now,
       );
-      final refreshStatus = ProfileRefreshPolicy.statusIsStale(
-        cached.statusFetchedAt,
-        now,
-      );
+      final refreshStatus =
+          ProfileRefreshPolicy.statusIsStale(cached.statusFetchedAt, now) &&
+          // ignore: deprecated_member_use
+          _matrix.presences[userId] == null;
       if (refreshMetadata || refreshStatus) {
         // Cached content is returned immediately. Optional metadata hydrates
         // behind it and is available to every subsequent profile reference.
@@ -125,6 +128,7 @@ extension _MatrixProfiles on MatrixBackend {
     required bool refreshMetadata,
     required bool refreshStatus,
     required bool refreshMedia,
+    ProfileInformation? metadata,
   }) async {
     final cached = _profileCache[userId];
     final pending = _profileRequests[userId];
@@ -143,7 +147,10 @@ extension _MatrixProfiles on MatrixBackend {
           refreshStatus &&
           (updated == null ||
               ProfileRefreshPolicy.statusIsStale(updated.statusFetchedAt, now));
-      if (!refreshMedia && !stillNeedsMetadata && !stillNeedsStatus) {
+      if (metadata == null &&
+          !refreshMedia &&
+          !stillNeedsMetadata &&
+          !stillNeedsStatus) {
         return pendingResult;
       }
       // An explicit full-profile refresh must not be satisfied by an older
@@ -155,6 +162,7 @@ extension _MatrixProfiles on MatrixBackend {
           refreshMetadata: refreshMetadata,
           refreshStatus: refreshStatus,
           refreshMedia: refreshMedia,
+          metadata: metadata,
         ).onError((error, stackTrace) {
           if (cached != null) {
             final attemptedAt = DateTime.now();
@@ -178,7 +186,9 @@ extension _MatrixProfiles on MatrixBackend {
     required bool refreshMetadata,
     required bool refreshStatus,
     required bool refreshMedia,
+    ProfileInformation? metadata,
   }) async {
+    final client = _client;
     final previous = _profileCache[userId];
     final needsProfileResponse =
         previous == null || refreshMetadata || refreshMedia;
@@ -193,32 +203,48 @@ extension _MatrixProfiles on MatrixBackend {
     final capabilityRequest = needsProfileResponse
         ? _profileCapability()
         : Future<ProfileFieldsCapability?>.value();
-    final remoteProfile = needsProfileResponse
-        ? await _matrix.getUserProfile(userId, maxCacheAge: Duration.zero)
-        : null;
+    final remoteProfile =
+        metadata ??
+        (needsProfileResponse
+            ? await _matrix.getUserProfile(userId, maxCacheAge: Duration.zero)
+            : null);
 
     final presence = await presenceRequest;
 
     final old = previous?.profile;
-    final avatarUri = remoteProfile?.avatarUrl ?? previous?.avatarUri;
-    final bannerUri = Uri.tryParse(
-      remoteProfile?.additionalProperties[_profileBannerField] as String? ?? '',
-    );
-    final voiceBackgroundUri = Uri.tryParse(
-      remoteProfile?.additionalProperties[_profileVoiceBackgroundField]
-              as String? ??
-          '',
-    );
+    final avatarUri = remoteProfile == null
+        ? previous?.avatarUri
+        : remoteProfile.avatarUrl;
+    final bannerUri = remoteProfile == null
+        ? previous?.bannerUri
+        : Uri.tryParse(
+            remoteProfile.additionalProperties[_profileBannerField]
+                    as String? ??
+                '',
+          );
+    final voiceBackgroundUri = remoteProfile == null
+        ? previous?.voiceBackgroundUri
+        : Uri.tryParse(
+            remoteProfile.additionalProperties[_profileVoiceBackgroundField]
+                    as String? ??
+                '',
+          );
     final avatarChanged = previous != null && previous.avatarUri != avatarUri;
+    final bannerChanged = previous != null && previous.bannerUri != bannerUri;
+    final voiceChanged =
+        previous != null && previous.voiceBackgroundUri != voiceBackgroundUri;
     final avatarBytes = avatarChanged ? null : old?.avatarBytes;
-    final bannerBytes = refreshMedia && bannerUri?.isScheme('mxc') != true
+    final bannerBytes =
+        bannerChanged || (refreshMedia && bannerUri?.isScheme('mxc') != true)
         ? null
         : old?.bannerBytes;
     final voiceBackgroundBytes =
-        refreshMedia && voiceBackgroundUri?.isScheme('mxc') != true
+        voiceChanged ||
+            (refreshMedia && voiceBackgroundUri?.isScheme('mxc') != true)
         ? null
         : old?.voiceBackgroundBytes;
     final capability = await capabilityRequest;
+    if (!identical(client, _client)) throw StateError('Session changed.');
     final properties = remoteProfile?.additionalProperties;
     final colorValue = properties?[_profileColorField];
     final now = DateTime.now();
@@ -258,10 +284,34 @@ extension _MatrixProfiles on MatrixBackend {
       blocked: _matrix.ignoredUsers.contains(userId),
     );
     final withSyncedPresence = _profileWithSyncedPresence(result);
+    if (avatarChanged) {
+      _senderAvatarUris[userId] = avatarUri;
+      _senderAvatarBytes.remove(userId);
+      for (final room in _matrix.rooms) {
+        final key = '${room.id}|$userId';
+        if (_memberAvatarUris[key] == previous.avatarUri &&
+            !_spaceProfileAvatarBytes.containsKey(key)) {
+          if (avatarUri == null) {
+            _memberAvatarUris.remove(key);
+          } else {
+            _memberAvatarUris[key] = avatarUri;
+          }
+          _senderAvatarBytes.remove(key);
+        }
+        if (room.directChatMatrixID == userId &&
+            _avatarUris[room.id] == previous.avatarUri) {
+          _avatarUris[room.id] = avatarUri;
+          _avatarBytes.remove(room.id);
+        }
+      }
+      if (userId == _matrix.userID) _applyOwnProfileSummary(withSyncedPresence);
+    }
     _profileCache.remove(userId);
     _profileCache[userId] = _ProfileCacheEntry(
       profile: withSyncedPresence,
       avatarUri: avatarUri,
+      bannerUri: bannerUri,
+      voiceBackgroundUri: voiceBackgroundUri,
       metadataFetchedAt: needsProfileResponse
           ? now
           : previous.metadataFetchedAt,
@@ -273,20 +323,25 @@ extension _MatrixProfiles on MatrixBackend {
       lastAccessedAt: now,
     );
     _profileRevision++;
-    final entry = _profileCache[userId]!;
     void publishMedia({
       Uint8List? avatar,
       Uint8List? banner,
       Uint8List? voice,
     }) {
-      // A refresh, eviction or logout invalidates this request's ownership.
-      if (!identical(_profileCache[userId], entry)) return;
+      // A metadata-only refresh must not discard a still-loading animation.
+      // Publish only media whose immutable reference still matches, in the
+      // same session. Eviction, logout and changed references remain barriers.
+      final entry = _profileCache[userId];
+      if (entry == null || !identical(client, _client)) return;
+      final matchingAvatar = avatar != null && entry.avatarUri == avatarUri;
       entry.profile = entry.profile.withMedia(
-        avatar: avatar,
-        banner: banner,
-        voiceBackground: voice,
+        avatar: matchingAvatar ? avatar : null,
+        banner: entry.bannerUri == bannerUri ? banner : null,
+        voiceBackground: entry.voiceBackgroundUri == voiceBackgroundUri
+            ? voice
+            : null,
       );
-      if (avatar != null && avatarUri != null) {
+      if (matchingAvatar && avatarUri != null) {
         _senderAvatarUris[userId] = avatarUri;
         _senderAvatarBytes[userId] = avatar;
         // Keep room-specific avatars separate from the global profile.
@@ -319,6 +374,8 @@ extension _MatrixProfiles on MatrixBackend {
       );
     }
     if (refreshMedia ||
+        bannerChanged ||
+        voiceChanged ||
         old == null ||
         (needsProfileResponse && old.bannerBytes == null)) {
       unawaited(
@@ -373,17 +430,27 @@ extension _MatrixProfiles on MatrixBackend {
   ) async {
     if (uri == null || !uri.isScheme('mxc')) return;
     try {
-      final preview = await _matrix
-          .getContentThumbnail(
-            uri.host,
-            uri.pathSegments.join('/'),
-            width,
-            height,
-            method: Method.scale,
-            animated: false,
-          )
-          .timeout(const Duration(seconds: 4));
-      if (preview.data.isNotEmpty) publish(preview.data);
+      // Separate still and original keys: a cached first frame must never
+      // suppress the animated original, nor satisfy a full-size request.
+      final cacheKey = uri.replace(query: 'send_still=${width}x$height');
+      final preview = await _avatarMediaPool.load(
+        cacheKey,
+        max(width, height),
+        () async {
+          final response = await _matrix
+              .getContentThumbnail(
+                uri.host,
+                uri.pathSegments.join('/'),
+                width,
+                height,
+                method: Method.scale,
+                animated: false,
+              )
+              .timeout(const Duration(seconds: 4));
+          return response.data;
+        },
+      );
+      if (preview != null && preview.isNotEmpty) publish(preview);
     } catch (_) {
       // An unavailable still preview must not prevent the original loading.
     }
@@ -473,46 +540,116 @@ extension _MatrixProfiles on MatrixBackend {
 
   Future<void> _refreshActiveProfileCache() async {
     if (_profileRefreshRunning ||
+        !_applicationForeground ||
         !_matrix.isLogged() ||
         _connectionStatus != ConnectionStatus.online) {
       return;
     }
     _profileRefreshRunning = true;
+    final client = _client;
     try {
       final now = DateTime.now();
       final ownUserId = _matrix.userID;
-      final activeUserIds = _profileCache.entries
-          .where(
-            (entry) =>
-                entry.key == ownUserId ||
-                ProfileRefreshPolicy.wasRecentlyAccessed(
-                  entry.value.lastAccessedAt,
-                  now,
-                ),
-          )
-          .map((entry) => entry.key)
-          .toList(growable: false);
+      final intervals = <String, Duration>{};
+      final ranked = _selectedSpaceId == null ? rooms : const <RoomSummary>[];
+      for (final watch in _profileWatchers.entries.toList()) {
+        if (!identical(client, _client)) return;
+        final visible = watch.value.values.where((w) => w.visible()).toList();
+        if (visible.isEmpty) continue;
+        if (watch.key.startsWith('!')) {
+          final room = _matrix.getRoomById(watch.key);
+          if (room != null && await _refreshAvatar(room)) {
+            _notifyBackendListeners();
+          }
+          continue;
+        }
+        final rank = ranked.indexWhere((r) => r.directUserId == watch.key);
+        final expanded = visible.any((w) => w.expanded);
+        final interval = ProfileRefreshPolicy.visibleMetadataInterval(
+          homeRank: rank,
+          expanded: expanded,
+          checkedOnce: _profileCheckedThisSession.contains(watch.key),
+        );
+        if (interval != null) intervals[watch.key] = interval;
+      }
+      if (_conversationVisible && _timeline != null) {
+        for (final event
+            in _timeline!.events
+                .where((e) => e.type == EventTypes.Message)
+                .take(20)) {
+          intervals[event.senderId] = const Duration(seconds: 30);
+        }
+        final room = _timeline!.room;
+        if (_spaceForRoom(room) == null) {
+          for (final user in room.getParticipants()) {
+            intervals[user.id] = const Duration(seconds: 30);
+          }
+        }
+      }
+      final activeUserIds = intervals.keys.where((id) {
+        final fetched =
+            _profileLastChecked[id] ?? _profileCache[id]?.metadataFetchedAt;
+        return fetched == null || now.difference(fetched) >= intervals[id]!;
+      }).toList();
+      Map<String, dynamic> batched = {};
+      if (activeUserIds.isNotEmpty &&
+          (_profileBatchRetryAfter?.isAfter(now) != true)) {
+        try {
+          for (var start = 0; start < activeUserIds.length; start += 32) {
+            final response = await serverStorage('profiles', {
+              'users': activeUserIds.skip(start).take(32).toList(),
+            });
+            if (response['profiles'] is Map) {
+              batched.addAll(
+                Map<String, dynamic>.from(response['profiles'] as Map),
+              );
+            }
+          }
+        } catch (_) {
+          _profileBatchRetryAfter = now.add(const Duration(minutes: 10));
+        }
+      }
       var refreshed = false;
-      for (final userId in activeUserIds) {
-        final cached = _profileCache[userId];
-        if (cached == null) continue;
-        final refreshMetadata = ProfileRefreshPolicy.metadataIsStale(
-          cached.metadataFetchedAt,
-          now,
-        );
-        final refreshStatus = ProfileRefreshPolicy.statusIsStale(
-          cached.statusFetchedAt,
-          now,
-        );
-        if (!refreshMetadata && !refreshStatus) continue;
-        final profile = await _refreshProfileCache(
-          userId,
-          refreshMetadata: refreshMetadata,
-          refreshStatus: refreshStatus,
-          refreshMedia: false,
-        );
-        if (userId == ownUserId) _applyOwnProfileSummary(profile);
-        refreshed = true;
+      Future<void> refresh(String userId) async {
+        if (!identical(client, _client)) return;
+        try {
+          final cached = _profileCache[userId];
+          final refreshMetadata = true;
+          final refreshStatus =
+              ProfileRefreshPolicy.statusIsStale(
+                cached?.statusFetchedAt ??
+                    DateTime.fromMillisecondsSinceEpoch(0),
+                now,
+              ) &&
+              // ignore: deprecated_member_use
+              _matrix.presences[userId] == null;
+          final profile = await _refreshProfileCache(
+            userId,
+            refreshMetadata: refreshMetadata,
+            refreshStatus: refreshStatus,
+            refreshMedia: false,
+            metadata: batched[userId] is Map
+                ? ProfileInformation.fromJson(
+                    Map<String, Object?>.from(batched[userId] as Map),
+                  )
+                : null,
+          );
+          _profileCheckedThisSession.add(userId);
+          _profileLastChecked.remove(userId);
+          _profileLastChecked[userId] = DateTime.now();
+          while (_profileLastChecked.length > 4096) {
+            _profileLastChecked.remove(_profileLastChecked.keys.first);
+          }
+          if (userId == ownUserId) _applyOwnProfileSummary(profile);
+          refreshed = true;
+        } catch (_) {
+          // A missing profile must not block the other users.
+          _profileLastChecked[userId] = DateTime.now();
+        }
+      }
+
+      for (var start = 0; start < activeUserIds.length; start += 4) {
+        await Future.wait(activeUserIds.skip(start).take(4).map(refresh));
       }
       if (refreshed) _notifyBackendListeners();
     } finally {
@@ -570,6 +707,12 @@ extension _MatrixProfiles on MatrixBackend {
       _avatarValidatedEventIds.remove(_avatarValidatedEventIds.first);
     }
     if (_connectionStatus != ConnectionStatus.online) return;
+    final previous = _profileCache[event.senderId];
+    if (previous != null &&
+        DateTime.now().difference(previous.metadataFetchedAt) <
+            const Duration(seconds: 30)) {
+      return;
+    }
     try {
       final profile = await _refreshProfileCache(
         event.senderId,
@@ -649,18 +792,20 @@ extension _MatrixProfiles on MatrixBackend {
 
   Future<Uint8List?> _profileOriginalMedia(Uri? mxc) async {
     if (mxc == null || !mxc.isScheme('mxc')) return null;
-    try {
-      final response = await _matrix.getContent(
-        mxc.host,
-        mxc.pathSegments.join('/'),
-      );
-      return response.data;
-    } catch (_) {
-      // Older media repositories may reject the authenticated original-media
-      // endpoint. A large scale thumbnail still looks substantially better
-      // than leaving the profile banner empty.
-      return _profileMedia(mxc, 1920, 640);
-    }
+    return _avatarMediaPool.load(mxc, 4096, () async {
+      try {
+        final response = await _matrix.getContent(
+          mxc.host,
+          mxc.pathSegments.join('/'),
+        );
+        return response.data;
+      } catch (_) {
+        // Older media repositories may reject the authenticated original-media
+        // endpoint. A large scale thumbnail still looks substantially better
+        // than leaving the profile banner empty.
+        return _profileMedia(mxc, 1920, 640);
+      }
+    });
   }
 
   Future<void> _updateOwnProfileFields({
@@ -745,6 +890,7 @@ extension _MatrixProfiles on MatrixBackend {
           filename: 'profile-banner.png',
           contentType: 'image/png',
         );
+        unawaited(_recordAssetUpload(mxc, bannerBytes));
         try {
           await _matrix.setProfileField(userId, _profileBannerField, {
             _profileBannerField: mxc.toString(),
@@ -812,6 +958,7 @@ extension _MatrixProfiles on MatrixBackend {
           filename: 'voice-background.png',
           contentType: 'image/png',
         );
+        unawaited(_recordAssetUpload(mxc, backgroundBytes));
         await _matrix.setProfileField(userId, _profileVoiceBackgroundField, {
           _profileVoiceBackgroundField: mxc.toString(),
         });

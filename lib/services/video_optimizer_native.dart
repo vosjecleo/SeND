@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import '../models/chat_models.dart';
+import '../models/media_compression.dart';
 import 'video_preparation_android.dart';
 
 bool get videoOptimizationSupported =>
@@ -33,8 +34,6 @@ Future<AttachmentDraft> probeVideo(AttachmentDraft draft) async {
   }
 }
 
-const _maximumBytes = 24 * 1024 * 1024;
-
 /// First-preview desktop adapter. FFmpeg/ffprobe are resolved from PATH; neither
 /// credentials nor media leave this device. Never truncate to meet the budget.
 Future<AttachmentDraft> optimizeVideo(
@@ -42,6 +41,7 @@ Future<AttachmentDraft> optimizeVideo(
   required void Function(double) progress,
   required bool Function() canceled,
   bool optimize = true,
+  VideoCompressionPreset preset = VideoCompressionPreset.balanced,
 }) async {
   if (!videoOptimizationSupported || !draft.mimeType.startsWith('video/')) {
     return draft;
@@ -50,6 +50,7 @@ Future<AttachmentDraft> optimizeVideo(
     return prepareAndroidVideo(
       draft,
       optimize: optimize,
+      preset: preset,
       progress: progress,
       canceled: canceled,
     );
@@ -142,14 +143,14 @@ Future<AttachmentDraft> optimizeVideo(
       final audio = streams.any((s) => s['codec_type'] == 'audio');
       // Reserve muxing/bitrate variance headroom below the web viewer's 25 MiB
       // verified-download limit. Do not force unusable quality on long clips.
-      final budget = (20 * 1024 * 1024 * 8 / duration - (audio ? 128000 : 0))
+      final budget = (preset.targetBytes * 8 / duration - (audio ? 128000 : 0))
           .floor();
       if (budget < 250000) {
         throw StateError(
-          'This video is too long for the optimized 24 MiB limit. Trim it or select original quality in Audio & video settings.',
+          'This video is too long for the selected size limit. Trim it or choose original quality.',
         );
       }
-      final bitrate = budget.clamp(250000, 4000000);
+      final bitrate = budget.clamp(250000, preset.maximumBitrate);
       await run(
         'ffmpeg',
         [
@@ -170,7 +171,7 @@ Future<AttachmentDraft> optimizeVideo(
           '-map_chapters',
           '-1',
           '-vf',
-          "scale=w='if(gte(iw,ih),min(iw,1920),min(iw,1080))':h='if(gte(iw,ih),min(ih,1080),min(ih,1920))':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
+          "scale=w='if(gte(iw,ih),min(iw,${preset.landscapeWidth}),min(iw,${preset.landscapeHeight}))':h='if(gte(iw,ih),min(ih,${preset.landscapeHeight}),min(ih,${preset.landscapeWidth}))':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
           '-c:v',
           'libx264',
           '-preset',
@@ -201,9 +202,9 @@ Future<AttachmentDraft> optimizeVideo(
         duration: duration,
       );
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (await output.length() > _maximumBytes) {
+      if (await output.length() > preset.maximumBytes) {
         throw StateError(
-          'The optimized video still exceeds 24 MiB. The original was not sent; choose original quality or trim the clip.',
+          'The optimized video still exceeds the selected size limit. The original was not sent; choose original quality or trim the clip.',
         );
       }
     }

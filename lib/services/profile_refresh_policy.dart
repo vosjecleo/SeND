@@ -5,6 +5,18 @@
 /// refreshes a full profile (or edits their own profile), avoiding repeated
 /// downloads of comparatively large immutable blobs.
 abstract final class ProfileRefreshPolicy {
+  static Duration? visibleMetadataInterval({
+    required int homeRank,
+    required bool expanded,
+    required bool checkedOnce,
+  }) {
+    if (expanded || (homeRank >= 0 && homeRank < 5)) {
+      return const Duration(seconds: 30);
+    }
+    if (homeRank >= 5 && homeRank < 10) return const Duration(minutes: 2);
+    return checkedOnce ? null : Duration.zero;
+  }
+
   /// Status messages are presence data, but some homeservers do not include
   /// every status change in `/sync`; poll recently viewed profiles as backup.
   static const statusInterval = Duration(seconds: 15);

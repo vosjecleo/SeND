@@ -6,6 +6,7 @@ import '../services/font_preferences.dart';
 import '../services/notification_volume.dart';
 import 'room_event_visibility.dart';
 import 'forum_post.dart';
+import 'media_compression.dart';
 
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
@@ -73,6 +74,9 @@ class AppPreferences {
     this._notificationVolume,
     this.callVolume = 1,
     this.optimizeVideos = true,
+    this.videoCompression = VideoCompressionPreset.balanced,
+    this.imageCompression = ImageCompressionPreset.original,
+    this.shareUploadCategories = false,
     this.notificationVibration = true,
     this.notificationAlertCadence = NotificationAlertCadence.fiveMinuteCooldown,
     this.sendReadReceipts = true,
@@ -131,6 +135,9 @@ class AppPreferences {
       _notificationVolume ?? defaultNotificationVolume;
   final double callVolume;
   final bool optimizeVideos;
+  final VideoCompressionPreset videoCompression;
+  final ImageCompressionPreset imageCompression;
+  final bool shareUploadCategories;
   final bool notificationVibration;
   final NotificationAlertCadence notificationAlertCadence;
   final bool sendReadReceipts;
@@ -196,6 +203,9 @@ class AppPreferences {
     double? notificationVolume,
     double? callVolume,
     bool? optimizeVideos,
+    VideoCompressionPreset? videoCompression,
+    ImageCompressionPreset? imageCompression,
+    bool? shareUploadCategories,
     bool? notificationVibration,
     NotificationAlertCadence? notificationAlertCadence,
     bool? sendReadReceipts,
@@ -255,6 +265,9 @@ class AppPreferences {
     notificationVolume: notificationVolume ?? this.notificationVolume,
     callVolume: callVolume ?? this.callVolume,
     optimizeVideos: optimizeVideos ?? this.optimizeVideos,
+    videoCompression: videoCompression ?? this.videoCompression,
+    imageCompression: imageCompression ?? this.imageCompression,
+    shareUploadCategories: shareUploadCategories ?? this.shareUploadCategories,
     notificationVibration: notificationVibration ?? this.notificationVibration,
     notificationAlertCadence:
         notificationAlertCadence ?? this.notificationAlertCadence,
@@ -1054,6 +1067,7 @@ class AttachmentDraft {
     this.videoWidth,
     this.videoHeight,
     this.videoThumbnail,
+    this.imagePrepared = false,
   });
 
   final Uint8List bytes;
@@ -1067,6 +1081,29 @@ class AttachmentDraft {
   final Uri? gifSource;
   final int? videoWidth, videoHeight;
   final Uint8List? videoThumbnail;
+  final bool imagePrepared;
+  AttachmentDraft copyWith({
+    Uint8List? bytes,
+    String? name,
+    String? mimeType,
+    bool? spoiler,
+    String? caption,
+    bool? imagePrepared,
+  }) => AttachmentDraft(
+    bytes: bytes ?? this.bytes,
+    name: name ?? this.name,
+    mimeType: mimeType ?? this.mimeType,
+    spoiler: spoiler ?? this.spoiler,
+    caption: caption ?? this.caption,
+    voiceMessage: voiceMessage,
+    durationMilliseconds: durationMilliseconds,
+    waveform: waveform,
+    gifSource: gifSource,
+    videoWidth: videoWidth,
+    videoHeight: videoHeight,
+    videoThumbnail: videoThumbnail,
+    imagePrepared: imagePrepared ?? this.imagePrepared,
+  );
 }
 
 class MediaPlaybackSource {
