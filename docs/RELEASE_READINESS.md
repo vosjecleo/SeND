@@ -19,7 +19,7 @@ and server list. These are usage observations, not controlled benchmarks.
 - [ ] Account safety: password and discovered SSO/OIDC sign-in, cancellation,
   refresh/relaunch, logout, device verification, recovery and upgrades preserve
   sessions and encryption keys. Never fix a failure by silently resetting data.
-- [ ] Security: review Android encrypted-database migration, attachment integrity,
+- [ ] Security: review Android, desktop and PWA encrypted-storage migrations, attachment integrity,
   links/previews, imports, permissions and browser callback handling. Verify
   callback cache/log protection before hosted browser SSO is used.
 - [ ] Lifecycle: repeated background/foreground and network changes preserve
@@ -87,6 +87,28 @@ Current CI covers Linux, Windows, Android and Web/PWA, with a separate Flatpak
 packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
+
+## Recorded release: 0.9.42+134
+
+Published to Latest on 2026-10-29 from `a5d712c`, tag `v0.9.42-b134`. Windows,
+Linux, Android and Web/PWA CI passed, followed by Flatpak build, sandbox checks,
+publication and mirroring. Release checksums passed. The PWA reports build 134;
+its protected Matrix database and encrypted search worker passed a synthetic
+round-trip under the live HTTPS/CSP headers without login or account writes.
+Stable's version fields and download lists were compared before/after and are
+unchanged. Stable promotion waits for further testing.
+
+Local preflight passed 890 Flutter tests with four skips, 70 server tests and
+15 Linux packaging checks with one tool-dependent skip. Static analysis and
+formatting were clean. Browser checks covered session/history migration,
+transaction rollback, opaque encrypted records, tamper/missing-key failures,
+search paging/scopes/quotas, and 15 image/editor cases.
+
+An earlier desktop preview was installed for inspection. The final hover/copy
+corrections were built by CI only; no further local package was installed.
+Legacy pruning needs the deployed optional storage module upgraded by the
+operator. That step is staged, not applied. Physical iOS image-editor acceptance
+and the separate performance/long-session avatar investigations remain open.
 
 ## Build 133 preflight
 

@@ -1,11 +1,11 @@
-Next release requests, 2026-10-28
-Implemented for SeND 0.9.42+134. Not published yet.
+Build 134 request record, started 2026-10-28
+Published as Latest on 2026-10-29. Stable unchanged. Source a5d712c.
 
 1. Post-update changelog popup
 
 Title: "An Update?!? Whats changed...?"
 Darker text panel with concise bullets and a full changelog hyperlink.
-Examples supplied by Cleo:
+Original examples supplied by Cleo, before the build's scope expanded:
 * Various bugfixes (see full changelog hyperlink)
 * Added Image and Video editing
 * Refined server-storage caps (12GiB free!)
@@ -50,8 +50,8 @@ The publisher updates the download page and script, retaining rollback copies.
 Version/build labels come from the manifest, independently for each channel.
 Flatpak mirroring also updates Stable when its version/build matches this release;
 the AppStream entry for 134 remains development.
-The local README/download-page preview was approved. Follow-up fixes remain local;
-no push, tag, CI build or publication has been started.
+The README/download-page preview was approved. CI and publication completed;
+the live download manifest and PWA report build 134. Stable remains unchanged.
 
 5. Server channels misclassified as direct messages
 
@@ -83,7 +83,7 @@ common image headers on web instead, retaining pixel limits. Image markup
 export uses the same cross-platform dimension reader. Video code is unchanged.
 Local fix passed 15 native tests, 15 Chromium browser tests and targeted static
 analysis. Browser tests cover compression, responsive tools and markup export.
-iOS PWA confirmation remains pending. Nothing deployed.
+iOS PWA confirmation remains pending. The fix is deployed in the build 134 PWA.
 
 8. Local-storage encryption
 
@@ -99,8 +99,10 @@ shown in Local storage alongside quota and persistence controls.
 9. Menus, Archive and call history
 
 Use the compact Home menu on desktop and mobile; grey muted names and avatars.
-Reveal Archive by a deliberate top-edge pull, navigate to its own page and hide
-the shortcut after scrolling it away. Simplify timeline tools and move room-link
+Reveal Archive with pull/release guidance and a single-row snap. Use the Home
+layout with archived chat rows, search, server rail and user island, not a separate
+page. Hide the shortcut after scrolling it away; support mouse-wheel reveal and
+hide DM scrollbars. Simplify timeline tools and move room-link
 copying to Members. Message actions use the requested order, Bookmark wording,
 author-only edit/delete and triple-tap editing. Discussions use the same menu.
 Record starts/ends and duration for DM/group calls only, without blocking RTC
@@ -118,8 +120,8 @@ The notification report was resolved in the phone's background-connection
 settings. No proxy/provider/server change was made for that incident. Firebase
 remains an optional follow-up, not an added dependency or configured service.
 
-Updated instruction: skip the local app build/install. Finish tests and show the
-changelog before pushing or starting cross-platform CI/publication.
+Final instruction: no further local build/install; run CI, update the PWA and
+publish Latest only. All four platform jobs and Flatpak completed successfully.
 
 Base-build validation: 857 native tests passed, 4 skipped. Static analysis was clean.
 The browser index checks and local release-mode web compilation passed too.
@@ -133,13 +135,20 @@ session migration, nested transactions/rollback, encrypted records, tamper and
 missing-key checks, plus search-history migration, encrypted pages and quota/
 paging/scope checks. All 70 server tests passed; static analysis and diff checks
 are clean. The local app build/install was skipped at Cleo's request. Physical
-iOS confirmation and release CI remain pending.
-No CI build, deployment or release has been started.
+iOS confirmation remained pending at that preflight stage.
+
+Final release validation: 890 Flutter tests passed, four skipped; all 70 server
+tests passed. Individual chart segments now highlight on desktop hover, with
+category/size following the cursor. Mobile legend rows are compact. Removed
+Legacy-specific implementation prose while retaining deletion consequences.
+GitHub release, mirror, Flatpak and PWA deployment are complete. The live HTTPS
+storage/search smoke check passed, and Stable metadata was verified unchanged.
 
 Local desktop preview, 2026-10-29: Cleo subsequently requested a build/install.
 Built and installed Arch package 0.9.42-134 without removing the account or app
 data. Launch restored the account and opened the protected database. A foreground
 refresh before client initialization exposed a startup race; the rebuilt preview
 guards it and sets a short SQLite busy timeout. Three focused tests and static
-analysis passed. The final package is installed; restart the running app to load
-that last fix. A private pre-upgrade app/keyring backup was retained.
+analysis passed. That earlier preview was installed. The final hover/copy fixes
+were released through CI without another local install. A private pre-upgrade
+app/keyring backup was retained.
