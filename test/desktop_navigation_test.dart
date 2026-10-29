@@ -305,7 +305,7 @@ void main() {
     expect(find.byKey(const Key('room-panel-resize-handle')), findsOneWidget);
   });
 
-  testWidgets('right clicking a DM exposes edit and leave actions', (
+  testWidgets('right clicking a DM exposes the compact Home menu', (
     tester,
   ) async {
     final backend = FakeBackend()
@@ -325,12 +325,16 @@ void main() {
     await revealMessageActions(tester, find.text('Alice'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit DM name'), findsOneWidget);
-    expect(find.text('Copy room link'), findsOneWidget);
-    expect(find.text('Leave room'), findsOneWidget);
-    await tester.tap(find.text('Leave room'));
+    expect(find.text('Edit DM name'), findsNothing);
+    expect(find.text('Copy room link'), findsNothing);
+    expect(find.text('Mark as read'), findsOneWidget);
+    expect(find.text('Mute room'), findsOneWidget);
+    expect(find.text('Pin'), findsOneWidget);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Leave'), findsOneWidget);
+    await tester.tap(find.text('Leave'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Leave room'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
     await tester.pumpAndSettle();
 
     expect(backend.leftRoomId, '!direct:example.org');

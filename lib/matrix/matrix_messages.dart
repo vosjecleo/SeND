@@ -620,7 +620,8 @@ extension _MatrixMessages on MatrixBackend {
       final room = _matrix.getRoomById(targetRoomId);
       if (room == null) throw StateError('The selected room is unavailable.');
       await _prepareEncryptedSend(room);
-      final transactionId = _matrix.generateUniqueTransactionId();
+      final transactionId =
+          queuedTransactionId ?? _matrix.generateUniqueTransactionId();
       final replyEvent = replyToMessageId == null
           ? null
           : _eventById(replyToMessageId);
@@ -836,6 +837,7 @@ extension _MatrixMessages on MatrixBackend {
   }
 
   Future<void> _cancelPendingMessage(String messageId) async {
+    if (cancelLocalQueuedMessage(messageId)) return;
     final event = _eventById(messageId);
     if (event == null || event.status.isSent) return;
     // `cancelSend` removes the SDK's database row, but some failure paths keep

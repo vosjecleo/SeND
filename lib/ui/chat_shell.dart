@@ -3,6 +3,11 @@ import '../services/socks_proxy.dart';
 import 'dart:async';
 import 'video_playback_status.dart';
 import 'activity_widgets.dart';
+import 'home_room_menu.dart';
+import 'archive_navigation.dart';
+import 'message_action_menu.dart';
+import 'queued_attachment_preview.dart';
+import '../services/queued_message.dart';
 import 'attachment_image_editor.dart';
 import 'navigation_polish.dart';
 import 'gif_favourite_button.dart';
@@ -40,6 +45,7 @@ import '../services/temporary_attachment_store.dart';
 import '../services/emoji_repository.dart';
 import '../services/emoji_completion.dart';
 import '../services/room_send_queue.dart';
+import '../services/attachment_admission.dart';
 import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/draft_store.dart';
@@ -232,6 +238,11 @@ class _ChatShellState extends State<ChatShell> {
     await _draftStore.initialize();
     if (!mounted) return;
     _restoreDraft(widget.backend.selectedRoom?.id);
+    if (_draftStore.warning case final warning?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(warning)));
+    }
   }
 
   int _inboxRevision = 0;
@@ -444,8 +455,8 @@ class _ChatShellState extends State<ChatShell> {
         sendingRoomId == null) {
       return;
     }
-    final submittedDelta = _message.document.toDelta().toJson();
-    final attachments = List<AttachmentDraft>.from(_pendingAttachments);
+    var submittedDelta = _message.document.toDelta().toJson();
+    var attachments = List<AttachmentDraft>.from(_pendingAttachments);
     final submittedReply = _replyingTo;
     final submittedEdit = _editingMessage;
 
@@ -467,30 +478,23 @@ class _ChatShellState extends State<ChatShell> {
     _memoryDrafts.remove(sendingRoomId);
     _draftStore.remove(sendingRoomId);
     try {
-      await widget.backend.enqueueRoomSend(sendingRoomId, () async {
-        if (attachments.isEmpty) {
-          await widget.backend.sendMessage(
-            text,
-            roomId: sendingRoomId,
-            formattedBody: formatted,
-            replyToMessageId: submittedReply?.id,
-            editMessageId: submittedEdit?.id,
-          );
-        } else {
-          for (var index = 0; index < attachments.length; index++) {
-            final attachment = attachments[index];
-            await widget.backend.sendAttachment(
-              attachment.copyWith(
-                caption: index == 0 && text.isNotEmpty ? text : null,
-              ),
-              roomId: sendingRoomId,
-              replyToMessageId: index == 0 ? submittedReply?.id : null,
-            );
-          }
-        }
-      });
+      await widget.backend.submitComposerMessage(
+        roomId: sendingRoomId,
+        text: text,
+        formattedBody: formatted,
+        attachments: attachments,
+        reply: submittedReply,
+        editMessageId: submittedEdit?.id,
+      );
     } catch (error) {
       if (error is QueuedSendCancelled) return;
+      if (error is PartialComposerSendFailure) {
+        attachments = error.attachments;
+        submittedDelta = [
+          {'insert': '\n'},
+        ];
+      }
+      if (error is AttachmentBudgetExceeded) attachments = error.attachments;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -650,18 +654,31 @@ class _ChatShellState extends State<ChatShell> {
       allowMultiple: true,
     );
     if (!mounted || result == null || result.files.isEmpty) return;
+    try {
+      validateAttachmentSelection(result.files.map((file) => file.size));
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+      return;
+    }
+    final drafts = <AttachmentDraft>[];
     for (var index = 0; index < result.files.length; index++) {
       final picked = result.files[index];
       final bytes = picked.bytes ?? await result.xFiles[index].readAsBytes();
       if (!mounted) return;
-      _queueAttachment(
-        bytes: bytes,
-        name: picked.name,
-        mimeType:
-            lookupMimeType(picked.name, headerBytes: bytes) ??
-            'application/octet-stream',
+      drafts.add(
+        AttachmentDraft(
+          bytes: bytes,
+          name: picked.name,
+          mimeType:
+              lookupMimeType(picked.name, headerBytes: bytes) ??
+              'application/octet-stream',
+          spoiler: false,
+        ),
       );
     }
+    _queueAttachments(drafts);
   }
 
   Future<void> _showGifPicker() async {
@@ -729,21 +746,31 @@ class _ChatShellState extends State<ChatShell> {
     required String mimeType,
   }) async {
     if (!mounted) return;
-    setState(
-      () => _pendingAttachments.add(
-        AttachmentDraft(
-          bytes: bytes,
-          name: name,
-          mimeType: mimeType,
-          spoiler: false,
-        ),
+    _queueAttachments([
+      AttachmentDraft(
+        bytes: bytes,
+        name: name,
+        mimeType: mimeType,
+        spoiler: false,
       ),
-    );
-    _composerFocus.requestFocus();
+    ]);
   }
 
   void _queueAttachments(List<AttachmentDraft> attachments) {
     if (!mounted || attachments.isEmpty) return;
+    try {
+      validateAttachmentSelection(
+        [
+          ..._pendingAttachments,
+          ...attachments,
+        ].map((item) => item.bytes.length),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+      return;
+    }
     setState(() => _pendingAttachments.addAll(attachments));
     _composerFocus.requestFocus();
   }
@@ -967,7 +994,9 @@ class _ChatShellState extends State<ChatShell> {
                                               setState(
                                                 () =>
                                                     _pendingAttachments[current] =
-                                                        edited,
+                                                        edited.copyWith(
+                                                          uploadTooLarge: false,
+                                                        ),
                                               );
                                             }
                                           },

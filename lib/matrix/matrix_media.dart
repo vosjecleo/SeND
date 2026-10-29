@@ -100,6 +100,9 @@ extension _MatrixMedia on MatrixBackend {
       } else {
         attachment = await VideoPreparation.probe(attachment);
       }
+      if (attachment.bytes.length > attachmentUploadBudget) {
+        throw AttachmentBudgetExceeded([attachment]);
+      }
       await _validateUploadSize(attachment.bytes.length);
       final animatedImage =
           attachment.mimeType.startsWith('image/') &&
@@ -151,7 +154,8 @@ extension _MatrixMedia on MatrixBackend {
               name: attachment.name,
               mimeType: attachment.mimeType,
             );
-      final transactionId = _matrix.generateUniqueTransactionId();
+      final transactionId =
+          queuedTransactionId ?? _matrix.generateUniqueTransactionId();
       final operation = attachment.voiceMessage
           ? room.sendFileEvent(
               MatrixAudioFile(

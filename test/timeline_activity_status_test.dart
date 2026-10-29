@@ -17,6 +17,30 @@ class PlayingBackend extends FakeBackend {
 }
 
 void main() {
+  testWidgets('timeline custom status keeps the coloured presence dot', (
+    tester,
+  ) async {
+    final backend = PlayingBackend()..activity = null;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+        ),
+        home: Scaffold(
+          body: TimelineActivityStatus(
+            backend: backend,
+            userId: '@peer:test',
+            presence: UserPresence.away,
+            status: 'Making tea',
+            fallback: const Text('Away'),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Making tea'), findsOneWidget);
+    expect(find.text('Away'), findsNothing);
+    expect(find.byKey(const ValueKey('header-presence-away')), findsOneWidget);
+  });
   testWidgets(
     'timeline replaces presence with icon and bare name; list wording unchanged',
     (tester) async {

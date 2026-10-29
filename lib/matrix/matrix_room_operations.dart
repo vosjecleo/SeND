@@ -449,6 +449,7 @@ extension _MatrixRoomOperations on MatrixBackend {
   }
 
   Future<void> _selectRoom(String roomId) async {
+    _manualUnreadHolds.remove(roomId);
     _lastForegroundAlertAt.remove(roomId);
     InAppNotificationCenter.dismissRoom(roomId);
     unawaited(_notifications.clearRoom(roomId));

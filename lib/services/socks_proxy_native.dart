@@ -24,9 +24,9 @@ class SocksProxyStore {
       );
   Future<SocksProxyConfig> load({bool forEditing = false}) async {
     final target = await _file();
-    if (!await target.exists()) return const SocksProxyConfig();
+    if (!await privateFileExists(target)) return const SocksProxyConfig();
     final value =
-        jsonDecode(await target.readAsString()) as Map<String, dynamic>;
+        jsonDecode(await readPrivateTextFile(target)) as Map<String, dynamic>;
     final secretKey = value['secret_key'] as String?;
     final password =
         secretKey == null || (!forEditing && value['enabled'] == false)
@@ -42,10 +42,10 @@ class SocksProxyStore {
     }
     final target = await _file();
     String? oldKey;
-    if (await target.exists()) {
+    if (await privateFileExists(target)) {
       try {
         oldKey =
-            (jsonDecode(await target.readAsString()) as Map)['secret_key']
+            (jsonDecode(await readPrivateTextFile(target)) as Map)['secret_key']
                 as String?;
       } catch (_) {}
     }

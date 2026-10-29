@@ -3,6 +3,69 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 134 (2026-10-29)
+
+- Show a one-time changelog popup after updating, with a link to the full log.
+  Keep fresh-install onboarding separate.
+- Check the 64 MiB attachment-batch limit after compression, when sending.
+  Retain the draft and highlight oversized attachments rather than dropping them.
+- Show queued text and media immediately in the timeline, with subdued pending
+  contents and image/video preparation progress. Keep sends ordered, allow the
+  next draft, reconcile Matrix echoes and restore only unsent attachments after
+  a partial batch failure. Do not give unsent messages delivery/read markers.
+- Fix PWA image dimension detection, which rejected ordinary images as too large
+  and disabled image-editor controls. Use the same web-compatible dimension
+  reader for markup export; keep the working video path unchanged.
+- Recover search-index gaps after a device has been offline. Fetch event pages,
+  not media, within the selected scope and budget. Foreground recovery yields
+  to manual downloads/decryption retries and keeps its own saved cursor.
+  Redacted encrypted messages no longer count as failed decryptions.
+- Encrypt desktop Matrix/search databases with SQLCipher and protect private
+  drafts, scheduled messages, favourites, proxy settings and avatar caches.
+  Preserve existing Android SQLCipher storage. Verify migrations, recover
+  interrupted replacements and retain data when keys or decryption fail.
+  Run larger native file-encryption jobs away from the UI thread.
+- Encrypt PWA Matrix records and search storage, with automatic browser-key
+  unlock. Keep lookup identities opaque, migrate existing sessions/history and
+  preserve transaction rollback. Browser-held keys do not protect against
+  compromised site code or a copied browser profile.
+- Show estimated browser storage usage, allowance and persistence status in
+  Local storage, with a persistent-storage request action.
+- Ignore foreground timeline refreshes until the Matrix client is ready, and
+  tolerate short-lived SQLite lock contention during startup.
+- Simplify Home chat menus to Mark as read, Mute, Pin, Archive and Leave. Grey
+  both muted avatars and names. Move Copy room link to Members and remove DM
+  renaming from this menu. Keep server-channel editing controls separate.
+- Reveal Archive by pulling down at the top of Home. Open archived chats on a
+  Home-style Archive view with the same chat rows, search, server rail and user
+  island. Show pull/release guidance, snap to a single-row shortcut and hide it
+  again when scrolled away. Support mouse-wheel reveal and hide DM scrollbars.
+- Reorder message actions to Reply, React, Copy, Mark unread, Pin, Bookmark,
+  Edit, Delete and Copy event link. Keep edit/delete author-only and preserve
+  failed-send recovery. Triple-tap your own eligible message to edit it.
+- Remove duplicate media, inbox, invitation, alias and read-state actions from
+  the timeline menu. Keep invitations and aliases in Members and hide shared
+  room-access controls for DMs. Match discussion message actions to the timeline.
+- Record DM/group-call starts and ends, including duration, in chat history.
+  Exclude server voice channels and reconnect noise. History writes do not
+  delay disconnecting the call.
+- Keep server channels out of Home despite stale direct-chat annotations. Stop
+  channels inheriting another user's status/activity and remove their DM switch.
+  Correct the mobile warning that leaving a server also leaves its rooms.
+- Keep cached own-avatar media when a startup profile request finishes, and
+  preserve that profile while other profiles load. Show custom statuses in DM
+  headers, with coloured presence dots and activity taking priority.
+- Highlight individual desktop storage-chart segments on hover, showing their
+  category and size beside the cursor. Compact the mobile legend and remove
+  Legacy-specific implementation notes. Keep irreversible-deletion warnings.
+  Correct the in-app update notes to describe this build.
+- Add explicit Legacy-upload pruning, with owner-bound previews and separate
+  confirmation. Recheck protected profiles, current packs and server assets
+  before deletion. This needs the updated optional homeserver storage module.
+- Refresh the README and screenshot gallery and add channel-specific version/
+  build labels to the download site. Publish to Latest only; Stable promotion
+  follows further testing.
+
 ## SeND 0.9.42 build 133 (2026-10-28)
 
 - Fix Android clipboard-toolbar taps and search-storage opening with SQLCipher.

@@ -1,6 +1,163 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixHistoryDownload on MatrixBackend {
+  Future<HistoryGapRecovery?> _openHistoryGaps() {
+    if (_historyDisposed) return Future.value();
+    if (_historyGaps != null) return Future.value(_historyGaps);
+    return _openingGaps ??=
+        () async {
+          final client = _client;
+          final index = await openHistoryIndex();
+          final download = await openHistoryDownload();
+          if (client == null ||
+              index == null ||
+              download == null ||
+              !identical(client, _client) ||
+              _historyDisposed) {
+            return null;
+          }
+          final attempted = <String>{};
+          final gaps = HistoryGapRecovery(
+            load: index.loadGapState,
+            save: index.saveGapState,
+            append: index.appendArchive,
+            recordPage: download.recordPage,
+            onFull: download.catchupStorageFull,
+            canRun: () =>
+                !_historyDisposed &&
+                identical(client, _client) &&
+                index.enabled &&
+                _applicationForeground &&
+                !download.running &&
+                !download.retrying,
+            fetch: (room, cursor, anchor, active) => _downloadIndexPage(
+              client,
+              room,
+              cursor,
+              active,
+              attempted,
+              stopAt: anchor,
+            ),
+          );
+          await gaps.open();
+          if (_historyDisposed ||
+              !identical(client, _client) ||
+              !identical(index, _historyIndex)) {
+            gaps.dispose();
+            return null;
+          }
+          _historyGaps = gaps;
+          _historyGapTimer?.cancel();
+          _historyGapTimer = Timer.periodic(
+            const Duration(seconds: 10),
+            (_) => unawaited(_tickHistoryGaps()),
+          );
+          return gaps;
+        }().whenComplete(() {
+          _openingGaps = null;
+        });
+  }
+
+  Future<void> _tickHistoryGaps() async {
+    if (_historyGapTicking) return;
+    _historyGapTicking = true;
+    try {
+      await _historyGaps?.tick();
+    } catch (_) {
+      // Keep the saved cursor and retry on a later foreground tick.
+    } finally {
+      _historyGapTicking = false;
+    }
+  }
+
+  Future<void> _observeHistorySync(SyncUpdate update) async {
+    final generation = _historyConfigurationGeneration;
+    final client = _client;
+    final index = await openHistoryIndex();
+    if (client == null ||
+        index?.enabled != true ||
+        !identical(client, _client)) {
+      return;
+    }
+    final gaps = await _openHistoryGaps();
+    if (gaps == null || generation != _historyConfigurationGeneration) return;
+    for (final entry
+        in update.rooms?.join?.entries ??
+            <MapEntry<String, JoinedRoomUpdate>>[]) {
+      final room = client.getRoomById(entry.key);
+      if (room == null ||
+          room.isSpace ||
+          !index!.scope.includes(_historyRoomKind(room))) {
+        continue;
+      }
+      final timeline = entry.value.timeline;
+      final events =
+          timeline?.events
+              ?.where(
+                (event) => {
+                  EventTypes.Message,
+                  EventTypes.Encrypted,
+                  'm.sticker',
+                  PollEventContent.startType,
+                  'm.room.redaction',
+                }.contains(event.type),
+              )
+              .toList() ??
+          <MatrixEvent>[];
+      for (var offset = 0; offset < events.length; offset += 100) {
+        if (!identical(client, _client) ||
+            !identical(index, _historyIndex) ||
+            generation != _historyConfigurationGeneration) {
+          return;
+        }
+        if (!_applicationForeground ||
+            _historyDownload?.running == true ||
+            _historyDownload?.retrying == true) {
+          await gaps.defer(
+            room.id,
+            events.skip(offset).take(100).map((e) => e.eventId).toList(),
+          );
+          continue;
+        }
+        final chunk = events.skip(offset).take(100).toList();
+        if (offset == 0 && timeline?.limited == true) {
+          await gaps.defer(room.id, chunk.map((e) => e.eventId).toList());
+        }
+        try {
+          final page = await _downloadIndexPage(
+            client,
+            room.id,
+            null,
+            () =>
+                identical(client, _client) &&
+                identical(index, _historyIndex) &&
+                index.enabled &&
+                generation == _historyConfigurationGeneration &&
+                index.scope.includes(_historyRoomKind(room)) &&
+                _applicationForeground,
+            <String>{},
+            suppliedEvents: chunk,
+            restoreKeys: false,
+          );
+          await gaps.observe(
+            room.id,
+            page,
+            limited: offset == 0 && timeline?.limited == true,
+            // Only the first chunk begins at prev_batch.
+            previousBatch: offset == 0 ? timeline?.prevBatch : null,
+            allowed: () =>
+                generation == _historyConfigurationGeneration &&
+                identical(index, _historyIndex),
+          );
+        } catch (_) {
+          if (generation != _historyConfigurationGeneration) return;
+          await gaps.defer(room.id, chunk.map((e) => e.eventId).toList());
+          rethrow;
+        }
+      }
+    }
+  }
+
   /// Direct pagination never changes the active timeline or read markers and
   /// does not bulk-store events/media in the SDK database.
   Future<HistoryDownloadPage> _downloadIndexPage(
@@ -10,6 +167,8 @@ extension _MatrixHistoryDownload on MatrixBackend {
     bool Function() active,
     Set<String> attemptedBackup, {
     List<MatrixEvent>? suppliedEvents,
+    String? stopAt,
+    bool restoreKeys = true,
   }) async {
     final room = client.getRoomById(roomId);
     if (!active() ||
@@ -47,19 +206,23 @@ extension _MatrixHistoryDownload on MatrixBackend {
     if (response.chunk.length > 200) {
       throw StateError('History page is too large.');
     }
-    await _loadDownloadKeys(
-      client,
-      room,
-      response.chunk,
-      active,
-      attemptedBackup,
-    );
+    final anchorIndex = stopAt == null
+        ? -1
+        : response.chunk.indexWhere((event) => event.eventId == stopAt);
+    final chunk = anchorIndex < 0
+        ? response.chunk
+        : response.chunk.take(anchorIndex + 1).toList();
+    // Live sync already went through the SDK's key handling. Do not turn each
+    // incoming message into a redundant key-backup request.
+    if (restoreKeys) {
+      await _loadDownloadKeys(client, room, chunk, active, attemptedBackup);
+    }
     final rows = <String, Map<String, Object?>>{};
     final failures = <HistoryDecryptionFailure>[];
     var unavailable = 0;
-    for (var offset = 0; offset < response.chunk.length; offset += 4) {
+    for (var offset = 0; offset < chunk.length; offset += 4) {
       final events = await Future.wait(
-        response.chunk.skip(offset).take(4).map((raw) async {
+        chunk.skip(offset).take(4).map((raw) async {
           var event = Event.fromMatrixEvent(raw, room);
           void failed() => failures.add(
             HistoryDecryptionFailure(
@@ -69,6 +232,9 @@ extension _MatrixHistoryDownload on MatrixBackend {
               timestamp: event.originServerTs.millisecondsSinceEpoch,
             ),
           );
+          // Redaction removes ciphertext too. There is nothing left to decrypt,
+          // even when the event retains its original encrypted type.
+          if (event.redacted) return event;
           if (event.type == EventTypes.Encrypted && client.encryption != null) {
             try {
               event = await client.encryption!
@@ -99,6 +265,16 @@ extension _MatrixHistoryDownload on MatrixBackend {
         }
         if (event == null) {
           unavailable++;
+          continue;
+        }
+        if (event.redacted) {
+          rows[event.eventId] = {
+            'id': event.eventId,
+            'room': roomId,
+            'time': 0,
+            'kind': '',
+            'deleted': true,
+          };
           continue;
         }
         if (event.type == 'm.room.redaction') {
@@ -210,7 +386,8 @@ extension _MatrixHistoryDownload on MatrixBackend {
     return HistoryDownloadPage(
       rows: rows.values.toList(),
       nextCursor: response.end,
-      checked: response.chunk.length,
+      checked: chunk.length,
+      eventIds: chunk.map((event) => event.eventId).toList(),
       unavailable: unavailable,
       failures: failures,
     );
@@ -225,7 +402,8 @@ extension _MatrixHistoryDownload on MatrixBackend {
   ) async {
     final sessions = <String>{
       for (final event in events)
-        if (event.type == EventTypes.Encrypted)
+        if (event.type == EventTypes.Encrypted &&
+            !Event.fromMatrixEvent(event, room).redacted)
           if (event.content['session_id'] case final String id)
             if (id.length <= 512) id,
     }.toList();

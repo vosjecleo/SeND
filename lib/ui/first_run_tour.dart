@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../services/first_run_tour_store.dart';
+import '../services/update_notes_store.dart';
+import '../version.dart';
+import 'update_notes_dialog.dart';
 import 'deltiecord_theme.dart';
 import 'android_notification_setup.dart';
 import 'history_index_settings.dart';
@@ -62,8 +65,21 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
       if (!mounted || _shown) return;
       _shown = true;
       if (complete) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) showHistoryIndexPrompt(context, widget.backend);
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await showHistoryIndexPrompt(context, widget.backend);
+          if (!mounted) return;
+          try {
+            final store = UpdateNotesStore();
+            final build = int.parse(deltiecordBuildNumber);
+            if (await store.shouldShow(build, existingInstall: true)) {
+              if (!mounted) return;
+              await showUpdateNotes(context);
+              await store.acknowledge(build);
+            }
+          } catch (_) {
+            // An unavailable keyring must not prevent opening the app.
+          }
         });
         return;
       }
@@ -79,6 +95,9 @@ class _FirstRunTourGateState extends State<FirstRunTourGate> {
       builder: (context) => FirstRunTourDialog(backend: widget.backend),
     );
     await _store.markComplete(userId);
+    try {
+      await UpdateNotesStore().acknowledge(int.parse(deltiecordBuildNumber));
+    } catch (_) {}
     final index = await widget.backend.openHistoryIndex();
     if (index != null && !index.prompted) {
       await widget.backend.configureHistoryIndex(index.enabled);

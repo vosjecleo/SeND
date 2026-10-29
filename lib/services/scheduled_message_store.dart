@@ -22,6 +22,8 @@ class ScheduledMessageStore {
   File? _file;
   final Map<String, ScheduledMessageSummary> _messages = {};
   Future<void> _writes = Future.value();
+  bool _readFailed = false;
+  String? warning;
 
   Future<void> initialize() async {
     if (!kIsWeb && _file == null) {
@@ -33,11 +35,11 @@ class ScheduledMessageStore {
       await ensurePrivateDirectory(_file!.parent);
     }
     final file = _file;
-    if (!kIsWeb && !await file!.exists()) return;
+    if (!kIsWeb && !await privateFileExists(file!)) return;
     try {
       final text = kIsWeb
           ? await BrowserPrivateStore.read('scheduled')
-          : await file!.readAsString();
+          : await readPrivateTextFile(file!);
       if (text == null) return;
       final decoded = jsonDecode(text);
       if (decoded is! List) return;
@@ -61,12 +63,9 @@ class ScheduledMessageStore {
         );
       }
     } catch (_) {
-      // A corrupt queue cannot be delivered and should not retain plaintext.
-      if (kIsWeb) {
-        await BrowserPrivateStore.write('scheduled', null);
-      } else {
-        await deletePrivateFile(file);
-      }
+      _readFailed = true;
+      warning =
+          'Scheduled messages could not be opened. Existing data was kept.';
     }
   }
 
@@ -77,21 +76,25 @@ class ScheduledMessageStore {
   }
 
   Future<void> put(ScheduledMessageSummary message) async {
+    if (_readFailed) throw StateError(warning!);
     _messages[message.id] = message;
     await _persist();
   }
 
   Future<void> remove(String id) async {
+    if (_readFailed) throw StateError(warning!);
     _messages.remove(id);
     await _persist();
   }
 
   Future<void> clear() async {
     _messages.clear();
+    _readFailed = false;
     await _persist();
   }
 
   Future<void> _persist() async {
+    if (_readFailed) return;
     final file = _file;
     if (!kIsWeb && file == null) return;
     final empty = _messages.isEmpty;

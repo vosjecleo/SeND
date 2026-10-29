@@ -5,7 +5,7 @@
   worker.onmessage = ({data}) => {
     const job = pending.get(data.id); if (!job) return;
     pending.delete(data.id); clearTimeout(job.timer);
-    if (data.error) job.reject(new Error('Local index operation failed'));
+    if (data.error) job.reject(new Error('Local index operation failed'+(data.stage?' ('+data.stage+')':'')));
     else job.resolve(data.value);
   };
   worker.onerror = () => { for (const job of pending.values()) { clearTimeout(job.timer); job.reject(new Error('Local index unavailable')); } pending.clear(); };

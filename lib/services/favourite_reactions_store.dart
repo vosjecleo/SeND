@@ -44,6 +44,10 @@ final class FavouriteReactionsStore extends ChangeNotifier {
 
   File? _file;
   bool _loaded = false;
+  bool _readFailed = false;
+  String? get warning => _readFailed
+      ? 'Could not open saved favourites. Existing data was kept.'
+      : null;
   final List<String> _emoji = [];
   final List<String> _stickers = [];
   final Map<String, int> _emojiUsage = {};
@@ -148,11 +152,11 @@ final class FavouriteReactionsStore extends ChangeNotifier {
         _file = File(
           path.join(support.path, 'deltiecord', 'reaction_favourites.json'),
         );
-        if (!await _file!.exists()) return;
+        if (!await privateFileExists(_file!)) return;
       }
       final text = kIsWeb
           ? await BrowserPrivateStore.read('reactions')
-          : await _file!.readAsString();
+          : await readPrivateTextFile(_file!);
       if (text == null) return;
       final value = jsonDecode(text);
       if (value is! Map) return;
@@ -183,6 +187,7 @@ final class FavouriteReactionsStore extends ChangeNotifier {
         ),
       );
     } catch (_) {
+      _readFailed = true;
       _emoji.clear();
       _stickers.clear();
     }
@@ -222,6 +227,7 @@ final class FavouriteReactionsStore extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    if (_readFailed) throw StateError(warning!);
     if (kIsWeb) {
       await BrowserPrivateStore.write(
         'reactions',

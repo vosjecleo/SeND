@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../models/markup_stroke.dart';
 import 'dart:ui' as ui;
 import 'package:image/image.dart' as image;
+import 'encoded_image_dimensions.dart';
 
 /// Use Flutter's compositor for indexed GIFs, preserving palette/transparency.
 /// Only one decoded frame is retained; exported animations stay animated PNGs.
@@ -14,17 +15,16 @@ Future<Uint8List> renderMarkedImage({
   bool jpeg = false,
   bool Function()? canceled,
 }) async {
-  final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-  final descriptor = await ui.ImageDescriptor.encoded(buffer);
-  final scale =
-      4096 /
-      (descriptor.width > descriptor.height
-          ? descriptor.width
-          : descriptor.height);
-  final width = (descriptor.width * (scale < 1 ? scale : 1)).round(),
-      height = (descriptor.height * (scale < 1 ? scale : 1)).round();
-  descriptor.dispose();
-  buffer.dispose();
+  final size = await readEncodedImageDimensions(
+    bytes,
+    maximumPixels: 100000000,
+  );
+  if (size == null) {
+    throw const FormatException('This image cannot be edited here.');
+  }
+  final scale = 4096 / (size.width > size.height ? size.width : size.height);
+  final width = (size.width * (scale < 1 ? scale : 1)).round(),
+      height = (size.height * (scale < 1 ? scale : 1)).round();
   final codec = await ui.instantiateImageCodec(
     bytes,
     targetWidth: width,

@@ -14,23 +14,213 @@ import '../services/history_download.dart';
 import '../services/history_scope.dart';
 import '../services/message_links.dart';
 import '../services/room_send_queue.dart';
+import '../services/attachment_admission.dart' as admission;
+import '../services/queued_message.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
 /// Keeping SDK objects behind this contract lets desktop and future Android
 /// interfaces share the same session, room, timeline, and crypto behavior.
 abstract class ChatBackend extends ChangeNotifier {
+  bool _archiveOpen = false;
+  bool get archiveOpen => _archiveOpen && selectedSpaceId == null;
+  void setArchiveOpen(bool value) {
+    _archiveOpen = value;
+    if (value && selectedSpaceId != null) selectSpace(null);
+    notifyListeners();
+  }
+
+  final _outgoing = <String, QueuedMessage>{};
+  bool _outgoingDisposed = false;
+  void _notifyOutgoing() {
+    if (!_outgoingDisposed) notifyListeners();
+  }
+
+  int _outgoingSequence = 0;
+  AttachmentDraft? queuedAttachment(String id) => _outgoing[id]?.draft;
+  bool get reconcilesOutgoingTransactions => false;
+  bool cancelLocalQueuedMessage(String id) {
+    if (messages.any((m) => m.id == id || m.transactionId == id)) return false;
+    final item = _outgoing.remove(id);
+    if (item == null) return false;
+    item.cancelled = true;
+    _notifyOutgoing();
+    return true;
+  }
+
+  List<ChatMessage> get timelineMessages {
+    final sent = messages;
+    final visible = sent.expand((m) => [m.id, ?m.transactionId]).toSet();
+    _outgoing.removeWhere((id, item) => item.completed && visible.contains(id));
+    return [
+      ..._outgoing.values
+          .where(
+            (item) =>
+                item.room == selectedRoom?.id && !visible.contains(item.id),
+          )
+          .toList()
+          .reversed
+          .map((item) => item.message),
+      ...sent,
+    ];
+  }
+
+  Future<void> submitComposerMessage({
+    required String roomId,
+    required String text,
+    String? formattedBody,
+    List<AttachmentDraft> attachments = const [],
+    ChatMessage? reply,
+    String? editMessageId,
+  }) async {
+    if (editMessageId != null) {
+      return enqueueRoomSend(
+        roomId,
+        () => sendMessage(
+          text,
+          roomId: roomId,
+          formattedBody: formattedBody,
+          replyToMessageId: reply?.id,
+          editMessageId: editMessageId,
+        ),
+      );
+    }
+    if (_outgoing.length + (attachments.isEmpty ? 1 : attachments.length) >
+        50) {
+      throw StateError('Wait for the current messages to finish sending.');
+    }
+    final waitingBytes = _outgoing.values.fold<int>(
+      0,
+      (sum, item) => sum + (item.draft?.bytes.length ?? 0),
+    );
+    if (waitingBytes +
+            attachments.fold<int>(0, (sum, item) => sum + item.bytes.length) >
+        512 * 1024 * 1024) {
+      throw StateError(
+        'Wait for some attachments to finish sending before adding more.',
+      );
+    }
+    final items = List.generate(attachments.isEmpty ? 1 : attachments.length, (
+      index,
+    ) {
+      final item = QueuedMessage(
+        id: 'send-local-${DateTime.now().microsecondsSinceEpoch}-${_outgoingSequence++}',
+        room: roomId,
+        body: index == 0 ? text : attachments[index].caption ?? '',
+        sender: profileDisplayName ?? userId ?? 'You',
+        senderId: userId,
+        avatar: profileAvatarBytes,
+        formattedBody: attachments.isEmpty ? formattedBody : null,
+        reply: index == 0 && reply != null
+            ? ReplyPreview(
+                eventId: reply.id,
+                sender: reply.sender,
+                body: reply.body,
+                senderId: reply.senderId,
+                senderColor: reply.senderColor,
+              )
+            : null,
+        draft: attachments.isEmpty ? null : attachments[index],
+      );
+      _outgoing[item.id] = item;
+      return item;
+    });
+    _notifyOutgoing();
+    try {
+      await enqueueRoomSend(roomId, () async {
+        if (items.every((item) => item.cancelled)) return;
+        if (attachments.isNotEmpty) {
+          final prepared = await prepareAttachmentsForSend(
+            attachments,
+            onProgress: (index, status, progress) {
+              if (items[index].cancelled) return;
+              items[index].status = status;
+              items[index].progress = progress;
+              _notifyOutgoing();
+            },
+          );
+          for (var index = 0; index < prepared.length; index++) {
+            items[index].draft = prepared[index];
+          }
+        }
+        for (final item in items) {
+          if (item.cancelled) continue;
+          item.status = item.draft == null ? 'Sending' : 'Uploading';
+          item.progress = null;
+          _notifyOutgoing();
+          await withQueuedTransaction(
+            item.id,
+            () => item.draft == null
+                ? sendMessage(
+                    text,
+                    roomId: roomId,
+                    formattedBody: formattedBody,
+                    replyToMessageId: reply?.id,
+                  )
+                : sendAttachment(
+                    item.draft!.copyWith(
+                      caption: item.body.isEmpty ? null : item.body,
+                    ),
+                    roomId: roomId,
+                    replyToMessageId: identical(item, items.first)
+                        ? reply?.id
+                        : null,
+                  ),
+          );
+          item.completed = true;
+          if (!reconcilesOutgoingTransactions) _outgoing.remove(item.id);
+        }
+      });
+    } catch (error) {
+      for (final item in items) {
+        _outgoing.remove(item.id);
+      }
+      if (items.any((item) => item.completed) &&
+          items.any((item) => !item.completed && !item.cancelled)) {
+        throw PartialComposerSendFailure(
+          items
+              .where((item) => !item.completed && !item.cancelled)
+              .map((item) => item.draft)
+              .whereType<AttachmentDraft>()
+              .toList(),
+          error,
+        );
+      }
+      rethrow;
+    } finally {
+      _notifyOutgoing();
+    }
+  }
+
   final _roomSends = RoomSendQueue();
   Future<void> enqueueRoomSend(String roomId, Future<void> Function() send) =>
       _roomSends.run(roomId, send);
-  void cancelQueuedSends() => _roomSends.cancelPending();
+  void cancelQueuedSends() {
+    _archiveOpen = false;
+    _roomSends.cancelPending();
+    for (final item in _outgoing.values) {
+      item.cancelled = true;
+    }
+    _outgoing.clear();
+  }
+
+  Future<List<AttachmentDraft>> prepareAttachmentsForSend(
+    List<AttachmentDraft> drafts, {
+    void Function(int index, String status, double? progress)? onProgress,
+  }) => admission.prepareAttachmentBatch(
+    drafts,
+    preferences,
+    onProgress: onProgress,
+  );
   @override
   void dispose() {
+    _outgoingDisposed = true;
     cancelQueuedSends();
     super.dispose();
   }
 
   PersonalData? get personalData => null;
+  String? get localStorageWarning => null;
   String? get serverStorageWarning => null;
   Future<Map<String, dynamic>> serverStorage(
     String action, [
@@ -315,6 +505,7 @@ abstract class ChatBackend extends ChangeNotifier {
     String? beforeRoomId,
   });
   int spaceChannelLayoutPowerLevel(String spaceId) => 100;
+  bool canMarkRoomDirect(String roomId) => true;
   bool isRoomDirect(String roomId) => false;
   Future<void> setRoomDirect(String roomId, bool direct) =>
       throw UnsupportedError('Room classification unavailable');
@@ -478,6 +669,11 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> muteRoomUntil(String roomId, DateTime? until) async =>
       setRoomMuted(roomId, until != null);
   Future<void> markRoomUnread(String roomId, bool unread) async {}
+  Future<void> markMessageUnread(String eventId) async {
+    final room = roomIdForMessage(eventId) ?? selectedRoom?.id;
+    if (room != null) await markRoomUnread(room, true);
+  }
+
   Future<void> setNotificationPreviewsEnabled(bool enabled);
 
   /// Registers the private UnifiedPush capability endpoint with Matrix.

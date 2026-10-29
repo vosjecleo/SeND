@@ -1,111 +1,60 @@
 # SeND screenshot gallery
 
-These screenshots show SeND build 115 in Chromium on 2026-10-03. The private
-**SeND showcase** Space uses a test account and sample messages, not user chats.
+Selected from Cleo's supplied desktop, Android and activity captures. Some show
+earlier interface revisions; these are not all build 134 screenshots. The images
+are unmodified. Names and conversations are visible as supplied.
 
-Browse: [chat](#chat-threads-and-media), [packs](#sticker-picker-and-telegram-import),
-[GIFs](#gif-search), [forums](#forums), [voice](#voice-channel-chat),
-[profiles](#profile-editing), [activity](#activity-and-privacy),
-[themes](#themes), [administration](#space-administration), [mobile](#mobile-layout).
+## Forums and discussions
 
-## Chat, threads and media
+![Forum posts with a discussion open beside the list](screenshots/showcase/desktop-forum.png)
 
-The desktop layout keeps Space navigation, the conversation and an optional
-discussion pane visible together. Rich text, spoilers and a sent sticker appear
-in the same timeline.
+## Calls and screen sharing
 
-![Desktop chat with a thread discussion](screenshots/desktop-chat-threads.png)
+![Desktop call with a shared screen](screenshots/showcase/desktop-call.png)
 
-## Sticker picker and Telegram import
+<img src="screenshots/showcase/mobile-call.png" alt="Android voice channel and screen sharing" width="330">
 
-The expression picker groups emoji, GIFs and stickers. This example imports two
-items from the public [Hot Cherry Telegram pack](https://t.me/addstickers/HotCherry).
-The artwork belongs to its respective creator; no standalone pack assets are
-redistributed here. Only the two imported samples are shown.
+## Image editing
 
-![Sticker picker with an imported sample pack](screenshots/sticker-picker.png)
+![Desktop crop, markup, compression and spoiler controls](screenshots/showcase/desktop-editor.png)
 
-Three static items from [Just zoo it!](https://t.me/addstickers/Animals) were
-separately imported as custom emoji. The alias editor and resulting pack in the
-picker are shown below; one emoji was also sent to the private showcase room.
+## Android
 
-![Custom emoji alias editor](screenshots/emoji-alias-editor.png)
+<p>
+  <img src="screenshots/showcase/mobile-home.png" alt="Direct messages and online statuses" width="300">
+  <img src="screenshots/showcase/mobile-channels.png" alt="Server categories, text, forum and voice channels" width="300">
+  <img src="screenshots/showcase/mobile-chat.png" alt="Conversation with replies, emoji, files and a voice message" width="300">
+</p>
 
-![Imported custom emoji grouped by pack](screenshots/custom-emoji-picker.png)
+## Profiles and listening history
 
-## GIF search
+<p>
+  <img src="screenshots/showcase/profile-custom.png" alt="Custom banner, profile colour, pronouns and status" width="300">
+  <img src="screenshots/showcase/profile-lastfm.png" alt="Full profile with local time and a Last.fm last-listened track" width="300">
+</p>
 
-KLIPY search results inside the expression picker. GIF and pack artwork belongs
-to the respective creators and is shown only as part of the client UI.
+## Activity details
 
-![KLIPY cat GIF search](screenshots/gif-search.png)
+![Music activity with album art and playback progress](screenshots/showcase/activity-music.png)
 
-## Forums
+![Game activity with an icon](screenshots/showcase/activity-game.png)
 
-Forum channels organize discussions as named posts with tags and replies.
+Game detection runs on native desktop clients. Activities can be viewed on other
+platforms. Last.fm and Libre.fm sharing are optional.
 
-![Private showcase forum with two sample posts](screenshots/forums.png)
+## Captures still wanted
 
-## Voice-channel chat
+- A populated desktop conversation, with a profile or thread open beside it.
+- Current search results, including the sender filter and page controls.
+- The mobile image editor with markup, plus the video trim/crop controls.
+- The emoji/sticker picker and pack editing, consolidation or splitting.
+- Server storage usage and pruning preview, with no private file details.
+- An iPhone Home Screen PWA capture, and a light-theme example.
 
-Preview a voice channel before joining, and keep its text conversation visible
-beside it.
+Keep credentials, recovery keys, notification contents and unrelated windows out
+of captures. Use showcase rooms and people who are happy to appear in public.
+Do not ring other people or change shared production permissions just to get a
+screenshot. Artwork in screenshots belongs to its respective creators.
 
-![Voice-channel preview with its chat panel](screenshots/voice-chat.png)
-
-## Profile editing
-
-The editor previews profile colours, biography and the status thought bubble.
-
-![Profile editor with a live preview](screenshots/profile-editor.png)
-
-## Activity and privacy
-
-This is the **web** Activity settings page. Native desktop process detection is
-not available in the PWA. Last.fm connection and sharing controls are shown.
-
-![Web activity-sharing settings](screenshots/activity-settings.png)
-
-## Themes
-
-The bundled Aero example supplies its own appearance controls through the
-declarative theme system. Both the controls and the resulting chat are shown.
-
-![Aero theme settings](screenshots/theme-settings.png)
-
-![Showcase chat using Aero](screenshots/aero-chat.png)
-
-## Space administration
-
-Roles, Matrix permission levels, Space access and shared timeline settings live
-in Administration. The example uses the private showcase Space.
-
-![Space administration settings](screenshots/space-administration.png)
-
-## Mobile layout
-
-The mobile layout, captured with Chromium's mobile emulation on Linux.
-
-<img src="screenshots/mobile-chat.png" alt="Mobile showcase conversation" width="390">
-
-<img src="screenshots/mobile-stickers.png" alt="Mobile sticker picker with the imported Hot Cherry sample" width="390">
-
-## Capture notes
-
-Captured with `grim` on the development laptop while build 116 was being prepared.
-The full 34-item animated Hot Cherry import was slow; only the two sample
-stickers and three static custom emoji were checked for these captures. Full-pack
-and animated-emoji imports were not validated by this session.
-
-No call was placed, microphone audio recorded or Last.fm account linked. Profile
-editor changes were discarded, and no public community permissions were changed.
-
-These are layout examples, not tests of animation, codecs, audio, notifications,
-encryption verification or physical iOS behaviour.
-
-### Taking new screenshots
-
-Keep credentials, recovery keys, notification contents and unrelated windows
-out of images. Use the private showcase rooms for future captures. Browser
-mobile emulation cannot test iOS hardware. Do not ring
-other people or publish test packs into shared production Spaces for a screenshot.
+The older build 115 captures remain in this directory for historical links.
+They are no longer presented as the current gallery.

@@ -33,9 +33,14 @@ for name in "$asset" "$sources" FLATPAK-SHA256SUMS; do
 done
 digest=$(sha256sum "$stage/$asset" | cut -d' ' -f1)
 size=$(stat -c %s "$stage/$asset")
-jq --arg name "$asset" --arg hash "$digest" --argjson size "$size" '
-  .platforms.linux.latest = ((.platforms.linux.latest | map(select(.name != $name))) +
-    [{name: $name, sha256: $hash, size: $size}])
+jq --arg name "$asset" --arg hash "$digest" --argjson size "$size" --arg release "$release_id" '
+  def add_flatpak($channel):
+    .platforms.linux[$channel] = (((.platforms.linux[$channel] // []) | map(select(.name != $name))) +
+      [{name: $name, sha256: $hash, size: $size}]);
+  add_flatpak("latest") |
+  if ((.stable_version // "") + "+" + ((.stable_build // "") | tostring)) == $release then
+    add_flatpak("stable")
+  else . end
 ' "$root/releases.json" > "$stage/releases.json"
 chmod 0644 "$stage/$asset" "$stage/$sources" "$stage/FLATPAK-SHA256SUMS" "$stage/releases.json"
 for name in "$asset" "$sources" FLATPAK-SHA256SUMS releases.json; do

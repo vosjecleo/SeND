@@ -97,34 +97,32 @@ void main() {
       tester.getCenter(find.byKey(const ValueKey(r'message-body-$own'))),
     );
     await tester.pump(const Duration(milliseconds: 1100));
-    expect(find.byTooltip('Reply'), findsNothing);
+    expect(find.text('Reply'), findsNothing);
     await hoverOnly.removePointer();
 
     await revealMessageActions(
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    expect(find.byTooltip('Reply'), findsOneWidget);
-    expect(find.byTooltip('Copy text'), findsOneWidget);
+    expect(find.text('Reply'), findsOneWidget);
+    expect(find.text('Copy'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(find.byTooltip('Reply'), findsNothing);
+    expect(find.text('Reply'), findsNothing);
 
     await revealMessageActions(
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    expect(find.byTooltip('Reply'), findsOneWidget);
+    expect(find.text('Reply'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 1100));
-    expect(find.byTooltip('Reply'), findsNothing);
+    expect(find.text('Reply'), findsNothing);
 
     await revealMessageActions(
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    tester
-        .widget<IconButton>(find.byKey(const Key('message-action-react')))
-        .onPressed!();
+    await tester.tap(find.byKey(const Key('message-action-react')));
     await tester.pumpAndSettle();
     expect(find.text('Emoji'), findsOneWidget);
     await tester.enterText(find.byType(TextField).last, 'tada');
@@ -137,9 +135,7 @@ void main() {
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    tester
-        .widget<IconButton>(find.byKey(const Key('message-action-edit')))
-        .onPressed!();
+    await tester.tap(find.byKey(const Key('message-action-edit')));
     await tester.pump();
     expect(find.text('Editing message'), findsOneWidget);
     await tester.tap(find.byTooltip('Cancel'));
@@ -158,9 +154,7 @@ void main() {
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    tester
-        .widget<IconButton>(find.byKey(const Key('message-action-edit')))
-        .onPressed!();
+    await tester.tap(find.byKey(const Key('message-action-edit')));
     await tester.pump();
     await enterComposer(tester, 'Changed');
     await tester.tap(find.byTooltip('Send'));
@@ -171,9 +165,7 @@ void main() {
       tester,
       find.byKey(const ValueKey(r'message-body-$own')),
     );
-    tester
-        .widget<IconButton>(find.byKey(const Key('message-action-delete')))
-        .onPressed!();
+    await tester.tap(find.byKey(const Key('message-action-delete')));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();

@@ -163,12 +163,20 @@ class _MemberSidebar extends StatelessWidget {
                 bottom: BorderSide(color: context.deltiecord.divider),
               ),
             ),
-            child: Text(
-              'Members — ${members.length}',
-              style: const TextStyle(
-                fontSize: DeltiecordTypeScale.bigUi,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Members — ${members.length}',
+                    style: const TextStyle(
+                      fontSize: DeltiecordTypeScale.bigUi,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (backend.selectedRoom case final room?)
+                  MemberRoomTools(backend: backend, room: room),
+              ],
             ),
           ),
           Expanded(

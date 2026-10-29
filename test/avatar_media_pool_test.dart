@@ -83,7 +83,7 @@ void main() {
       ),
       [7, 8, 9],
     );
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await first.clear(disk: false); // Wait for the protected disk write.
 
     final second = AvatarMediaPool(directory: cacheDirectory);
     var networkLoads = 0;

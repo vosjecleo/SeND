@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'platform_io.dart';
 import 'dart:typed_data';
+import 'private_file_store.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -160,13 +161,13 @@ final class AvatarMediaPool {
     for (final dimension in dimensions) {
       final file = File(p.join(directory.path, _fileName(uri, dimension)));
       try {
-        if (!await file.exists()) continue;
+        if (!await privateFileExists(file)) continue;
         final length = await file.length();
-        if (length <= 0 || length > maximumEntryBytes) {
+        if (length <= 0 || length > maximumEntryBytes + 64) {
           await file.delete();
           continue;
         }
-        final bytes = await file.readAsBytes();
+        final bytes = await readPrivateBytesFile(file);
         await file.setLastModified(DateTime.now());
         seed(uri, bytes, dimension);
         return bytes;
@@ -182,7 +183,7 @@ final class AvatarMediaPool {
     if (directory == null) return;
     try {
       final file = File(p.join(directory.path, _fileName(uri, dimension)));
-      await file.writeAsBytes(bytes, flush: true);
+      await writePrivateBytesFile(file, bytes);
       await _trimDisk(directory);
     } catch (_) {
       // Avatars still remain in memory when a platform cache is unavailable.

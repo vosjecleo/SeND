@@ -414,6 +414,11 @@ extension _MatrixProfiles on MatrixBackend {
         (mediaBytes > MatrixBackend._maximumCachedProfileMediaBytes &&
             _profileCache.length > 1)) {
       final removed = _profileCache.remove(_profileCache.keys.first);
+      if (removed?.profile.userId == _client?.userID &&
+          _profileCache.isNotEmpty) {
+        _profileCache[removed!.profile.userId] = removed;
+        continue;
+      }
       mediaBytes -=
           (removed?.profile.avatarBytes?.length ?? 0) +
           (removed?.profile.bannerBytes?.length ?? 0) +

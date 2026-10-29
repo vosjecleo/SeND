@@ -1,9 +1,29 @@
 import asyncio
 import io
+import json
 import sqlite3
 import unittest
 
-from send_storage import Storage, category, read_body
+from send_storage import Storage, category, read_body, protected_custom_assets
+
+
+class AssetProtectionTests(unittest.TestCase):
+    def test_current_unlabelled_pack_and_profile_assets_are_protected(self):
+        db=sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.executescript('''
+          CREATE TABLE profiles(fields TEXT);
+          CREATE TABLE account_data(account_data_type TEXT,content TEXT);
+          CREATE TABLE current_state_events(type TEXT,event_id TEXT);
+          CREATE TABLE event_json(event_id TEXT,json TEXT);
+        ''')
+        refs={f'mxc://example.org/{value}':value for value in ('banner','personal','room','override','unused')}
+        db.execute('INSERT INTO profiles VALUES(?)',[json.dumps({'net.deltiecord.banner':'mxc://example.org/banner'})])
+        db.execute('INSERT INTO account_data VALUES(?,?)',['im.ponies.user_emotes',json.dumps({'images':{'emoji':{'url':'mxc://example.org/personal'}}})])
+        for event_type,media_id in [('im.ponies.room_emotes','room'),('net.deltiecord.space_profile_overrides','override')]:
+            db.execute('INSERT INTO current_state_events VALUES(?,?)',[event_type,media_id])
+            db.execute('INSERT INTO event_json VALUES(?,?)',[media_id,json.dumps({'content':{'url':f'mxc://example.org/{media_id}'}})])
+        self.assertEqual(protected_custom_assets(db.cursor(),refs),{'banner','personal','room','override'})
 
 
 class StorageTests(unittest.IsolatedAsyncioTestCase):
@@ -83,6 +103,27 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.store.usage('@a:example.org'))['used_bytes'], 80)
         with self.assertRaises(ValueError):
             await self.store.prune('@a:example.org', preview['token'])
+    async def test_legacy_requires_explicit_selection_and_owner_bound_confirmation(self):
+        self.assertEqual((await self.store.preview('@a:example.org',100))['files'],[])
+        preview=await self.store.preview('@a:example.org',100,'legacy')
+        self.assertEqual([row['media_id'] for row in preview['files']],['mine'])
+        self.assertEqual(self.deleted,[])
+        with self.assertRaises(ValueError):
+            await self.store.prune('@b:example.org',preview['token'])
+        self.assertEqual((await self.store.prune('@a:example.org',preview['token']))['deleted'],1)
+        self.assertEqual(self.deleted,['mine'])
+    async def test_legacy_excludes_known_new_labeled_cached_and_protected_media(self):
+        self.add('old-photo','@a:example.org',20,'image/png')
+        self.add('new','@a:example.org',30)
+        self.db.execute("UPDATE local_media_repository SET created_ts=2000 WHERE media_id='new'")
+        self.add('cached','@a:example.org',40,cache='https://example.org')
+        self.protected.add('mine')
+        self.assertEqual((await self.store.preview('@a:example.org',5000,'legacy'))['files'],[])
+        self.protected.clear()
+        preview=await self.store.preview('@a:example.org',100,'legacy')
+        await self.label(source='asset')
+        self.assertEqual((await self.store.prune('@a:example.org',preview['token']))['deleted'],0)
+        with self.assertRaises(ValueError):await self.store.preview('@a:example.org',100,'legacy','klipy')
     async def test_cannot_label_or_delete_another_owners_upload(self):
         response = await self.store.label('@a:example.org', [{'media_id': 'other', 'kind': 'videos', 'source': 'upload'}])
         self.assertEqual(response, {'saved': 0, 'rejected': ['other']})

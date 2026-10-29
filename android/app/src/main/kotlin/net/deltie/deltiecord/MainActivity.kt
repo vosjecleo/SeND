@@ -27,8 +27,9 @@ class MainActivity : FlutterActivity() {
         private const val SHARED_CONTENT_CHANNEL =
             "net.deltie.deltiecord/shared_content"
         private const val REGISTRATION_TIMEOUT_MS = 30_000L
-        private const val MAX_SHARED_ITEM_BYTES = 32 * 1024 * 1024
-        private const val MAX_SHARED_TOTAL_BYTES = 64 * 1024 * 1024
+        // Read safety only. The final upload budget is checked after compression.
+        private const val MAX_SHARED_ITEM_BYTES = 256 * 1024 * 1024
+        private const val MAX_SHARED_TOTAL_BYTES = 256 * 1024 * 1024
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -441,21 +442,21 @@ class MainActivity : FlutterActivity() {
             return null
         }
         val text = source.getStringExtra(Intent.EXTRA_TEXT)?.take(100_000)
-        val uris = sharedUris(source).take(10)
+        val uris = sharedUris(source)
+        if (uris.size > 20) return mapOf("error" to "Choose at most 20 files.")
         var total = 0
         val items = mutableListOf<Map<String, Any>>()
         for (uri in uris) {
             val mimeType = contentResolver.getType(uri) ?: source.type ?: continue
             if (!mimeType.startsWith("image/") && !mimeType.startsWith("video/")) continue
             val bytes = readBounded(uri, minOf(MAX_SHARED_ITEM_BYTES, MAX_SHARED_TOTAL_BYTES - total))
-                ?: continue
+                ?: return mapOf("error" to "Could not read the shared media. Select fewer files to edit safely (256 MiB at a time).")
             total += bytes.size
             items += mapOf(
                 "bytes" to bytes,
                 "mimeType" to mimeType,
                 "name" to sharedDisplayName(uri, mimeType),
             )
-            if (total >= MAX_SHARED_TOTAL_BYTES) break
         }
         source.action = null
         source.removeExtra(Intent.EXTRA_TEXT)

@@ -523,7 +523,10 @@ class _SpaceBar extends StatelessWidget {
                 _SpaceButton(
                   tooltip: 'Home',
                   selected: backend.selectedSpaceId == null,
-                  onTap: () => backend.selectSpace(null),
+                  onTap: () {
+                    backend.setArchiveOpen(false);
+                    backend.selectSpace(null);
+                  },
                   attentionCount: backend.directUnreadCount,
                   unread: backend.directUnreadCount > 0,
                   child: const ThemeIcon(Icons.home_filled, size: 21),
@@ -867,6 +870,7 @@ class _RoomPanel extends StatefulWidget {
 
 class _RoomPanelState extends State<_RoomPanel> {
   final _roomSearchController = TextEditingController();
+  bool _wasArchive = false;
   String _roomQuery = '';
 
   ChatBackend get backend => widget.backend;
@@ -986,10 +990,18 @@ class _RoomPanelState extends State<_RoomPanel> {
   );
 
   Widget _buildPanel(BuildContext context) {
+    if (_wasArchive != backend.archiveOpen) {
+      _wasArchive = backend.archiveOpen;
+      _roomQuery = '';
+      _roomSearchController.clear();
+    }
     final query = _roomQuery.trim().toLowerCase();
+    final sourceRooms = backend.archiveOpen
+        ? backend.archivedRooms
+        : backend.rooms;
     final visibleRooms = query.isEmpty
-        ? backend.rooms
-        : backend.rooms
+        ? sourceRooms
+        : sourceRooms
               .where(
                 (room) =>
                     room.name.toLowerCase().contains(query) ||
@@ -1035,22 +1047,49 @@ class _RoomPanelState extends State<_RoomPanel> {
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 8,
                                 ),
-                                child: Text(
-                                  backend.selectedSpaceId == null
-                                      ? 'Home'
-                                      : backend.spaces
-                                                .where(
-                                                  (space) =>
-                                                      space.id ==
-                                                      backend.selectedSpaceId,
-                                                )
-                                                .map((space) => space.name)
-                                                .firstOrNull ??
-                                            'Space',
-                                  style: const TextStyle(
-                                    fontSize: DeltiecordTypeScale.normal,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                child: Row(
+                                  children: [
+                                    if (backend.archiveOpen)
+                                      IconButton(
+                                        tooltip: 'Back to Home',
+                                        padding: EdgeInsets.zero,
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                              width: 28,
+                                              height: 28,
+                                            ),
+                                        onPressed: () =>
+                                            backend.setArchiveOpen(false),
+                                        icon: const Icon(
+                                          Icons.arrow_back,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        backend.selectedSpaceId == null
+                                            ? (backend.archiveOpen
+                                                  ? 'Archive'
+                                                  : 'Home')
+                                            : backend.spaces
+                                                      .where(
+                                                        (space) =>
+                                                            space.id ==
+                                                            backend
+                                                                .selectedSpaceId,
+                                                      )
+                                                      .map(
+                                                        (space) => space.name,
+                                                      )
+                                                      .firstOrNull ??
+                                                  'Space',
+                                        style: const TextStyle(
+                                          fontSize: DeltiecordTypeScale.normal,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1155,11 +1194,31 @@ class _RoomPanelState extends State<_RoomPanel> {
                     ),
                   ),
                   Expanded(
-                    child:
-                        visibleRooms.isEmpty &&
-                            (backend.selectedSpaceId == null ||
-                                backend.selectedSpaceCategories.isEmpty ||
-                                query.isNotEmpty)
+                    child: backend.selectedSpaceId == null
+                        ? ArchivePullList(
+                            key: const ValueKey('desktop-chats'),
+                            backend: backend,
+                            enabled: !backend.archiveOpen,
+                            emptyLabel: backend.archiveOpen
+                                ? 'No archived chats'
+                                : 'No joined rooms',
+                            onOpenArchive: () {
+                              _roomSearchController.clear();
+                              setState(() => _roomQuery = '');
+                              backend.setArchiveOpen(true);
+                            },
+                            itemCount: visibleRooms.length,
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            itemBuilder: (context, index) => _RoomListTile(
+                              key: ValueKey(visibleRooms[index].id),
+                              backend: backend,
+                              room: visibleRooms[index],
+                            ),
+                          )
+                        : visibleRooms.isEmpty &&
+                              (backend.selectedSpaceId == null ||
+                                  backend.selectedSpaceCategories.isEmpty ||
+                                  query.isNotEmpty)
                         ? Center(
                             child: Text(
                               query.isEmpty
@@ -2048,6 +2107,10 @@ class _RoomListTile extends StatelessWidget {
   }
 
   Future<void> _showContextMenu(BuildContext context, Offset position) async {
+    if (backend.selectedSpaceId == null) {
+      await showHomeRoomMenu(context, backend, room, position: position);
+      return;
+    }
     final screen = MediaQuery.sizeOf(context);
     final selectedSpaceId = backend.selectedSpaceId;
     final mayArrange =
@@ -2316,7 +2379,9 @@ class _RoomListTile extends StatelessWidget {
               ? participantCount == 0
                     ? null
                     : Text('$participantCount connected')
-              : backend.selectedSpaceId == null &&
+              : !room.usesChannelIcon &&
+                    room.isDirect &&
+                    backend.selectedSpaceId == null &&
                     ActivityStatus.hasContent(backend, room)
               ? ActivityStatus(
                   backend: backend,
@@ -2384,7 +2449,7 @@ class _HomeRoomListTile extends StatelessWidget {
     return ActivityWatch(
       backend: backend,
       roomId: room.id,
-      userId: room.isDirect ? room.directUserId : null,
+      userId: room.isDirect && !room.usesChannelIcon ? room.directUserId : null,
       presence: room.presence,
       child: NavigationHover(
         builder: (hovered) => GestureDetector(
@@ -2437,11 +2502,14 @@ class _HomeRoomListTile extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _RoomIcon(
-                        room: room,
-                        size: 34,
-                        showPresence: room.isDirect,
-                        autoplay: selected || hovered,
+                      MutedAvatar(
+                        muted: roomIsMuted(room),
+                        child: _RoomIcon(
+                          room: room,
+                          size: 34,
+                          showPresence: room.isDirect,
+                          autoplay: selected || hovered,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2455,7 +2523,11 @@ class _HomeRoomListTile extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: DeltiecordTypeScale.bigChat,
-                                color: hovered || selected
+                                color: roomIsMuted(room)
+                                    ? context.deltiecord.muted.withValues(
+                                        alpha: .6,
+                                      )
+                                    : hovered || selected
                                     ? Theme.of(context).colorScheme.onSurface
                                     : context.deltiecord.muted,
                                 fontWeight:
@@ -2467,7 +2539,7 @@ class _HomeRoomListTile extends StatelessWidget {
                                 height: 1.1,
                               ),
                             ),
-                            if (room.isDirect)
+                            if (room.isDirect && !room.usesChannelIcon)
                               ActivityStatus(
                                 backend: backend,
                                 userId: room.directUserId,

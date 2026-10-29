@@ -193,6 +193,7 @@ class _MatrixThreadSession extends ThreadSession {
     String text, {
     String? formattedBody,
     String? editMessageId,
+    String? replyToMessageId,
   }) {
     if (_disposed) throw StateError('This discussion has been closed.');
     if (editMessageId != null &&
@@ -212,6 +213,7 @@ class _MatrixThreadSession extends ThreadSession {
       text,
       roomId: roomId,
       formattedBody: formattedBody,
+      replyToMessageId: replyToMessageId,
       editMessageId: editMessageId,
       threadRootEventId:
           editMessageId == null ||

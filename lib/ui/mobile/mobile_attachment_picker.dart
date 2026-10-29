@@ -6,6 +6,7 @@ import 'package:mime/mime.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../models/chat_models.dart';
+import '../../services/attachment_admission.dart';
 import '../../services/browser_file_picker.dart';
 import '../deltiecord_theme.dart';
 
@@ -134,9 +135,7 @@ class _MobileAttachmentPickerState extends State<MobileAttachmentPicker> {
         final file = await asset.originFile;
         if (file == null) throw StateError('One selected item is unavailable.');
         total += await file.length();
-        if (total > 64 * 1024 * 1024) {
-          throw StateError('Select fewer items (64 MiB per selection).');
-        }
+        validateAttachmentSelection([total]);
         final bytes = await file.readAsBytes();
         final name = await asset.titleAsync;
         drafts.add(

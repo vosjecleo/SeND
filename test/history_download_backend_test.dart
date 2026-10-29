@@ -76,6 +76,48 @@ class _Room extends Room {
   }) async => throw StateError('Timeline not loaded in this fixture');
 }
 
+class _RedactedClient extends _Client {
+  @override
+  Future<GetRoomEventsResponse> getRoomEvents(
+    String roomId,
+    Direction dir, {
+    String? from,
+    String? to,
+    int? limit,
+    String? filter,
+  }) async => GetRoomEventsResponse(
+    start: 'start',
+    chunk: [
+      MatrixEvent.fromJson({
+        'event_id': r'$deleted',
+        'type': 'm.room.encrypted',
+        'sender': '@friend:test',
+        'origin_server_ts': 1700000000000,
+        'content': <String, Object?>{},
+        'unsigned': {
+          'redacted_because': {
+            'event_id': r'$redaction',
+            'type': 'm.room.redaction',
+            'sender': '@friend:test',
+            'origin_server_ts': 1700000001000,
+            'content': <String, Object?>{},
+          },
+        },
+      }),
+      MatrixEvent.fromJson({
+        'event_id': r'$missing-key',
+        'type': 'm.room.encrypted',
+        'sender': '@friend:test',
+        'origin_server_ts': 1700000000000,
+        'content': {
+          'algorithm': 'm.megolm.v1.aes-sha2',
+          'session_id': 'missing',
+        },
+      }),
+    ],
+  );
+}
+
 class _OfflineBackend extends MatrixBackend {
   _OfflineBackend(Client client, HistoryIndex index)
     : super(client: client, historyIndexFactory: (_) => index);
@@ -86,6 +128,48 @@ class _OfflineBackend extends MatrixBackend {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'redacted ciphertext deletes stale index content without a false decryption failure',
+    () async {
+      sqfliteFfiInit();
+      final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      final client = _RedactedClient();
+      client.httpClient = MockClient(
+        (_) async => throw StateError('No network'),
+      );
+      final room = _Room(client);
+      client.rooms = [room];
+      final index = HistoryIndex(
+        '@me:test',
+        store: HistoryStore('redaction', database: db),
+      );
+      final backend = MatrixBackend(
+        client: client,
+        historyIndexFactory: (_) => index,
+      );
+      await backend.openHistoryIndex();
+      await backend.configureHistoryIndex(true);
+      await index.ingest([
+        {
+          'id': r'$deleted',
+          'room': room.id,
+          'time': 1,
+          'sender': '@friend:test',
+          'kind': '',
+          'body': 'previously visible',
+        },
+      ]);
+      final job = (await backend.openHistoryDownload())!;
+      await job.start([room.id]);
+      await job.done;
+      expect(await index.readRows([r'$deleted']), isEmpty);
+      expect(job.unavailable, 1);
+      expect(job.failures.single.eventId, r'$missing-key');
+      backend.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await client.dispose();
+    },
+  );
   test(
     'offline indexed search pages beyond fifty results without network history',
     () async {

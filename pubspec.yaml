@@ -1,7 +1,7 @@
 name: deltiecord
 description: A lightweight Matrix client with an old-school desktop focus.
 publish_to: none
-version: 0.9.42+133
+version: 0.9.42+134
 
 environment:
   sdk: ^3.12.0
@@ -27,7 +27,7 @@ dependencies:
   image: ^4.9.1
   image_picker: ^1.2.1
   photo_manager: ^3.12.0
-  matrix: ^10.0.1
+  matrix: 10.1.0
   markdown: ^7.3.1
   media_kit: ^1.2.6
   media_kit_libs_video: ^1.0.7
@@ -38,8 +38,12 @@ dependencies:
   package_info_plus: ^9.0.0
   record: ^7.1.1
   sqflite: ^2.4.3
+  sqflite_common: ^2.5.6
   sqflite_sqlcipher: ^3.4.1
   sqflite_common_ffi: ^2.4.2
+  sqflite_common_ffi_web: 1.2.0
+  sqlite3: 3.6.0
+  cryptography: ^2.9.0
   vodozemac: ^0.7.0
   url_launcher: ^6.3.2
   universal_io: ^2.3.1
@@ -61,6 +65,15 @@ dependency_overrides:
   # shared version required by LiveKit and cover drag/clipboard regressions.
   device_info_plus: 12.3.0
 
+hooks:
+  user_defines:
+    sqlite3:
+      source:
+        default: sqlite3
+        linux: sqlcipher
+        windows: sqlcipher
+        macos: sqlcipher
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -70,6 +83,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/legal/
     - assets/icons/tango/
     - assets/emoji/emojis.json
     - assets/emoji/aliases.json

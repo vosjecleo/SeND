@@ -1,5 +1,8 @@
 import 'platform_io.dart';
 import 'dart:math';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'protected_file_codec.dart';
 
 import 'package:path/path.dart' as path;
 
@@ -26,8 +29,55 @@ Future<void> ensurePrivateDirectory(Directory directory) async {
 /// The temporary is owner-only before message text is written. Windows cannot
 /// replace an existing file with `rename`, so it uses a same-directory backup
 /// and restores it if the replacement fails.
-Future<void> writePrivateTextFile(File target, String contents) async {
+Future<void> writePrivateTextFile(File target, String contents) =>
+    writePrivateBytesFile(target, utf8.encode(contents));
+
+Future<String> readPrivateTextFile(File file) async =>
+    utf8.decode(await readPrivateBytesFile(file));
+
+File _replacementBackup(File target) =>
+    File('${target.path}.send-replacement-backup');
+Future<bool> privateFileExists(File target) async {
+  final backup = _replacementBackup(target);
+  if (!await target.exists() && await backup.exists()) {
+    await backup.rename(target.path);
+  }
+  return target.exists();
+}
+
+Future<Uint8List> readPrivateBytesFile(File file) async {
+  await privateFileExists(file);
+  final bytes = await file.readAsBytes();
+  final codec = ProtectedFileCodec.instance;
+  if (codec.encrypted(bytes)) {
+    final decoded = await codec.open(bytes, path.basename(file.path));
+    final backup = _replacementBackup(file);
+    if (await backup.exists()) await backup.delete();
+    return decoded;
+  }
+  // Rewrite legacy data atomically only after key storage and encryption work.
+  await writePrivateBytesFile(file, bytes);
+  return bytes;
+}
+
+Future<void> writePrivateBytesFile(File target, List<int> contents) async {
   await ensurePrivateDirectory(target.parent);
+  final codec = ProtectedFileCodec.instance;
+  await privateFileExists(target);
+  final previous = await target.exists() ? await target.readAsBytes() : null;
+  final requireExisting = previous != null && codec.encrypted(previous);
+  final oldBackup = _replacementBackup(target);
+  if (await oldBackup.exists()) {
+    if (requireExisting) {
+      await codec.open(previous, path.basename(target.path));
+    }
+    await oldBackup.delete();
+  }
+  final protected = await codec.seal(
+    contents,
+    path.basename(target.path),
+    requireExisting: requireExisting,
+  );
   final random = Random.secure();
   final suffix = List.generate(
     12,
@@ -40,9 +90,9 @@ Future<void> writePrivateTextFile(File target, String contents) async {
   try {
     await temporary.create(exclusive: true);
     await _secureFile(temporary);
-    await temporary.writeAsString(contents, flush: true);
+    await temporary.writeAsBytes(protected, flush: true);
     if (Platform.isWindows && await target.exists()) {
-      backup = File('${target.path}.$suffix.backup');
+      backup = _replacementBackup(target);
       await target.rename(backup.path);
     }
     await temporary.rename(target.path);
@@ -58,7 +108,10 @@ Future<void> writePrivateTextFile(File target, String contents) async {
 }
 
 Future<void> deletePrivateFile(File? file) async {
-  if (file != null && await file.exists()) await file.delete();
+  if (file == null) return;
+  if (await file.exists()) await file.delete();
+  final backup = _replacementBackup(file);
+  if (await backup.exists()) await backup.delete();
 }
 
 Future<void> _secureFile(File file) async {

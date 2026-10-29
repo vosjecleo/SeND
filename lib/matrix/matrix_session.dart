@@ -18,6 +18,11 @@ extension _MatrixSession on MatrixBackend {
       _openingPersonal = null;
       await _indexEventSubscription?.cancel();
       _historyDownload?.dispose();
+      _manualUnreadHolds.clear();
+      _historyGapTimer?.cancel();
+      _historyGaps?.dispose();
+      _historyGaps = null;
+      _openingGaps = null;
       _historyDownload = null;
       _openingDownload = null;
       await _historyIndex?.close();
@@ -52,7 +57,17 @@ extension _MatrixSession on MatrixBackend {
       _roomHeroUsersLoaded.clear();
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
-      _syncSubscription = _matrix.onSync.stream.listen((_) {
+      _syncSubscription = _matrix.onSync.stream.listen((update) {
+        final syncingClient = _client;
+        final indexGeneration = _historyConfigurationGeneration;
+        _historySyncQueue = _historySyncQueue
+            .then((_) async {
+              if (identical(syncingClient, _client) &&
+                  indexGeneration == _historyConfigurationGeneration) {
+                await _observeHistorySync(update);
+              }
+            })
+            .catchError((Object _) {});
         _personal?.merge({
           for (final e in _matrix.accountData.entries) e.key: e.value.content,
         });
@@ -296,6 +311,11 @@ extension _MatrixSession on MatrixBackend {
     cancelQueuedSends();
     await _indexEventSubscription?.cancel();
     _historyDownload?.dispose();
+    _manualUnreadHolds.clear();
+    _historyGapTimer?.cancel();
+    _historyGaps?.dispose();
+    _historyGaps = null;
+    _openingGaps = null;
     _historyDownload = null;
     _openingDownload = null;
     await _historyIndex?.clear();
@@ -444,18 +464,114 @@ extension _MatrixSession on MatrixBackend {
 
   void _initializeVoice() {
     if (!_matrix.isLogged() || _voice != null) return;
-    _voice =
+    final client = _matrix;
+    final history = DmCallHistory(
+      identity: '${client.userID}:${client.deviceID}',
+      read: (room) => _readCallHistory(room),
+      load: (room) async => (await client.database.getCustomCacheObject(
+        'send.call.$room',
+      ))?.content,
+      save: (room, record) =>
+          client.database.cacheCustomObject('send.call.$room', record),
+      publish: (id, content, transaction) async {
+        final room = client.getRoomById(id);
+        if (room == null) return;
+        await _prepareEncryptedSend(room);
+        await room.sendEvent(
+          Map<String, dynamic>.from(content),
+          txid: transaction,
+        );
+      },
+    );
+    late final MatrixVoiceController voice;
+    voice =
         MatrixVoiceController(
             _matrix,
             friendlyError: _friendlyError,
             canRingRoom: (room) =>
                 !room.isSpace &&
                 _presentationFor(room) != RoomPresentation.voice &&
-                (room.isDirectChat || !_allSpaceChildIds.contains(room.id)),
+                !_allSpaceChildIds.contains(room.id),
+            onHistoryJoined: (room, starting) async {
+              await voice.refreshMemberships(roomId: room.id);
+              final members = voice.membersForRoom(room)
+                ..sort((a, b) {
+                  final time = a.createdAt.compareTo(b.createdAt);
+                  return time != 0
+                      ? time
+                      : a.deviceIdentity.compareTo(b.deviceIdentity);
+                });
+              final leader = members.firstOrNull;
+              final elected =
+                  leader == null ||
+                  (leader.userId == client.userID &&
+                      leader.deviceId == client.deviceID);
+              await history.joined(room.id, starting: starting && elected);
+            },
+            onHistoryLeft: (room, elected) async {
+              await Future<void>.delayed(const Duration(milliseconds: 600));
+              await voice.refreshMemberships(roomId: room.id);
+              final remaining = voice
+                  .membersForRoom(room)
+                  .where(
+                    (m) =>
+                        m.userId != client.userID ||
+                        m.deviceId != client.deviceID,
+                  )
+                  .toList();
+              await history.left(
+                room.id,
+                empty: remaining.isEmpty,
+                elected: elected,
+              );
+            },
           )
           ..addListener(_notifyBackendListeners)
           ..applyPreferences(_preferences)
           ..initialize();
+    _voice = voice;
+  }
+
+  Future<List<Map<String, Object?>>> _readCallHistory(String roomId) async {
+    final client = _matrix, room = _matrix.getRoomById(roomId);
+    if (room == null) return [];
+    final response = await client.getRoomEvents(
+      roomId,
+      Direction.b,
+      limit: 100,
+      filter: jsonEncode({
+        'types': [EventTypes.Message, EventTypes.Encrypted],
+      }),
+    );
+    final records = <Map<String, Object?>>[];
+    for (var offset = 0; offset < response.chunk.length; offset += 4) {
+      final events = await Future.wait(
+        response.chunk.skip(offset).take(4).map((raw) async {
+          var event = Event.fromMatrixEvent(raw, room);
+          if (event.type == EventTypes.Encrypted && client.encryption != null) {
+            try {
+              event = await client.encryption!
+                  .decryptRoomEvent(event, store: false)
+                  .timeout(const Duration(seconds: 3));
+            } catch (_) {
+              return null;
+            }
+          }
+          return event;
+        }),
+      );
+      for (final event in events.whereType<Event>()) {
+        if (event.redacted || event.content[callHistoryKey] is! Map) continue;
+        final record = Map<String, Object?>.from(
+          event.content[callHistoryKey] as Map,
+        );
+        if (record['phase'] == 'started') {
+          record['started_at'] = event.originServerTs.millisecondsSinceEpoch;
+        }
+        records.add(record);
+      }
+    }
+    return records;
   }
 
   Future<void> _disposeVoice() async {
@@ -549,13 +665,17 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _refreshProfile() async {
-    final userId = _matrix.userID;
+    final client = _client;
+    final userId = client?.userID;
     if (userId == null || _profileLoading) return;
     _profileLoading = true;
     _notifyBackendListeners();
     try {
       final profile = await _getUserProfile(userId, refresh: true);
-      _applyOwnProfileSummary(profile);
+      if (!identical(client, _client)) return;
+      // Cached media may finish between the profile request and this await's
+      // continuation. Do not overwrite it with the earlier metadata-only result.
+      _applyOwnProfileSummary(_profileCache[userId]?.profile ?? profile);
     } catch (exception) {
       _error = _friendlyError(exception);
     } finally {

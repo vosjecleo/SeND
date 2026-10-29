@@ -47,6 +47,8 @@ Future<cipher.Database> openEncryptedAndroidDatabase(String path) async {
       if (plaintext) await _migrate(path, key);
       final database = await cipher.openDatabase(path, password: key);
       try {
+        await database.execute('PRAGMA temp_store=MEMORY');
+        await database.execute('PRAGMA cipher_memory_security=ON');
         await _verify(database, thorough: false);
         return database;
       } catch (_) {

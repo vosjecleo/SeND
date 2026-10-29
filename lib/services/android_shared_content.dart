@@ -27,6 +27,7 @@ final class AndroidSharedContent {
     initialize();
     final raw = await _channel.invokeMapMethod<String, Object?>('consume');
     if (raw == null) return null;
+    if (raw['error'] case final String error) throw StateError(error);
     final attachments = <AttachmentDraft>[];
     for (final item in (raw['items'] as List? ?? const [])) {
       if (item is! Map) continue;

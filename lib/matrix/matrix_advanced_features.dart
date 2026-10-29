@@ -209,6 +209,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
   }
 
   Future<void> _markRoomUnread(String roomId, bool unread) async {
+    if (!unread) _manualUnreadHolds.remove(roomId);
     final room = _matrix.getRoomById(roomId);
     if (room == null) return;
     await room.markUnread(unread);

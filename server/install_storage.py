@@ -18,6 +18,7 @@ import time
 SOURCE = Path(__file__).resolve().parent
 # Unmodified preview modules that this installer can upgrade explicitly.
 KNOWN_PREVIEW_MODULES = {
+    '8cd6bda88ca6a1dd42af46a3cb9a37f2a3fbb0d21c3f42016f46a59919bd938b',  # released build 133
     'e4fef96f16849c6f65e4044823e34ae42609516472d31af479956e7a6152be0a',
     '2386eba3271f0a84c37d0d117e59b38a76764d65fb6bdffd5043776c8087b78c',
 }

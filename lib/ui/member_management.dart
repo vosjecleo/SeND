@@ -1,8 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import '../models/space_administration.dart';
+
+class MemberRoomTools extends StatelessWidget {
+  const MemberRoomTools({required this.backend, required this.room, super.key});
+  final ChatBackend backend;
+  final RoomSummary room;
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    tooltip: 'Member options',
+    icon: const Icon(Icons.more_horiz),
+    onSelected: (action) async {
+      switch (action) {
+        case 'invite':
+          await showInviteMember(context, backend, roomId: room.id);
+        case 'aliases':
+          await showRoomAliasEditor(context, backend, room);
+        case 'link':
+          await Clipboard.setData(
+            ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+          );
+      }
+    },
+    itemBuilder: (context) => [
+      if (backend.canInviteToRoom(room.id))
+        const PopupMenuItem(value: 'invite', child: Text('Invite member')),
+      const PopupMenuItem(value: 'aliases', child: Text('Room aliases')),
+      const PopupMenuItem(value: 'link', child: Text('Copy room link')),
+    ],
+  );
+}
 
 Future<void> showMemberManagement(
   BuildContext context,

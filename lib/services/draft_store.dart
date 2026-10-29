@@ -27,6 +27,8 @@ class DraftStore {
   File? _file;
   final Map<String, StoredDraft> _drafts = {};
   Future<void> _writes = Future.value();
+  bool _readFailed = false;
+  String? warning;
 
   Future<void> initialize() async {
     if (!kIsWeb && _file == null) {
@@ -37,11 +39,11 @@ class DraftStore {
     } else if (!kIsWeb) {
       await ensurePrivateDirectory(_file!.parent);
     }
-    if (!kIsWeb && !await _file!.exists()) return;
+    if (!kIsWeb && !await privateFileExists(_file!)) return;
     try {
       final text = kIsWeb
           ? await BrowserPrivateStore.read('drafts')
-          : await _file!.readAsString();
+          : await readPrivateTextFile(_file!);
       if (text == null) return;
       final decoded = jsonDecode(text) as Map<String, dynamic>;
       for (final entry in decoded.entries) {
@@ -53,12 +55,8 @@ class DraftStore {
         }
       }
     } catch (_) {
-      // Corrupt plaintext is neither useful nor safe to retain indefinitely.
-      if (kIsWeb) {
-        await BrowserPrivateStore.write('drafts', null);
-      } else {
-        await deletePrivateFile(_file);
-      }
+      _readFailed = true;
+      warning = 'Saved drafts could not be opened. Existing data was kept.';
     }
   }
 
@@ -93,10 +91,12 @@ class DraftStore {
   Future<void> clear() async {
     _saveTimer?.cancel();
     _drafts.clear();
+    _readFailed = false;
     await _persist();
   }
 
   Future<void> _persist() async {
+    if (_readFailed) return;
     final file = _file;
     if (!kIsWeb && file == null) return;
     final data = {

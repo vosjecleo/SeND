@@ -14,6 +14,124 @@ String storageSize(num bytes) => bytes >= 1073741824
     ? '${(bytes / 1073741824).toStringAsFixed(2)} GiB'
     : '${(bytes / 1048576).toStringAsFixed(1)} MiB';
 
+class _StorageSegment extends StatefulWidget {
+  const _StorageSegment({
+    required this.id,
+    required this.label,
+    required this.bytes,
+    required this.color,
+    required this.hoverEnabled,
+  });
+  final String id, label;
+  final num bytes;
+  final Color color;
+  final bool hoverEnabled;
+  @override
+  State<_StorageSegment> createState() => _StorageSegmentState();
+}
+
+class _StorageSegmentState extends State<_StorageSegment> {
+  final _overlay = OverlayPortalController();
+  Offset _cursor = Offset.zero;
+  bool _hovered = false;
+  @override
+  Widget build(BuildContext context) {
+    final highlight = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    final fill = DecoratedBox(
+      key: ValueKey('storage-segment-fill-${widget.id}'),
+      decoration: BoxDecoration(
+        color: _hovered
+            ? Color.alphaBlend(highlight.withValues(alpha: .2), widget.color)
+            : widget.color,
+        border: _hovered
+            ? Border.all(color: highlight.withValues(alpha: .55))
+            : null,
+      ),
+      child: const SizedBox.expand(),
+    );
+    if (!widget.hoverEnabled) return fill;
+    return MouseRegion(
+      key: ValueKey('storage-segment-${widget.id}'),
+      onEnter: (event) {
+        setState(() {
+          _hovered = true;
+          _cursor = event.position;
+        });
+        _overlay.show();
+      },
+      onHover: (event) => setState(() => _cursor = event.position),
+      onExit: (_) {
+        setState(() => _hovered = false);
+        _overlay.hide();
+      },
+      child: OverlayPortal(
+        overlayLocation: OverlayChildLocation.rootOverlay,
+        controller: _overlay,
+        overlayChildBuilder: (context) {
+          final root =
+              Overlay.of(context, rootOverlay: true).context.findRenderObject()
+                  as RenderBox;
+          return Positioned.fill(
+            child: IgnorePointer(
+              child: CustomSingleChildLayout(
+                delegate: _CursorStorageLabel(root.globalToLocal(_cursor)),
+                child: Material(
+                  key: const ValueKey('storage-category-tooltip'),
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(6),
+                  color: Theme.of(context).colorScheme.inverseSurface,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    child: Text(
+                      '${widget.label}: ${storageSize(widget.bytes)}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onInverseSurface,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        child: fill,
+      ),
+    );
+  }
+}
+
+class _CursorStorageLabel extends SingleChildLayoutDelegate {
+  _CursorStorageLabel(this.cursor);
+  final Offset cursor;
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final top = cursor.dy + 18 + childSize.height <= size.height - 8
+        ? cursor.dy + 18
+        : cursor.dy - childSize.height - 12;
+    return Offset(
+      (cursor.dx + 14)
+          .clamp(0, (size.width - childSize.width).clamp(0, double.infinity))
+          .toDouble(),
+      top
+          .clamp(0, (size.height - childSize.height).clamp(0, double.infinity))
+          .toDouble(),
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _CursorStorageLabel oldDelegate) =>
+      cursor != oldDelegate.cursor;
+}
+
 class ServerStorageSettings extends StatefulWidget {
   const ServerStorageSettings({required this.backend, super.key});
   final ChatBackend backend;
@@ -83,8 +201,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
       }
       if (!mounted) return;
       if (files.isEmpty) {
-        _notice =
-            'No matching uploads. Older unclassified files are not included in bulk pruning.';
+        _notice = 'No matching uploads.';
         return;
       }
       setState(() => _busy = false);
@@ -94,7 +211,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
           scrollable: true,
           title: Text('Delete ${files.length} uploads?'),
           content: Text(
-            'Delete ${storageSize(preview['bytes'] as num)} from your homeserver? Shared attachments will stop working; messages stay. This can\'t be undone, and copies elsewhere may remain.\nPreview: up to 100 files, excluding profile images and protected files.',
+            'Delete ${storageSize(preview['bytes'] as num)} from your homeserver? Shared attachments will stop working; messages stay. This can\'t be undone, and copies elsewhere may remain.',
           ),
           actions: [
             TextButton(
@@ -133,11 +250,23 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
   @override
   Widget build(BuildContext context) {
     final usage = _usage;
+    final mobile =
+        MediaQuery.sizeOf(context).width < 600 ||
+        {
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        }.contains(Theme.of(context).platform);
+    final legend = usage == null
+        ? ''
+        : _storageKinds.entries
+              .map(
+                (entry) =>
+                    '${entry.value.$1}: ${storageSize(((usage['categories'] as Map)[entry.key] as Map?)?['bytes'] as num? ?? 0)}',
+              )
+              .join('\n');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Server storage', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
         if (usage != null) ...[
           if (usage['quota_enforced'] == false)
             const Text('Preview only — storage limits aren\'t enforced.'),
@@ -185,7 +314,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
           ),
           const SizedBox(height: 16),
           Semantics(
-            label: 'Server media usage by category',
+            label: 'Server media usage by category. $legend',
             child: SizedBox(
               height: 28,
               child: ClipRRect(
@@ -209,15 +338,24 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
                                             as num? ??
                                         0) /
                                     total),
-                            child: ColoredBox(
+                            child: _StorageSegment(
+                              id: entry.key,
+                              label: entry.value.$1,
+                              bytes:
+                                  (categories[entry.key] as Map?)?['bytes']
+                                      as num? ??
+                                  0,
+                              hoverEnabled: !mobile,
                               color: entry.value.$2,
-                              child: const SizedBox.expand(),
                             ),
                           ),
-                        const Expanded(
-                          child: ColoredBox(
+                        Expanded(
+                          child: _StorageSegment(
+                            id: 'available',
+                            label: 'Available',
+                            bytes: usage['remaining_bytes'] as num? ?? 0,
+                            hoverEnabled: !mobile,
                             color: Color(0x22777777),
-                            child: SizedBox.expand(),
                           ),
                         ),
                       ],
@@ -227,20 +365,27 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          for (final entry in _storageKinds.entries)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.circle, color: entry.value.$2, size: 12),
-              title: Text(entry.value.$1),
-              trailing: Text(
-                storageSize(
-                  ((usage['categories'] as Map)[entry.key] as Map?)?['bytes']
-                          as num? ??
-                      0,
+          if (mobile) const SizedBox(height: 8),
+          if (mobile)
+            for (final entry in _storageKinds.entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: entry.value.$2, size: 10),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(entry.value.$1)),
+                    Text(
+                      storageSize(
+                        ((usage['categories'] as Map)[entry.key]
+                                    as Map?)?['bytes']
+                                as num? ??
+                            0,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
 
           const Divider(height: 32),
           Text(
@@ -253,11 +398,17 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
             decoration: const InputDecoration(labelText: 'Media type'),
             items: [
               for (final entry in _storageKinds.entries.where(
-                (entry) => entry.key != 'legacy',
+                (entry) =>
+                    entry.key != 'legacy' || usage['legacy_pruning'] == true,
               ))
                 DropdownMenuItem(value: entry.key, child: Text(entry.value.$1)),
             ],
-            onChanged: _busy ? null : (v) => setState(() => _kind = v!),
+            onChanged: _busy
+                ? null
+                : (v) => setState(() {
+                    _kind = v!;
+                    if (v == 'legacy') _source = 'all';
+                  }),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
@@ -278,7 +429,9 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
               DropdownMenuItem(value: 'upload', child: Text('Uploaded files')),
               DropdownMenuItem(value: 'klipy', child: Text('Klipy GIFs')),
             ],
-            onChanged: _busy ? null : (v) => setState(() => _source = v!),
+            onChanged: _busy || _kind == 'legacy'
+                ? null
+                : (v) => setState(() => _source = v!),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(

@@ -44,9 +44,7 @@ void main() {
     expect(find.textContaining('> <'), findsNothing);
 
     await revealMessageActions(tester, find.text('My actual reply'));
-    tester
-        .widget<IconButton>(find.byKey(const Key('message-action-reply')))
-        .onPressed!();
+    await tester.tap(find.byKey(const Key('message-action-reply')));
     await tester.pump();
     expect(find.text('Replying to Alice'), findsOneWidget);
     await enterComposer(tester, 'A second reply');

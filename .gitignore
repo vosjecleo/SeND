@@ -64,6 +64,9 @@ app.*.map.json
 # Generated browser Matrix crypto assets (rebuilt from pinned upstream source).
 /web/pkg/
 /web/e2ee.worker.dart.js*
+/web/history_sql_worker.dart.js*
+/web/sqlite3mc.wasm*
+/web/sqlite-storage-licenses.txt
 # Local browser regression dependencies (the lockfile is committed).
 tool/browser-tests/node_modules/
 tool/web-video/node_modules/

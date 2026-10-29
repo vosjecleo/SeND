@@ -9,6 +9,29 @@ import 'package:image/image.dart' as image;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'encoded dimensions work without a pixel decode and enforce limits',
+    () async {
+      final pixels = image.Image(width: 48, height: 24);
+      for (final bytes in [
+        image.encodePng(pixels),
+        image.encodeJpg(pixels),
+        image.encodeGif(pixels),
+        image.encodeBmp(pixels),
+      ]) {
+        final encoded = Uint8List.fromList(bytes);
+        expect(await readEncodedImageDimensions(encoded), (
+          width: 48,
+          height: 24,
+        ));
+        expect(
+          await readEncodedImageDimensions(encoded, maximumPixels: 1000),
+          isNull,
+        );
+      }
+      expect(await readEncodedImageDimensions(Uint8List(0)), isNull);
+    },
+  );
+  test(
     'image quality resizes an opaque photo and preserves attachment metadata',
     () async {
       final pixels = image.Image(width: 1600, height: 800);

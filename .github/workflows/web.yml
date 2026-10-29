@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           node --check web/sw.js
           node --check web/browser_bridge.js
+          node --check web/local_vault.js
           node --check web/push_preview_store.js
           node --check web/push_preview.js
           node --test tool/web_push_test.cjs
@@ -74,6 +75,9 @@ jobs:
           flutter test --no-pub --platform chrome test/browser_inline_animation_test.dart test/browser_file_picker_test.dart test/browser_image_paste_test.dart test/web_login_form_test.dart test/video_optimizer_browser_test.dart test/browser_visibility_test.dart test/browser_keyboard_geometry_test.dart
           node tool/web_autofill_test.mjs
           node tool/web_push_preview_browser_test.mjs
+          node tool/history_index_browser_test.mjs
+          dart compile js tool/protected_web_storage_probe.dart -O1 -o .dart_tool/protected_web_storage_probe.js
+          node tool/protected_web_storage_test.mjs
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
             sudo apt-get update
             sudo apt-get install -y ffmpeg

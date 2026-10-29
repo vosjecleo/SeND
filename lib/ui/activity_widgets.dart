@@ -117,12 +117,14 @@ class TimelineActivityStatus extends StatelessWidget {
     required this.userId,
     required this.presence,
     required this.fallback,
+    this.status,
     super.key,
   });
   final ChatBackend backend;
   final String? userId;
   final UserPresence presence;
   final Widget fallback;
+  final String? status;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: backend,
@@ -130,16 +132,23 @@ class TimelineActivityStatus extends StatelessWidget {
       final activity = userId == null || presence == UserPresence.offline
           ? null
           : backend.activityFor(userId!);
-      if (activity == null) return fallback;
+      final customStatus = presence == UserPresence.offline
+          ? ''
+          : status?.trim() ?? '';
+      if (activity == null && customStatus.isEmpty) return fallback;
       final color = context.deltiecord.muted;
       return Row(
         key: const ValueKey('timeline-activity-status'),
         children: [
-          Icon(activityIcon(activity.kind), size: 14, color: color),
-          const SizedBox(width: 4),
+          HeaderPresenceDot(presence: presence),
+          const SizedBox(width: 5),
+          if (activity != null) ...[
+            Icon(activityIcon(activity.kind), size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Text(
-              activity.name,
+              activity?.name ?? customStatus,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -154,8 +163,30 @@ class TimelineActivityStatus extends StatelessWidget {
   );
 }
 
+class HeaderPresenceDot extends StatelessWidget {
+  const HeaderPresenceDot({required this.presence, super.key});
+  final UserPresence presence;
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey('header-presence-${presence.name}'),
+    width: 7,
+    height: 7,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: switch (presence) {
+        UserPresence.online => const Color(0xff43b581),
+        UserPresence.away => const Color(0xffffc857),
+        UserPresence.doNotDisturb => const Color(0xffe5484d),
+        UserPresence.offline => const Color(0xff747680),
+      },
+    ),
+  );
+}
+
 class ActivityStatus extends StatelessWidget {
   static bool hasContent(ChatBackend backend, RoomSummary room) =>
+      room.isDirect &&
+      !room.usesChannelIcon &&
       room.presence != UserPresence.offline &&
       (room.directUserId != null
               ? backend.activityFor(room.directUserId!)?.label ??

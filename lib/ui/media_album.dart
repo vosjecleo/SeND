@@ -57,6 +57,9 @@ class MediaAlbumIndex {
   static bool _eligible(ChatMessage message) {
     final attachment = message.attachment;
     if (attachment == null ||
+        message.pending ||
+        message.queued ||
+        message.failed ||
         attachment.sticker ||
         attachment.animated ||
         message.system ||

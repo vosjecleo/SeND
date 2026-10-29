@@ -126,6 +126,31 @@ class _Client extends Client {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'own avatar survives startup profile-cache pressure and fast cached media',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'send-own-avatar-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final client = _Client();
+      final backend = MatrixBackend(
+        client: client,
+        avatarMediaPool: AvatarMediaPool(directory: directory),
+      );
+      await backend.refreshProfile();
+      for (var i = 0; i < 140; i++) {
+        await backend.getUserProfile('@peer$i:test');
+      }
+      client.preview.complete(FileResponse(data: Uint8List.fromList([1, 2])));
+      client.original.complete(FileResponse(data: Uint8List.fromList([3, 4])));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(backend.profileAvatarBytes, isNotNull);
+      await backend.refreshProfile();
+      expect(backend.profileAvatarBytes, isNotNull);
+      backend.dispose();
+    },
+  );
+  test(
     'category ordering follows child order and survives another move and reload',
     () async {
       final client = _Client();

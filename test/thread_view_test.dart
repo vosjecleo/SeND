@@ -37,6 +37,7 @@ class _Session extends ThreadSession {
     String text, {
     String? formattedBody,
     String? editMessageId,
+    String? replyToMessageId,
   }) async {
     if (fail) throw StateError('Offline');
     await sendGate?.future;

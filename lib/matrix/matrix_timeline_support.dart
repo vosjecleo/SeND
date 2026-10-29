@@ -249,6 +249,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _refreshTimelineAfterResume() async {
+    // Lifecycle/view focus can arrive while the protected database is opening.
+    // Session initialization starts sync once a client actually exists.
+    if (_client?.isLogged() != true) return;
     _notifyBackendListeners();
     if (_lastResumeTimelineRefresh != null &&
         DateTime.now().difference(_lastResumeTimelineRefresh!) <
@@ -256,10 +259,10 @@ extension _MatrixTimelineSupport on MatrixBackend {
       return;
     }
     _resumeTimelineRefreshRequested = true;
-    if (_resumeTimelineRefreshRunning || !_matrix.isLogged()) return;
+    if (_resumeTimelineRefreshRunning || _client?.isLogged() != true) return;
     _resumeTimelineRefreshRunning = true;
     try {
-      while (_resumeTimelineRefreshRequested && _matrix.isLogged()) {
+      while (_resumeTimelineRefreshRequested && _client?.isLogged() == true) {
         _resumeTimelineRefreshRequested = false;
         final timeline = _timeline;
         final generation = _timelineGeneration;
@@ -268,7 +271,8 @@ extension _MatrixTimelineSupport on MatrixBackend {
           // Invalidate that suspended request through the SDK before restarting;
           // abortSync waits for its database transaction and rejects stale data.
           // Keep the same Timeline, listeners, and scroll anchor throughout.
-          final client = _matrix;
+          final client = _client;
+          if (client == null) return;
           // Focus can change several times while opening a desktop popup.
           // An actively processing sync must finish its transaction; don't
           // repeatedly abort and restart it for each focus event.
@@ -291,7 +295,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
       }
     } finally {
       _resumeTimelineRefreshRunning = false;
-      if (_resumeTimelineRefreshRequested && _matrix.isLogged()) {
+      if (_resumeTimelineRefreshRequested && _client?.isLogged() == true) {
         unawaited(_refreshTimelineAfterResume());
       }
     }

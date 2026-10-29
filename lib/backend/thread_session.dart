@@ -18,6 +18,7 @@ abstract class ThreadSession extends ChangeNotifier {
     String text, {
     String? formattedBody,
     String? editMessageId,
+    String? replyToMessageId,
   });
   Future<void> attach(AttachmentDraft attachment);
   Future<void> markRead(String eventId) async {}

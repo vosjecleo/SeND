@@ -101,8 +101,11 @@ class _MessageRowState extends State<_MessageRow> {
     setState(() {
       _actionsHovered = false;
       _actionsPosition = Offset(
-        globalPosition.dx.clamp(0, max(0, viewport.width - 224)),
-        globalPosition.dy.clamp(0, viewport.height - 48),
+        globalPosition.dx.clamp(0, max(0, viewport.width - 248)),
+        globalPosition.dy.clamp(
+          0,
+          max(0, viewport.height - min(550, viewport.height - 24)),
+        ),
       );
     });
     widget.onActionsShown(_hideActions);
@@ -220,502 +223,555 @@ class _MessageRowState extends State<_MessageRow> {
                 color: context.deltiecord.elevated,
                 borderRadius: DeltiecordCorners.borderRadius,
               ),
-              child: _MessageActions(
-                onThread:
-                    !widget.allowThreadNavigation ||
-                        message.pending ||
-                        message.failed
-                    ? null
-                    : () => _performAction(
-                        () => openDiscussion(context, widget.backend, message),
-                      ),
-                onReply: () => _performAction(widget.onReply),
-                onCopy: () {
-                  unawaited(
-                    Clipboard.setData(ClipboardData(text: message.body)),
-                  );
-                  _hideActions();
-                },
-                onBookmark: () => _performAction(
-                  () => widget.backend.toggleMessageBookmarked(message.id),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 248,
+                  maxHeight: max(120, MediaQuery.sizeOf(context).height - 24),
                 ),
-                bookmarked: message.bookmarked,
-                onPin: message.canRedact
-                    ? () => _performAction(
-                        () => widget.backend.toggleMessagePinned(message.id),
+                child: _MessageActions(
+                  message: message,
+                  onUnread: () => _performAction(
+                    () => widget.backend.markMessageUnread(message.id),
+                  ),
+                  onLink: () => _performAction(
+                    () => Clipboard.setData(
+                      ClipboardData(
+                        text:
+                            "https://matrix.to/#/${widget.backend.roomIdForMessage(message.id) ?? widget.backend.selectedRoom?.id}/${message.id}",
+                      ),
+                    ),
+                  ),
+                  onThread:
+                      !widget.allowThreadNavigation ||
+                          message.pending ||
+                          message.failed
+                      ? null
+                      : () => _performAction(
+                          () =>
+                              openDiscussion(context, widget.backend, message),
+                        ),
+                  onReply: () => _performAction(widget.onReply),
+                  onCopy: () {
+                    unawaited(
+                      Clipboard.setData(ClipboardData(text: message.body)),
+                    );
+                    _hideActions();
+                  },
+                  onBookmark: () => _performAction(
+                    () => widget.backend.toggleMessageBookmarked(message.id),
+                  ),
+                  bookmarked: message.bookmarked,
+                  onPin:
+                      widget.backend.canChangeRoomState(
+                        widget.backend.selectedRoom?.id ?? "",
+                        "m.room.pinned_events",
                       )
-                    : null,
-                pinned: message.pinned,
-                onEdit: widget.onEdit == null
-                    ? null
-                    : () => _performAction(widget.onEdit),
-                onDelete: widget.onDelete == null
-                    ? null
-                    : () => _performAction(widget.onDelete),
-                onReact: widget.onReact == null
-                    ? null
-                    : () => _performAction(widget.onReact),
-                onRetry: widget.onRetry == null
-                    ? null
-                    : () => _performAction(widget.onRetry),
-                onCancel: widget.onCancel == null
-                    ? null
-                    : () => _performAction(widget.onCancel),
+                      ? () => _performAction(
+                          () => widget.backend.toggleMessagePinned(message.id),
+                        )
+                      : null,
+                  pinned: message.pinned,
+                  onEdit: widget.onEdit == null
+                      ? null
+                      : () => _performAction(widget.onEdit),
+                  onDelete: !message.own || widget.onDelete == null
+                      ? null
+                      : () => _performAction(widget.onDelete),
+                  onReact: widget.onReact == null
+                      ? null
+                      : () => _performAction(widget.onReact),
+                  onRetry: widget.onRetry == null
+                      ? null
+                      : () => _performAction(widget.onRetry),
+                  onCancel: widget.onCancel == null
+                      ? null
+                      : () => _performAction(widget.onCancel),
+                ),
               ),
             ),
           ),
         ),
       ),
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (event) {
-          if (event.buttons == kSecondaryMouseButton) {
-            _showActions(event.position);
-          }
-        },
-        child: MouseRegion(
-          onEnter: _enter,
-          onExit: _exit,
-          child: AnimatedContainer(
-            key: Key('message-row-${message.id}'),
-            margin: EdgeInsets.only(top: widget.startsGroup ? groupGap : 0),
-            duration: widget.backend.preferences.reducedMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 110),
-            decoration: BoxDecoration(
-              color: pinged
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.11)
-                  : _hovered || widget.highlighted
-                  ? context.deltiecord.hover
-                  : Colors.transparent,
-              border: pinged
-                  ? Border(
-                      left: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 3,
+      child: TripleTapEdit(
+        onEdit:
+            message.own &&
+                !message.pending &&
+                !message.failed &&
+                !message.redacted
+            ? widget.onEdit
+            : null,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            if (event.buttons == kSecondaryMouseButton) {
+              _showActions(event.position);
+            }
+          },
+          child: MouseRegion(
+            onEnter: _enter,
+            onExit: _exit,
+            child: AnimatedContainer(
+              key: Key('message-row-${message.id}'),
+              margin: EdgeInsets.only(top: widget.startsGroup ? groupGap : 0),
+              duration: widget.backend.preferences.reducedMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 110),
+              decoration: BoxDecoration(
+                color: pinged
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.11)
+                    : _hovered || widget.highlighted
+                    ? context.deltiecord.hover
+                    : Colors.transparent,
+                border: pinged
+                    ? Border(
+                        left: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        ),
+                      )
+                    : null,
+              ),
+              child: Opacity(
+                opacity: message.pending ? 0.55 : 1,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        10,
+                        rowPadding,
+                        20,
+                        rowPadding,
                       ),
-                    )
-                  : null,
-            ),
-            child: Opacity(
-              opacity: message.pending ? 0.55 : 1,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      10,
-                      rowPadding,
-                      20,
-                      rowPadding,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(width: 40),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            key: ValueKey('message-content-${message.id}'),
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (message.reply case final reply?)
-                                Transform.translate(
-                                  offset: const Offset(-50, 0),
-                                  child: InkWell(
-                                    key: Key('reply-preview-${message.id}'),
-                                    onTap: () =>
-                                        widget.onJumpToReply(reply.eventId),
-                                    child: Row(
-                                      children: [
-                                        CustomPaint(
-                                          size: const Size(42, 20),
-                                          painter: _ReplyConnectorPainter(
-                                            color: context.deltiecord.muted,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Flexible(
-                                          child: Text.rich(
-                                            TextSpan(
-                                              children: [
-                                                TextSpan(
-                                                  text: '${reply.sender}  ',
-                                                  style: TextStyle(
-                                                    color:
-                                                        reply.senderColor ==
-                                                            null
-                                                        ? null
-                                                        : Color(
-                                                            reply.senderColor!,
-                                                          ),
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                TextSpan(
-                                                  text: reply.body.replaceAll(
-                                                    '\n',
-                                                    ' ',
-                                                  ),
-                                                  style: TextStyle(
-                                                    color: context
-                                                        .deltiecord
-                                                        .muted,
-                                                  ),
-                                                ),
-                                              ],
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(width: 40),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              key: ValueKey('message-content-${message.id}'),
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (message.reply case final reply?)
+                                  Transform.translate(
+                                    offset: const Offset(-50, 0),
+                                    child: InkWell(
+                                      key: Key('reply-preview-${message.id}'),
+                                      onTap: () =>
+                                          widget.onJumpToReply(reply.eventId),
+                                      child: Row(
+                                        children: [
+                                          CustomPaint(
+                                            size: const Size(42, 20),
+                                            painter: _ReplyConnectorPainter(
+                                              color: context.deltiecord.muted,
                                             ),
-                                            maxLines: 1,
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Flexible(
+                                            child: Text.rich(
+                                              TextSpan(
+                                                children: [
+                                                  TextSpan(
+                                                    text: '${reply.sender}  ',
+                                                    style: TextStyle(
+                                                      color:
+                                                          reply.senderColor ==
+                                                              null
+                                                          ? null
+                                                          : Color(
+                                                              reply
+                                                                  .senderColor!,
+                                                            ),
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: reply.body.replaceAll(
+                                                      '\n',
+                                                      ' ',
+                                                    ),
+                                                    style: TextStyle(
+                                                      color: context
+                                                          .deltiecord
+                                                          .muted,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize:
+                                                    DeltiecordTypeScale.normal,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (widget.startsGroup ||
+                                    HeaderMessageMetadata.has(
+                                      context,
+                                      message.id,
+                                    ))
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: InkWell(
+                                          onTap: _showSenderProfile,
+                                          onTapDown: (details) =>
+                                              _profileAnchorPosition =
+                                                  details.globalPosition,
+                                          child: Text(
+                                            message.sender,
+                                            key: ValueKey(
+                                              'message-sender-${message.id}',
+                                            ),
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
+                                            style: TextStyle(
+                                              color: message.senderColor == null
+                                                  ? null
+                                                  : Color(message.senderColor!),
                                               fontSize:
-                                                  DeltiecordTypeScale.normal,
+                                                  DeltiecordTypeScale.bigChat,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.15,
                                             ),
                                           ),
                                         ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        time,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                              fontSize:
+                                                  DeltiecordTypeScale.small,
+                                              color: context.deltiecord.muted,
+                                            ),
+                                      ),
+                                      Flexible(
+                                        child: HeaderMessageMetadata(
+                                          messageId: message.id,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                if (widget.startsGroup ||
+                                    HeaderMessageMetadata.has(
+                                      context,
+                                      message.id,
+                                    ))
+                                  const SizedBox(height: 2),
+                                if (widget.albumMessages == null &&
+                                    message.body.isNotEmpty &&
+                                    message.poll == null)
+                                  KeyedSubtree(
+                                    key: ValueKey('message-body-${message.id}'),
+                                    child: message.formattedBody != null
+                                        ? MatrixHtmlText(
+                                            trailing: messageMetadata(
+                                              context,
+                                              message,
+                                              showReceipt: widget.showReceipt,
+                                            ),
+                                            html: message.formattedBody!,
+                                            fallback: message.body,
+                                            backend: widget.backend,
+                                            onCustomEmojiTap: (emoji) =>
+                                                showStickerPackForEmoji(
+                                                  context,
+                                                  widget.backend,
+                                                  emoji,
+                                                ),
+                                          )
+                                        : MatrixPlainText(
+                                            trailing: messageMetadata(
+                                              context,
+                                              message,
+                                              showReceipt: widget.showReceipt,
+                                            ),
+                                            text: message.body,
+                                            style: TextStyle(
+                                              height: 1.16,
+                                              fontStyle: message.redacted
+                                                  ? FontStyle.italic
+                                                  : FontStyle.normal,
+                                              color: message.redacted
+                                                  ? context.deltiecord.muted
+                                                  : null,
+                                            ),
+                                          ),
+                                  ),
+                                if (message.poll != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: MediaWithMessageMetadata(
+                                      message: message,
+                                      showReceipt: widget.showReceipt,
+                                      child: PollCard(
+                                        backend: widget.backend,
+                                        message: message,
+                                      ),
+                                    ),
+                                  ),
+                                if (widget.albumMessages case final album?)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: MediaWithMessageMetadata(
+                                      message: message,
+                                      showReceipt: widget.showReceipt,
+                                      album: album,
+                                      receiptIds: widget.receiptIds,
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 430,
+                                        ),
+                                        child: MediaAlbumGrid(
+                                          messages: album,
+                                          height: 300,
+                                          itemBuilder:
+                                              (
+                                                context,
+                                                albumMessage,
+                                              ) => MediaAlbumTile(
+                                                key: ValueKey(albumMessage.id),
+                                                backend: widget.backend,
+                                                message: albumMessage,
+                                                onOpen: () => showDialog<void>(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      _MediaLightbox(
+                                                        backend: widget.backend,
+                                                        messages: widget
+                                                            .mediaMessages,
+                                                        initialMessageId:
+                                                            albumMessage.id,
+                                                      ),
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else if (widget.backend.queuedAttachment(
+                                      message.id,
+                                    )
+                                    case final draft?)
+                                  QueuedAttachmentPreview(draft: draft)
+                                else if (message.attachment
+                                    case final attachment?)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: MediaWithMessageMetadata(
+                                      message: message,
+                                      enabled: message.body.isEmpty,
+                                      showReceipt:
+                                          message.body.isEmpty &&
+                                          widget.showReceipt,
+                                      child: _AttachmentView(
+                                        backend: widget.backend,
+                                        messageId: message.id,
+                                        attachment: attachment,
+                                        gallery: widget.mediaMessages,
+                                      ),
+                                    ),
+                                  ),
+                                if (message.queued &&
+                                    message.pending &&
+                                    message.attachment != null)
+                                  QueuedSendProgress(message: message),
+                                for (final preview in message.linkPreviews)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: _LinkPreviewCard(
+                                      preview: preview,
+                                      backend: widget.backend,
+                                    ),
+                                  ),
+                                if (message.queued)
+                                  const Text(
+                                    'Queued — retrying after reconnect',
+                                    style: TextStyle(
+                                      fontSize: DeltiecordTypeScale.normal,
+                                      color: Color(0xffffc857),
+                                    ),
+                                  )
+                                else if (message.failed)
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Failed to send',
+                                        style: TextStyle(
+                                          fontSize: DeltiecordTypeScale.normal,
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: widget.onRetry,
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  ),
+                                if (message.transferStatus case final status?)
+                                  Text(
+                                    status,
+                                    style: const TextStyle(
+                                      fontSize: DeltiecordTypeScale.normal,
+                                      color: Color(0xffb8bfff),
+                                    ),
+                                  ),
+                                if (widget.allowThreadNavigation &&
+                                    (message.threadReplyCount > 0 ||
+                                        message.threadRootId != null))
+                                  TextButton.icon(
+                                    onPressed: () => openDiscussion(
+                                      context,
+                                      widget.backend,
+                                      message,
+                                    ),
+                                    icon: Icon(
+                                      message.threadUnread
+                                          ? Icons.mark_chat_unread_outlined
+                                          : Icons.forum_outlined,
+                                      size: 16,
+                                    ),
+                                    label: Text(
+                                      message.threadRootId != null
+                                          ? 'View discussion'
+                                          : '${message.threadReplyCount} replies',
+                                    ),
+                                  ),
+                                if (message.reactions.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        for (final reaction
+                                            in message.reactions)
+                                          ActionChip(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            backgroundColor:
+                                                reaction.reactedByMe
+                                                ? const Color(0xff424a78)
+                                                : const Color(0xff303139),
+                                            // Keep ordinary reactions as one Text
+                                            // node for accessibility and the
+                                            // established widget contract. Custom
+                                            // emoji need a composed image/count row.
+                                            label: reaction.customEmoji == null
+                                                ? Text(
+                                                    '${reaction.key} ${reaction.count}',
+                                                    style: TextStyle(
+                                                      fontFamily: context
+                                                          .deltiecordEmojiFont,
+                                                    ),
+                                                  )
+                                                : Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      CustomEmojiImage(
+                                                        backend: widget.backend,
+                                                        emoji: reaction
+                                                            .customEmoji!,
+                                                        size: 18,
+                                                      ),
+                                                      Text(
+                                                        ' ${reaction.count}',
+                                                      ),
+                                                    ],
+                                                  ),
+                                            onPressed: () => widget
+                                                .onToggleReaction(reaction),
+                                          ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              if (widget.startsGroup ||
-                                  HeaderMessageMetadata.has(
-                                    context,
-                                    message.id,
-                                  ))
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: InkWell(
-                                        onTap: _showSenderProfile,
-                                        onTapDown: (details) =>
-                                            _profileAnchorPosition =
-                                                details.globalPosition,
-                                        child: Text(
-                                          message.sender,
-                                          key: ValueKey(
-                                            'message-sender-${message.id}',
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: message.senderColor == null
-                                                ? null
-                                                : Color(message.senderColor!),
-                                            fontSize:
-                                                DeltiecordTypeScale.bigChat,
-                                            fontWeight: FontWeight.w600,
-                                            height: 1.15,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      time,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            fontSize: DeltiecordTypeScale.small,
-                                            color: context.deltiecord.muted,
-                                          ),
-                                    ),
-                                    Flexible(
-                                      child: HeaderMessageMetadata(
-                                        messageId: message.id,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              if (widget.startsGroup ||
-                                  HeaderMessageMetadata.has(
-                                    context,
-                                    message.id,
-                                  ))
-                                const SizedBox(height: 2),
-                              if (widget.albumMessages == null &&
-                                  message.body.isNotEmpty &&
-                                  message.poll == null)
-                                KeyedSubtree(
-                                  key: ValueKey('message-body-${message.id}'),
-                                  child: message.formattedBody != null
-                                      ? MatrixHtmlText(
-                                          trailing: messageMetadata(
-                                            context,
-                                            message,
-                                            showReceipt: widget.showReceipt,
-                                          ),
-                                          html: message.formattedBody!,
-                                          fallback: message.body,
-                                          backend: widget.backend,
-                                          onCustomEmojiTap: (emoji) =>
-                                              showStickerPackForEmoji(
-                                                context,
-                                                widget.backend,
-                                                emoji,
-                                              ),
-                                        )
-                                      : MatrixPlainText(
-                                          trailing: messageMetadata(
-                                            context,
-                                            message,
-                                            showReceipt: widget.showReceipt,
-                                          ),
-                                          text: message.body,
-                                          style: TextStyle(
-                                            height: 1.16,
-                                            fontStyle: message.redacted
-                                                ? FontStyle.italic
-                                                : FontStyle.normal,
-                                            color: message.redacted
-                                                ? context.deltiecord.muted
-                                                : null,
-                                          ),
-                                        ),
-                                ),
-                              if (message.poll != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: MediaWithMessageMetadata(
-                                    message: message,
-                                    showReceipt: widget.showReceipt,
-                                    child: PollCard(
-                                      backend: widget.backend,
-                                      message: message,
-                                    ),
-                                  ),
-                                ),
-                              if (widget.albumMessages case final album?)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: MediaWithMessageMetadata(
-                                    message: message,
-                                    showReceipt: widget.showReceipt,
-                                    album: album,
-                                    receiptIds: widget.receiptIds,
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 430,
-                                      ),
-                                      child: MediaAlbumGrid(
-                                        messages: album,
-                                        height: 300,
-                                        itemBuilder: (context, albumMessage) =>
-                                            MediaAlbumTile(
-                                              key: ValueKey(albumMessage.id),
-                                              backend: widget.backend,
-                                              message: albumMessage,
-                                              onOpen: () => showDialog<void>(
-                                                context: context,
-                                                builder: (_) => _MediaLightbox(
-                                                  backend: widget.backend,
-                                                  messages:
-                                                      widget.mediaMessages,
-                                                  initialMessageId:
-                                                      albumMessage.id,
-                                                ),
-                                              ),
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              else if (message.attachment
-                                  case final attachment?)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: MediaWithMessageMetadata(
-                                    message: message,
-                                    enabled: message.body.isEmpty,
-                                    showReceipt:
-                                        message.body.isEmpty &&
-                                        widget.showReceipt,
-                                    child: _AttachmentView(
-                                      backend: widget.backend,
-                                      messageId: message.id,
-                                      attachment: attachment,
-                                      gallery: widget.mediaMessages,
-                                    ),
-                                  ),
-                                ),
-                              for (final preview in message.linkPreviews)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: _LinkPreviewCard(
-                                    preview: preview,
-                                    backend: widget.backend,
-                                  ),
-                                ),
-                              if (message.queued)
-                                const Text(
-                                  'Queued — retrying after reconnect',
-                                  style: TextStyle(
-                                    fontSize: DeltiecordTypeScale.normal,
-                                    color: Color(0xffffc857),
-                                  ),
-                                )
-                              else if (message.failed)
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Failed to send',
-                                      style: TextStyle(
-                                        fontSize: DeltiecordTypeScale.normal,
-                                        color: Colors.redAccent,
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: widget.onRetry,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
-                                ),
-                              if (message.transferStatus case final status?)
-                                Text(
-                                  status,
-                                  style: const TextStyle(
-                                    fontSize: DeltiecordTypeScale.normal,
-                                    color: Color(0xffb8bfff),
-                                  ),
-                                ),
-                              if (widget.allowThreadNavigation &&
-                                  (message.threadReplyCount > 0 ||
-                                      message.threadRootId != null))
-                                TextButton.icon(
-                                  onPressed: () => openDiscussion(
-                                    context,
-                                    widget.backend,
-                                    message,
-                                  ),
-                                  icon: Icon(
-                                    message.threadUnread
-                                        ? Icons.mark_chat_unread_outlined
-                                        : Icons.forum_outlined,
-                                    size: 16,
-                                  ),
-                                  label: Text(
-                                    message.threadRootId != null
-                                        ? 'View discussion'
-                                        : '${message.threadReplyCount} replies',
-                                  ),
-                                ),
-                              if (message.reactions.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Wrap(
-                                    spacing: 4,
-                                    runSpacing: 4,
-                                    children: [
-                                      for (final reaction in message.reactions)
-                                        ActionChip(
-                                          visualDensity: VisualDensity.compact,
-                                          backgroundColor: reaction.reactedByMe
-                                              ? const Color(0xff424a78)
-                                              : const Color(0xff303139),
-                                          // Keep ordinary reactions as one Text
-                                          // node for accessibility and the
-                                          // established widget contract. Custom
-                                          // emoji need a composed image/count row.
-                                          label: reaction.customEmoji == null
-                                              ? Text(
-                                                  '${reaction.key} ${reaction.count}',
-                                                  style: TextStyle(
-                                                    fontFamily: context
-                                                        .deltiecordEmojiFont,
-                                                  ),
-                                                )
-                                              : Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    CustomEmojiImage(
-                                                      backend: widget.backend,
-                                                      emoji:
-                                                          reaction.customEmoji!,
-                                                      size: 18,
-                                                    ),
-                                                    Text(' ${reaction.count}'),
-                                                  ],
-                                                ),
-                                          onPressed: () =>
-                                              widget.onToggleReaction(reaction),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (widget.startsGroup)
-                    Positioned(
-                      // Keep the avatar centred against the sender header and
-                      // first content line. The near-equal outer and inner
-                      // gutters make the timeline read as one aligned column.
-                      left: 10,
-                      top:
-                          rowPadding +
-                          (MediaQuery.textScalerOf(
-                                        context,
-                                      ).scale(DeltiecordTypeScale.bigChat) *
-                                      1.15 +
-                                  MediaQuery.textScalerOf(
-                                        context,
-                                      ).scale(DeltiecordTypeScale.normal) *
-                                      1.16 -
-                                  38) /
-                              2 +
-                          (message.reply == null ? 0 : 22),
-                      child: GestureDetector(
-                        key: ValueKey('message-avatar-${message.id}'),
-                        onTap: _showSenderProfile,
-                        onSecondaryTap: () {
-                          final member = widget.backend.selectedRoomMembers
-                              .where(
-                                (member) => member.userId == message.senderId,
-                              )
-                              .firstOrNull;
-                          if (member != null) {
-                            showMemberManagement(
-                              context,
-                              widget.backend,
-                              member,
-                            );
-                          }
-                        },
-                        onTapDown: (details) =>
-                            _profileAnchorPosition = details.globalPosition,
-                        child: ThemeAvatar(
-                          autoplay:
-                              widget
-                                  .backend
-                                  .preferences
-                                  .animateTimelineAvatars ||
-                              _hovered,
-                          radius: 19,
-                          backgroundColor: context.deltiecord.elevated,
-                          backgroundImage: message.avatarBytes == null
-                              ? null
-                              : MemoryImage(message.avatarBytes!),
-                          child: message.avatarBytes == null
-                              ? Text(
-                                  message.sender.trim().isEmpty
-                                      ? '?'
-                                      : message.sender.characters.first
-                                            .toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: DeltiecordTypeScale.normal,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : null,
-                        ),
+                        ],
                       ),
                     ),
-                ],
+                    if (widget.startsGroup)
+                      Positioned(
+                        // Keep the avatar centred against the sender header and
+                        // first content line. The near-equal outer and inner
+                        // gutters make the timeline read as one aligned column.
+                        left: 10,
+                        top:
+                            rowPadding +
+                            (MediaQuery.textScalerOf(
+                                          context,
+                                        ).scale(DeltiecordTypeScale.bigChat) *
+                                        1.15 +
+                                    MediaQuery.textScalerOf(
+                                          context,
+                                        ).scale(DeltiecordTypeScale.normal) *
+                                        1.16 -
+                                    38) /
+                                2 +
+                            (message.reply == null ? 0 : 22),
+                        child: GestureDetector(
+                          key: ValueKey('message-avatar-${message.id}'),
+                          onTap: _showSenderProfile,
+                          onSecondaryTap: () {
+                            final member = widget.backend.selectedRoomMembers
+                                .where(
+                                  (member) => member.userId == message.senderId,
+                                )
+                                .firstOrNull;
+                            if (member != null) {
+                              showMemberManagement(
+                                context,
+                                widget.backend,
+                                member,
+                              );
+                            }
+                          },
+                          onTapDown: (details) =>
+                              _profileAnchorPosition = details.globalPosition,
+                          child: ThemeAvatar(
+                            autoplay:
+                                widget
+                                    .backend
+                                    .preferences
+                                    .animateTimelineAvatars ||
+                                _hovered,
+                            radius: 19,
+                            backgroundColor: context.deltiecord.elevated,
+                            backgroundImage: message.avatarBytes == null
+                                ? null
+                                : MemoryImage(message.avatarBytes!),
+                            child: message.avatarBytes == null
+                                ? Text(
+                                    message.sender.trim().isEmpty
+                                        ? '?'
+                                        : message.sender.characters.first
+                                              .toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: DeltiecordTypeScale.normal,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -783,6 +839,7 @@ class _UnreadDivider extends StatelessWidget {
 
 class _MessageActions extends StatelessWidget {
   const _MessageActions({
+    required this.message,
     this.onThread,
     required this.onReply,
     required this.onCopy,
@@ -795,109 +852,56 @@ class _MessageActions extends StatelessWidget {
     required this.onReact,
     required this.onRetry,
     required this.onCancel,
+    required this.onUnread,
+    required this.onLink,
   });
-
-  final VoidCallback onReply;
-  final VoidCallback? onThread;
-  final VoidCallback onCopy;
-  final VoidCallback onBookmark;
-  final bool bookmarked;
-  final VoidCallback? onPin;
-  final bool pinned;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-  final VoidCallback? onReact;
-  final VoidCallback? onRetry;
-  final VoidCallback? onCancel;
-
+  final ChatMessage message;
+  final VoidCallback onReply, onCopy, onBookmark, onUnread, onLink;
+  final bool bookmarked, pinned;
+  final VoidCallback? onThread,
+      onPin,
+      onEdit,
+      onDelete,
+      onReact,
+      onRetry,
+      onCancel;
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (onThread != null)
-        IconButton(
-          tooltip: 'Open discussion',
-          visualDensity: VisualDensity.compact,
-          onPressed: onThread,
-          icon: const Icon(Icons.forum_outlined, size: 16),
-        ),
-      IconButton(
-        key: const Key('message-action-reply'),
-        visualDensity: VisualDensity.compact,
-        tooltip: 'Reply',
-        onPressed: onReply,
-        icon: const Icon(Icons.reply, size: 16),
-      ),
-      IconButton(
-        key: const Key('message-action-bookmark'),
-        visualDensity: VisualDensity.compact,
-        tooltip: bookmarked ? 'Remove bookmark' : 'Save message',
-        onPressed: onBookmark,
-        icon: Icon(
-          bookmarked ? Icons.bookmark : Icons.bookmark_border,
-          size: 16,
-        ),
-      ),
-      if (onPin != null)
-        IconButton(
-          key: const Key('message-action-pin'),
-          visualDensity: VisualDensity.compact,
-          tooltip: pinned ? 'Unpin' : 'Pin message',
-          onPressed: onPin,
-          icon: Icon(
-            pinned ? Icons.push_pin : Icons.push_pin_outlined,
-            size: 16,
-          ),
-        ),
-      IconButton(
-        key: const Key('message-action-copy'),
-        visualDensity: VisualDensity.compact,
-        tooltip: 'Copy text',
-        onPressed: onCopy,
-        icon: const Icon(Icons.copy_outlined, size: 16),
-      ),
-      if (onReact != null)
-        IconButton(
-          key: const Key('message-action-react'),
-          visualDensity: VisualDensity.compact,
-          tooltip: 'React',
-          onPressed: onReact,
-          icon: const Icon(Icons.add_reaction_outlined, size: 16),
-        ),
-      if (onEdit != null)
-        IconButton(
-          key: const Key('message-action-edit'),
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Edit',
-          onPressed: onEdit,
-          icon: const Icon(Icons.edit_outlined, size: 16),
-        ),
-      if (onDelete != null)
-        IconButton(
-          key: const Key('message-action-delete'),
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Delete',
-          onPressed: onDelete,
-          icon: Icon(
-            Icons.delete_outline,
-            size: 16,
-            color: Theme.of(context).colorScheme.error,
-          ),
-        ),
-      if (onRetry != null)
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Retry send',
-          onPressed: onRetry,
-          icon: const Icon(Icons.refresh, size: 16),
-        ),
-      if (onCancel != null)
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Remove failed send',
-          onPressed: onCancel,
-          icon: const Icon(Icons.close, size: 16),
-        ),
-    ],
+  Widget build(BuildContext context) => MessageActionList(
+    message: message,
+    actions: messageActionOrder(
+      message,
+      canEdit: onEdit != null,
+      canPin: onPin != null,
+      canReact: onReact != null,
+    ),
+    onThread: onThread,
+    onAction: (action) {
+      switch (action) {
+        case MessageAction.reply:
+          onReply();
+        case MessageAction.react:
+          onReact?.call();
+        case MessageAction.copy:
+          onCopy();
+        case MessageAction.unread:
+          onUnread();
+        case MessageAction.pin:
+          onPin?.call();
+        case MessageAction.bookmark:
+          onBookmark();
+        case MessageAction.edit:
+          onEdit?.call();
+        case MessageAction.delete:
+          onDelete?.call();
+        case MessageAction.link:
+          onLink();
+        case MessageAction.retry:
+          onRetry?.call();
+        case MessageAction.discard:
+          onCancel?.call();
+        case MessageAction.thread:
+          onThread?.call();
+      }
+    },
   );
 }

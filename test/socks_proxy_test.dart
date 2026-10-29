@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/socks_proxy_config.dart';
 import 'package:deltiecord/services/socks_proxy_native.dart';
+import 'package:deltiecord/services/private_file_store.dart';
 
 class _Proxy {
   late ServerSocket server;
@@ -334,7 +335,14 @@ void main() {
       password: 'fixture-password',
     );
     await store.save(config);
-    expect(await file.readAsString(), isNot(contains('fixture-password')));
+    expect(
+      latin1.decode(await file.readAsBytes()),
+      isNot(contains('fixture-password')),
+    );
+    expect(
+      await readPrivateTextFile(file),
+      isNot(contains('fixture-password')),
+    );
     expect((await store.load()).password, 'fixture-password');
     if (!Platform.isWindows) expect((await file.stat()).mode & 63, 0);
     await file.writeAsString('damaged');

@@ -68,6 +68,18 @@ extension _MatrixEventMapping on MatrixBackend {
     Iterable<Event> events,
   ) {
     events = events.toList(growable: false);
+    final callNotices = <String>{};
+    events = events
+        .where((event) {
+          final record = event.content[callHistoryKey];
+          if (record is! Map ||
+              record['id'] is! String ||
+              record['phase'] is! String) {
+            return true;
+          }
+          return callNotices.add('${record['id']}:${record['phase']}');
+        })
+        .toList(growable: false);
     final roles = _rolesForRoom(timeline.room);
     final threadEvents = <String, List<Event>>{};
     for (final event in timeline.events) {
@@ -103,15 +115,20 @@ extension _MatrixEventMapping on MatrixBackend {
               final displayEvent = event.type == EventTypes.Message
                   ? event.getDisplayEvent(timeline)
                   : event;
+              final callNotice =
+                  displayEvent.type == EventTypes.Message &&
+                  displayEvent.content[callHistoryKey] is Map;
               final isMessage =
-                  displayEvent.type == EventTypes.Message ||
+                  (displayEvent.type == EventTypes.Message && !callNotice) ||
                   displayEvent.type == EventTypes.Encrypted ||
                   displayEvent.type == EventTypes.Sticker ||
                   displayEvent.type == PollEventContent.startType;
               final attachment = _attachmentFor(displayEvent);
               final poll = _pollFor(displayEvent, timeline);
               final blocked = _matrix.ignoredUsers.contains(event.senderId);
-              final body = blocked
+              final body = callNotice
+                  ? displayEvent.content.tryGet<String>('body') ?? 'Call'
+                  : blocked
                   ? 'Message from blocked user'
                   : event.redacted
                   ? 'Message deleted'
@@ -131,6 +148,7 @@ extension _MatrixEventMapping on MatrixBackend {
                             : '');
               return ChatMessage(
                 id: event.eventId,
+                transactionId: event.unsigned?['transaction_id'] as String?,
                 forumPost: ForumPost.fromJson(
                   displayEvent.content[forumPostKey] ??
                       event.content[forumPostKey],

@@ -640,6 +640,8 @@ class ChatMessage {
     required this.pending,
     this.failed = false,
     this.transferStatus,
+    this.preparationProgress,
+    this.transactionId,
     this.system = false,
     this.own = false,
     this.canRedact = false,
@@ -677,6 +679,8 @@ class ChatMessage {
   final bool pending;
   final bool failed;
   final String? transferStatus;
+  final double? preparationProgress;
+  final String? transactionId;
   final bool system;
   final bool own;
   final bool canRedact;
@@ -1069,6 +1073,7 @@ class AttachmentDraft {
     this.videoThumbnail,
     this.imagePrepared = false,
     this.videoPrepared = false,
+    this.uploadTooLarge = false,
   });
 
   final Uint8List bytes;
@@ -1084,6 +1089,7 @@ class AttachmentDraft {
   final Uint8List? videoThumbnail;
   final bool imagePrepared;
   final bool videoPrepared;
+  final bool uploadTooLarge;
   AttachmentDraft copyWith({
     Uint8List? bytes,
     String? name,
@@ -1092,6 +1098,7 @@ class AttachmentDraft {
     String? caption,
     bool? imagePrepared,
     bool? videoPrepared,
+    bool? uploadTooLarge,
   }) => AttachmentDraft(
     bytes: bytes ?? this.bytes,
     name: name ?? this.name,
@@ -1107,6 +1114,7 @@ class AttachmentDraft {
     videoThumbnail: videoThumbnail,
     imagePrepared: imagePrepared ?? this.imagePrepared,
     videoPrepared: videoPrepared ?? this.videoPrepared,
+    uploadTooLarge: uploadTooLarge ?? this.uploadTooLarge,
   );
 }
 

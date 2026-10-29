@@ -18,6 +18,37 @@ SOURCES = frozenset(('upload', 'klipy', 'asset'))
 MEDIA_ID = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
 
 
+def protected_custom_assets(txn, references):
+    """Current custom profiles and packs are not disposable legacy uploads."""
+    result = set()
+    placeholders = ','.join('?' for _ in references)
+    for field in ('net.deltiecord.banner', 'net.deltiecord.voice_background'):
+        txn.execute(f'SELECT fields->>? FROM profiles WHERE fields->>? IN ({placeholders})',
+                    [field, field, *references])
+        result.update(references[row[0]] for row in txn.fetchall())
+
+    def collect(value):
+        if isinstance(value, str):
+            if value in references:
+                result.add(references[value])
+        elif isinstance(value, dict):
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    txn.execute('SELECT content FROM account_data WHERE account_data_type=?',
+                ['im.ponies.user_emotes'])
+    for row in txn.fetchall():
+        collect(json.loads(row[0]) if isinstance(row[0], str) else row[0])
+    txn.execute('SELECT e.json FROM current_state_events s JOIN event_json e ON e.event_id=s.event_id '
+                'WHERE s.type IN (?,?)', ['im.ponies.room_emotes', 'net.deltiecord.space_profile_overrides'])
+    for row in txn.fetchall():
+        collect(json.loads(row[0]) if isinstance(row[0], str) else row[0])
+    return result
+
+
 def category(mime):
     if not isinstance(mime, str):
         return 'other'
@@ -73,7 +104,8 @@ class Storage:
                 'quota_enforced': await self.run('send_storage_enforcement',enforcement),
                 'remaining_bytes': max(0, quota - used), 'categories': categories,
                 'message_bytes': None, 'accounting': 'original_uploads',
-                'notes': 'Messages, server-generated previews, thumbnails and backups are separate.'}
+                'notes': 'Messages, server-generated previews, thumbnails and backups are separate.',
+                'features': {'legacy_pruning': True}}
 
     async def label(self, owner, items):
         if not isinstance(items, list) or not 1 <= len(items) <= 100:
@@ -104,11 +136,26 @@ class Storage:
     async def files(self, owner, before, kind=None, source=None):
         if type(before) is not int or not 0 < before <= self.now() + 86400000:
             raise ValueError('Invalid age cutoff.')
-        if kind is not None and kind not in KINDS or source is not None and source not in SOURCES - {'asset'}:
+        if kind is not None and kind not in DISPLAY_KINDS or source is not None and source not in SOURCES - {'asset'}:
             raise ValueError('Invalid media filter.')
+        if kind == 'legacy' and source is not None:
+            raise ValueError('Legacy uploads have no recorded source. Choose all uploads.')
         def query(txn):
-            # Unlabelled historical uploads are counted, but are not bulk-pruned
-            # until their purpose is known. No guessing from encrypted filenames.
+            # Legacy is never folded into the default/all selection. It requires
+            # an explicit request and still uses owner/protection checks.
+            if kind == 'legacy':
+                txn.execute("SELECT m.media_id,m.media_length,m.created_ts,'legacy',NULL "
+                            'FROM local_media_repository m LEFT JOIN send_storage_labels l '
+                            'ON l.media_id=m.media_id AND l.owner=m.user_id '
+                            'WHERE m.user_id=? AND m.created_ts<? AND m.media_length IS NOT NULL '
+                            'AND m.url_cache IS NULL AND m.quarantined_by IS NULL AND l.media_id IS NULL '
+                            'AND COALESCE(m.created_ts,0)<(SELECT classification_since FROM send_storage_policy WHERE id=1) '
+                            "AND COALESCE(m.media_type,'') NOT LIKE 'image/%' "
+                            "AND COALESCE(m.media_type,'') NOT LIKE 'video/%' "
+                            "AND COALESCE(m.media_type,'') NOT LIKE 'audio/%' "
+                            'ORDER BY m.media_length DESC,m.media_id LIMIT 100', (owner, before))
+                return [{'media_id': row[0], 'bytes': row[1], 'created_ts': row[2], 'kind': row[3], 'source': row[4]}
+                        for row in txn.fetchall()]
             sql = ('SELECT m.media_id,m.media_length,m.created_ts,l.kind,l.source '
                    'FROM local_media_repository m JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
                    "WHERE m.user_id=? AND m.created_ts<? AND m.media_length IS NOT NULL AND m.url_cache IS NULL "
@@ -155,7 +202,9 @@ class Storage:
             result = []
             for media_id in ids:
                 txn.execute('SELECT m.user_id,l.protected FROM local_media_repository m '
-                            'JOIN send_storage_labels l ON l.media_id=m.media_id WHERE m.media_id=? AND m.url_cache IS NULL', (media_id,))
+                            'LEFT JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
+                            "WHERE m.media_id=? AND m.url_cache IS NULL AND m.quarantined_by IS NULL "
+                            "AND COALESCE(l.source,'')<>'asset'", (media_id,))
                 value = txn.fetchone()
                 if value and value[0] == owner and not value[1]:
                     result.append(media_id)
@@ -196,13 +245,7 @@ class SendStorage:
                 include_quarantined_media=False, include_protected_media=False))
             references = {f'mxc://{api.server_name}/{value}': value for value in ids}
             def custom_profile_assets(txn):
-                result = set()
-                for field in ('net.deltiecord.banner', 'net.deltiecord.voice_background'):
-                    placeholders = ','.join('?' for _ in references)
-                    txn.execute(f'SELECT fields->>? FROM profiles WHERE fields->>? IN ({placeholders})',
-                                [field, field, *references])
-                    result.update(references[row[0]] for row in txn.fetchall())
-                return result
+                return protected_custom_assets(txn, references)
             custom = await api.run_db_interaction('send_storage_profile_assets', custom_profile_assets)
             return (set(ids) - candidates) | custom
 

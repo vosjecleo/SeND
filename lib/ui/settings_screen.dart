@@ -29,6 +29,7 @@ import 'deltiecord_theme.dart';
 import 'android_notification_setup.dart';
 import 'history_index_settings.dart';
 import 'server_storage_settings.dart';
+import 'browser_storage_usage.dart';
 import 'media_compression_settings.dart';
 import 'notification_diagnostics.dart';
 import '../services/favourite_reactions_store.dart';
@@ -955,6 +956,10 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ServerStorageSettings(backend: backend),
     ]),
     _SettingsPage.storage => _section('Local storage', [
+      if (backend.localStorageWarning case final warning?) Text(warning),
+      if (FavouriteReactionsStore.instance.warning case final warning?)
+        Text(warning),
+      if (kIsWeb) ...[const BrowserStorageUsage(), const Divider(height: 28)],
       MediaCompressionSettings(backend: backend),
       const Divider(height: 28),
       HistoryIndexSettings(backend: backend),

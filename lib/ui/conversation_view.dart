@@ -611,7 +611,7 @@ class _ConversationState extends State<_Conversation> {
   Widget build(BuildContext context) {
     final backend = widget.backend;
     final room = backend.selectedRoom!;
-    final messages = backend.messages;
+    final messages = backend.timelineMessages;
     final receipts = receiptFrontiers(messages);
     final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
     _scheduleInitialViewportFill();
@@ -674,6 +674,7 @@ class _ConversationState extends State<_Conversation> {
                                 ),
                                 if (room.isDirect)
                                   TimelineActivityStatus(
+                                    status: room.statusMessage,
                                     backend: backend,
                                     userId: room.directUserId,
                                     presence: room.presence,
@@ -843,27 +844,18 @@ class _ConversationState extends State<_Conversation> {
                                 value: 'members',
                                 child: Text('Members'),
                               ),
-                              const PopupMenuItem(
-                                value: 'copy-link',
-                                child: Text('Copy room link'),
-                              ),
+
                               if (backend.firstUnreadMessageId != null)
                                 const PopupMenuItem(
                                   value: 'first-unread',
                                   child: Text('Jump to first unread'),
                                 ),
-                              const PopupMenuItem(
-                                value: 'media',
-                                child: Text('Media and links'),
-                              ),
+
                               const PopupMenuItem(
                                 value: 'saved',
                                 child: Text('Saved and scheduled'),
                               ),
-                              const PopupMenuItem(
-                                value: 'inbox',
-                                child: Text('Inbox'),
-                              ),
+
                               const PopupMenuDivider(),
 
                               const PopupMenuItem(
@@ -874,22 +866,14 @@ class _ConversationState extends State<_Conversation> {
                                 value: 'events',
                                 child: Text('Timeline events'),
                               ),
-                              const PopupMenuItem(
-                                value: 'access',
-                                child: Text('Room access and shared settings'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'unread',
-                                child: Text('Toggle read / unread'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'invite',
-                                child: Text('Invite member'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'aliases',
-                                child: Text('Room aliases'),
-                              ),
+                              if (!room.isDirect)
+                                const PopupMenuItem(
+                                  value: 'access',
+                                  child: Text(
+                                    'Room access and shared settings',
+                                  ),
+                                ),
+
                               CheckedPopupMenuItem(
                                 value: 'previews',
                                 checked: backend.notificationPreviewsEnabled,
@@ -1042,7 +1026,9 @@ class _ConversationState extends State<_Conversation> {
                                                       !message.redacted
                                                   ? () => widget.onEdit(message)
                                                   : null,
-                                              onDelete: message.canRedact
+                                              onDelete:
+                                                  message.own &&
+                                                      message.canRedact
                                                   ? () =>
                                                         _deleteMessage(message)
                                                   : null,

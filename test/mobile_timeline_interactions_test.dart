@@ -185,8 +185,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Reply'), findsWidgets);
     expect(find.text('React'), findsOneWidget);
-    expect(find.text('Copy text'), findsOneWidget);
-    await tester.tap(find.text('Copy text'));
+    expect(find.text('Copy'), findsOneWidget);
+    await tester.tap(find.text('Copy'));
     await tester.pumpAndSettle();
     expect(copiedText, 'swipe this');
   });

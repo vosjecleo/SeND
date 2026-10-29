@@ -849,11 +849,22 @@ class _PendingAttachmentTile extends StatelessWidget {
       onSecondaryTapDown: (details) =>
           _showMenu(context, details.globalPosition),
       child: Tooltip(
-        message: '${attachment.name}\nRight-click for options',
+        message: attachment.uploadTooLarge
+            ? '${attachment.name}\nToo big. ${isImage || isVideo ? 'Tap to change compression.' : 'Remove this file or send fewer attachments.'}'
+            : '${attachment.name}\nRight-click for options',
         child: Container(
           width: 72,
           height: 72,
           clipBehavior: Clip.antiAlias,
+          foregroundDecoration: BoxDecoration(
+            border: attachment.uploadTooLarge
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 3,
+                  )
+                : null,
+            borderRadius: DeltiecordCorners.borderRadius,
+          ),
           decoration: BoxDecoration(
             color: attachment.spoiler
                 ? Color.alphaBlend(
@@ -900,6 +911,12 @@ class _PendingAttachmentTile extends StatelessWidget {
                   child: Center(
                     child: ThemeIcon(Icons.visibility_off_outlined, size: 20),
                   ),
+                ),
+              if (attachment.uploadTooLarge)
+                const Positioned(
+                  left: 2,
+                  bottom: 2,
+                  child: Icon(Icons.error, color: Colors.red),
                 ),
               Positioned(
                 right: 1,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../activity_widgets.dart';
 import '../navigation_polish.dart';
 
@@ -57,15 +58,23 @@ class MobileDetailsPanel extends StatelessWidget {
             value: !backend.selectedRoomMuted,
             onChanged: (enabled) => backend.setSelectedRoomMuted(!enabled),
           ),
-          ListTile(
-            leading: const Icon(Icons.person_add_outlined),
-            title: const Text('Invite member'),
-            onTap: () => showInviteMember(context, backend),
-          ),
+          if (backend.canInviteToRoom(room.id))
+            ListTile(
+              leading: const Icon(Icons.person_add_outlined),
+              title: const Text('Invite member'),
+              onTap: () => showInviteMember(context, backend),
+            ),
           ListTile(
             leading: const Icon(Icons.alternate_email),
             title: const Text('Room aliases'),
             onTap: () => showRoomAliasEditor(context, backend, room),
+          ),
+          ListTile(
+            leading: const Icon(Icons.link),
+            title: const Text('Copy room link'),
+            onTap: () => Clipboard.setData(
+              ClipboardData(text: 'https://matrix.to/#/${room.id}'),
+            ),
           ),
           const Divider(height: 28),
           Text(

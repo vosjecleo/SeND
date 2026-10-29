@@ -2,6 +2,9 @@ import 'dart:async';
 import '../models/rtc_connectivity.dart';
 import '../services/rtc_audio_controls.dart';
 import '../services/attachment_text.dart';
+import '../services/attachment_admission.dart';
+import '../services/queued_message.dart';
+import '../services/dm_call_history.dart';
 import '../services/encoded_image_dimensions.dart';
 import '../services/video_preparation.dart';
 import '../models/user_activity.dart';
@@ -12,6 +15,7 @@ import '../services/socks_proxy.dart';
 import '../services/personal_data.dart';
 import '../services/history_index.dart';
 import '../services/history_download.dart';
+import '../services/history_gap_recovery.dart';
 import '../services/history_scope.dart';
 import '../services/server_storage.dart';
 import '../services/image_preparation.dart';
@@ -499,6 +503,8 @@ class MatrixBackend extends ChatBackend {
   final _labelledEvents = <String>{};
   @override
   String? get serverStorageWarning => _uploadLabels?.warning;
+  @override
+  String? get localStorageWarning => _scheduledMessageStore.warning;
   Future<UploadLabels?> _openUploadLabels() {
     final client = _client;
     if (client == null ||
@@ -780,7 +786,30 @@ class MatrixBackend extends ChatBackend {
   int _historySearchGeneration = 0;
   final Map<String, ChatMessage> _historySearchMessages = {};
   HistoryIndex? _historyIndex;
+  @override
+  Future<List<AttachmentDraft>> prepareAttachmentsForSend(
+    List<AttachmentDraft> drafts, {
+    void Function(int index, String status, double? progress)? onProgress,
+  }) async {
+    final prepared = await super.prepareAttachmentsForSend(
+      drafts,
+      onProgress: onProgress,
+    );
+    // Check the whole batch before uploading its first item.
+    for (final item in prepared) {
+      await _validateUploadSize(item.bytes.length);
+    }
+    return prepared;
+  }
+
   HistoryDownload? _historyDownload;
+  HistoryGapRecovery? _historyGaps;
+  Future<HistoryGapRecovery?>? _openingGaps;
+  Timer? _historyGapTimer;
+  bool _historyGapTicking = false;
+  bool _historyDisposed = false;
+  int _historyConfigurationGeneration = 0;
+  Future<void> _historySyncQueue = Future.value();
   Future<HistoryDownload?>? _openingDownload;
   @override
   List<HistoryDownloadRoom> get historyDownloadRooms => _joinedRooms
@@ -815,11 +844,13 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> configureHistoryScope(HistoryScope scope) async {
+    _historyConfigurationGeneration++;
     final index = await openHistoryIndex();
     if (index == null || _client == null || status != SessionStatus.signedIn) {
       throw StateError('Sign in before changing the search scope.');
     }
     await _historyDownload?.reset();
+    await _historyGaps?.reset();
     await index.setScope(
       scope,
       historyDownloadRooms
@@ -934,13 +965,18 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> configureHistoryIndex(bool enabled, {int? limitMiB}) async {
+    _historyConfigurationGeneration++;
     _historyDownload?.pause(reason: 'Paused while the cache settings change.');
     if (!enabled) await _historyDownload?.reset();
+    if (!enabled) await _historyGaps?.reset();
     final index = await openHistoryIndex();
     if (index == null) {
       throw StateError('Local search storage could not be opened.');
     }
     await index.configure(text: enabled, limit: limitMiB);
+    _historyGaps?.capacityChanged();
+    _historyDownload?.clearCatchupStorageFull();
+    if (enabled) unawaited(_openHistoryGaps().catchError((Object _) => null));
     if (!enabled) _resetIndexedSearch();
     _indexFingerprints.clear();
     if (_timeline case final timeline?) await _indexEvents(timeline.events);
@@ -948,7 +984,9 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> clearHistoryIndex() async {
+    _historyConfigurationGeneration++;
     await _historyDownload?.reset();
+    await _historyGaps?.reset();
     await _historyIndex?.clear();
     _resetIndexedSearch();
     _indexFingerprints.clear();
@@ -977,6 +1015,11 @@ class MatrixBackend extends ChatBackend {
         return null;
       }
       _historyIndex = index;
+      if (index.enabled) {
+        scheduleMicrotask(
+          () => unawaited(_openHistoryGaps().catchError((Object _) => null)),
+        );
+      }
       _indexRetryAfter = null;
       _indexError = null;
       index.addListener(_indexWarningChanged);
@@ -1459,9 +1502,16 @@ class MatrixBackend extends ChatBackend {
       .fold(0, (sum, room) => sum + room.notificationCount);
 
   @override
-  int get serverPingCount => _joinedRooms
-      .where((room) => !room.isSpace && !room.isDirectChat)
-      .fold(0, (sum, room) => sum + room.highlightCount);
+  int get serverPingCount {
+    final serverRooms = _allSpaceChildIds;
+    return _joinedRooms
+        .where(
+          (room) =>
+              !room.isSpace &&
+              (serverRooms.contains(room.id) || !room.isDirectChat),
+        )
+        .fold(0, (sum, room) => sum + room.highlightCount);
+  }
 
   @override
   int get totalAttentionCount => directUnreadCount + serverPingCount;
@@ -1529,13 +1579,14 @@ class MatrixBackend extends ChatBackend {
       .whereType<String>()
       .toSet();
 
-  List<Room> get _homeRooms => _joinedRooms
-      .where(
-        (room) =>
-            !room.isSpace &&
-            (room.isDirectChat || !_allSpaceChildIds.contains(room.id)),
-      )
-      .toList(growable: false);
+  List<Room> get _homeRooms {
+    final serverRooms = _allSpaceChildIds;
+    // m.direct is a user annotation and can contain stale channel entries.
+    // Joined server membership takes precedence without rewriting account data.
+    return _joinedRooms
+        .where((room) => !room.isSpace && !serverRooms.contains(room.id))
+        .toList(growable: false);
+  }
 
   @override
   RoomSummary? get selectedRoom => _selectedRoomSummary;
@@ -1553,6 +1604,9 @@ class MatrixBackend extends ChatBackend {
     if (_timeline != null) return _mappedMessages;
     return _roomMessageCache[_selectedRoomId] ?? const [];
   }
+
+  @override
+  bool get reconcilesOutgoingTransactions => true;
 
   @override
   List<ChatMessage> get bookmarkedMessages => _roomMessageCache.values
@@ -1612,7 +1666,26 @@ class MatrixBackend extends ChatBackend {
   }
 
   bool get _mayAdvanceReadMarker =>
-      _applicationForeground && _conversationVisible && _conversationAtPresent;
+      _applicationForeground &&
+      _conversationVisible &&
+      _conversationAtPresent &&
+      !_manualUnreadHolds.contains(_selectedRoomId);
+
+  final _manualUnreadHolds = <String>{};
+  @override
+  Future<void> markMessageUnread(String eventId) async {
+    final room = roomIdForMessage(eventId) ?? _selectedRoomId;
+    if (room == null) return;
+    _manualUnreadHolds.add(room);
+    try {
+      await _markRoomUnread(room, true);
+      _firstUnreadEventIds[room] = eventId;
+      _notifyBackendListeners();
+    } catch (_) {
+      _manualUnreadHolds.remove(room);
+      rethrow;
+    }
+  }
 
   @override
   void setApplicationForeground(bool foreground) {
@@ -1623,6 +1696,7 @@ class MatrixBackend extends ChatBackend {
     }
     final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    if (foreground) unawaited(_tickHistoryGaps());
     if (!foreground && (kIsWeb || Platform.isAndroid || Platform.isIOS)) {
       _historyDownload?.pause(
         reason: 'Paused while SeND is in the background.',
@@ -1878,14 +1952,23 @@ class MatrixBackend extends ChatBackend {
       _getRoomAccessSettings(roomId);
 
   @override
+  bool canMarkRoomDirect(String roomId) {
+    final room = _matrix.getRoomById(roomId);
+    return room != null && !room.isSpace && _spaceForRoom(room) == null;
+  }
+
+  @override
   bool isRoomDirect(String roomId) =>
-      _matrix.getRoomById(roomId)?.isDirectChat ?? false;
+      canMarkRoomDirect(roomId) && _matrix.getRoomById(roomId)!.isDirectChat;
 
   @override
   Future<void> setRoomDirect(String roomId, bool direct) async {
     final room = _matrix.getRoomById(roomId);
     if (room == null || room.isSpace) {
       throw StateError('Choose a joined conversation.');
+    }
+    if (direct && !canMarkRoomDirect(roomId)) {
+      throw StateError('Server channels cannot be marked as DMs.');
     }
     final members = direct ? await room.requestParticipants() : <User>[];
     final mapping = <String, List<String>>{
@@ -2024,7 +2107,10 @@ class MatrixBackend extends ChatBackend {
   Future<String> regenerateEncryptionRecoveryKey() =>
       _regenerateEncryptionRecoveryKey();
   @override
-  void selectSpace(String? spaceId) => _selectSpace(spaceId);
+  void selectSpace(String? spaceId) {
+    if (spaceId != null && archiveOpen) setArchiveOpen(false);
+    _selectSpace(spaceId);
+  }
 
   @override
   Future<void> selectRoom(String roomId) => _selectRoom(roomId);
@@ -2500,7 +2586,10 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _historyDisposed = true;
     _historyDownload?.dispose();
+    _historyGapTimer?.cancel();
+    _historyGaps?.dispose();
     _personal?.removeListener(_notifyBackendListeners);
     _historyIndex?.removeListener(_indexWarningChanged);
     unawaited(_indexEventSubscription?.cancel());

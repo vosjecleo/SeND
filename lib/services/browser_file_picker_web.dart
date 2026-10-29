@@ -3,6 +3,7 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 import 'package:mime/mime.dart';
 import '../models/chat_models.dart';
+import 'attachment_admission.dart';
 
 /// Read user-selected File objects directly; no blob URL fetch/CSP exception.
 /// Call from the button handler, before awaiting route dismissal on Safari.
@@ -35,9 +36,7 @@ Future<List<AttachmentDraft>> pickBrowserAttachments({
     for (var i = 0; i < files.length; i++) {
       total += files.item(i)!.size;
     }
-    if (total > 64 * 1024 * 1024) {
-      throw StateError('Choose at most 64 MiB per selection.');
-    }
+    validateAttachmentSelection([total]);
     final drafts = <AttachmentDraft>[];
     for (var i = 0; i < files.length; i++) {
       final file = files.item(i)!;

@@ -35,6 +35,8 @@ class MatrixVoiceController extends ChangeNotifier {
     this._client, {
     required this.friendlyError,
     this.canRingRoom,
+    this.onHistoryJoined,
+    this.onHistoryLeft,
     RtcAudioOutputSelector? audioOutputSelector,
     RtcTransportApi Function(Client)? transportApiFactory,
     RtcSfuSession Function(Room, RtcTransport, AppPreferences, RtcTransportApi)?
@@ -54,6 +56,8 @@ class MatrixVoiceController extends ChangeNotifier {
   final Client _client;
   final String Function(Object error) friendlyError;
   final bool Function(Room room)? canRingRoom;
+  final Future<void> Function(Room room, bool starting)? onHistoryJoined;
+  final Future<void> Function(Room room, bool elected)? onHistoryLeft;
   StreamSubscription<Event>? _ringEvents;
   // SDK 10 emits delayed decryptions only through this legacy update stream.
   // ignore: deprecated_member_use
@@ -460,6 +464,11 @@ class MatrixVoiceController extends ChangeNotifier {
       _cameraEnabled = session.cameraEnabled;
       _remoteUsers = session.members.map((m) => m.userId).toSet();
       _participantSoundsReady = true;
+      if (_mayRing(room) && !_rejoining) {
+        unawaited(
+          onHistoryJoined?.call(room, starting).catchError((Object _) {}),
+        );
+      }
       if (_callSound && !_rejoining) unawaited(AppSounds.callConnected());
       if (starting && !_rejoining && _remoteUsers.isEmpty) {
         try {
@@ -611,6 +620,14 @@ class MatrixVoiceController extends ChangeNotifier {
     _remoteUsers = {};
     _joiningRoomId = null;
     final session = _session;
+    final room = session?.matrixRoom;
+    final recordHistory = room != null && _mayRing(room) && !_rejoining;
+    final ownIdentity = '${_client.userID}:${_client.deviceID}';
+    final identities = <String>{
+      ownIdentity,
+      if (room != null) ...membersForRoom(room).map((m) => m.deviceIdentity),
+    }.toList()..sort();
+    final elected = identities.isEmpty || identities.first == ownIdentity;
     _session = null;
     session?.removeListener(_sessionChanged);
     _status = _rejoining
@@ -619,6 +636,9 @@ class MatrixVoiceController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
     try {
       await session?.close();
+      if (recordHistory) {
+        unawaited(onHistoryLeft?.call(room, elected).catchError((Object _) {}));
+      }
     } finally {
       await ScreenCaptureService.stop();
       _status = _rejoining

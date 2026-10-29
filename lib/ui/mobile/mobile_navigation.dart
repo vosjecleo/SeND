@@ -12,6 +12,8 @@ import '../presence_controls.dart';
 import '../relative_activity_time.dart';
 import '../space_settings_screen.dart';
 import '../personal_organisation.dart';
+import '../home_room_menu.dart';
+import '../archive_navigation.dart';
 import '../member_management.dart';
 import '../chat_shell.dart' show showChannelActions, showCreateChannelCategory;
 import 'mobile_widgets.dart';
@@ -37,6 +39,13 @@ class MobileNavigationPanel extends StatefulWidget {
 
 class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
   String _query = '';
+  final _queryController = TextEditingController();
+  bool _wasArchive = false;
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
 
   ChatBackend get backend => widget.backend;
 
@@ -47,8 +56,13 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
   );
 
   Widget _buildPanel(BuildContext context) {
+    if (_wasArchive != backend.archiveOpen) {
+      _wasArchive = backend.archiveOpen;
+      _query = '';
+      _queryController.clear();
+    }
     final selectedSpace = backend.selectedSpaceId;
-    final rooms = backend.rooms
+    final rooms = (backend.archiveOpen ? backend.archivedRooms : backend.rooms)
         .where((room) {
           final query = _query.trim().toLowerCase();
           return query.isEmpty ||
@@ -119,24 +133,49 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                           horizontal: 2,
                                           vertical: 3,
                                         ),
-                                        child: Text(
-                                          selectedSpace == null
-                                              ? 'Home'
-                                              : backend.spaces
-                                                        .where(
-                                                          (space) =>
-                                                              space.id ==
-                                                              selectedSpace,
-                                                        )
-                                                        .firstOrNull
-                                                        ?.name ??
-                                                    'Space',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
+                                        child: Row(
+                                          children: [
+                                            if (backend.archiveOpen)
+                                              IconButton(
+                                                tooltip: 'Back to Home',
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints.tightFor(
+                                                      width: 28,
+                                                      height: 28,
+                                                    ),
+                                                onPressed: () => backend
+                                                    .setArchiveOpen(false),
+                                                icon: const Icon(
+                                                  Icons.arrow_back,
+                                                  size: 20,
+                                                ),
                                               ),
+                                            Expanded(
+                                              child: Text(
+                                                selectedSpace == null
+                                                    ? (backend.archiveOpen
+                                                          ? 'Archive'
+                                                          : 'Home')
+                                                    : backend.spaces
+                                                              .where(
+                                                                (space) =>
+                                                                    space.id ==
+                                                                    selectedSpace,
+                                                              )
+                                                              .firstOrNull
+                                                              ?.name ??
+                                                          'Space',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleLarge
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -153,6 +192,7 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                     children: [
                                       Expanded(
                                         child: TextField(
+                                          controller: _queryController,
                                           key: const ValueKey(
                                             'mobile-room-search',
                                           ),
@@ -417,7 +457,10 @@ class _SpaceRail extends StatelessWidget {
         _RailButton(
           selected: backend.selectedSpaceId == null,
           tooltip: 'Home',
-          onTap: () => backend.selectSpace(null),
+          onTap: () {
+            backend.setArchiveOpen(false);
+            backend.selectSpace(null);
+          },
           attentionCount: backend.directUnreadCount,
           unread: backend.directUnreadCount > 0,
           child: const Icon(Icons.home_rounded),
@@ -580,7 +623,7 @@ class _SpaceRail extends StatelessWidget {
           builder: (dialogContext) => AlertDialog(
             title: Text('Leave ${space.name}?'),
             content: const Text(
-              'Rooms inside the Space are not left automatically.',
+              'You will also leave the rooms in this server. You may need another invitation to rejoin.',
             ),
             actions: [
               TextButton(
@@ -854,7 +897,11 @@ class _RoomList extends StatelessWidget {
   final ValueChanged<RoomSummary> onOpenRoom;
 
   @override
-  Widget build(BuildContext context) => ListView.builder(
+  Widget build(BuildContext context) => ArchivePullList(
+    backend: backend,
+    enabled: !backend.archiveOpen,
+    emptyLabel: backend.archiveOpen ? 'No archived chats' : 'No joined rooms',
+    onOpenRoom: (room) async => onOpenRoom(room),
     key: const ValueKey('mobile-room-list'),
     padding: const EdgeInsets.fromLTRB(8, 0, 8, 84),
     itemCount: rooms.length,
@@ -870,7 +917,9 @@ class _RoomList extends StatelessWidget {
         key: _RoomRowKey(room.id),
         backend: backend,
         roomId: room.id,
-        userId: room.isDirect ? room.directUserId : null,
+        userId: room.isDirect && !room.usesChannelIcon
+            ? room.directUserId
+            : null,
         presence: room.presence,
         child: _SelectedRoomSurface(
           selected: backend.selectedRoom?.id == room.id,
@@ -884,18 +933,28 @@ class _RoomList extends StatelessWidget {
               horizontalTitleGap: 12,
               selected: backend.selectedRoom?.id == room.id,
               selectedColor: Theme.of(context).colorScheme.onSurface,
-              leading: MobileRoomAvatar(
-                room: room,
-                size: 44,
-                autoplay: backend.selectedRoom?.id == room.id,
+              leading: MutedAvatar(
+                muted: roomIsMuted(room),
+                child: MobileRoomAvatar(
+                  room: room,
+                  size: 44,
+                  autoplay: backend.selectedRoom?.id == room.id,
+                ),
               ),
               title: Text(
                 room.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: roomIsMuted(room)
+                    ? TextStyle(
+                        color: context.deltiecord.muted.withValues(alpha: .6),
+                      )
+                    : null,
               ),
               subtitle:
-                  room.isDirect && ActivityStatus.hasContent(backend, room)
+                  room.isDirect &&
+                      !room.usesChannelIcon &&
+                      ActivityStatus.hasContent(backend, room)
                   ? ActivityStatus(
                       backend: backend,
                       userId: room.directUserId,
@@ -933,13 +992,7 @@ class _RoomList extends StatelessWidget {
                     ),
               onTap: () => onOpenRoom(room),
               onLongPress: () {
-                final box = context.findRenderObject() as RenderBox?;
-                showChannelActions(
-                  context,
-                  backend,
-                  room,
-                  box?.localToGlobal(Offset.zero) ?? Offset.zero,
-                );
+                showHomeRoomMenu(context, backend, room);
               },
             ),
           ),

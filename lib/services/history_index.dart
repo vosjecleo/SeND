@@ -170,6 +170,10 @@ class HistoryIndex extends ChangeNotifier {
       _serial(_store.loadDownloadState);
   Future<void> saveDownloadState(Map<String, Object?>? value) =>
       _serial(() => _store.saveDownloadState(value));
+  Future<Map<String, Object?>?> loadGapState() =>
+      _serial(() => _store.loadDownloadState(slot: 2));
+  Future<void> saveGapState(Map<String, Object?>? value) =>
+      _serial(() => _store.saveDownloadState(value, slot: 2));
 
   Future<bool> appendArchive(List<Map<String, Object?>> rows) async {
     await flush();

@@ -24,11 +24,15 @@ class HistoryDownloadPage {
     required this.checked,
     this.unavailable = 0,
     this.failures = const [],
+    this.eventIds = const [],
   });
   final List<Map<String, Object?>> rows;
   final String? nextCursor;
   final int checked, unavailable;
   final List<HistoryDecryptionFailure> failures;
+
+  /// Includes redacted and non-message events, in server pagination order.
+  final List<String> eventIds;
 }
 
 /// Foreground, event-only backfill. Checkpoint only after an admitted page;
@@ -258,6 +262,62 @@ class HistoryDownload extends ChangeNotifier {
     status = HistoryDownloadStatus.idle;
     message = null;
     await save(null);
+    _changed();
+  }
+
+  /// Share automatic catch-up failures with the existing review/retry controls.
+  /// Return false before a caller advances its cursor if bookkeeping is full.
+  Future<bool> recordPage(HistoryDownloadPage page) async {
+    if (_closed || running || retrying) return false;
+    final next = Map.of(_failures);
+    for (final row in page.rows) {
+      next.remove('${row['room']}\u0000${row['id']}');
+    }
+    for (final failure in page.failures) {
+      next[failure.key] = failure;
+    }
+    if (next.length > 10000 ||
+        utf8
+                .encode(
+                  jsonEncode([
+                    for (final failure in next.values) failure.toMap(),
+                  ]),
+                )
+                .length >
+            2 * 1048576) {
+      return false;
+    }
+    _failures
+      ..clear()
+      ..addAll(next);
+    if (_rooms.isEmpty && next.isNotEmpty) {
+      _rooms = next.values.map((e) => e.roomId).toSet().toList();
+      _position = _rooms.length;
+      status = HistoryDownloadStatus.complete;
+    }
+    if (_rooms.isEmpty) return true;
+    checked = checked < unavailable ? unavailable : checked;
+    final saved = await _persist();
+    _changed();
+    return saved;
+  }
+
+  void catchupStorageFull() {
+    if (_closed || running || retrying) return;
+    status = HistoryDownloadStatus.full;
+    message = 'Search catch-up paused. Increase the cache limit to continue.';
+    _changed();
+  }
+
+  void clearCatchupStorageFull() {
+    if (message !=
+        'Search catch-up paused. Increase the cache limit to continue.') {
+      return;
+    }
+    status = hasCheckpoint
+        ? HistoryDownloadStatus.paused
+        : HistoryDownloadStatus.idle;
+    message = null;
     _changed();
   }
 

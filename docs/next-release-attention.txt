@@ -1,5 +1,5 @@
 Next release requests, 2026-10-28
-Not included in SeND 0.9.42+133.
+Implemented for SeND 0.9.42+134. Not published yet.
 
 1. Post-update changelog popup
 
@@ -32,4 +32,114 @@ silently remove files or bypass the limit through Original quality or queueing.
 Requested message: "Uh-oh! Your attachment is too big."
 Bottom text: "Select a (smaller) compression option or try another way".
 
-These requests are recorded, not implemented.
+3. Automatic search gap recovery
+
+Tracks per-room event-ID boundaries on this device, then backfills limited sync
+gaps in event-only pages. Foreground only, within the chosen indexing scope.
+Manual downloads and decryption retries take priority. Cache limits pause
+catch-up without advancing the saved cursor or deleting old search context.
+New rooms establish a baseline, not an automatic full-history download.
+Missing-key events remain in the existing review/retry list. Redacted encrypted
+events are deleted from the index rather than reported as decryption failures.
+
+4. Release channel
+
+Cleo's final instruction is Latest only for 0.9.42+134. Stable promotion waits
+for testing. Publish with packaging/publish-release.sh --channel latest.
+The publisher updates the download page and script, retaining rollback copies.
+Version/build labels come from the manifest, independently for each channel.
+Flatpak mirroring also updates Stable when its version/build matches this release;
+the AppStream entry for 134 remains development.
+The local README/download-page preview was approved. Follow-up fixes remain local;
+no push, tag, CI build or publication has been started.
+
+5. Server channels misclassified as direct messages
+
+Joined server membership takes precedence over stale m.direct account annotations.
+Server channels stay out of Home and its DM unread count, while their highlights
+remain counted as server attention. Channel summaries do not inherit a supposed
+DM peer's identity, status or presence. Personal status/activity previews also
+reject channel models. Server channel settings no longer offer the DM switch,
+and the backend rejects attempts to mark a joined server channel as a DM.
+Existing Matrix account annotations are not rewritten.
+
+6. Queued messages and media preparation
+
+Immediately show submitted/queued messages at the bottom of the timeline, with
+slightly greyed-out contents until sent. Photos and videos appear before their
+preparation finishes, and both show compression progress. Preserve captions,
+spoilers, FIFO order, retry/cancel and the ability to type/send another message.
+Reconcile queued items with SDK/remote echoes without duplicate messages or
+incorrect delivery/read markers. Implemented with per-room transaction IDs,
+pending-media previews, cancellation and partial-batch draft recovery.
+
+7. PWA image sending and editor controls
+
+Reported: video trimming/encoding/sending works, but image sending fails with a
+resize-safety error and the image editor's controls do not respond.
+The encoded ImageDescriptor dimensions are unsupported on Flutter web. This
+returned no dimensions, blocking compression and disabling the editor. Read
+common image headers on web instead, retaining pixel limits. Image markup
+export uses the same cross-platform dimension reader. Video code is unchanged.
+Local fix passed 15 native tests, 15 Chromium browser tests and targeted static
+analysis. Browser tests cover compression, responsive tools and markup export.
+iOS PWA confirmation remains pending. Nothing deployed.
+
+8. Local-storage encryption
+
+Desktop Matrix and search databases use SQLCipher. Android keeps its existing
+SQLCipher store. Private native drafts, scheduled sends, favourites, proxy files
+and avatar caches use authenticated encryption; larger buffers run in an isolate.
+PWA Matrix records use WebCrypto with opaque lookup keys. PWA search uses the
+checksum-pinned SQLite3MultipleCiphers WASM asset in a worker. Existing sessions
+and history migrate without a plaintext fallback or missing-key reset. Browser
+unlock is automatic, as requested, and its browser-profile/site-code limits are
+shown in Local storage alongside quota and persistence controls.
+
+9. Menus, Archive and call history
+
+Use the compact Home menu on desktop and mobile; grey muted names and avatars.
+Reveal Archive by a deliberate top-edge pull, navigate to its own page and hide
+the shortcut after scrolling it away. Simplify timeline tools and move room-link
+copying to Members. Message actions use the requested order, Bookmark wording,
+author-only edit/delete and triple-tap editing. Discussions use the same menu.
+Record starts/ends and duration for DM/group calls only, without blocking RTC
+disconnect or treating a reconnect as another call.
+
+10. Legacy pruning and safety
+
+Add an explicit Legacy selector behind the server capability flag. Preserve
+owner-bound, expiring previews and separate confirmation. Recheck current
+personal/server packs, profile assets and Synapse-protected media at deletion.
+The installer retains Compose v1/v2 and restrictive-umask fixes. No production
+module has been deployed and no actual uploads have been deleted in this pass.
+
+The notification report was resolved in the phone's background-connection
+settings. No proxy/provider/server change was made for that incident. Firebase
+remains an optional follow-up, not an added dependency or configured service.
+
+Updated instruction: skip the local app build/install. Finish tests and show the
+changelog before pushing or starting cross-platform CI/publication.
+
+Base-build validation: 857 native tests passed, 4 skipped. Static analysis was clean.
+The browser index checks and local release-mode web compilation passed too.
+README/gallery previews loaded all inline images. Download-page browser tests
+passed; 15 Linux packaging tests ran successfully with one tool-dependent skip.
+AppStream validation passed with one existing content-rating information notice.
+The server-room follow-up passed 45 targeted tests and clean static analysis.
+Current local validation (2026-10-29): 883 native tests passed, four skipped.
+The PWA image/editor tests passed 15 Chromium cases. Browser probes passed SDK
+session migration, nested transactions/rollback, encrypted records, tamper and
+missing-key checks, plus search-history migration, encrypted pages and quota/
+paging/scope checks. All 70 server tests passed; static analysis and diff checks
+are clean. The local app build/install was skipped at Cleo's request. Physical
+iOS confirmation and release CI remain pending.
+No CI build, deployment or release has been started.
+
+Local desktop preview, 2026-10-29: Cleo subsequently requested a build/install.
+Built and installed Arch package 0.9.42-134 without removing the account or app
+data. Launch restored the account and opened the protected database. A foreground
+refresh before client initialization exposed a startup race; the rebuilt preview
+guards it and sets a short SQLite busy timeout. Three focused tests and static
+analysis passed. The final package is installed; restart the running app to load
+that last fix. A private pre-upgrade app/keyring backup was retained.

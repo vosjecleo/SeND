@@ -67,6 +67,38 @@ void main() {
     failures: [failed],
   );
   test(
+    'automatic catch-up shares persistent failed references and resolves redactions',
+    () async {
+      final h = Harness();
+      var job = h.create();
+      await job.open();
+      expect(await job.recordPage(failurePage()), true);
+      expect(job.unavailable, 1);
+      job.dispose();
+      job = h.create();
+      await job.open();
+      expect(job.failures.single.eventId, failed.eventId);
+      expect(
+        await job.recordPage(
+          HistoryDownloadPage(
+            rows: [
+              {...row(failed.eventId), 'deleted': true},
+            ],
+            nextCursor: null,
+            checked: 1,
+          ),
+        ),
+        true,
+      );
+      expect(job.failures, isEmpty);
+      job.dispose();
+      job = h.create();
+      await job.open();
+      expect(job.failures, isEmpty);
+      job.dispose();
+    },
+  );
+  test(
     'failed event references survive reopening and targeted retry indexes them',
     () async {
       final h = Harness()..page = (_, _) async => failurePage();

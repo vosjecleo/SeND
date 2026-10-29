@@ -48,6 +48,8 @@ Map<String, dynamic> normalizeServerStorageUsage(Map<String, dynamic> raw) {
     'categories': categories,
     'quota_enforced': raw['quota_enforced'] != false,
     'dry_run_pruning': raw['dry_run_pruning'] == true,
+    'legacy_pruning':
+        (raw['features'] is Map && raw['features']['legacy_pruning'] == true),
   };
 }
 

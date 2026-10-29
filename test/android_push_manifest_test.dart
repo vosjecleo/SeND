@@ -45,7 +45,9 @@ void main() {
     expect(manifest, contains('android:mimeType="video/*"'));
     expect(activity, contains('MAX_SHARED_ITEM_BYTES'));
     expect(activity, contains('MAX_SHARED_TOTAL_BYTES'));
-    expect(activity, contains('.take(10)'));
+    expect(activity, contains('uris.size > 20'));
+    expect(activity, contains('MAX_SHARED_TOTAL_BYTES = 256 * 1024 * 1024'));
+    expect(activity, contains('return mapOf("error"'));
   });
 
   test('UnifiedPush receiver can wake SeND while Flutter is stopped', () {

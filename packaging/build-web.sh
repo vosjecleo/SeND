@@ -33,11 +33,14 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals' \
 flutter pub get --enforce-lockfile
 dart compile js third_party/livekit_e2ee/e2ee.worker.dart -o web/e2ee.worker.dart.js -m
 bash packaging/build-push-crypto.sh
+bash packaging/build-web-storage.sh
 python3 packaging/flutter-with-credentials.py build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run "$@"
 test -s build/web/pkg/vodozemac_bindings_dart_bg.wasm
 test -s build/web/sw.js
 test -s build/web/browser_bridge.js
 test -s build/web/e2ee.worker.dart.js
+test -s build/web/history_sql_worker.dart.js
+test -s build/web/sqlite3mc.wasm
 release_id="$(sed -n 's/^version: \([^[:space:]]*\).*/\1/p' pubspec.yaml)"
 [[ "$release_id" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
 mkdir -p dist

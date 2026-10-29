@@ -295,6 +295,7 @@ ssh -o BatchMode=yes deltie "mkdir -m 700 -- '$remote_stage'"
 cleanup_remote() { ssh -o BatchMode=yes deltie "rm -rf -- '$remote_stage'" >/dev/null 2>&1 || true; }
 trap 'cleanup_remote; rm -rf -- "$temporary"' EXIT
 scp -q -- "$temporary/SHA256SUMS" "$temporary/releases.json" \
+  "server/website/index.html" "server/website/downloads.js" \
   "packaging/deploy-web.py" "${artifacts[@]/#/$temporary/}" "deltie:$remote_stage/"
 
 ssh -o BatchMode=yes deltie "bash -s" -- \
@@ -318,6 +319,13 @@ fi
 if [[ -f "$remote_root/SHA256SUMS" ]]; then
   cp -- "$remote_root/SHA256SUMS" "$archive/SHA256SUMS.before"
 fi
+for page in index.html downloads.js; do
+  if [[ -f "$remote_root/$page" ]]; then
+    cp -- "$remote_root/$page" "$archive/$page.before"
+  fi
+  install -m 0644 -- "$stage/$page" "$remote_root/.$page.new"
+  mv -- "$remote_root/.$page.new" "$remote_root/$page"
+done
 for artifact in "$@"; do
   install -m 0644 -- "$stage/$artifact" "$remote_root/$artifact"
 done

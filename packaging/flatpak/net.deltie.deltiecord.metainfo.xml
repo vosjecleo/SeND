@@ -11,7 +11,9 @@
   <launchable type="desktop-id">net.deltie.deltiecord.desktop</launchable>
   <url type="homepage">https://deltie.net/SeND</url>
   <url type="bugtracker">https://github.com/VosjeCleo/SeND/issues</url>
-  <releases><release version="0.9.37+116" date="2026-10-03" type="development">
+  <releases><release version="0.9.42+134" date="2026-10-29" type="development">
+    <description><p>Encrypted local storage, automatic search catch-up, simpler chat menus and pending-media previews.</p></description>
+  </release><release version="0.9.37+116" date="2026-10-03" type="development">
     <description><p>Explicit compression recovery and refreshed installation and technical documentation.</p></description>
   </release></releases>
 </component>

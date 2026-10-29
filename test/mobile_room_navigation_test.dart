@@ -8,9 +8,7 @@ import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
 void main() {
-  testWidgets('mobile DM hold opens permission-aware room settings', (
-    tester,
-  ) async {
+  testWidgets('mobile DM hold opens the compact Home menu', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn
       ..roomList = const [
@@ -27,10 +25,13 @@ void main() {
     await pumpMobile(tester, backend);
     await tester.longPress(find.text('Alice'));
     await tester.pumpAndSettle();
-    expect(find.text('Edit DM name'), findsOneWidget);
-    await tester.tap(find.text('Edit DM name'));
-    await tester.pumpAndSettle();
-    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Edit DM name'), findsNothing);
+    expect(find.text('Copy room link'), findsNothing);
+    expect(find.text('Mark as read'), findsOneWidget);
+    expect(find.text('Mute room'), findsOneWidget);
+    expect(find.text('Pin'), findsOneWidget);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Leave'), findsOneWidget);
   });
 
   testWidgets('Android Home shows the Space rail and DM-only navigation', (

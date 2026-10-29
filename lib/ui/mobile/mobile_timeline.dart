@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../activity_widgets.dart';
+import '../message_action_menu.dart';
+import '../queued_attachment_preview.dart';
+import '../../services/queued_message.dart';
 import '../attachment_image_editor.dart';
 import '../inline_composer_preview.dart';
 import '../selection_toolbar.dart';
@@ -19,6 +23,7 @@ import '../chat_shell.dart' show openDiscussion;
 import '../../models/chat_models.dart';
 import '../../services/emoji_completion.dart';
 import '../../services/room_send_queue.dart';
+import '../../services/attachment_admission.dart';
 import '../../services/android_shared_content.dart';
 import '../../services/emoji_repository.dart';
 import '../../services/custom_emoji.dart';
@@ -122,6 +127,20 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
 
   ChatBackend get backend => widget.backend;
 
+  void _addAttachments(List<AttachmentDraft> items) {
+    if (!mounted || items.isEmpty) return;
+    try {
+      validateAttachmentSelection(
+        [..._attachments, ...items].map((item) => item.bytes.length),
+      );
+      setState(() => _attachments.addAll(items));
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -129,7 +148,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       enabled: () => mounted && _focus.hasFocus,
       contextKey: () => backend.selectedRoom?.id,
       onImages: (images) {
-        if (mounted) setState(() => _attachments.addAll(images));
+        _addAttachments(images);
       },
       onError: (error) {
         if (mounted) {
@@ -158,7 +177,17 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _consumeSharedContent() async {
-    final shared = await AndroidSharedContent.instance.consume();
+    late final ({String? text, List<AttachmentDraft> attachments})? shared;
+    try {
+      shared = await AndroidSharedContent.instance.consume();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+      return;
+    }
     if (!mounted || shared == null) return;
     final additions = shared.attachments;
     if (shared.text case final text?) {
@@ -168,24 +197,22 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
         offset: _composer.text.length,
       );
     }
-    if (additions.isNotEmpty) setState(() => _attachments.addAll(additions));
+    _addAttachments(additions);
     _focus.requestFocus();
   }
 
   void _insertKeyboardContent(KeyboardInsertedContent content) {
     final bytes = content.data;
     if (bytes == null || bytes.isEmpty) return;
-    setState(() {
-      _attachments.add(
-        AttachmentDraft(
-          bytes: bytes,
-          name:
-              'pasted-${DateTime.now().millisecondsSinceEpoch}.${_extensionForMime(content.mimeType)}',
-          mimeType: content.mimeType,
-          spoiler: false,
-        ),
-      );
-    });
+    _addAttachments([
+      AttachmentDraft(
+        bytes: bytes,
+        name:
+            'pasted-${DateTime.now().millisecondsSinceEpoch}.${_extensionForMime(content.mimeType)}',
+        mimeType: content.mimeType,
+        spoiler: false,
+      ),
+    ]);
   }
 
   @override
@@ -603,7 +630,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
 
   @override
   Widget build(BuildContext context) {
-    final messages = backend.messages;
+    final messages = backend.timelineMessages;
     final receipts = receiptFrontiers(messages);
     final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
     final physicalPixel = 1 / MediaQuery.devicePixelRatioOf(context);
@@ -669,14 +696,23 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                       ),
                       if (widget.room.isDirect)
                         TimelineActivityStatus(
+                          status: widget.room.statusMessage,
                           backend: backend,
                           userId: widget.room.directUserId,
                           presence: widget.room.presence,
-                          fallback: Text(
-                            mobilePresenceLabel(widget.room.presence),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
+                          fallback: Row(
+                            children: [
+                              HeaderPresenceDot(presence: widget.room.presence),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  mobilePresenceLabel(widget.room.presence),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
                           ),
                         )
                       else
@@ -792,36 +828,27 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                     );
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'gallery', child: Text('Media and links')),
+              itemBuilder: (context) => [
                 PopupMenuItem(
                   value: 'saved',
                   child: Text('Saved and scheduled'),
                 ),
                 PopupMenuItem(value: 'pinned', child: Text('Pinned messages')),
-                PopupMenuItem(value: 'inbox', child: Text('Inbox')),
+
                 PopupMenuDivider(),
                 PopupMenuItem(value: 'members', child: Text('Members')),
-                PopupMenuItem(value: 'invite', child: Text('Invite member')),
-                PopupMenuItem(value: 'aliases', child: Text('Room aliases')),
-                PopupMenuItem(
-                  value: 'copy-link',
-                  child: Text('Copy room link'),
-                ),
+
                 PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'notifications',
                   child: Text('Notification settings'),
                 ),
                 PopupMenuItem(value: 'events', child: Text('Timeline events')),
-                PopupMenuItem(
-                  value: 'access',
-                  child: Text('Room access and shared settings'),
-                ),
-                PopupMenuItem(
-                  value: 'unread',
-                  child: Text('Toggle read / unread'),
-                ),
+                if (!widget.room.isDirect)
+                  PopupMenuItem(
+                    value: 'access',
+                    child: Text('Room access and shared settings'),
+                  ),
               ],
             ),
           ],
@@ -1083,7 +1110,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                   );
                   if (!mounted || edited == null) return;
                   final index = _attachments.indexOf(attachment);
-                  if (index >= 0) setState(() => _attachments[index] = edited);
+                  if (index >= 0) {
+                    setState(
+                      () => _attachments[index] = edited.copyWith(
+                        uploadTooLarge: false,
+                      ),
+                    );
+                  }
                 },
                 onToggleAttachmentSpoiler: (attachment) {
                   final index = _attachments.indexOf(attachment);
@@ -1169,9 +1202,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     if (text.isEmpty && _attachments.isEmpty) return;
     final roomId = widget.room.id;
     final submittedText = text;
-    final submittedRawText = _composer.text;
-    final submittedEmojiSpans = List<CustomEmojiTextSpan>.of(_customEmojiSpans);
-    final submittedAttachments = List<AttachmentDraft>.from(_attachments);
+    var submittedRawText = _composer.text;
+    var submittedEmojiSpans = List<CustomEmojiTextSpan>.of(_customEmojiSpans);
+    var submittedAttachments = List<AttachmentDraft>.from(_attachments);
     final reply = _reply;
     final edit = _edit;
     _composer.value = const TextEditingValue(
@@ -1197,32 +1230,24 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       _edit = null;
     });
     try {
-      await backend.enqueueRoomSend(roomId, () async {
-        if (submittedAttachments.isEmpty) {
-          await backend.sendMessage(
-            submittedText,
-            roomId: roomId,
-            formattedBody: formatted,
-            replyToMessageId: reply?.id,
-            editMessageId: edit?.id,
-          );
-        } else {
-          for (var index = 0; index < submittedAttachments.length; index++) {
-            final item = submittedAttachments[index];
-            await backend.sendAttachment(
-              item.copyWith(
-                caption: index == 0 && submittedText.isNotEmpty
-                    ? submittedText
-                    : null,
-              ),
-              roomId: roomId,
-              replyToMessageId: index == 0 ? reply?.id : null,
-            );
-          }
-        }
-      });
+      await backend.submitComposerMessage(
+        roomId: roomId,
+        text: submittedText,
+        formattedBody: formatted,
+        attachments: submittedAttachments,
+        reply: reply,
+        editMessageId: edit?.id,
+      );
     } catch (error) {
       if (error is QueuedSendCancelled) return;
+      if (error is PartialComposerSendFailure) {
+        submittedAttachments = error.attachments;
+        submittedRawText = '';
+        submittedEmojiSpans = [];
+      }
+      if (error is AttachmentBudgetExceeded) {
+        submittedAttachments = error.attachments;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1310,7 +1335,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     );
     if (!mounted) return;
     if (choice is List<AttachmentDraft>) {
-      setState(() => _attachments.addAll(choice));
+      _addAttachments(choice);
       return;
     }
     if (choice == 'poll') {
@@ -1335,11 +1360,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       var total = 0;
       for (final file in files) {
         total += await file.length();
-        if (total > 64 * 1024 * 1024) {
+        if (total > attachmentReadBudget) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Select fewer items (64 MiB per selection).'),
+                content: Text(
+                  'Select fewer files to edit safely (256 MiB at a time).',
+                ),
               ),
             );
           }
@@ -1357,28 +1384,42 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
           ),
         );
       }
-      if (mounted) setState(() => _attachments.addAll(drafts));
+      _addAttachments(drafts);
       return;
     }
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: kIsWeb,
       type: FileType.any,
     );
     if (result == null || !mounted) return;
-    final drafts = result.files
-        .where((file) => file.bytes != null)
-        .map(
-          (file) => AttachmentDraft(
-            bytes: file.bytes!,
-            name: file.name,
-            mimeType:
-                lookupMimeType(file.name, headerBytes: file.bytes) ??
-                'application/octet-stream',
-            spoiler: false,
-          ),
-        );
-    setState(() => _attachments.addAll(drafts));
+    try {
+      validateAttachmentSelection(result.files.map((file) => file.size));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+      return;
+    }
+    final drafts = <AttachmentDraft>[];
+    for (var i = 0; i < result.files.length; i++) {
+      final file = result.files[i];
+      final bytes = file.bytes ?? await result.xFiles[i].readAsBytes();
+      drafts.add(
+        AttachmentDraft(
+          bytes: bytes,
+          name: file.name,
+          mimeType:
+              lookupMimeType(file.name, headerBytes: bytes) ??
+              'application/octet-stream',
+          spoiler: false,
+        ),
+      );
+    }
+    if (!mounted) return;
+    _addAttachments(drafts);
   }
 
   Future<void> _pasteClipboardImage() async {
@@ -1396,23 +1437,31 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
         ? await picker.pickVideo(source: ImageSource.camera)
         : await picker.pickImage(source: ImageSource.camera);
     if (file == null || !mounted) return;
+    try {
+      validateAttachmentSelection([await file.length()]);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+      return;
+    }
     final bytes = await file.readAsBytes();
     if (!mounted) return;
     final name = file.name.isEmpty
         ? '${video ? 'video' : 'photo'}-${DateTime.now().millisecondsSinceEpoch}'
         : file.name;
-    setState(() {
-      _attachments.add(
-        AttachmentDraft(
-          bytes: bytes,
-          name: name,
-          mimeType:
-              lookupMimeType(name, headerBytes: bytes) ??
-              (video ? 'video/mp4' : 'image/jpeg'),
-          spoiler: false,
-        ),
-      );
-    });
+    _addAttachments([
+      AttachmentDraft(
+        bytes: bytes,
+        name: name,
+        mimeType:
+            lookupMimeType(name, headerBytes: bytes) ??
+            (video ? 'video/mp4' : 'image/jpeg'),
+        spoiler: false,
+      ),
+    ]);
   }
 
   Future<void> _showEmojiPicker() async {
@@ -1715,319 +1764,356 @@ class _MobileMessageRow extends StatelessWidget {
         color: Theme.of(context).colorScheme.primaryContainer,
         child: const Icon(Icons.reply),
       ),
-      child: InkWell(
-        onLongPress: () => _showActions(context),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color:
-                message.pingedCurrentUser ||
-                    message.hasVisualMention ||
-                    (albumMessages?.any(
-                          (m) => m.pingedCurrentUser || m.hasVisualMention,
-                        ) ??
-                        false)
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.11)
-                : highlighted
-                ? context.deltiecord.hover
-                : Colors.transparent,
-            border:
-                message.pingedCurrentUser ||
-                    message.hasVisualMention ||
-                    (albumMessages?.any(
-                          (m) => m.pingedCurrentUser || m.hasVisualMention,
-                        ) ??
-                        false)
-                ? Border(
-                    left: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 3,
-                    ),
-                  )
-                : null,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-            child: _MobileMessageBodyRow(
-              message: message,
-              eligible: !grouped && albumMessages == null,
-              children: [
-                SizedBox(
-                  width: 40,
-                  child: grouped
-                      ? null
-                      : Padding(
-                          padding: EdgeInsets.only(
-                            top: message.reply == null ? 0 : 22,
-                          ),
-                          child: GestureDetector(
-                            onTap: onProfile,
-                            child: MobileAvatar(
-                              bytes: message.avatarBytes,
-                              autoplay:
-                                  backend.preferences.animateTimelineAvatars,
-                              fallback: message.sender,
-                              size: 40,
-                            ),
-                          ),
+      child: TripleTapEdit(
+        onEdit:
+            message.own &&
+                !message.pending &&
+                !message.failed &&
+                !message.redacted
+            ? onEdit
+            : null,
+        child: Opacity(
+          opacity: message.pending ? .55 : 1,
+          child: InkWell(
+            onLongPress: () => _showActions(context),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color:
+                    message.pingedCurrentUser ||
+                        message.hasVisualMention ||
+                        (albumMessages?.any(
+                              (m) => m.pingedCurrentUser || m.hasVisualMention,
+                            ) ??
+                            false)
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.11)
+                    : highlighted
+                    ? context.deltiecord.hover
+                    : Colors.transparent,
+                border:
+                    message.pingedCurrentUser ||
+                        message.hasVisualMention ||
+                        (albumMessages?.any(
+                              (m) => m.pingedCurrentUser || m.hasVisualMention,
+                            ) ??
+                            false)
+                    ? Border(
+                        left: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 3,
                         ),
+                      )
+                    : null,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    key: ValueKey('mobile-message-content-${message.id}'),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (message.reply case final reply?)
-                        Transform.translate(
-                          offset: const Offset(-48, 0),
-                          child: InkWell(
-                            key: ValueKey('mobile-reply-${message.id}'),
-                            onTap: () => onJumpToReply(reply.eventId),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
+                child: _MobileMessageBodyRow(
+                  message: message,
+                  eligible: !grouped && albumMessages == null,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      child: grouped
+                          ? null
+                          : Padding(
+                              padding: EdgeInsets.only(
+                                top: message.reply == null ? 0 : 22,
+                              ),
+                              child: GestureDetector(
+                                onTap: onProfile,
+                                child: MobileAvatar(
+                                  bytes: message.avatarBytes,
+                                  autoplay: backend
+                                      .preferences
+                                      .animateTimelineAvatars,
+                                  fallback: message.sender,
+                                  size: 40,
+                                ),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        key: ValueKey('mobile-message-content-${message.id}'),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (message.reply case final reply?)
+                            Transform.translate(
+                              offset: const Offset(-48, 0),
+                              child: InkWell(
+                                key: ValueKey('mobile-reply-${message.id}'),
+                                onTap: () => onJumpToReply(reply.eventId),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: Row(
+                                    children: [
+                                      CustomPaint(
+                                        size: const Size(40, 20),
+                                        painter: _MobileReplyConnector(
+                                          color: context.deltiecord.muted,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Flexible(
+                                        child: Text.rich(
+                                          TextSpan(
+                                            children: [
+                                              TextSpan(
+                                                text: '${reply.sender}  ',
+                                                style: TextStyle(
+                                                  color:
+                                                      reply.senderColor == null
+                                                      ? null
+                                                      : Color(
+                                                          reply.senderColor!,
+                                                        ),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              TextSpan(
+                                                text: reply.body.replaceAll(
+                                                  '\n',
+                                                  ' ',
+                                                ),
+                                                style: TextStyle(
+                                                  color:
+                                                      context.deltiecord.muted,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (!grouped ||
+                              HeaderMessageMetadata.has(context, message.id))
+                            GestureDetector(
+                              onTap: onProfile,
                               child: Row(
                                 children: [
-                                  CustomPaint(
-                                    size: const Size(40, 20),
-                                    painter: _MobileReplyConnector(
+                                  Flexible(
+                                    child: Text(
+                                      message.sender,
+                                      style: TextStyle(
+                                        color: message.senderColor == null
+                                            ? null
+                                            : Color(message.senderColor!),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text(
+                                    _mobileMessageTimestamp(
+                                      context,
+                                      message.timestamp,
+                                      use24HourTime:
+                                          backend.preferences.use24HourTime,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 11,
                                       color: context.deltiecord.muted,
                                     ),
                                   ),
-                                  const SizedBox(width: 5),
                                   Flexible(
-                                    child: Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: '${reply.sender}  ',
-                                            style: TextStyle(
-                                              color: reply.senderColor == null
-                                                  ? null
-                                                  : Color(reply.senderColor!),
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: reply.body.replaceAll(
-                                              '\n',
-                                              ' ',
-                                            ),
-                                            style: TextStyle(
-                                              color: context.deltiecord.muted,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12),
+                                    child: HeaderMessageMetadata(
+                                      messageId: message.id,
                                     ),
                                   ),
+                                  if (message.pending) ...[
+                                    const SizedBox(width: 5),
+                                    const SizedBox.square(
+                                      dimension: 10,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                          ),
-                        ),
-                      if (!grouped ||
-                          HeaderMessageMetadata.has(context, message.id))
-                        GestureDetector(
-                          onTap: onProfile,
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  message.sender,
-                                  style: TextStyle(
-                                    color: message.senderColor == null
-                                        ? null
-                                        : Color(message.senderColor!),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+                          if (!grouped ||
+                              HeaderMessageMetadata.has(context, message.id))
+                            const SizedBox(height: 2),
+                          if (!message.redacted &&
+                              message.poll == null &&
+                              albumMessages == null &&
+                              message.body.isNotEmpty)
+                            KeyedSubtree(
+                              key: ValueKey(
+                                'mobile-message-body-${message.id}',
                               ),
-                              const SizedBox(width: 7),
-                              Text(
-                                _mobileMessageTimestamp(
-                                  context,
-                                  message.timestamp,
-                                  use24HourTime:
-                                      backend.preferences.use24HourTime,
-                                ),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: context.deltiecord.muted,
-                                ),
-                              ),
-                              Flexible(
-                                child: HeaderMessageMetadata(
-                                  messageId: message.id,
-                                ),
-                              ),
-                              if (message.pending) ...[
-                                const SizedBox(width: 5),
-                                const SizedBox.square(
-                                  dimension: 10,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      if (!grouped ||
-                          HeaderMessageMetadata.has(context, message.id))
-                        const SizedBox(height: 2),
-                      if (!message.redacted &&
-                          message.poll == null &&
-                          albumMessages == null &&
-                          message.body.isNotEmpty)
-                        KeyedSubtree(
-                          key: ValueKey('mobile-message-body-${message.id}'),
-                          child: message.formattedBody != null
-                              ? MatrixHtmlText(
-                                  trailing: messageMetadata(
-                                    context,
-                                    message,
-                                    showReceipt: showReceipt,
-                                    onReaders: () => _showReaders(context),
-                                  ),
-                                  html: message.formattedBody!,
-                                  fallback: message.body,
-                                  selectable: false,
-                                  backend: backend,
-                                  onCustomEmojiTap: (emoji) =>
-                                      showStickerPackForEmoji(
+                              child: message.formattedBody != null
+                                  ? MatrixHtmlText(
+                                      trailing: messageMetadata(
                                         context,
-                                        backend,
-                                        emoji,
+                                        message,
+                                        showReceipt: showReceipt,
+                                        onReaders: () => _showReaders(context),
                                       ),
-                                )
-                              : MatrixPlainText(
-                                  trailing: messageMetadata(
-                                    context,
-                                    message,
-                                    showReceipt: showReceipt,
-                                    onReaders: () => _showReaders(context),
-                                  ),
-                                  text: message.body,
-                                  selectable: false,
+                                      html: message.formattedBody!,
+                                      fallback: message.body,
+                                      selectable: false,
+                                      backend: backend,
+                                      onCustomEmojiTap: (emoji) =>
+                                          showStickerPackForEmoji(
+                                            context,
+                                            backend,
+                                            emoji,
+                                          ),
+                                    )
+                                  : MatrixPlainText(
+                                      trailing: messageMetadata(
+                                        context,
+                                        message,
+                                        showReceipt: showReceipt,
+                                        onReaders: () => _showReaders(context),
+                                      ),
+                                      text: message.body,
+                                      selectable: false,
+                                    ),
+                            )
+                          else if (message.redacted)
+                            const Text(
+                              'Message deleted',
+                              style: TextStyle(fontStyle: FontStyle.italic),
+                            ),
+                          if (message.poll != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 5),
+                              child: MediaWithMessageMetadata(
+                                message: message,
+                                showReceipt: showReceipt,
+                                child: PollCard(
+                                  backend: backend,
+                                  message: message,
                                 ),
-                        )
-                      else if (message.redacted)
-                        const Text(
-                          'Message deleted',
-                          style: TextStyle(fontStyle: FontStyle.italic),
-                        ),
-                      if (message.poll != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: MediaWithMessageMetadata(
-                            message: message,
-                            showReceipt: showReceipt,
-                            child: PollCard(backend: backend, message: message),
-                          ),
-                        ),
-                      if (albumMessages case final album?)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: MediaWithMessageMetadata(
-                            message: message,
-                            showReceipt: showReceipt,
-                            album: album,
-                            receiptIds: receiptIds,
-                            child: MediaAlbumGrid(
-                              messages: album,
-                              height: 250,
-                              itemBuilder: (context, albumMessage) =>
-                                  MediaAlbumTile(
-                                    key: ValueKey(albumMessage.id),
-                                    backend: backend,
-                                    message: albumMessage,
-                                    onOpen: () => showDialog<void>(
-                                      context: context,
-                                      barrierColor: Colors.black,
-                                      builder: (_) => MobileMediaGallery(
+                              ),
+                            ),
+                          if (albumMessages case final album?)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 5),
+                              child: MediaWithMessageMetadata(
+                                message: message,
+                                showReceipt: showReceipt,
+                                album: album,
+                                receiptIds: receiptIds,
+                                child: MediaAlbumGrid(
+                                  messages: album,
+                                  height: 250,
+                                  itemBuilder: (context, albumMessage) =>
+                                      MediaAlbumTile(
+                                        key: ValueKey(albumMessage.id),
                                         backend: backend,
-                                        initialMessage: albumMessage,
+                                        message: albumMessage,
+                                        onOpen: () => showDialog<void>(
+                                          context: context,
+                                          barrierColor: Colors.black,
+                                          builder: (_) => MobileMediaGallery(
+                                            backend: backend,
+                                            initialMessage: albumMessage,
+                                          ),
+                                        ),
                                       ),
+                                ),
+                              ),
+                            )
+                          else if (backend.queuedAttachment(message.id)
+                              case final draft?)
+                            QueuedAttachmentPreview(draft: draft)
+                          else if (message.attachment != null)
+                            Padding(
+                              key: ValueKey(
+                                'mobile-message-attachment-${message.id}',
+                              ),
+                              padding: const EdgeInsets.only(top: 5),
+                              child: MediaWithMessageMetadata(
+                                message: message,
+                                enabled: message.body.isEmpty,
+                                showReceipt:
+                                    message.body.isEmpty && showReceipt,
+                                child: MobileAttachmentView(
+                                  backend: backend,
+                                  message: message,
+                                ),
+                              ),
+                            ),
+                          if (message.queued &&
+                              message.pending &&
+                              message.attachment != null)
+                            QueuedSendProgress(message: message),
+                          for (final preview in message.linkPreviews)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 5),
+                              child: MobileLinkPreviewCard(
+                                preview: preview,
+                                backend: backend,
+                              ),
+                            ),
+                          if (message.threadReplyCount > 0 ||
+                              message.threadRootId != null)
+                            TextButton.icon(
+                              onPressed: () =>
+                                  openDiscussion(context, backend, message),
+                              icon: Icon(
+                                message.threadUnread
+                                    ? Icons.mark_chat_unread_outlined
+                                    : Icons.forum_outlined,
+                                size: 16,
+                              ),
+                              label: Text(
+                                message.threadRootId != null
+                                    ? 'View discussion'
+                                    : '${message.threadReplyCount} replies',
+                              ),
+                            ),
+                          if (message.reactions.isNotEmpty)
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                for (final reaction in message.reactions)
+                                  ActionChip(
+                                    label: reaction.customEmoji == null
+                                        ? Text(
+                                            '${reaction.key} ${reaction.count}',
+                                          )
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CustomEmojiImage(
+                                                backend: backend,
+                                                emoji: reaction.customEmoji!,
+                                                size: 18,
+                                              ),
+                                              Text(' ${reaction.count}'),
+                                            ],
+                                          ),
+                                    onPressed: () => backend.toggleReaction(
+                                      message.id,
+                                      reaction.key,
+                                      customEmoji: reaction.customEmoji,
                                     ),
                                   ),
+                              ],
                             ),
-                          ),
-                        )
-                      else if (message.attachment != null)
-                        Padding(
-                          key: ValueKey(
-                            'mobile-message-attachment-${message.id}',
-                          ),
-                          padding: const EdgeInsets.only(top: 5),
-                          child: MediaWithMessageMetadata(
-                            message: message,
-                            enabled: message.body.isEmpty,
-                            showReceipt: message.body.isEmpty && showReceipt,
-                            child: MobileAttachmentView(
-                              backend: backend,
-                              message: message,
-                            ),
-                          ),
-                        ),
-                      for (final preview in message.linkPreviews)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: MobileLinkPreviewCard(
-                            preview: preview,
-                            backend: backend,
-                          ),
-                        ),
-                      if (message.threadReplyCount > 0 ||
-                          message.threadRootId != null)
-                        TextButton.icon(
-                          onPressed: () =>
-                              openDiscussion(context, backend, message),
-                          icon: Icon(
-                            message.threadUnread
-                                ? Icons.mark_chat_unread_outlined
-                                : Icons.forum_outlined,
-                            size: 16,
-                          ),
-                          label: Text(
-                            message.threadRootId != null
-                                ? 'View discussion'
-                                : '${message.threadReplyCount} replies',
-                          ),
-                        ),
-                      if (message.reactions.isNotEmpty)
-                        Wrap(
-                          spacing: 4,
-                          children: [
-                            for (final reaction in message.reactions)
-                              ActionChip(
-                                label: reaction.customEmoji == null
-                                    ? Text('${reaction.key} ${reaction.count}')
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CustomEmojiImage(
-                                            backend: backend,
-                                            emoji: reaction.customEmoji!,
-                                            size: 18,
-                                          ),
-                                          Text(' ${reaction.count}'),
-                                        ],
-                                      ),
-                                onPressed: () => backend.toggleReaction(
-                                  message.id,
-                                  reaction.key,
-                                  customEmoji: reaction.customEmoji,
-                                ),
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -2039,77 +2125,21 @@ class _MobileMessageRow extends StatelessWidget {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            if (message.failed)
-              ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('Retry send'),
-                onTap: () => Navigator.pop(context, 'retry'),
-              ),
-            if (message.failed || message.pending)
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Discard failed send'),
-                onTap: () => Navigator.pop(context, 'discard'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.reply),
-              title: const Text('Reply'),
-              onTap: () => Navigator.pop(context, 'reply'),
+      builder: (sheet) => SafeArea(
+        child: MessageActionList(
+          message: message,
+          actions: messageActionOrder(
+            message,
+            canEdit: onEdit != null,
+            canPin: backend.canChangeRoomState(
+              backend.selectedRoom?.id ?? '',
+              'm.room.pinned_events',
             ),
-            if (!message.pending && !message.failed)
-              ListTile(
-                leading: const Icon(Icons.forum_outlined),
-                title: const Text('Open discussion'),
-                onTap: () => Navigator.pop(context, 'thread'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.add_reaction_outlined),
-              title: const Text('React'),
-              onTap: () => Navigator.pop(context, 'react'),
-            ),
-            if (onEdit != null)
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-            if (message.canRedact)
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete'),
-                onTap: () => Navigator.pop(context, 'delete'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copy text'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
-            ListTile(
-              leading: Icon(
-                message.bookmarked ? Icons.bookmark : Icons.bookmark_border,
-              ),
-              title: Text(
-                message.bookmarked ? 'Remove bookmark' : 'Save message',
-              ),
-              onTap: () => Navigator.pop(context, 'bookmark'),
-            ),
-            if (message.canRedact)
-              ListTile(
-                leading: Icon(
-                  message.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-                title: Text(message.pinned ? 'Unpin message' : 'Pin message'),
-                onTap: () => Navigator.pop(context, 'pin'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('Copy event link'),
-              onTap: () => Navigator.pop(context, 'link'),
-            ),
-          ],
+          ),
+          onThread: !message.pending && !message.failed
+              ? () => Navigator.pop(sheet, 'thread')
+              : null,
+          onAction: (action) => Navigator.pop(sheet, action.name),
         ),
       ),
     );
@@ -2125,7 +2155,27 @@ class _MobileMessageRow extends StatelessWidget {
       case 'edit':
         onEdit?.call();
       case 'delete':
-        await backend.redactMessage(message.id);
+        if (!message.own || !context.mounted) return;
+        final yes = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+            title: const Text('Delete message?'),
+            content: const Text('Delete this message for everyone?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (yes == true) await backend.redactMessage(message.id);
+      case 'unread':
+        await backend.markMessageUnread(message.id);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: message.body));
       case 'link':
@@ -2731,6 +2781,26 @@ class _PendingAttachmentPreview extends StatelessWidget {
                       Icons.visibility_off_outlined,
                       color: Colors.white,
                       semanticLabel: 'Spoiler',
+                    ),
+                  ),
+                ),
+              ),
+            if (attachment.uploadTooLarge)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.error,
+                        width: 3,
+                      ),
+                      borderRadius: DeltiecordCorners.borderRadius,
+                    ),
+                    alignment: Alignment.bottomLeft,
+                    child: const Icon(
+                      Icons.error,
+                      color: Colors.red,
+                      semanticLabel: 'Too big. Edit compression.',
                     ),
                   ),
                 ),

@@ -10,14 +10,15 @@ import '../services/android_video_thumbnail.dart';
 
 import 'matrix_state_types.dart';
 import 'encrypted_android_database.dart';
+import 'encrypted_desktop_database.dart';
 import 'rtc/rtc_matrix_client.dart';
 import 'rtc/rtc_protocol.dart';
 
 /// Creates the Matrix SDK client and its platform-appropriate persistent store.
 ///
 /// Session tokens, Olm state, and cached room keys stay in the application data
-/// directory rather than the repository. Desktop SQLite uses the FFI factory;
-/// Android uses SQLCipher through the same SDK database abstraction.
+/// directory rather than the repository. Android and desktop use SQLCipher
+/// through the same SDK database abstraction.
 Future<Client> createMatrixClient() async {
   final dataDirectory = await getDeltiecordDataDirectory();
   await dataDirectory.create(recursive: true);
@@ -28,10 +29,10 @@ Future<Client> createMatrixClient() async {
   DatabaseFactory? ffiFactory;
   if (Platform.isAndroid) {
     database = await openEncryptedAndroidDatabase(databasePath);
-  } else if (Platform.isLinux || Platform.isWindows) {
+  } else if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     sqfliteFfiInit();
     ffiFactory = databaseFactoryFfi;
-    database = await ffiFactory.openDatabase(databasePath);
+    database = await openEncryptedDesktopDatabase(databasePath);
   } else {
     database = await sqflite.openDatabase(databasePath);
   }
@@ -41,7 +42,7 @@ Future<Client> createMatrixClient() async {
     'deltiecord',
     database: database,
     sqfliteFactory: ffiFactory,
-    fileStorageLocation: dataDirectory.uri,
+    // Media uses SeND's protected cache rather than SDK loose plaintext files.
   );
   return RtcMatrixClient(
     'Deltiecord', // Persistent SDK client ID; preserve existing sessions.

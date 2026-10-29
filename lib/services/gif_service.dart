@@ -278,8 +278,8 @@ class GifService {
       final file = _favoritesFile;
       final text = kIsWeb
           ? await BrowserPrivateStore.read('gifs')
-          : await file!.exists()
-          ? await file.readAsString()
+          : await privateFileExists(file!)
+          ? await readPrivateTextFile(file)
           : null;
       if (text == null) {
         _favorites = [];
@@ -291,7 +291,9 @@ class GifService {
             .toList();
       }
     } catch (_) {
-      _favorites = [];
+      // Do not let a later favourite write replace an unreadable source.
+      _favorites = null;
+      throw StateError('Could not open saved GIFs. Existing data was kept.');
     }
     return List.unmodifiable(_favorites!);
   }

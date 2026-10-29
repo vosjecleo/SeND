@@ -216,7 +216,8 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_error != null) Text(_error!),
-              if (!widget.isSpace)
+              if (!widget.isSpace &&
+                  widget.backend.canMarkRoomDirect(widget.roomId))
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Treat as direct message'),

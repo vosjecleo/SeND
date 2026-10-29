@@ -57,10 +57,12 @@ class ThreadView extends StatefulWidget {
 
 class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   final _draft = TextEditingController();
+  final _focus = FocusNode();
   final _scroll = ScrollController();
   ThreadSession? _session;
   String? _error;
   ChatMessage? _editing;
+  ChatMessage? _replying;
   bool _sending = false;
 
   @override
@@ -146,11 +148,13 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
         value.plainText,
         formattedBody: value.html,
         editMessageId: _editing?.id,
+        replyToMessageId: _replying?.id,
       );
       if (mounted) {
         setState(() {
           if (_draft.text == sentText) _draft.clear();
           _editing = null;
+          _replying = null;
         });
       }
     });
@@ -166,6 +170,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
       } else {
         final result = await FilePicker.pickFiles(allowMultiple: true);
         if (result == null) return;
+        validateAttachmentSelection(result.files.map((file) => file.size));
         for (var i = 0; i < result.files.length; i++) {
           final file = result.files[i];
           final bytes = file.bytes ?? await result.xFiles[i].readAsBytes();
@@ -181,7 +186,8 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
           );
         }
       }
-      for (final draft in drafts) {
+      final prepared = await widget.backend.prepareAttachmentsForSend(drafts);
+      for (final draft in prepared) {
         if (!mounted) return;
         await session.attach(draft);
       }
@@ -204,50 +210,82 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   }
 
   Future<void> _messageActions(ChatMessage message) async {
-    final action = await showModalBottomSheet<String>(
+    final action = await showModalBottomSheet<MessageAction>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.add_reaction_outlined),
-              title: const Text('React'),
-              onTap: () => Navigator.pop(context, 'react'),
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: MessageActionList(
+          message: message,
+          actions: messageActionOrder(
+            message,
+            canEdit: message.attachment == null,
+            canPin: widget.backend.canChangeRoomState(
+              widget.roomId,
+              'm.room.pinned_events',
             ),
-            if (message.own && message.attachment == null)
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-            if (message.canRedact)
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete message'),
-                onTap: () => Navigator.pop(context, 'delete'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copy text'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
-          ],
+          ),
+          onAction: (action) => Navigator.pop(sheet, action),
         ),
       ),
     );
-    if (!mounted) return;
+    if (!mounted || action == null) return;
     switch (action) {
-      case 'react':
+      case MessageAction.reply:
+        setState(() {
+          _replying = message;
+          _editing = null;
+        });
+        _focus.requestFocus();
+      case MessageAction.react:
         await _react(message);
-      case 'edit':
+      case MessageAction.edit:
         setState(() {
           _editing = message;
+          _replying = null;
           _draft.text = message.body;
         });
-      case 'delete':
-        await _run(() => widget.backend.redactMessage(message.id));
-      case 'copy':
+        _focus.requestFocus();
+      case MessageAction.delete:
+        if (!message.own) return;
+        final yes = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+            title: const Text('Delete message?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (yes == true) {
+          await _run(() => widget.backend.redactMessage(message.id));
+        }
+      case MessageAction.copy:
         await Clipboard.setData(ClipboardData(text: message.body));
+      case MessageAction.unread:
+        await _run(() => widget.backend.markMessageUnread(message.id));
+      case MessageAction.pin:
+        await _run(() => widget.backend.toggleMessagePinned(message.id));
+      case MessageAction.bookmark:
+        await _run(() => widget.backend.toggleMessageBookmarked(message.id));
+      case MessageAction.link:
+        await Clipboard.setData(
+          ClipboardData(
+            text: 'https://matrix.to/#/${widget.roomId}/${message.id}',
+          ),
+        );
+      case MessageAction.retry:
+        await _run(() => widget.backend.retryMessage(message.id));
+      case MessageAction.discard:
+        await _run(() => widget.backend.cancelPendingMessage(message.id));
+      case MessageAction.thread:
+        break;
     }
   }
 
@@ -258,6 +296,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
     _session?.removeListener(_changed);
     _session?.dispose();
     _draft.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -364,7 +403,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                                         _draft.text = message.body;
                                       })
                                     : null,
-                                onDelete: message.canRedact
+                                onDelete: message.own && message.canRedact
                                     ? () => _run(
                                         () => widget.backend.redactMessage(
                                           message.id,
@@ -432,6 +471,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                 }),
               ),
             ),
+          if (_replying case final reply?)
+            ListTile(
+              dense: true,
+              title: Text('Replying to ${reply.sender}'),
+              trailing: IconButton(
+                tooltip: 'Cancel reply',
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _replying = null),
+              ),
+            ),
           SafeArea(
             top: false,
             child: Padding(
@@ -447,6 +496,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                   Expanded(
                     child: TextField(
                       controller: _draft,
+                      focusNode: _focus,
                       minLines: 1,
                       maxLines: 6,
                       decoration: const InputDecoration(

@@ -1,6 +1,6 @@
 import 'dart:js_interop';
 
-bool get historyIndexEncryptedAtRest => false;
+bool get historyIndexEncryptedAtRest => true;
 
 @JS('sendHistoryIndexCall')
 external JSPromise<JSAny?> _request(
@@ -48,13 +48,15 @@ class HistoryStore {
         'preserve': true,
       }) ==
       true;
-  Future<Map<String, Object?>?> loadDownloadState() async {
-    final value = await _call('downloadState');
+  Future<Map<String, Object?>?> loadDownloadState({int slot = 1}) async {
+    final value = await _call('downloadState', {'slot': slot});
     return value == null ? null : Map<String, Object?>.from(value as Map);
   }
 
-  Future<void> saveDownloadState(Map<String, Object?>? value) async =>
-      _call('saveDownloadState', {'state': value});
+  Future<void> saveDownloadState(
+    Map<String, Object?>? value, {
+    int slot = 1,
+  }) async => _call('saveDownloadState', {'state': value, 'slot': slot});
   Future<List<Map<String, Object?>>> readRows(List<String> ids) async =>
       (await _call('rows', {'ids': ids}) as List)
           .map((value) => Map<String, Object?>.from(value as Map))

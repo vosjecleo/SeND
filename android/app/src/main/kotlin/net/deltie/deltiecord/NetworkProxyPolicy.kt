@@ -8,8 +8,11 @@ import org.json.JSONObject
 /** Native Java sockets cannot use Flutter's SOCKS transport. */
 internal object NetworkProxyPolicy {
     fun blocked(context: Context): Boolean {
-        if (context.getSharedPreferences("send_network_privacy", Context.MODE_PRIVATE)
-                .getBoolean("block_direct", false)) return true
+        val policy = context.getSharedPreferences("send_network_privacy", Context.MODE_PRIVATE)
+        // Flutter commits this decision before changing proxy configuration.
+        // An explicit false is authoritative too: the detailed configuration
+        // file is now encrypted and must not be parsed as native JSON.
+        if (policy.contains("block_direct")) return policy.getBoolean("block_direct", true)
         // Boot receivers can run before Flutter (including after a restore).
         // This file contains routing metadata only, never proxy passwords.
         val config = File(context.filesDir, "deltiecord/network_proxy.json")

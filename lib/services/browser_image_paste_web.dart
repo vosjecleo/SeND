@@ -2,6 +2,7 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 import 'package:mime/mime.dart';
 import '../models/chat_models.dart';
+import 'attachment_admission.dart';
 
 /// Capture actual user paste data synchronously, before Flutter's hidden input
 /// consumes it. Safari grants access to these File objects during the gesture;
@@ -31,8 +32,8 @@ void Function() listenBrowserImagePaste({
     event.stopImmediatePropagation();
     if (files.length > 20 ||
         files.fold<int>(0, (total, file) => total + file.size) >
-            64 * 1024 * 1024) {
-      onError('Paste up to 20 images (64 MiB total).');
+            attachmentReadBudget) {
+      onError('Paste up to 20 images (256 MiB to edit safely).');
       return;
     }
     () async {

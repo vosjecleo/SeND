@@ -37,6 +37,19 @@ source reference and bundled source map are in `web/web-video/`. It is loaded
 locally when a user prepares a video, not from a third-party CDN. The build
 recipe and pinned npm lockfile are in `tool/web-video/`.
 
+Protected desktop databases use SQLCipher Community 4.19.0. PWA search uses
+SQLite3MultipleCiphers 2.5.0, built with its authenticated ChaCha20 cipher.
+Both come from checksum-pinned sqlite3.dart 3.6.0 assets. Build recipes are at
+https://github.com/simolus3/sqlite3.dart/tree/sqlite3-3.6.0 . SQLCipher's OpenSSL
+dependency and these libraries' licence texts are bundled in
+`assets/legal/sqlite-storage-licenses.txt`; web builds also include
+`sqlite-storage-licenses.txt` beside the WASM asset.
+
+The protected browser Matrix database adapter is derived from Matrix Dart SDK
+10.1.0, copyright Famedly GmbH, under AGPL-3.0-or-later. Its attribution is retained
+in `lib/matrix/web_database/`. AES-GCM file/record protection uses `cryptography`
+or browser WebCrypto; these are not custom message-encryption protocols.
+
 Packaging tools such as linuxdeploy and the AppImage runtime are build-time
 tools and are not incorporated as application source. Their upstream projects
 and licences are listed in `CREDITS.md`.

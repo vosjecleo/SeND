@@ -62,29 +62,34 @@ extension _MatrixRoomMetadata on MatrixBackend {
     }
   }
 
-  RoomSummary _roomSummary(Room room) => RoomSummary(
-    id: room.id,
-    name: room.getLocalizedDisplayname(),
-    lastMessage: _eventPreview(room.lastEvent),
-    lastActivityAt: room.lastEvent?.originServerTs,
-    unreadCount: room.notificationCount,
-    highlightCount: room.highlightCount,
-    usesChannelIcon: !room.isSpace && _spaceForRoom(room) != null,
-    presentation: _presentationFor(room),
-    voiceParticipants: _voiceParticipants(room),
-    avatarBytes: _avatarBytes[room.id],
-    topic: room.topic,
-    isDirect: room.isDirectChat,
-    directUserId: room.directChatMatrixID,
-    // ignore: deprecated_member_use
-    statusMessage: _matrix.presences[room.directChatMatrixID]?.statusMsg,
-    encrypted: room.encrypted,
-    presence: _roomPresence(room),
-    notificationMode: _notificationModeFor(room),
-    mutedUntil: _temporaryRoomMutes[room.id],
-    markedUnread: room.markedUnread,
-    hasUnreadMessages: room.hasNewMessages,
-  );
+  RoomSummary _roomSummary(Room room) {
+    final isChannel = !room.isSpace && _spaceForRoom(room) != null;
+    final isDirect = !room.isSpace && !isChannel && room.isDirectChat;
+    final peer = isDirect ? room.directChatMatrixID : null;
+    return RoomSummary(
+      id: room.id,
+      name: room.getLocalizedDisplayname(),
+      lastMessage: _eventPreview(room.lastEvent),
+      lastActivityAt: room.lastEvent?.originServerTs,
+      unreadCount: room.notificationCount,
+      highlightCount: room.highlightCount,
+      usesChannelIcon: isChannel,
+      presentation: _presentationFor(room),
+      voiceParticipants: _voiceParticipants(room),
+      avatarBytes: _avatarBytes[room.id],
+      topic: room.topic,
+      isDirect: isDirect,
+      directUserId: peer,
+      // ignore: deprecated_member_use
+      statusMessage: peer == null ? null : _matrix.presences[peer]?.statusMsg,
+      encrypted: room.encrypted,
+      presence: isChannel ? UserPresence.offline : _roomPresence(room),
+      notificationMode: _notificationModeFor(room),
+      mutedUntil: _temporaryRoomMutes[room.id],
+      markedUnread: room.markedUnread,
+      hasUnreadMessages: room.hasNewMessages,
+    );
+  }
 
   UserPresence _roomPresence(Room room) {
     var result = UserPresence.offline;
