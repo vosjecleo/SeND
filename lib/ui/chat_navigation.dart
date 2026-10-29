@@ -1625,95 +1625,15 @@ class _ChannelCategorySection extends StatelessWidget {
 
   static const double _gripColumnWidth = 26;
 
-  Future<void> _rename(BuildContext context) async {
-    final current = category;
-    if (current == null) return;
-    final controller = TextEditingController(text: current.name);
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename category'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: Navigator.of(context).pop,
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    final value = controller.text.trim();
-    controller.dispose();
-    if (save == true && value.isNotEmpty) {
-      await backend.renameChannelCategory(current.id, value);
-    }
-  }
-
   Future<void> _showContextMenu(BuildContext context, Offset position) async {
     final current = category;
     if (current == null || !canArrange) return;
-    final screen = MediaQuery.sizeOf(context);
-    final action = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & const Size(1, 1),
-        Offset.zero & screen,
-      ),
-      items: [
-        const PopupMenuItem(
-          value: 'rename',
-          child: _RoomContextMenuEntry(
-            icon: Icons.edit_outlined,
-            label: 'Rename category',
-          ),
-        ),
-        PopupMenuItem(
-          value: 'up',
-          enabled: (categoryIndex ?? 0) > 0,
-          child: const _RoomContextMenuEntry(
-            icon: Icons.arrow_upward,
-            label: 'Move up',
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'down',
-          child: _RoomContextMenuEntry(
-            icon: Icons.arrow_downward,
-            label: 'Move down',
-          ),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'delete',
-          child: _RoomContextMenuEntry(
-            icon: Icons.delete_outline,
-            label: 'Delete category',
-            color: Theme.of(context).colorScheme.error,
-          ),
-        ),
-      ],
+    await showChannelCategoryMenu(
+      context,
+      backend,
+      current,
+      position: position,
     );
-    if (!context.mounted || action == null) return;
-    switch (action) {
-      case 'rename':
-        await _rename(context);
-      case 'up':
-        await backend.reorderChannelCategory(
-          current.id,
-          max(0, (categoryIndex ?? 0) - 1),
-        );
-      case 'down':
-        await backend.reorderChannelCategory(
-          current.id,
-          (categoryIndex ?? 0) + 1,
-        );
-      case 'delete':
-        await backend.deleteChannelCategory(current.id);
-    }
   }
 
   @override

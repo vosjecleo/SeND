@@ -68,12 +68,16 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$repo_root"
 
-for command in curl git jq scp sha256sum ssh stat; do
+for command in curl git jq scp sha256sum ssh stat openssl python3; do
   command -v "$command" >/dev/null || {
     printf 'Required command is unavailable: %s\n' "$command" >&2
     exit 1
   }
 done
+export SEND_RELEASE_SIGNING_KEY_FILE="${SEND_RELEASE_SIGNING_KEY_FILE:-/home/cleo/.local/share/send-release-signing/ed25519-release-v1.pem}"
+test -r "$SEND_RELEASE_SIGNING_KEY_FILE" || {
+  echo 'Release signing key unavailable. Set SEND_RELEASE_SIGNING_KEY_FILE.' >&2; exit 1;
+}
 
 [[ "$(git branch --show-current)" == main ]] || {
   printf '%s\n' 'Releases must be published from main.' >&2
@@ -185,6 +189,9 @@ done
   printf '\nTimed out waiting for GitHub release %s.\n' "$tag" >&2
   exit 1
 }
+curl --fail --silent --show-error --location --retry 3 --proto '=https' --tlsv1.2 \
+  "$base_url/SHA256SUMS.sig" -o "$temporary/SHA256SUMS.sig"
+python3 packaging/sign-release.py "$temporary/SHA256SUMS" "$temporary/SHA256SUMS.sig" --verify
 
 artifacts=(
   "SeND-${release_id}-windows-x64-portable.zip"
@@ -221,8 +228,14 @@ done
 current_manifest="$temporary/current-releases.json"
 curl --fail --silent --show-error --location --connect-timeout 15 --max-time 60 --retry 3 --proto '=https' --tlsv1.2 \
   https://deltie.net/SeND/releases.json -o "$current_manifest"
+if [[ "${SEND_RELEASE_BOOTSTRAP:-0}" != 1 ]]; then
+  curl --fail --silent --show-error --location --retry 3 --proto '=https' --tlsv1.2 \
+    https://deltie.net/SeND/releases.json.sig -o "$temporary/current-releases.json.sig"
+  python3 packaging/sign-release.py "$current_manifest" "$temporary/current-releases.json.sig" --verify --manifest
+fi
 jq -e '.platforms.android and .platforms.linux and .platforms.windows' \
   "$current_manifest" >/dev/null
+previous_manifest_hash="$(sha256sum "$current_manifest" | cut -d' ' -f1)"
 
 asset_json() {
   local pattern="$1" file name digest size
@@ -288,18 +301,20 @@ jq --arg channel "$channel" \
   .updated_at = $updated
 ' "$current_manifest" >"$temporary/releases.json"
 jq -e . "$temporary/releases.json" >/dev/null
+python3 packaging/sign-release.py "$temporary/releases.json" "$temporary/releases.json.sig" --manifest
+python3 packaging/sign-release.py "$temporary/releases.json" "$temporary/releases.json.sig" --verify --manifest
 
 remote_root='/srv/storage/www/deltie/cord'
 remote_stage="$remote_root/.publish-$tag-$$"
 ssh -o BatchMode=yes deltie "mkdir -m 700 -- '$remote_stage'"
 cleanup_remote() { ssh -o BatchMode=yes deltie "rm -rf -- '$remote_stage'" >/dev/null 2>&1 || true; }
 trap 'cleanup_remote; rm -rf -- "$temporary"' EXIT
-scp -q -- "$temporary/SHA256SUMS" "$temporary/releases.json" \
+scp -q -- "$temporary/SHA256SUMS" "$temporary/SHA256SUMS.sig" "$temporary/releases.json" "$temporary/releases.json.sig" \
   "server/website/index.html" "server/website/downloads.js" \
   "packaging/deploy-web.py" "${artifacts[@]/#/$temporary/}" "deltie:$remote_stage/"
 
 ssh -o BatchMode=yes deltie "bash -s" -- \
-  "$remote_root" "$remote_stage" "$version" "$build" "$channel" "$web_only" "${artifacts[@]}" <<'REMOTE'
+  "$remote_root" "$remote_stage" "$version" "$build" "$channel" "$web_only" "$previous_manifest_hash" "${artifacts[@]}" <<'REMOTE'
 set -euo pipefail
 remote_root="$1"
 stage="$2"
@@ -307,7 +322,12 @@ version="$3"
 build="$4"
 channel="$5"
 web_only="$6"
-shift 6
+previous_manifest_hash="$7"
+shift 7
+test "$(sha256sum "$remote_root/releases.json" | cut -d' ' -f1)" = "$previous_manifest_hash" || {
+  echo 'Release channels changed during staging. Nothing was deployed; retry publication.' >&2
+  exit 1
+}
 python3 "$stage/deploy-web.py" \
   "$stage/SeND-${version}+${build}-web.tar.gz" \
   /srv/storage/www/deltiecord-web "${version}+${build}"
@@ -315,6 +335,9 @@ archive="/srv/storage/releases-archive/deltiecord/${version}-b${build}"
 mkdir -p -- "$archive"
 if [[ -f "$remote_root/releases.json" ]]; then
   cp -- "$remote_root/releases.json" "$archive/releases.before.json"
+fi
+if [[ -f "$remote_root/releases.json.sig" ]]; then
+  cp -- "$remote_root/releases.json.sig" "$archive/releases.before.json.sig"
 fi
 if [[ -f "$remote_root/SHA256SUMS" ]]; then
   cp -- "$remote_root/SHA256SUMS" "$archive/SHA256SUMS.before"
@@ -340,7 +363,19 @@ if [[ "$web_only" == false ]]; then
   done
 fi
 install -m 0644 -- "$stage/SHA256SUMS" "$remote_root/SHA256SUMS"
-install -m 0644 -- "$stage/releases.json" "$remote_root/releases.json"
+install -m 0644 -- "$stage/SHA256SUMS.sig" "$remote_root/SHA256SUMS.sig"
+# Each file is atomically replaced. Readers seeing the brief pair mismatch
+# fail closed and can retry; they never trust unmatched metadata.
+for name in releases.json releases.json.sig; do
+  install -m 0644 -- "$stage/$name" "$remote_root/.$name.new"
+  mv -- "$remote_root/.$name.new" "$remote_root/$name"
+done
+for name in releases.json releases.json.sig; do
+  target=release-metadata.json
+  if [[ "$name" == *.sig ]]; then target=release-metadata.json.sig; fi
+  install -m 0644 -- "$stage/$name" "/srv/storage/www/deltiecord-web/current/.$target.new"
+  mv -- "/srv/storage/www/deltiecord-web/current/.$target.new" "/srv/storage/www/deltiecord-web/current/$target"
+done
 rm -rf -- "$stage"
 REMOTE
 

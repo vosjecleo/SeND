@@ -31,6 +31,7 @@ void main() {
         body: 'earlier reply',
         sendAt: earlier,
         replyToMessageId: r'$event',
+        threadRootId: r'$discussion',
       ),
     );
 
@@ -42,6 +43,8 @@ void main() {
     ]);
     expect(restored.messages.first.roomId, '!first:example.org');
     expect(restored.messages.first.replyToMessageId, r'$event');
+    expect(restored.messages.first.threadRootId, r'$discussion');
+    expect(restored.messages.last.threadRootId, isNull);
 
     await restored.remove('earlier');
     final afterRemoval = ScheduledMessageStore(file);

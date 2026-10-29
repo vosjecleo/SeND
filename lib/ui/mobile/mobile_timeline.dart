@@ -20,6 +20,7 @@ import 'package:mime/mime.dart';
 
 import '../../backend/chat_backend.dart';
 import '../chat_shell.dart' show openDiscussion;
+import '../threshold_feedback.dart';
 import '../../models/chat_models.dart';
 import '../../services/emoji_completion.dart';
 import '../../services/room_send_queue.dart';
@@ -681,7 +682,11 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             onTap: widget.onOpenDetails,
             child: Row(
               children: [
-                MobileRoomAvatar(room: widget.room, size: 40),
+                MobileRoomAvatar(
+                  room: widget.room,
+                  size: 40,
+                  showPresence: false,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -1746,24 +1751,12 @@ class _MobileMessageRow extends StatelessWidget {
         ),
       );
     }
-    return Dismissible(
-      key: ValueKey('swipe-${message.id}'),
+    return SwipeToReply(
+      messageId: message.id,
       // A cancelled drawer swipe must not leak through as a reply gesture on
       // the message beneath it.
-      direction: navigationGestureActive
-          ? DismissDirection.none
-          : DismissDirection.endToStart,
-      dismissThresholds: const {DismissDirection.endToStart: 0.15},
-      confirmDismiss: (_) async {
-        onReply();
-        return false;
-      },
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        color: Theme.of(context).colorScheme.primaryContainer,
-        child: const Icon(Icons.reply),
-      ),
+      enabled: !navigationGestureActive,
+      onReply: onReply,
       child: TripleTapEdit(
         onEdit:
             message.own &&
@@ -1776,6 +1769,7 @@ class _MobileMessageRow extends StatelessWidget {
           opacity: message.pending ? .55 : 1,
           child: InkWell(
             onLongPress: () => _showActions(context),
+            onSecondaryTap: () => _showActions(context),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color:

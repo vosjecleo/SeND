@@ -78,6 +78,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
           message.body,
           roomId: message.roomId,
           replyToMessageId: message.replyToMessageId,
+          threadRootEventId: message.threadRootId,
         );
         await _scheduledMessageStore.remove(message.id);
       } catch (_) {
@@ -94,6 +95,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     DateTime sendAt, {
     String? roomId,
     String? replyToMessageId,
+    String? threadRootEventId,
   }) async {
     final body = text.trim();
     final targetRoomId = roomId ?? _selectedRoomId;
@@ -104,6 +106,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         body,
         roomId: targetRoomId,
         replyToMessageId: replyToMessageId,
+        threadRootEventId: threadRootEventId,
       );
       return;
     }
@@ -115,6 +118,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         body: body,
         sendAt: instant,
         replyToMessageId: replyToMessageId,
+        threadRootId: threadRootEventId,
       ),
     );
     _scheduleNextQueuedMessage();
@@ -259,7 +263,11 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     _notifyBackendListeners();
   }
 
-  Future<void> _sendPoll(PollDraft draft, {String? roomId}) async {
+  Future<void> _sendPoll(
+    PollDraft draft, {
+    String? roomId,
+    String? threadRootEventId,
+  }) async {
     final question = draft.question.trim();
     final answers = draft.answers
         .map((answer) => answer.trim())
@@ -270,6 +278,28 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       throw ArgumentError('Add a question and at least two answers.');
     }
     await _prepareEncryptedSend(room);
+    if (threadRootEventId != null) {
+      final content = PollEventContent(
+        mText:
+            '$question\n${answers.asMap().entries.map((e) => '${e.key}. ${e.value}').join('\n')}',
+        pollStartContent: PollStartContent(
+          kind: draft.disclosed ? PollKind.disclosed : PollKind.undisclosed,
+          maxSelections: draft.maxSelections.clamp(1, answers.length),
+          question: PollQuestion(mText: question),
+          answers: [
+            for (var i = 0; i < answers.length; i++)
+              PollAnswer(id: 'deltiecord-${i + 1}', mText: answers[i]),
+          ],
+        ),
+      );
+      await room.sendEvent(
+        content.toJson(),
+        type: PollEventContent.startType,
+        threadRootEventId: threadRootEventId,
+        threadLastEventId: threadRootEventId,
+      );
+      return;
+    }
     await room.startPoll(
       question: question,
       answers: [
@@ -310,7 +340,11 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     await event.endPoll();
   }
 
-  Future<void> _sendSticker(StickerSummary sticker, {String? roomId}) async {
+  Future<void> _sendSticker(
+    StickerSummary sticker, {
+    String? roomId,
+    String? threadRootEventId,
+  }) async {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) return;
     final pack = _stickerPacks
@@ -320,22 +354,27 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         )
         .firstOrNull;
     await _prepareEncryptedSend(room);
-    final sentStickerId = await room.sendEvent({
-      'body': sticker.body ?? sticker.name,
-      'url': sticker.mxcUri.toString(),
-      'info': {
-        'mimetype': sticker.mimeType,
-        if (sticker.width != null) 'w': sticker.width,
-        if (sticker.height != null) 'h': sticker.height,
-      },
-      if (pack != null)
-        'net.deltiecord.sticker_pack': {
-          'id': pack.id,
-          'display_name': pack.name,
-          if (pack.sourceRoomId != null) 'room_id': pack.sourceRoomId,
-          if (pack.stateKey != null) 'state_key': pack.stateKey,
+    final sentStickerId = await room.sendEvent(
+      {
+        'body': sticker.body ?? sticker.name,
+        'url': sticker.mxcUri.toString(),
+        'info': {
+          'mimetype': sticker.mimeType,
+          if (sticker.width != null) 'w': sticker.width,
+          if (sticker.height != null) 'h': sticker.height,
         },
-    }, type: EventTypes.Sticker);
+        if (pack != null)
+          'net.deltiecord.sticker_pack': {
+            'id': pack.id,
+            'display_name': pack.name,
+            if (pack.sourceRoomId != null) 'room_id': pack.sourceRoomId,
+            if (pack.stateKey != null) 'state_key': pack.stateKey,
+          },
+      },
+      type: EventTypes.Sticker,
+      threadRootEventId: threadRootEventId,
+      threadLastEventId: threadRootEventId,
+    );
     if (sentStickerId != null) {
       unawaited(
         FavouriteReactionsStore.instance

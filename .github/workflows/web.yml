@@ -78,6 +78,7 @@ jobs:
           node tool/history_index_browser_test.mjs
           dart compile js tool/protected_web_storage_probe.dart -O1 -o .dart_tool/protected_web_storage_probe.js
           node tool/protected_web_storage_test.mjs
+          flutter test --no-pub --platform chrome test/release_signatures_test.dart
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
             sudo apt-get update
             sudo apt-get install -y ffmpeg

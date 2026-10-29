@@ -128,6 +128,18 @@ jobs:
           (cd release-assets && sha256sum -- * >SHA256SUMS)
           test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq "$expected_count"
 
+      - name: Sign release checksums
+        shell: bash
+        env:
+          SEND_RELEASE_SIGNING_KEY: ${{ secrets.SEND_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/send-release-key.pem"
+          trap 'rm -f -- "$key_file"' EXIT
+          python3 -c 'import os; from pathlib import Path; key=os.environ.get("SEND_RELEASE_SIGNING_KEY", ""); assert key, "Set SEND_RELEASE_SIGNING_KEY before publishing"; path=Path(os.environ["RUNNER_TEMP"])/"send-release-key.pem"; fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600); os.write(fd,key.encode()); os.close(fd)'
+          python3 packaging/sign-release.py release-assets/SHA256SUMS release-assets/SHA256SUMS.sig --key "$key_file"
+          python3 packaging/sign-release.py release-assets/SHA256SUMS release-assets/SHA256SUMS.sig --verify
+
       - name: Publish GitHub release
         shell: bash
         run: |

@@ -61,7 +61,8 @@ Future<String?> installedArtifactSuffix() async {
 }
 
 /// User-initiated, interactive Inno upgrade. No silent elevation/forced exit.
-/// TLS manifest + SHA-256 protect transfer integrity, not publisher signing.
+/// The update checker authenticates metadata before exposing artifact hashes.
+/// The installer still checks size/hash and uses the OS elevation prompt.
 Future<void> installWindowsUpdate(ReleaseArtifact artifact) async {
   if (!Platform.isWindows ||
       await installedArtifactSuffix() != '-windows-x64-setup.exe' ||

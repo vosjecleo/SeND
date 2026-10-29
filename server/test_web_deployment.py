@@ -48,6 +48,19 @@ class WebDeploymentTests(unittest.TestCase):
                     deployment.deploy(archive, root / 'web', '0.9.30+99')
                 self.assertFalse((root / 'web/current').exists())
 
+    def test_web_only_patch_keeps_same_origin_signed_metadata(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            archive = root / 'web.tar.gz'
+            self.archive(archive)
+            deployment.deploy(archive, root / 'web', '0.9.30+99')
+            manifest, signature = b'{"fixture":"signed"}\n', b'{"signature":"fixture"}\n'
+            (root / 'web/current/release-metadata.json').write_bytes(manifest)
+            (root / 'web/current/release-metadata.json.sig').write_bytes(signature)
+            deployment.deploy(archive, root / 'web', '0.9.30+99', 'b' * 40)
+            self.assertEqual((root / 'web/current/release-metadata.json').read_bytes(), manifest)
+            self.assertEqual((root / 'web/current/release-metadata.json.sig').read_bytes(), signature)
+
     def test_same_version_patch_retains_original_for_rollback(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

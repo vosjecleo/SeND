@@ -58,6 +58,16 @@ def deploy(archive, root, release, revision=None):
                 raise ValueError('Web archive version mismatch')
             # Nginx needs to traverse immutable release directories.
             staging.chmod(0o755)
+            # Same-origin signed update metadata is mutable beside the app
+            # assets. Preserve it across PWA-only patches, without changing
+            # either channel or re-signing anything on the web server.
+            previous = root / 'current'
+            previous_target = previous.resolve()
+            if previous_target.is_relative_to(root):
+                for name in ('release-metadata.json', 'release-metadata.json.sig'):
+                    source = previous / name
+                    if source.is_file() and not source.is_symlink():
+                        shutil.copyfile(source, staging / name)
             (staging / '.archive-sha256').write_text(digest + '\n')
             staging.rename(destination)
     link = root / ('.current-' + directory)

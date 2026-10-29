@@ -14,6 +14,7 @@ import '../space_settings_screen.dart';
 import '../personal_organisation.dart';
 import '../home_room_menu.dart';
 import '../archive_navigation.dart';
+import '../channel_category_menu.dart';
 import '../member_management.dart';
 import '../chat_shell.dart' show showChannelActions, showCreateChannelCategory;
 import 'mobile_widgets.dart';
@@ -1022,6 +1023,8 @@ class _SpaceRoomList extends StatelessWidget {
     for (final category in backend.selectedSpaceCategories) {
       children.add(
         ListTile(
+          onLongPress: () =>
+              showChannelCategoryMenu(context, backend, category),
           dense: true,
           visualDensity: const VisualDensity(vertical: -4),
           minTileHeight: 24,

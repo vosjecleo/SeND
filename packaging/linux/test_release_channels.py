@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class ReleaseChannelsTest(unittest.TestCase):
     def update(self, data):
         script = (ROOT / 'packaging/publish-flatpak.sh').read_text()
-        expression = re.search(r"--arg release \"\$release_id\" '(.*?)' \"\$root/releases.json\"", script, re.S)[1]
+        expression = re.search(r"--arg release \"\$release_id\" '(.*?)' \"\$work/releases.json\"", script, re.S)[1]
         result = subprocess.run(['jq', '--arg', 'name', 'SeND-0.9.42+134-linux-x86_64.flatpak',
                                  '--arg', 'hash', 'a' * 64, '--argjson', 'size', '1024',
                                  '--arg', 'release', '0.9.42+134', expression],

@@ -87,9 +87,16 @@ jobs:
       - name: Add Flatpak without replacing existing packages or checksum lists
         env:
           GH_TOKEN: ${{ github.token }}
+          SEND_RELEASE_SIGNING_KEY: ${{ secrets.SEND_RELEASE_SIGNING_KEY }}
         run: |
+          set -euo pipefail
           release=$(sed -n 's/^version: //p' pubspec.yaml)
           tag="v${release/+/-b}"
+          key_file="$RUNNER_TEMP/send-release-key.pem"
+          trap 'rm -f -- "$key_file"' EXIT
+          python3 -c 'import os; from pathlib import Path; key=os.environ.get("SEND_RELEASE_SIGNING_KEY", ""); assert key, "Set SEND_RELEASE_SIGNING_KEY before publishing"; path=Path(os.environ["RUNNER_TEMP"])/"send-release-key.pem"; fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600); os.write(fd,key.encode()); os.close(fd)'
+          python3 packaging/sign-release.py dist/FLATPAK-SHA256SUMS dist/FLATPAK-SHA256SUMS.sig --key "$key_file"
+          python3 packaging/sign-release.py dist/FLATPAK-SHA256SUMS dist/FLATPAK-SHA256SUMS.sig --verify
           cd dist
           sha256sum -c FLATPAK-SHA256SUMS
-          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" ./*.flatpak FLATPAK-SHA256SUMS --clobber
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" ./*.flatpak FLATPAK-SHA256SUMS FLATPAK-SHA256SUMS.sig --clobber

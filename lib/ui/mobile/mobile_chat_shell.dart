@@ -715,6 +715,7 @@ class _MobileChatShellState extends State<MobileChatShell>
       _navigationDragProgress ?? (_navigationVisible ? 1 : 0);
 
   void _reportConversationVisibility(bool visible) {
+    visible = visible && ModalRoute.of(context)?.isCurrent != false;
     if (_reportedConversationVisible == visible) return;
     _reportedConversationVisible = visible;
     WidgetsBinding.instance.addPostFrameCallback((_) {

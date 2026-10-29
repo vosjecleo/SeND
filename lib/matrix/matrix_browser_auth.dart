@@ -45,6 +45,7 @@ extension _MatrixBrowserAuthentication on MatrixBackend {
     _browserAuthenticationActive = true;
     _browserAuthenticationCanceled = false;
     _status = SessionStatus.signingIn;
+    _sessionScope.invalidate();
     _connectionStatus = ConnectionStatus.connecting;
     _error = null;
     AuthBrowser? browser;

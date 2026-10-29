@@ -29,8 +29,12 @@ class SettingsEchoGuard {
     _expected = null;
   }
 
-  String _key(Object? value) => jsonEncode(_canonical(value));
-  Object? _canonical(Object? value) {
+  static bool equivalent(
+    Map<String, Object?>? left,
+    Map<String, Object?>? right,
+  ) => _key(left) == _key(right);
+  static String _key(Object? value) => jsonEncode(_canonical(value));
+  static Object? _canonical(Object? value) {
     if (value is Map) {
       final keys = value.keys.cast<String>().toList()..sort();
       return {for (final key in keys) key: _canonical(value[key])};

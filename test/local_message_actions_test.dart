@@ -15,6 +15,33 @@ ChatMessage message({bool own = true, bool pending = false}) => ChatMessage(
   canRedact: true,
 );
 void main() {
+  testWidgets('discussion is a full action row immediately below React', (
+    tester,
+  ) async {
+    var opened = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageActionList(
+            message: message(),
+            actions: messageActionOrder(message(), canEdit: true, canPin: true),
+            onThread: () => opened++,
+            onAction: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester.getTopLeft(find.text('Start discussion')).dy,
+      greaterThan(tester.getTopLeft(find.text('React')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Start discussion')).dy,
+      lessThan(tester.getTopLeft(find.text('Copy')).dy),
+    );
+    await tester.tap(find.text('Start discussion'));
+    expect(opened, 1);
+  });
   test('regular message actions follow the requested order', () {
     expect(messageActionOrder(message(), canEdit: true, canPin: true), [
       MessageAction.reply,

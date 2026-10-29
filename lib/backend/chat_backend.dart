@@ -31,6 +31,7 @@ abstract class ChatBackend extends ChangeNotifier {
   }
 
   final _outgoing = <String, QueuedMessage>{};
+  final _acknowledgedOutgoing = <String>{};
   bool _outgoingDisposed = false;
   void _notifyOutgoing() {
     if (!_outgoingDisposed) notifyListeners();
@@ -39,24 +40,53 @@ abstract class ChatBackend extends ChangeNotifier {
   int _outgoingSequence = 0;
   AttachmentDraft? queuedAttachment(String id) => _outgoing[id]?.draft;
   bool get reconcilesOutgoingTransactions => false;
+
+  /// Sync acknowledgements are independent of which conversation is visible.
+  /// An acknowledgement can arrive before the send future completes.
+  void acknowledgeQueuedTransactions(Iterable<String> ids) {
+    var removed = false;
+    for (final id in ids) {
+      final item = _outgoing[id];
+      if (item == null) continue;
+      if (item.completed) {
+        _outgoing.remove(id);
+        _acknowledgedOutgoing.remove(id);
+        removed = true;
+      } else {
+        _acknowledgedOutgoing.add(id);
+      }
+    }
+    if (removed) _notifyOutgoing();
+  }
+
   bool cancelLocalQueuedMessage(String id) {
     if (messages.any((m) => m.id == id || m.transactionId == id)) return false;
     final item = _outgoing.remove(id);
+    _acknowledgedOutgoing.remove(id);
     if (item == null) return false;
     item.cancelled = true;
     _notifyOutgoing();
     return true;
   }
 
-  List<ChatMessage> get timelineMessages {
-    final sent = messages;
+  List<ChatMessage> get timelineMessages =>
+      conversationMessages(roomId: selectedRoom?.id, sent: messages);
+
+  List<ChatMessage> conversationMessages({
+    required String? roomId,
+    required List<ChatMessage> sent,
+    String? threadRootId,
+  }) {
     final visible = sent.expand((m) => [m.id, ?m.transactionId]).toSet();
     _outgoing.removeWhere((id, item) => item.completed && visible.contains(id));
+    _acknowledgedOutgoing.removeWhere((id) => !_outgoing.containsKey(id));
     return [
       ..._outgoing.values
           .where(
             (item) =>
-                item.room == selectedRoom?.id && !visible.contains(item.id),
+                item.room == roomId &&
+                item.threadRootId == threadRootId &&
+                !visible.contains(item.id),
           )
           .toList()
           .reversed
@@ -72,17 +102,42 @@ abstract class ChatBackend extends ChangeNotifier {
     List<AttachmentDraft> attachments = const [],
     ChatMessage? reply,
     String? editMessageId,
+    ThreadSession? thread,
   }) async {
+    final target = thread?.sendTarget;
+    if (thread != null && thread.roomId != roomId) {
+      throw StateError('The discussion belongs to another room.');
+    }
     if (editMessageId != null) {
+      if (thread != null &&
+          !thread.messages.any(
+            (m) =>
+                m.id == editMessageId &&
+                m.own &&
+                !m.pending &&
+                !m.failed &&
+                !m.redacted,
+          )) {
+        throw StateError(
+          'Only your own messages in this discussion can be edited.',
+        );
+      }
       return enqueueRoomSend(
         roomId,
-        () => sendMessage(
-          text,
-          roomId: roomId,
-          formattedBody: formattedBody,
-          replyToMessageId: reply?.id,
-          editMessageId: editMessageId,
-        ),
+        () => target != null
+            ? target.send(
+                text,
+                formattedBody: formattedBody,
+                replyToMessageId: reply?.id,
+                editMessageId: editMessageId,
+              )
+            : sendMessage(
+                text,
+                roomId: roomId,
+                formattedBody: formattedBody,
+                replyToMessageId: reply?.id,
+                editMessageId: editMessageId,
+              ),
       );
     }
     if (_outgoing.length + (attachments.isEmpty ? 1 : attachments.length) >
@@ -106,6 +161,7 @@ abstract class ChatBackend extends ChangeNotifier {
       final item = QueuedMessage(
         id: 'send-local-${DateTime.now().microsecondsSinceEpoch}-${_outgoingSequence++}',
         room: roomId,
+        threadRootId: target?.threadRootId,
         body: index == 0 ? text : attachments[index].caption ?? '',
         sender: profileDisplayName ?? userId ?? 'You',
         senderId: userId,
@@ -150,7 +206,22 @@ abstract class ChatBackend extends ChangeNotifier {
           _notifyOutgoing();
           await withQueuedTransaction(
             item.id,
-            () => item.draft == null
+            () => target != null
+                ? item.draft == null
+                      ? target.send(
+                          text,
+                          formattedBody: formattedBody,
+                          replyToMessageId: reply?.id,
+                        )
+                      : target.attach(
+                          item.draft!.copyWith(
+                            caption: item.body.isEmpty ? null : item.body,
+                          ),
+                          replyToMessageId: identical(item, items.first)
+                              ? reply?.id
+                              : null,
+                        )
+                : item.draft == null
                 ? sendMessage(
                     text,
                     roomId: roomId,
@@ -168,12 +239,16 @@ abstract class ChatBackend extends ChangeNotifier {
                   ),
           );
           item.completed = true;
-          if (!reconcilesOutgoingTransactions) _outgoing.remove(item.id);
+          if (!reconcilesOutgoingTransactions ||
+              _acknowledgedOutgoing.remove(item.id)) {
+            _outgoing.remove(item.id);
+          }
         }
       });
     } catch (error) {
       for (final item in items) {
         _outgoing.remove(item.id);
+        _acknowledgedOutgoing.remove(item.id);
       }
       if (items.any((item) => item.completed) &&
           items.any((item) => !item.completed && !item.cancelled)) {
@@ -202,6 +277,7 @@ abstract class ChatBackend extends ChangeNotifier {
       item.cancelled = true;
     }
     _outgoing.clear();
+    _acknowledgedOutgoing.clear();
   }
 
   Future<List<AttachmentDraft>> prepareAttachmentsForSend(

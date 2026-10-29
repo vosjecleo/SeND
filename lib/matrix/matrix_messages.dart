@@ -610,10 +610,9 @@ extension _MatrixMessages on MatrixBackend {
     String? editMessageId,
     String? threadRootEventId,
   }) async {
-    final originalValue = text.trim();
-    final value = _preferences.improveTwitterLinks
-        ? rewriteTwitterLinks(originalValue)
-        : originalValue;
+    // Compatibility services may supply previews, never rewrite authored text
+    // or HTML in the Matrix event (including edits and thread replies).
+    final value = text.trim();
     final targetRoomId = roomId ?? _selectedRoomId;
     if (value.isEmpty || targetRoomId == null) return;
     try {
@@ -626,10 +625,7 @@ extension _MatrixMessages on MatrixBackend {
           ? null
           : _eventById(replyToMessageId);
       late Future<String?> operation;
-      final outgoingFormattedBody =
-          formattedBody != null && _preferences.improveTwitterLinks
-          ? rewriteTwitterLinks(formattedBody)
-          : formattedBody;
+      final outgoingFormattedBody = formattedBody;
       final mentions = _mentionsFor(value, replyEvent, room);
       if ((outgoingFormattedBody == null || outgoingFormattedBody.isEmpty) &&
           mentions.isEmpty) {

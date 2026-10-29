@@ -57,7 +57,8 @@ String messageActionLabel(MessageAction action, ChatMessage message) =>
       MessageAction.edit => 'Edit',
       MessageAction.delete => 'Delete',
       MessageAction.link => 'Copy event link',
-      MessageAction.thread => 'Open discussion',
+      MessageAction.thread =>
+        message.threadReplyCount > 0 ? 'Open discussion' : 'Start discussion',
       MessageAction.retry => 'Retry send',
       MessageAction.discard => 'Discard failed send',
     };
@@ -95,7 +96,16 @@ class MessageActionList extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final action in actions)
+          for (final action in [
+            for (final item in actions) ...[
+              item,
+              if (onThread != null &&
+                  (item == MessageAction.react ||
+                      (item == MessageAction.reply &&
+                          !actions.contains(MessageAction.react))))
+                MessageAction.thread,
+            ],
+          ])
             if (action == null)
               const SizedBox(height: 12)
             else
@@ -118,14 +128,9 @@ class MessageActionList extends StatelessWidget {
                         : null,
                   ),
                 ),
-                trailing: action == MessageAction.reply && onThread != null
-                    ? IconButton(
-                        tooltip: 'Open discussion',
-                        icon: const Icon(Icons.forum_outlined, size: 18),
-                        onPressed: onThread,
-                      )
-                    : null,
-                onTap: () => onAction(action),
+                onTap: action == MessageAction.thread
+                    ? onThread
+                    : () => onAction(action),
               ),
         ],
       ),

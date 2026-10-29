@@ -3,6 +3,7 @@
 // Encrypted values AND opaque HMAC keys. Schema names/counts remain structural
 // metadata. Crypto preparation happens before IDB write transactions begin.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 import 'package:web/web.dart';
 // Pinned SDK transaction context; keep parity with its concrete database API.
@@ -54,6 +55,22 @@ class BoxCollection with ZoneTransactionMixin {
   final String name;
   final WebRecordVault vault;
   final _boxes = <String, Box>{};
+  final _scopeHashes = <(String, String), Future<String>>{};
+  Future<String> _scopeHash(String store, String scope) {
+    final lookup = (store, scope);
+    final cached = _scopeHashes.remove(lookup);
+    if (cached != null) {
+      _scopeHashes[lookup] = cached;
+      return cached;
+    }
+    if (_scopeHashes.length >= 512) {
+      _scopeHashes.remove(_scopeHashes.keys.first);
+    }
+    final result = vault.hash(store, scope);
+    _scopeHashes[lookup] = result;
+    return result;
+  }
+
   List<Future<_Write> Function()>? _pending;
   Zone? _owner;
   bool get _insideTransaction {
@@ -72,6 +89,7 @@ class BoxCollection with ZoneTransactionMixin {
   }
 
   static const _meta = 'send_encryption_v1';
+  static String _keyStore(String name) => '${name}__keys_v1';
   static Future<BoxCollection> open(
     String name,
     Set<String> boxNames, {
@@ -82,7 +100,7 @@ class BoxCollection with ZoneTransactionMixin {
   }) async {
     final factory = idbFactory ?? window.indexedDB;
     final completed = Completer<IDBDatabase>();
-    final request = factory.open(name, version * 100 + 1);
+    final request = factory.open(name, version * 100 + 2);
     request.onupgradeneeded = ((IDBVersionChangeEvent _) {
       final db = request.result as IDBDatabase;
       for (final box in {...boxNames, _meta}) {
@@ -91,6 +109,12 @@ class BoxCollection with ZoneTransactionMixin {
             box,
             IDBObjectStoreParameters(autoIncrement: true),
           );
+        }
+      }
+      for (final box in boxNames) {
+        final keys = _keyStore(box);
+        if (!db.objectStoreNames.contains(keys)) {
+          db.createObjectStore(keys).createIndex('scope', 'scope'.toJS);
         }
       }
     }).toJS;
@@ -130,24 +154,16 @@ class BoxCollection with ZoneTransactionMixin {
             .objectStore(_meta)
             .get('key'.toJS),
       ))?.dartify();
+      if (raw != null && (raw is! String || raw.isEmpty)) {
+        throw StateError(
+          'Local encryption marker is invalid. Existing data was kept.',
+        );
+      }
       if (raw == null) {
-        for (final store in boxNames) {
-          final first =
-              (await _result(
-                    db
-                        .transaction(store.toJS, 'readonly')
-                        .objectStore(store)
-                        .getAll(null, 1),
-                  ))?.dartify()
-                  as List? ??
-              [];
-          if (first.isNotEmpty &&
-              first.first is Map &&
-              (first.first as Map)['sendEncrypted'] == 1) {
-            throw StateError(
-              'Local encryption marker is missing. Existing data was kept.',
-            );
-          }
+        if (await collection._hasEncryptedRows()) {
+          throw StateError(
+            'Local encryption marker is missing. Existing data was kept.',
+          );
         }
       }
       final id = await collection.vault.bind(raw is String ? raw : null);
@@ -160,11 +176,18 @@ class BoxCollection with ZoneTransactionMixin {
             .objectStore(_meta)
             .get('migrated'.toJS),
       ))?.dartify();
-      if (migrated != true) {
+      final indexed = (await _result(
+        db
+            .transaction(_meta.toJS, 'readonly')
+            .objectStore(_meta)
+            .get('keyIndex'.toJS),
+      ))?.dartify();
+      if (migrated != true || indexed != true) {
         await collection._migrate();
         final finished = db.transaction(_meta.toJS, 'readwrite'),
             saved = _done(finished);
         finished.objectStore(_meta).put(true.toJS, 'migrated'.toJS);
+        finished.objectStore(_meta).put(true.toJS, 'keyIndex'.toJS);
         await saved;
       }
       return collection;
@@ -172,6 +195,35 @@ class BoxCollection with ZoneTransactionMixin {
       db.close();
       rethrow;
     }
+  }
+
+  Future<bool> _hasEncryptedRows() async {
+    // An interrupted old migration can have plaintext first and encrypted rows
+    // later. Inspect every page before binding any replacement key. Healthy
+    // encrypted databases already have a marker and never need this scan.
+    for (final name in boxNames) {
+      JSAny? after;
+      while (true) {
+        final store = _db.transaction(name.toJS, 'readonly').objectStore(name);
+        final range = after == null
+            ? null
+            : IDBKeyRange.lowerBound(after, true);
+        final page = await Future.wait([
+          _result(store.getAllKeys(range, 128)),
+          _result(store.getAll(range, 128)),
+        ]);
+        final keys = page[0]?.dartify() as List? ?? [];
+        final values = page[1]?.dartify() as List? ?? [];
+        if (values.any(
+          (value) => value is Map && value['sendEncrypted'] == 1,
+        )) {
+          return true;
+        }
+        if (keys.isEmpty) break;
+        after = (keys.last as Object?).jsify();
+      }
+    }
+    return false;
   }
 
   Future<void> _migrate() async {
@@ -198,7 +250,13 @@ class BoxCollection with ZoneTransactionMixin {
           final key = '${keys[i]}', value = values[i];
           if (value is Map && value['sendEncrypted'] == 1) {
             // Authenticate existing encrypted rows too, never downgrade them.
-            await vault.open(storeName, key, value.jsify());
+            final decoded =
+                await vault.open(storeName, key, value.jsify()) as Map;
+            final logical = decoded['key'] as String;
+            if (await vault.hash(storeName, logical) != key) {
+              throw StateError('Protected lookup mismatch.');
+            }
+            writes.add(await _prepareKey(storeName, logical, key));
             continue;
           }
           final hidden = await vault.hash(storeName, key);
@@ -208,6 +266,7 @@ class BoxCollection with ZoneTransactionMixin {
           });
           await vault.open(storeName, hidden, sealed);
           writes.add(_Write(storeName, 'put', hidden, sealed));
+          writes.add(await _prepareKey(storeName, key, hidden));
           if (hidden != key) writes.add(_Write(storeName, 'delete', key));
         }
         if (writes.isNotEmpty) await _commit(writes);
@@ -217,10 +276,49 @@ class BoxCollection with ZoneTransactionMixin {
     }
   }
 
+  Future<_Write> _prepareKey(String store, String key, String hidden) async {
+    final keys = _keyStore(store);
+    final scope = await _scopeHash(keys, key.split('|').first);
+    return _Write(
+      keys,
+      'put',
+      hidden,
+      {
+        'scope': scope,
+        'sealed': await vault.seal(keys, hidden, {'key': key, 'scope': scope}),
+      }.jsify(),
+    );
+  }
+
   Box<V> openBox<V>(String store) {
     if (!boxNames.contains(store)) throw StateError('Unknown protected store.');
     return _boxes.putIfAbsent(store, () => Box<V>(store, this)) as Box<V>;
   }
+
+  /// Capture all stores in one read-only IDB transaction. Decrypt afterwards,
+  /// so another tab's atomic write cannot produce a mixed-version export.
+  Future<Map<String, Object?>> snapshot() => locked(() async {
+    final tx = _db.transaction(boxNames.toList().jsify()!, 'readonly');
+    final done = _done(tx);
+    final reads = <String, Future<List<JSAny?>>>{};
+    for (final name in boxNames) {
+      final store = tx.objectStore(name);
+      reads[name] = Future.wait([
+        _result(store.getAllKeys()),
+        _result(store.getAll()),
+      ]);
+    }
+    final raw = await Future.wait([
+      ...reads.values,
+      done.then((_) => <JSAny?>[]),
+    ]);
+    final result = <String, Object?>{};
+    for (final (i, name) in reads.keys.indexed) {
+      final box = _boxes[name] ?? Box<Object?>(name, this);
+      result[name] = await box._decodeValues(raw[i]);
+    }
+    return result;
+  });
 
   Future<void> _commit(List<_Write> writes) async {
     if (writes.isEmpty) return;
@@ -281,10 +379,13 @@ class BoxCollection with ZoneTransactionMixin {
   Future<void> clear() async {
     await transaction(() async {
       _pending!.addAll([
-        for (final store in boxNames) () async => _Write(store, 'clear'),
+        for (final store in boxNames) ...[
+          () async => _Write(store, 'clear'),
+          () async => _Write(_keyStore(store), 'clear'),
+        ],
       ]);
       for (final box in _boxes.values) {
-        box._cache.clear();
+        box.clearQuickAccessCache();
         box._changes.clear();
         box._cleared = true;
       }
@@ -292,6 +393,7 @@ class BoxCollection with ZoneTransactionMixin {
   }
 
   Future<void> close() async {
+    _scopeHashes.clear();
     _db.close();
   }
 
@@ -312,11 +414,35 @@ class Box<V> {
   final String name;
   final BoxCollection collection;
   final _cache = <String, V?>{};
+  final _cacheSizes = <String, int>{};
+  int _cacheBytes = 0;
+  static const maximumCachedRecords = 128;
+  static const maximumCachedBytes = 512 * 1024;
+  int get cachedRecordCount => _cache.length;
+  int get cachedBytes => _cacheBytes;
   final _changes = <String, V?>{};
   bool _cleared = false;
   void _finish() {
     _changes.clear();
     _cleared = false;
+  }
+
+  V? _remember(String key, V? value) {
+    _cache.remove(key);
+    _cacheBytes -= _cacheSizes.remove(key) ?? 0;
+    final size = key.length * 2 + jsonEncode(value).length * 2 + 64;
+    if (size > maximumCachedBytes) return value;
+    while (_cache.isNotEmpty &&
+        (_cache.length >= maximumCachedRecords ||
+            _cacheBytes + size > maximumCachedBytes)) {
+      final oldest = _cache.keys.first;
+      _cache.remove(oldest);
+      _cacheBytes -= _cacheSizes.remove(oldest)!;
+    }
+    _cache[key] = value;
+    _cacheSizes[key] = size;
+    _cacheBytes += size;
+    return value;
   }
 
   Future<Map<String, V>> getAllValues([IDBTransaction? ignored]) =>
@@ -328,40 +454,122 @@ class Box<V> {
           _result(store.getAllKeys()),
           _result(store.getAll()),
         ]);
-        final keys = results[0]?.dartify() as List? ?? [];
-        final raw = results[1]?.dartify() as List? ?? [];
-        final result = <String, V>{};
-        for (var i = 0; i < raw.length; i++) {
-          final hidden = keys[i] as String;
-          final decoded =
-              await collection.vault.open(
-                    name,
-                    hidden,
-                    (raw[i] as Object?).jsify(),
-                  )
-                  as Map;
-          final key = decoded['key'] as String;
-          if (await collection.vault.hash(name, key) != hidden) {
-            throw StateError('Protected lookup mismatch.');
-          }
-          result[key] = _value(decoded['value']) as V;
-        }
-        if (_cleared) result.clear();
-        for (final entry in _changes.entries) {
-          if (entry.value == null) {
-            result.remove(entry.key);
-          } else {
-            result[entry.key] = entry.value as V;
-          }
-        }
-        _cache.addAll(result);
-        return result;
+        return _decodeValues(results);
       });
-  Future<List<String>> getAllKeys([IDBTransaction? ignored]) async =>
-      (await getAllValues()).keys.toList();
+
+  Future<Map<String, V>> _decodeValues(List<JSAny?> results) async {
+    final keys = results[0]?.dartify() as List? ?? [];
+    final raw = results[1]?.dartify() as List? ?? [];
+    final result = <String, V>{};
+    for (var i = 0; i < raw.length; i++) {
+      final hidden = keys[i] as String;
+      final decoded =
+          await collection.vault.open(name, hidden, (raw[i] as Object?).jsify())
+              as Map;
+      final key = decoded['key'] as String;
+      if (await collection.vault.hash(name, key) != hidden) {
+        throw StateError('Protected lookup mismatch.');
+      }
+      result[key] = _value(decoded['value']) as V;
+    }
+    if (_cleared) result.clear();
+    for (final entry in _changes.entries) {
+      if (entry.value == null) {
+        result.remove(entry.key);
+      } else {
+        result[entry.key] = entry.value as V;
+      }
+    }
+    return result;
+  }
+
+  Future<List<String>> getAllKeys([IDBTransaction? ignored]) => _keys();
+
+  /// Tuple-key collections are partitioned by their first component (room or
+  /// user ID). Both the partition and primary lookup are HMACs, never clear IDs.
+  Future<List<String>> getKeysInScope(String scope) => _keys(scope: scope);
+
+  Future<List<String>> _keys({String? scope}) => collection.locked(() async {
+    final result = <String>{};
+    if (!_cleared) {
+      final keysStore = BoxCollection._keyStore(name);
+      final scopeHash = scope == null
+          ? null
+          : await collection._scopeHash(keysStore, scope);
+      JSAny? after;
+      while (true) {
+        final store = collection._db
+            .transaction(keysStore.toJS, 'readonly')
+            .objectStore(keysStore);
+        final range = scopeHash != null
+            ? IDBKeyRange.only(scopeHash.toJS)
+            : after == null
+            ? null
+            : IDBKeyRange.lowerBound(after, true);
+        // A room query reads only that room's small key records. Global
+        // enumeration is paged and never loads/decrypts message values.
+        final raw = scopeHash == null
+            ? await Future.wait([
+                _result(store.getAllKeys(range, 512)),
+                _result(store.getAll(range, 512)),
+              ])
+            : await Future.wait([
+                _result(store.index('scope').getAllKeys(range)),
+                _result(store.index('scope').getAll(range)),
+              ]);
+        final hiddenKeys = raw[0]?.dartify() as List? ?? [];
+        final rows = raw[1]?.dartify() as List? ?? [];
+        if (rows.isEmpty) break;
+        // Bound both crypto concurrency and temporary plaintext. Serial Web
+        // Crypto calls make large enumerations unnecessarily slow on phones.
+        for (var offset = 0; offset < rows.length; offset += 16) {
+          result.addAll(
+            await Future.wait([
+              for (var i = offset; i < rows.length && i < offset + 16; i++)
+                () async {
+                  final hidden = hiddenKeys[i] as String,
+                      wrapper = rows[i] as Map;
+                  final decoded =
+                      await collection.vault.open(
+                            keysStore,
+                            hidden,
+                            (wrapper['sealed'] as Object?).jsify(),
+                          )
+                          as Map;
+                  final key = decoded['key'] as String;
+                  if (await collection.vault.hash(name, key) != hidden ||
+                      decoded['scope'] != wrapper['scope'] ||
+                      await collection._scopeHash(
+                            keysStore,
+                            key.split('|').first,
+                          ) !=
+                          decoded['scope'] ||
+                      (scope != null && key.split('|').first != scope)) {
+                    throw StateError('Protected key index mismatch.');
+                  }
+                  return key;
+                }(),
+            ]),
+          );
+        }
+        if (scopeHash != null) break;
+        after = (hiddenKeys.last as Object?).jsify();
+      }
+    }
+    for (final change in _changes.entries) {
+      if (scope != null && change.key.split('|').first != scope) continue;
+      if (change.value == null) {
+        result.remove(change.key);
+      } else {
+        result.add(change.key);
+      }
+    }
+    return result.toList();
+  });
   Future<V?> get(String key, [IDBTransaction? ignored]) => collection.locked(
     () async {
-      if (_cache.containsKey(key)) return _cache[key];
+      if (_changes.containsKey(key)) return _changes[key];
+      if (_cache.containsKey(key)) return _remember(key, _cache[key]);
       if (_cleared) return null;
       final hidden = await collection.vault.hash(name, key);
       final raw = await _result(
@@ -370,16 +578,23 @@ class Box<V> {
             .objectStore(name)
             .get(hidden.toJS),
       );
-      if (raw == null) return _cache[key] = null;
+      if (raw == null) return _remember(key, null);
       final decoded = await collection.vault.open(name, hidden, raw) as Map;
       if (decoded['key'] != key) throw StateError('Protected lookup mismatch.');
-      return _cache[key] = _value(decoded['value']);
+      return _remember(key, _value(decoded['value']));
     },
   );
   Future<List<V?>> getAll(List<String> keys, [IDBTransaction? ignored]) =>
       Future.wait(keys.map((key) => get(key)));
   Future<void> put(String key, V value, [IDBTransaction? ignored]) =>
       collection.transaction(() async {
+        collection._pending!.add(
+          () async => collection._prepareKey(
+            name,
+            key,
+            await collection.vault.hash(name, key),
+          ),
+        );
         collection._pending!.add(() async {
           final hidden = await collection.vault.hash(name, key);
           return _Write(
@@ -392,16 +607,23 @@ class Box<V> {
             }),
           );
         });
-        _cache[key] = value;
+        _remember(key, value);
         _changes[key] = value;
       });
   Future<void> delete(String key, [IDBTransaction? ignored]) =>
       collection.transaction(() async {
         collection._pending!.add(
+          () async => _Write(
+            BoxCollection._keyStore(name),
+            'delete',
+            await collection.vault.hash(name, key),
+          ),
+        );
+        collection._pending!.add(
           () async =>
               _Write(name, 'delete', await collection.vault.hash(name, key)),
         );
-        _cache[key] = null;
+        _remember(key, null);
         _changes[key] = null;
       });
   Future<void> deleteAll(List<String> keys, [IDBTransaction? ignored]) =>
@@ -410,11 +632,19 @@ class Box<V> {
           await delete(key);
         }
       });
-  void clearQuickAccessCache() => _cache.clear();
+  void clearQuickAccessCache() {
+    _cache.clear();
+    _cacheSizes.clear();
+    _cacheBytes = 0;
+  }
+
   Future<void> clear([IDBTransaction? ignored]) =>
       collection.transaction(() async {
         collection._pending!.add(() async => _Write(name, 'clear'));
-        _cache.clear();
+        collection._pending!.add(
+          () async => _Write(BoxCollection._keyStore(name), 'clear'),
+        );
+        clearQuickAccessCache();
         _changes.clear();
         _cleared = true;
       });

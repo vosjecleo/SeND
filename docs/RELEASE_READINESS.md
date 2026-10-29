@@ -5,6 +5,9 @@ results, and remaining gaps must be fixed or documented as limitations.
 Feature completeness does not establish security certification, full Discord
 parity or universal device compatibility.
 
+Implementation references: [browser storage safety](BROWSER_STORAGE.md) and
+[release signing, rotation and recovery](RELEASE_SIGNING.md).
+
 ## Release gates
 
 All supported platforms have had extensive hands-on testing across most features.

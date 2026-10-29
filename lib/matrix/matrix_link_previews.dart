@@ -44,7 +44,12 @@ extension _MatrixLinkPreviews on MatrixBackend {
   /// Homeserver previews remain the default. Direct origin requests happen
   /// only after explicit opt-in; a local domain card provides a deterministic
   /// non-network fallback so every HTTP(S) link still has an embed surface.
-  Future<void> _hydrateLinkPreviews(Timeline timeline) async {
+  Future<void> _hydrateLinkPreviews(
+    Timeline timeline, {
+    bool Function()? isCurrent,
+  }) async {
+    bool current() => isCurrent?.call() ?? identical(timeline, _timeline);
+    if (!current()) return;
     final pending = <(Event, Event)>[];
     for (final event in timeline.events) {
       final displayEvent = event.type == EventTypes.Message
@@ -71,7 +76,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
               ),
             ),
       );
-      if (!identical(timeline, _timeline)) return;
+      if (!current()) return;
     }
   }
 
@@ -121,6 +126,9 @@ extension _MatrixLinkPreviews on MatrixBackend {
     Event source, {
     void Function(LinkPreview)? onUpdate,
   }) async {
+    final lease = _sessionScope.capture();
+    final client = source.room.client;
+    bool current() => lease.isCurrent && identical(client, _client);
     final cached = _linkPreviewUrlCache.getEntry(original);
     if (cached.$1 && cached.$2 != null) return cached.$2!;
 
@@ -129,10 +137,11 @@ extension _MatrixLinkPreviews on MatrixBackend {
         : original;
     LinkPreview? result;
     try {
-      final response = await _matrix.getUrlPreview(
+      final response = await client.getUrlPreview(
         requestUrl,
         ts: source.originServerTs.millisecondsSinceEpoch,
       );
+      if (!current()) return LinkPreview(url: original, title: original.host);
       final properties = Map<String, Object?>.from(
         response.additionalProperties,
       );
@@ -172,6 +181,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
         properties: properties,
         imageBytes: imageBytes,
       );
+      if (!current()) return LinkPreview(url: original, title: original.host);
       if (hasUsefulPreview(parsed)) {
         result = parsed;
         onUpdate?.call(parsed);
@@ -183,6 +193,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
       );
     }
 
+    if (!current()) return LinkPreview(url: original, title: original.host);
     final directAllowed = LinkPreviewNetworkPolicy.allowsDirectFallback(
       _preferences.directLinkPreviewMode,
       requestUrl,
@@ -218,7 +229,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
               width: bytes[6] | (bytes[7] << 8),
               height: bytes[8] | (bytes[9] << 8),
             );
-            _linkPreviewUrlCache.put(original, result);
+            if (current()) _linkPreviewUrlCache.put(original, result);
             return result;
           }
         }
@@ -270,7 +281,7 @@ extension _MatrixLinkPreviews on MatrixBackend {
       title: original.host,
       siteName: original.host,
     );
-    _linkPreviewUrlCache.put(original, result);
+    if (current()) _linkPreviewUrlCache.put(original, result);
     return result;
   }
 

@@ -60,6 +60,7 @@ class ScheduledMessageStore {
           body: body,
           sendAt: sendAt.toUtc(),
           replyToMessageId: value['reply_to'] as String?,
+          threadRootId: value['thread_root'] as String?,
         );
       }
     } catch (_) {
@@ -107,6 +108,7 @@ class ScheduledMessageStore {
           'send_at': message.sendAt.toUtc().toIso8601String(),
           if (message.replyToMessageId != null)
             'reply_to': message.replyToMessageId,
+          if (message.threadRootId != null) 'thread_root': message.threadRootId,
         },
     ]);
     if (kIsWeb) {

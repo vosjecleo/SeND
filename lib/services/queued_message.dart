@@ -28,9 +28,10 @@ class QueuedMessage {
     this.draft,
     this.formattedBody,
     this.reply,
+    this.threadRootId,
   });
   final String id, room, body, sender;
-  final String? senderId, formattedBody;
+  final String? senderId, formattedBody, threadRootId;
   final Uint8List? avatar;
   final ReplyPreview? reply;
   final DateTime timestamp = DateTime.now();
@@ -51,6 +52,7 @@ class QueuedMessage {
     queued: true,
     own: true,
     reply: reply,
+    threadRootId: threadRootId,
     transferStatus: status,
     preparationProgress: progress,
     attachment: draft == null

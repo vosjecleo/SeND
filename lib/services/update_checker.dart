@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'platform_io.dart';
 
 import 'bounded_http.dart';
+import 'release_signatures.dart';
+import 'release_replay_guard.dart';
 
 const deltiecordReleasesPage = 'https://deltie.net/SeND/';
 const _releaseManifestUrl = 'https://deltie.net/SeND/releases.json';
@@ -22,7 +25,7 @@ class UpdateChecker {
     bool stableOnly = false,
   }) async {
     final request = await _client
-        .getUrl(Uri.parse(_releaseManifestUrl))
+        .getUrl(_metadataUri)
         .timeout(const Duration(seconds: 8));
     request.followRedirects = false;
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
@@ -44,15 +47,38 @@ class UpdateChecker {
       maximumBytes: 1024 * 1024,
       inactivityTimeout: const Duration(seconds: 8),
     );
-    return parseReleaseManifest(
-      utf8.decode(bytes),
+    final source = utf8.decode(bytes);
+    final signatureRequest = await _client
+        .getUrl(_metadataUri.replace(path: '${_metadataUri.path}.sig'))
+        .timeout(const Duration(seconds: 8));
+    signatureRequest.followRedirects = false;
+    final signatureResponse = await signatureRequest.close().timeout(
+      const Duration(seconds: 8),
+    );
+    if (signatureResponse.statusCode != HttpStatus.ok) {
+      await signatureResponse.drain<void>();
+      throw const FormatException('Signed release metadata is unavailable.');
+    }
+    final signature = await readBoundedResponse(
+      signatureResponse,
+      maximumBytes: 4096,
+      inactivityTimeout: const Duration(seconds: 8),
+    );
+    final issued = await verifyReleaseSignature(source, utf8.decode(signature));
+    final result = parseReleaseManifest(
+      source,
       currentVersion: currentVersion,
       currentBuild: currentBuild,
       stableOnly: stableOnly,
     );
+    await ReleaseReplayGuard().accept(issued);
+    return result;
   }
 
   void close() => _client.close(force: true);
+  Uri get _metadataUri => kIsWeb
+      ? Uri.base.resolve('/release-metadata.json')
+      : Uri.parse(_releaseManifestUrl);
 }
 
 class ReleaseCheckResult {

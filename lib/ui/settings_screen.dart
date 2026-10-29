@@ -1542,8 +1542,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       SwitchListTile(
         key: const ValueKey('improve-twitter-links-toggle'),
         contentPadding: EdgeInsets.zero,
-        title: const Text('Improve X/Twitter links with FxTwitter'),
-        subtitle: const Text('Use FxTwitter for previews and links you send.'),
+        title: const Text('Use FxTwitter previews'),
+        subtitle: const Text('Keep the original links in messages.'),
         value: preferences.improveTwitterLinks,
         onChanged: (value) => backend.updatePreferences(
           backend.preferences.copyWith(improveTwitterLinks: value),

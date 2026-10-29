@@ -22,6 +22,7 @@ import 'package:matrix/src/utils/copy_map.dart';
 import 'package:matrix/src/utils/queued_to_device_event.dart';
 
 import 'encrypted_box.dart';
+import 'dump_validation.dart';
 
 /// Database based on SQlite3 on native and IndexedDB on web. For native you
 /// have to pass a `Database` object, which can be created with the sqflite
@@ -378,32 +379,36 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
   @override
   Future<void> forgetRoom(String roomId) async {
     await _timelineFragmentsBox.delete(TupleKey(roomId, '').toString());
-    final eventsBoxKeys = await _eventsBox.getAllKeys();
+    final eventsBoxKeys = await _eventsBox.getKeysInScope(roomId);
     for (final key in eventsBoxKeys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
       await _eventsBox.delete(key);
     }
-    final preloadRoomStateBoxKeys = await _preloadRoomStateBox.getAllKeys();
+    final preloadRoomStateBoxKeys = await _preloadRoomStateBox.getKeysInScope(
+      roomId,
+    );
     for (final key in preloadRoomStateBoxKeys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
       await _preloadRoomStateBox.delete(key);
     }
     final nonPreloadRoomStateBoxKeys = await _nonPreloadRoomStateBox
-        .getAllKeys();
+        .getKeysInScope(roomId);
     for (final key in nonPreloadRoomStateBoxKeys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
       await _nonPreloadRoomStateBox.delete(key);
     }
-    final roomMembersBoxKeys = await _roomMembersBox.getAllKeys();
+    final roomMembersBoxKeys = await _roomMembersBox.getKeysInScope(roomId);
     for (final key in roomMembersBoxKeys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
       await _roomMembersBox.delete(key);
     }
-    final roomAccountDataBoxKeys = await _roomAccountDataBox.getAllKeys();
+    final roomAccountDataBoxKeys = await _roomAccountDataBox.getKeysInScope(
+      roomId,
+    );
     for (final key in roomAccountDataBoxKeys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
@@ -595,7 +600,7 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
     final room = Room.fromJson(copyMap(roomData), client);
 
     // Get the room account data
-    final allKeys = await _roomAccountDataBox.getAllKeys();
+    final allKeys = await _roomAccountDataBox.getKeysInScope(roomId);
     final roomAccountDataKeys = allKeys
         .where((key) => TupleKey.fromString(key).parts.first == roomId)
         .toList();
@@ -615,7 +620,9 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
 
     // Get important states:
     if (loadImportantStates) {
-      final preloadRoomStateKeys = await _preloadRoomStateBox.getAllKeys();
+      final preloadRoomStateKeys = await _preloadRoomStateBox.getKeysInScope(
+        roomId,
+      );
       final keysForRoom = preloadRoomStateKeys
           .where((key) => TupleKey.fromString(key).parts.first == roomId)
           .toList();
@@ -711,7 +718,9 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
     List<String> events,
     Room room,
   ) async {
-    final keys = (await _nonPreloadRoomStateBox.getAllKeys()).where((key) {
+    final keys = (await _nonPreloadRoomStateBox.getKeysInScope(room.id)).where((
+      key,
+    ) {
       final tuple = TupleKey.fromString(key);
       return tuple.parts.first == room.id && !events.contains(tuple.parts[1]);
     });
@@ -794,9 +803,9 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
   @override
   Future<List<User>> getUsers(Room room) async {
     final users = <User>[];
-    final keys = (await _roomMembersBox.getAllKeys())
-        .where((key) => TupleKey.fromString(key).parts.first == room.id)
-        .toList();
+    final keys = (await _roomMembersBox.getKeysInScope(
+      room.id,
+    )).where((key) => TupleKey.fromString(key).parts.first == room.id).toList();
     final states = await _roomMembersBox.getAll(keys);
     states.removeWhere((state) => state == null);
     for (final state in states) {
@@ -907,7 +916,7 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
   @override
   Future<void> removeEvent(String eventId, String roomId) async {
     await _eventsBox.delete(TupleKey(roomId, eventId).toString());
-    final keys = await _timelineFragmentsBox.getAllKeys();
+    final keys = await _timelineFragmentsBox.getKeysInScope(roomId);
     for (final key in keys) {
       final multiKey = TupleKey.fromString(key);
       if (multiKey.parts.first != roomId) continue;
@@ -1545,134 +1554,69 @@ class ProtectedWebMatrixDatabase extends MatrixSdkDatabase {
     return raw;
   }
 
+  // One registry for both directions, so newly added stores cannot be exported
+  // without a matching restore path.
+  Map<String, Box> get _dumpBoxes => {
+    _clientBoxName: _clientBox,
+    _accountDataBoxName: _accountDataBox,
+    _roomsBoxName: _roomsBox,
+    _preloadRoomStateBoxName: _preloadRoomStateBox,
+    _nonPreloadRoomStateBoxName: _nonPreloadRoomStateBox,
+    _roomMembersBoxName: _roomMembersBox,
+    _toDeviceQueueBoxName: _toDeviceQueueBox,
+    _roomAccountDataBoxName: _roomAccountDataBox,
+    _inboundGroupSessionsBoxName: _inboundGroupSessionsBox,
+    _inboundGroupSessionsUploadQueueBoxName:
+        _inboundGroupSessionsUploadQueueBox,
+    _outboundGroupSessionsBoxName: _outboundGroupSessionsBox,
+    _olmSessionsBoxName: _olmSessionsBox,
+    _userDeviceKeysBoxName: _userDeviceKeysBox,
+    _userDeviceKeysOutdatedBoxName: _userDeviceKeysOutdatedBox,
+    _userCrossSigningKeysBoxName: _userCrossSigningKeysBox,
+    _ssssCacheBoxName: _ssssCacheBox,
+    _presencesBoxName: _presencesBox,
+    _timelineFragmentsBoxName: _timelineFragmentsBox,
+    _eventsBoxName: _eventsBox,
+    _seenDeviceIdsBoxName: _seenDeviceIdsBox,
+    _seenDeviceKeysBoxName: _seenDeviceKeysBox,
+    _userProfilesBoxName: _userProfilesBox,
+    _readReceiptsBoxName: _readReceiptsBox,
+  };
+
   @override
-  Future<String> exportDump() async {
-    final dataMap = {
-      _clientBoxName: await _clientBox.getAllValues(),
-      _accountDataBoxName: await _accountDataBox.getAllValues(),
-      _roomsBoxName: await _roomsBox.getAllValues(),
-      _preloadRoomStateBoxName: await _preloadRoomStateBox.getAllValues(),
-      _nonPreloadRoomStateBoxName: await _nonPreloadRoomStateBox.getAllValues(),
-      _roomMembersBoxName: await _roomMembersBox.getAllValues(),
-      _toDeviceQueueBoxName: await _toDeviceQueueBox.getAllValues(),
-      _roomAccountDataBoxName: await _roomAccountDataBox.getAllValues(),
-      _inboundGroupSessionsBoxName: await _inboundGroupSessionsBox
-          .getAllValues(),
-      _inboundGroupSessionsUploadQueueBoxName:
-          await _inboundGroupSessionsUploadQueueBox.getAllValues(),
-      _outboundGroupSessionsBoxName: await _outboundGroupSessionsBox
-          .getAllValues(),
-      _olmSessionsBoxName: await _olmSessionsBox.getAllValues(),
-      _userDeviceKeysBoxName: await _userDeviceKeysBox.getAllValues(),
-      _userDeviceKeysOutdatedBoxName: await _userDeviceKeysOutdatedBox
-          .getAllValues(),
-      _userCrossSigningKeysBoxName: await _userCrossSigningKeysBox
-          .getAllValues(),
-      _ssssCacheBoxName: await _ssssCacheBox.getAllValues(),
-      _presencesBoxName: await _presencesBox.getAllValues(),
-      _timelineFragmentsBoxName: await _timelineFragmentsBox.getAllValues(),
-      _eventsBoxName: await _eventsBox.getAllValues(),
-      _seenDeviceIdsBoxName: await _seenDeviceIdsBox.getAllValues(),
-      _seenDeviceKeysBoxName: await _seenDeviceKeysBox.getAllValues(),
-    };
-    final json = jsonEncode(dataMap);
-    await clear();
-    return json;
-  }
+  Future<String> exportDump() async => jsonEncode(await _collection.snapshot());
 
   @override
   Future<bool> importDump(String export) async {
     try {
-      await clear();
-      await open();
-      final json = Map.from(jsonDecode(export)).cast<String, Map>();
-      for (final key in json[_clientBoxName]!.keys) {
-        await _clientBox.put(key, json[_clientBoxName]![key]);
-      }
-      for (final key in json[_accountDataBoxName]!.keys) {
-        await _accountDataBox.put(key, json[_accountDataBoxName]![key]);
-      }
-      for (final key in json[_roomsBoxName]!.keys) {
-        await _roomsBox.put(key, json[_roomsBoxName]![key]);
-      }
-      for (final key in json[_preloadRoomStateBoxName]!.keys) {
-        await _preloadRoomStateBox.put(
-          key,
-          json[_preloadRoomStateBoxName]![key],
-        );
-      }
-      for (final key in json[_nonPreloadRoomStateBoxName]!.keys) {
-        await _nonPreloadRoomStateBox.put(
-          key,
-          json[_nonPreloadRoomStateBoxName]![key],
-        );
-      }
-      for (final key in json[_roomMembersBoxName]!.keys) {
-        await _roomMembersBox.put(key, json[_roomMembersBoxName]![key]);
-      }
-      for (final key in json[_toDeviceQueueBoxName]!.keys) {
-        await _toDeviceQueueBox.put(key, json[_toDeviceQueueBoxName]![key]);
-      }
-      for (final key in json[_roomAccountDataBoxName]!.keys) {
-        await _roomAccountDataBox.put(key, json[_roomAccountDataBoxName]![key]);
-      }
-      for (final key in json[_inboundGroupSessionsBoxName]!.keys) {
-        await _inboundGroupSessionsBox.put(
-          key,
-          json[_inboundGroupSessionsBoxName]![key],
-        );
-      }
-      for (final key in json[_inboundGroupSessionsUploadQueueBoxName]!.keys) {
-        await _inboundGroupSessionsUploadQueueBox.put(
-          key,
-          json[_inboundGroupSessionsUploadQueueBoxName]![key],
-        );
-      }
-      for (final key in json[_outboundGroupSessionsBoxName]!.keys) {
-        await _outboundGroupSessionsBox.put(
-          key,
-          json[_outboundGroupSessionsBoxName]![key],
-        );
-      }
-      for (final key in json[_olmSessionsBoxName]!.keys) {
-        await _olmSessionsBox.put(key, json[_olmSessionsBoxName]![key]);
-      }
-      for (final key in json[_userDeviceKeysBoxName]!.keys) {
-        await _userDeviceKeysBox.put(key, json[_userDeviceKeysBoxName]![key]);
-      }
-      for (final key in json[_userDeviceKeysOutdatedBoxName]!.keys) {
-        await _userDeviceKeysOutdatedBox.put(
-          key,
-          json[_userDeviceKeysOutdatedBoxName]![key],
-        );
-      }
-      for (final key in json[_userCrossSigningKeysBoxName]!.keys) {
-        await _userCrossSigningKeysBox.put(
-          key,
-          json[_userCrossSigningKeysBoxName]![key],
-        );
-      }
-      for (final key in json[_ssssCacheBoxName]!.keys) {
-        await _ssssCacheBox.put(key, json[_ssssCacheBoxName]![key]);
-      }
-      for (final key in json[_presencesBoxName]!.keys) {
-        await _presencesBox.put(key, json[_presencesBoxName]![key]);
-      }
-      for (final key in json[_timelineFragmentsBoxName]!.keys) {
-        await _timelineFragmentsBox.put(
-          key,
-          json[_timelineFragmentsBoxName]![key],
-        );
-      }
-      for (final key in json[_seenDeviceIdsBoxName]!.keys) {
-        await _seenDeviceIdsBox.put(key, json[_seenDeviceIdsBoxName]![key]);
-      }
-      for (final key in json[_seenDeviceKeysBoxName]!.keys) {
-        await _seenDeviceKeysBox.put(key, json[_seenDeviceKeysBoxName]![key]);
-      }
+      final snapshot = validateMatrixDump(export, version: version);
+      // All encryption is prepared before the single IndexedDB commit.
+      // Validation, encryption, quota errors and an interrupted commit leave
+      // the previous database intact. Never close/reopen or clear it first.
+      await transaction(() async {
+        if (!snapshot.containsKey(_userProfilesBoxName) ||
+            !snapshot.containsKey(_readReceiptsBoxName)) {
+          final destinationUser = await _clientBox.get('user_id');
+          if (destinationUser != null &&
+              snapshot[_clientBoxName]?['user_id'] != destinationUser) {
+            throw const FormatException(
+              'Legacy dump cannot retain data from another account.',
+            );
+          }
+        }
+        for (final entry in snapshot.entries) {
+          final box = _dumpBoxes[entry.key]!;
+          await box.clear();
+          for (final row in entry.value.entries) {
+            await box.put(row.key, row.value);
+          }
+        }
+      });
       return true;
-    } catch (e, s) {
-      Logs().e('Database import error: ', e, s);
+    } catch (_) {
+      // Dumps contain access tokens and encryption material. Do not log input
+      // or exceptions which might include record contents.
+      Logs().e('Database import failed. Existing data was kept.');
       return false;
     }
   }

@@ -228,6 +228,18 @@ void main() {
         '!a:test',
       ]);
       reloaded.dispose();
+      await backend.renameChannelCategory('cat', 'Renamed');
+      expect(backend.selectedSpaceCategories.single.name, 'Renamed');
+      await backend.deleteChannelCategory('cat');
+      expect(backend.selectedSpaceCategories, isEmpty);
+      expect(client.children[space.id], ['!a:test', '!b:test', '!c:test']);
+      expect(client.writes.last['categories'], isEmpty);
+      expect(client.writes.last['rooms'], isEmpty);
+      state('net.deltiecord.space.channels', '', client.writes.last);
+      final afterDelete = MatrixBackend(client: client)..selectSpace(space.id);
+      expect(afterDelete.selectedSpaceCategories, isEmpty);
+      expect(space.spaceChildren.length, 3);
+      afterDelete.dispose();
       backend.dispose();
     },
   );

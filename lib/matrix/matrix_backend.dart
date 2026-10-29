@@ -24,6 +24,8 @@ import '../services/upload_labels.dart';
 import '../services/frame_diagnostics.dart';
 import '../services/activity_service_error.dart';
 import '../services/settings_echo_guard.dart';
+import '../services/settings_writer.dart';
+import '../services/session_scope.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -47,6 +49,7 @@ import 'package:matrix/matrix.dart' hide RoomSummary;
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';
 import '../backend/chat_backend.dart';
 import '../backend/thread_session.dart';
+import '../backend/conversation_send_target.dart';
 import '../models/forum_post.dart';
 import '../models/login_methods.dart';
 import '../services/auth_browser.dart';
@@ -61,7 +64,10 @@ import '../services/favourite_reactions_store.dart';
 import '../services/custom_emoji.dart';
 import '../services/avatar_media_pool.dart';
 import '../services/coalesced_callback.dart';
+import '../services/conversation_history_cache.dart';
 import '../services/device_appearance_store.dart';
+import '../services/device_preferences_store.dart';
+import '../services/preference_scopes.dart';
 import '../services/account_settings_sync.dart';
 import '../services/app_sounds.dart';
 import '../services/android_push_bridge.dart';
@@ -282,6 +288,24 @@ class MatrixBackend extends ChatBackend {
   }
 
   final Set<_MatrixThreadSession> _threadSessions = {};
+  ConversationHistoryCache? _threadHistory;
+  ConversationHistoryCache _threadHistoryFor(Client client) {
+    if (!identical(_threadHistory?.owner, client)) {
+      _threadHistory?.dispose();
+      _threadHistory = ConversationHistoryCache(
+        owner: client,
+        read: () async => (await client.database.getCustomCacheObject(
+          'send.conversation_history.v1',
+        ))?.content,
+        write: (data) => client.database.cacheCustomObject(
+          'send.conversation_history.v1',
+          data,
+        ),
+      );
+    }
+    return _threadHistory!;
+  }
+
   final Map<String, Event> _forumRoots = {};
   String? _forumCursor;
   bool _forumHasMore = true;
@@ -459,6 +483,7 @@ class MatrixBackend extends ChatBackend {
     DirectLinkPreviewFetcher? directPreviewFetcher,
     AvatarMediaPool? avatarMediaPool,
     DeviceAppearanceStore? deviceAppearanceStore,
+    DevicePreferencesStore? devicePreferencesStore,
     HistoryIndex Function(String account)? historyIndexFactory,
   }) : _notifications = notifications ?? const SilentChatNotificationSink(),
        _directPreviewFetcher =
@@ -467,7 +492,9 @@ class MatrixBackend extends ChatBackend {
        _historyIndexFactory =
            historyIndexFactory ?? ((account) => HistoryIndex(account)),
        _deviceAppearanceStore =
-           deviceAppearanceStore ?? DeviceAppearanceStore();
+           deviceAppearanceStore ?? DeviceAppearanceStore(),
+       _devicePreferencesStore =
+           devicePreferencesStore ?? DevicePreferencesStore();
 
   final ChatNotificationSink _notifications;
   String? _notificationError;
@@ -497,6 +524,16 @@ class MatrixBackend extends ChatBackend {
   final DirectLinkPreviewFetcher _directPreviewFetcher;
   final AvatarMediaPool _avatarMediaPool;
   final DeviceAppearanceStore _deviceAppearanceStore;
+  final DevicePreferencesStore _devicePreferencesStore;
+  Map<String, Object?>? _devicePreferences;
+  bool _devicePreferencesLoadFailed = false;
+  bool _devicePreferencesLoaded = false;
+  int _devicePreferencesRevision = 0;
+  String get _preferencesPlatform =>
+      '${kIsWeb ? 'web_' : ''}${defaultTargetPlatform.name}';
+  String get _platformPreferencesType =>
+      '${MatrixBackend._settingsAccountDataType}.platform.$_preferencesPlatform';
+  final _platformSettingsEchoGuard = SettingsEchoGuard();
   final HistoryIndex Function(String account) _historyIndexFactory;
   UploadLabels? _uploadLabels;
   Future<UploadLabels?>? _openingUploadLabels;
@@ -654,10 +691,13 @@ class MatrixBackend extends ChatBackend {
           .where((room) => room.membership == Membership.invite)
           .length ??
       0;
-  Timer? _settingsSaveTimer;
-  AppPreferences? _pendingPreferences;
+  late final _preferenceWriter = SettingsWriter<AppPreferences>(
+    write: _writePreferences,
+    changed: _notifyBackendListeners,
+  );
+  final _sessionScope = SessionScope();
+  AppPreferences? get _pendingPreferences => _preferenceWriter.pending;
   final _settingsEchoGuard = SettingsEchoGuard();
-  Future<void> _preferencesWriteQueue = Future.value();
   String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
   StreamSubscription<Object?>? _loginSubscription;
@@ -2586,6 +2626,8 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _sessionScope.dispose();
+    _threadHistory?.dispose();
     _historyDisposed = true;
     _historyDownload?.dispose();
     _historyGapTimer?.cancel();
@@ -2609,7 +2651,7 @@ class MatrixBackend extends ChatBackend {
     }
     _backendUpdates.dispose();
     _typingStopTimer?.cancel();
-    _settingsSaveTimer?.cancel();
+    _preferenceWriter.dispose();
     _desktopActivityLeaseTimer?.cancel();
     _scheduledMessageTimer?.cancel();
     _temporaryRoomMuteTimer?.cancel();

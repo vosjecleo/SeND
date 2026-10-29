@@ -30,11 +30,13 @@ class MobileRoomAvatar extends StatelessWidget {
     required this.room,
     this.size = 40,
     this.autoplay = false,
+    this.showPresence = true,
     super.key,
   });
   final RoomSummary room;
   final double size;
   final bool autoplay;
+  final bool showPresence;
   @override
   Widget build(BuildContext context) => room.usesChannelIcon || room.isVoice
       ? SizedBox.square(
@@ -51,7 +53,7 @@ class MobileRoomAvatar extends StatelessWidget {
       : MobileAvatar(
           bytes: room.avatarBytes,
           fallback: room.name,
-          presence: room.isDirect ? room.presence : null,
+          presence: showPresence && room.isDirect ? room.presence : null,
           size: size,
           autoplay: autoplay,
         );

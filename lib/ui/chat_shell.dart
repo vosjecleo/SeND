@@ -5,7 +5,9 @@ import 'video_playback_status.dart';
 import 'activity_widgets.dart';
 import 'home_room_menu.dart';
 import 'archive_navigation.dart';
+import 'channel_category_menu.dart';
 import 'message_action_menu.dart';
+import 'threshold_feedback.dart';
 import 'queued_attachment_preview.dart';
 import '../services/queued_message.dart';
 import 'attachment_image_editor.dart';
@@ -32,6 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../backend/chat_backend.dart';
 import '../backend/thread_session.dart';
+import '../backend/conversation_send_target.dart';
 import '../models/forum_post.dart';
 import '../services/browser_file_picker.dart';
 import '../services/browser_image_paste.dart';
@@ -78,6 +81,7 @@ import 'presence_controls.dart';
 import 'space_settings_screen.dart';
 import 'personal_organisation.dart';
 import 'typing_indicator.dart';
+import 'timeline_scroll_anchor.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
 import 'room_event_visibility_dialog.dart';
@@ -391,11 +395,9 @@ class _ChatShellState extends State<ChatShell> {
       _wasTyping = typing;
       unawaited(widget.backend.setComposerTyping(typing));
     }
-    final cursor = _message.selection.extentOffset.clamp(0, text.length);
-    final beforeCursor = text.substring(0, cursor);
-    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(beforeCursor);
-    final query = match?.group(1);
-    final start = match == null ? null : beforeCursor.lastIndexOf('@');
+    final match = composerMentionQuery(text, _message.selection.extentOffset);
+    final query = match?.query;
+    final start = match?.start;
     if (query == _mentionQuery && start == _mentionStart) return;
     setState(() {
       _mentionQuery = query;
@@ -415,24 +417,7 @@ class _ChatShellState extends State<ChatShell> {
       }
     }
     if (suggestion == null) return;
-    final mentionText = suggestion.isRoom
-        ? '#${suggestion.displayName}'
-        : suggestion.matrixId;
-    final end = _message.selection.extentOffset;
-    _message.replaceText(
-      start,
-      end - start,
-      '$mentionText ',
-      TextSelection.collapsed(offset: start + mentionText.length + 1),
-    );
-    if (!suggestion.isRole &&
-        (suggestion.isRoom || suggestion.matrixId.contains(':'))) {
-      _message.formatText(
-        start,
-        mentionText.length,
-        LinkAttribute('https://matrix.to/#/${suggestion.matrixId}'),
-      );
-    }
+    insertComposerMention(_message, start, suggestion);
     setState(() {
       _mentionQuery = null;
       _mentionStart = null;
@@ -514,8 +499,9 @@ class _ChatShellState extends State<ChatShell> {
         final nextDelta = _message.document.toDelta();
         _restoringDraft = true;
         try {
-          _message.document = Document.fromDelta(
-            Document.fromJson(submittedDelta).toDelta().concat(nextDelta),
+          _message.document = restoreFailedComposer(
+            Document.fromJson(submittedDelta),
+            Document.fromDelta(nextDelta),
           );
           _message.updateSelection(
             TextSelection.collapsed(
@@ -1174,6 +1160,7 @@ class _ChatShellState extends State<ChatShell> {
   }
 
   void _reportConversationVisibility(bool visible) {
+    visible = visible && ModalRoute.of(context)?.isCurrent != false;
     if (_reportedConversationVisible == visible) return;
     _reportedConversationVisible = visible;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1182,18 +1169,10 @@ class _ChatShellState extends State<ChatShell> {
     });
   }
 
-  List<MentionSuggestion> get _mentionSuggestions {
-    final query = _mentionQuery?.toLowerCase();
-    if (query == null) return const [];
-    return widget.backend.mentionSuggestions
-        .where(
-          (suggestion) =>
-              suggestion.displayName.toLowerCase().contains(query) ||
-              suggestion.matrixId.toLowerCase().contains(query),
-        )
-        .take(6)
-        .toList(growable: false);
-  }
+  List<MentionSuggestion> get _mentionSuggestions => matchingComposerMentions(
+    widget.backend.mentionSuggestions,
+    _mentionQuery,
+  );
 }
 
 class _RoomDraft {

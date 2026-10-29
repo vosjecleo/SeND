@@ -14,6 +14,11 @@ class _Session extends ThreadSession {
   final read = <String>[];
   final sent = <String>[];
   final items = <ChatMessage>[];
+  bool _visible = false;
+  @override
+  bool get visible => _visible;
+  @override
+  void setVisible(bool visible) => _visible = visible;
   @override
   String get roomId => '!room';
   @override
@@ -29,7 +34,10 @@ class _Session extends ThreadSession {
   @override
   Future<void> loadMore() async {}
   @override
-  Future<void> attach(AttachmentDraft attachment) async {}
+  Future<void> attach(
+    AttachmentDraft attachment, {
+    String? replyToMessageId,
+  }) async {}
   @override
   Future<void> markRead(String eventId) async => read.add(eventId);
   @override
@@ -59,6 +67,59 @@ class _Backend extends FakeBackend {
 }
 
 void main() {
+  testWidgets('discussion visibility follows routes and app lifecycle', (
+    tester,
+  ) async {
+    final backend = _Backend(), navigation = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigation,
+        theme: ThemeData(
+          extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+        ),
+        home: Scaffold(
+          body: ThreadView(
+            backend: backend,
+            roomId: '!room',
+            rootId: r'$root',
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(backend.session.visible, true);
+    navigation.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Other view')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(backend.session.visible, false);
+    navigation.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(backend.session.visible, true);
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+    expect(backend.session.visible, false);
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pumpAndSettle();
+    expect(backend.session.visible, true);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(backend.session.visible, false);
+  });
   testWidgets(
     'new replies stay below old replies and sending keeps the keyboard',
     (tester) async {
@@ -101,8 +162,9 @@ void main() {
       );
       expect(backend.session.read.last, 'new');
       await tester.enterText(find.byType(TextField), 'First draft');
+      await tester.pump();
       backend.session.sendGate = Completer<void>();
-      await tester.tap(find.byTooltip('Send reply'));
+      await tester.tap(find.byTooltip('Send'));
       await tester.pump();
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
@@ -185,7 +247,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Hello discussion');
-      await tester.tap(find.byTooltip('Send reply'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       expect(backend.session.sent, ['Hello discussion']);
       expect(
@@ -194,7 +257,8 @@ void main() {
       );
       backend.session.fail = true;
       await tester.enterText(find.byType(TextField), 'Keep this draft');
-      await tester.tap(find.byTooltip('Send reply'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,

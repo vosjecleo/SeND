@@ -767,6 +767,7 @@ class ScheduledMessageSummary {
     required this.body,
     required this.sendAt,
     this.replyToMessageId,
+    this.threadRootId,
   });
 
   final String id;
@@ -774,6 +775,7 @@ class ScheduledMessageSummary {
   final String body;
   final DateTime sendAt;
   final String? replyToMessageId;
+  final String? threadRootId;
 }
 
 enum InboxItemKind { mention, reply, reaction, missedCall, invite }

@@ -1,10 +1,65 @@
 import 'dart:convert';
+import 'package:flutter/services.dart' show TextSelection;
 
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:markdown/markdown.dart' as markdown;
 
 import '../services/custom_emoji.dart';
 import '../models/chat_models.dart';
+
+({String query, int start})? composerMentionQuery(String text, int cursor) {
+  final before = text.substring(0, cursor.clamp(0, text.length));
+  final query = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(before)?.group(1);
+  return query == null ? null : (query: query, start: before.lastIndexOf('@'));
+}
+
+List<MentionSuggestion> matchingComposerMentions(
+  Iterable<MentionSuggestion> candidates,
+  String? query,
+) {
+  if (query == null) return const [];
+  final lower = query.toLowerCase();
+  return candidates
+      .where(
+        (m) =>
+            m.displayName.toLowerCase().contains(lower) ||
+            m.matrixId.toLowerCase().contains(lower),
+      )
+      .take(6)
+      .toList(growable: false);
+}
+
+void insertComposerMention(
+  QuillController controller,
+  int start,
+  MentionSuggestion suggestion,
+) {
+  final text = suggestion.isRoom
+      ? '#${suggestion.displayName}'
+      : suggestion.matrixId;
+  controller.replaceText(
+    start,
+    controller.selection.extentOffset - start,
+    '$text ',
+    TextSelection.collapsed(offset: start + text.length + 1),
+  );
+  if (!suggestion.isRole &&
+      (suggestion.isRoom || suggestion.matrixId.contains(':'))) {
+    controller.formatText(
+      start,
+      text.length,
+      LinkAttribute('https://matrix.to/#/${suggestion.matrixId}'),
+    );
+  }
+}
+
+/// Quill's final newline is structural. Do not turn the empty next draft into
+/// an extra visible blank line when restoring a failed send.
+Document restoreFailedComposer(Document failed, Document next) {
+  if (next.length == 1 && next.toPlainText() == '\n') return failed;
+  if (failed.length == 1 && failed.toPlainText() == '\n') return next;
+  return Document.fromDelta(failed.toDelta().concat(next.toDelta()));
+}
 
 /// Import only text and explicit custom-emoji identities into the plain editor.
 Document plainMessageDocument(String body, String? html) {

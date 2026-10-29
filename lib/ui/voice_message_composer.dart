@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import '../backend/chat_backend.dart';
+import '../backend/thread_session.dart';
 import '../models/chat_models.dart';
 import '../services/voice_recording.dart';
 import 'deltiecord_theme.dart';
@@ -16,6 +17,7 @@ class VoiceMessageComposer extends StatefulWidget {
     required this.builder,
     this.replyToMessageId,
     this.onSent,
+    this.thread,
     this.createRecording,
     super.key,
   });
@@ -23,6 +25,7 @@ class VoiceMessageComposer extends StatefulWidget {
   final String roomId;
   final String? replyToMessageId;
   final VoidCallback? onSent;
+  final ThreadSession? thread;
   final VoiceRecordingController Function()? createRecording;
   final Widget Function(VoidCallback start) builder;
   @override
@@ -137,6 +140,7 @@ class _VoiceMessageComposerState extends State<VoiceMessageComposer>
   Future<void> _send() async {
     final draft = _recording?.draft;
     final targetRoom = widget.roomId, backend = widget.backend, reply = _reply;
+    final target = widget.thread?.sendTarget;
     if (_sending || draft == null) return;
     setState(() {
       _sending = true;
@@ -146,11 +150,13 @@ class _VoiceMessageComposerState extends State<VoiceMessageComposer>
       await _player?.pause();
       await backend.enqueueRoomSend(
         targetRoom,
-        () => backend.sendAttachment(
-          draft,
-          roomId: targetRoom,
-          replyToMessageId: reply,
-        ),
+        () => target != null
+            ? target.attach(draft, replyToMessageId: reply)
+            : backend.sendAttachment(
+                draft,
+                roomId: targetRoom,
+                replyToMessageId: reply,
+              ),
       );
       if (!mounted) return;
       setState(() => _sending = false);

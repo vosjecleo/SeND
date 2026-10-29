@@ -46,19 +46,140 @@ extension _MatrixForumIndex on MatrixBackend {
 }
 
 class _MatrixThreadSession extends ThreadSession {
-  _MatrixThreadSession(this.backend, this.room, this.rootId);
+  _MatrixThreadSession(this.backend, this.room, this.rootId)
+    : client = room.client,
+      lease = backend._sessionScope.capture();
 
   final MatrixBackend backend;
   final Room room;
+  final Client client;
+  final SessionLease lease;
+  bool get _active =>
+      !_disposed && lease.isCurrent && identical(backend._client, client);
+  @override
+  ConversationSendTarget get sendTarget => ConversationSendTarget(
+    roomId: roomId,
+    threadRootId: rootId,
+    sticker: (sticker) {
+      if (!lease.isCurrent || !identical(backend._client, client)) {
+        throw StateError('The account session has ended.');
+      }
+      return backend._sendSticker(
+        sticker,
+        roomId: roomId,
+        threadRootEventId: rootId,
+      );
+    },
+    send: (text, {formattedBody, editMessageId, replyToMessageId}) {
+      if (!lease.isCurrent || !identical(backend._client, client)) {
+        throw StateError('The account session has ended.');
+      }
+      return backend._sendMessage(
+        text,
+        roomId: roomId,
+        formattedBody: formattedBody,
+        editMessageId: editMessageId,
+        replyToMessageId: replyToMessageId,
+        threadRootEventId: editMessageId == rootId ? null : rootId,
+      );
+    },
+    attach: (draft, {replyToMessageId}) {
+      if (!lease.isCurrent || !identical(backend._client, client)) {
+        throw StateError('The account session has ended.');
+      }
+      return backend._sendAttachment(
+        draft,
+        roomId: roomId,
+        threadRootEventId: rootId,
+        replyToMessageId: replyToMessageId,
+      );
+    },
+  );
   @override
   final String rootId;
   Timeline? _timeline;
   String? _next;
   bool _disposed = false;
+  bool _viewVisible = false;
+  @override
+  bool get visible => _active && _viewVisible;
+  @override
+  void setVisible(bool visible) {
+    _viewVisible = visible;
+  }
+
   bool _loading = false;
   bool _more = true;
   String? _error;
   String? _lastRead;
+  bool _hydrating = false, _needsHydration = false;
+  late final _cache = backend._threadHistoryFor(client);
+  String get _cacheKey => '$roomId\u0000$rootId';
+  Timer? _typingStop;
+  DateTime? _lastTyping;
+  @override
+  List<String> get typingNames => !_active
+      ? const []
+      : room.typingUsers
+            .where((user) => user.id != client.userID)
+            .map((user) => user.calcDisplayname())
+            .toList();
+  @override
+  Future<void> setTyping(bool typing) async {
+    if (!_active || !backend.preferences.sendTypingNotifications) return;
+    if (typing &&
+        _lastTyping != null &&
+        DateTime.now().difference(_lastTyping!) < const Duration(seconds: 3)) {
+      return;
+    }
+    _typingStop?.cancel();
+    _lastTyping = typing ? DateTime.now() : null;
+    try {
+      await room.setTyping(typing, timeout: 5000);
+      if (typing && _active) {
+        _typingStop = Timer(
+          const Duration(seconds: 4),
+          () => unawaited(setTyping(false)),
+        );
+      }
+    } catch (_) {
+      /* Typing must not interrupt editing while offline. */
+    }
+  }
+
+  @override
+  Future<void> sendSticker(StickerSummary sticker) {
+    _requireAccount();
+    return backend._sendSticker(
+      sticker,
+      roomId: roomId,
+      threadRootEventId: rootId,
+    );
+  }
+
+  @override
+  Future<void> sendPoll(PollDraft poll) {
+    _requireAccount();
+    return backend._sendPoll(poll, roomId: roomId, threadRootEventId: rootId);
+  }
+
+  @override
+  Future<void> schedule(String text, DateTime at, {String? replyToMessageId}) {
+    _requireAccount();
+    return backend._scheduleMessage(
+      text,
+      at,
+      roomId: roomId,
+      replyToMessageId: replyToMessageId,
+      threadRootEventId: rootId,
+    );
+  }
+
+  void _requireAccount() {
+    if (!lease.isCurrent || !identical(backend._client, client)) {
+      throw StateError('The account session has ended.');
+    }
+  }
 
   @override
   String get roomId => room.id;
@@ -71,20 +192,43 @@ class _MatrixThreadSession extends ThreadSession {
   @override
   List<ChatMessage> get messages {
     final timeline = _timeline;
-    if (timeline == null || _disposed) return const [];
-    return backend._mapTimelineEvents(
-      timeline,
-      timeline.events.where(
-        (event) =>
-            event.eventId == rootId ||
-            (event.relationshipType == RelationshipTypes.thread &&
-                event.relationshipEventId == rootId),
+    if (timeline == null || !_active) return const [];
+    return backend.conversationMessages(
+      roomId: roomId,
+      threadRootId: rootId,
+      sent: backend._mapTimelineEvents(
+        timeline,
+        timeline.events.where(
+          (event) =>
+              event.eventId == rootId ||
+              (event.relationshipType == RelationshipTypes.thread &&
+                  event.relationshipEventId == rootId),
+        ),
       ),
     );
   }
 
   Future<void> initialize() async {
-    final root = await room.getEventById(rootId);
+    final cached = <Event>[];
+    final cachedRows = await _cache.get(_cacheKey);
+    if (!_active) return;
+    for (final row in cachedRows) {
+      try {
+        final event = Event.fromJson(Map<String, dynamic>.from(row), room);
+        if (event.eventId == rootId ||
+            (event.relationshipType == RelationshipTypes.thread &&
+                event.relationshipEventId == rootId)) {
+          cached.add(event);
+        }
+      } catch (_) {
+        /* Ignore malformed optional cache rows, never live data. */
+      }
+    }
+    final root =
+        backend._eventById(rootId) ??
+        cached.where((e) => e.eventId == rootId).firstOrNull ??
+        await room.getEventById(rootId);
+    if (!_active) return;
     if (root == null) throw StateError('This discussion is unavailable.');
     if (root.relationshipType == RelationshipTypes.thread) {
       throw StateError(
@@ -92,22 +236,33 @@ class _MatrixThreadSession extends ThreadSession {
       );
     }
     final timeline = await room.getTimeline(limit: 30, onUpdate: _changed);
-    if (_disposed) {
+    if (!_active) {
       timeline.cancelSubscriptions();
       return;
     }
     _timeline = timeline;
+    backend.addListener(_backendChanged);
     // Room-wide limited-sync trimming must not discard a separately paged
     // discussion root/history. Live event and key subscriptions remain active.
     await timeline.roomSub?.cancel();
+    final ids = timeline.events.map((e) => e.eventId).toSet();
+    timeline.events.addAll(cached.where((e) => ids.add(e.eventId)));
     if (!timeline.events.any((event) => event.eventId == rootId)) {
       timeline.events.add(root);
     }
+    timeline.events.sort(
+      (a, b) => b.originServerTs.compareTo(a.originServerTs),
+    );
     unawaited(loadMore());
   }
 
+  void _backendChanged() {
+    if (!_active) return;
+    notifyListeners();
+  }
+
   void _changed() {
-    if (_disposed) return;
+    if (!_active) return;
     final timeline = _timeline;
     if (timeline != null) {
       timeline.events.removeWhere(
@@ -118,19 +273,62 @@ class _MatrixThreadSession extends ThreadSession {
       );
       final retained = timeline.events.map((event) => event.eventId).toSet();
       timeline.aggregatedEvents.removeWhere((id, _) => !retained.contains(id));
+      _needsHydration = true;
+      unawaited(_hydrate());
     }
     notifyListeners();
+  }
+
+  Future<void> _hydrate() async {
+    if (_hydrating || !_active) return;
+    _hydrating = true;
+    try {
+      while (_needsHydration && _active) {
+        _needsHydration = false;
+        final timeline = _timeline;
+        if (timeline == null) return;
+        try {
+          await Future.wait([
+            backend._hydrateSenderAvatars(timeline),
+            backend._hydrateReplies(timeline),
+            backend._hydratePollResponses(timeline),
+            backend._hydrateLinkPreviews(timeline, isCurrent: () => _active),
+          ]);
+        } catch (_) {
+          /* Text/history remain usable if optional metadata fails. */
+        }
+        if (_active) notifyListeners();
+      }
+    } finally {
+      _hydrating = false;
+    }
+  }
+
+  void _persistSnapshot() {
+    final timeline = _timeline;
+    if (!_active || timeline == null) return;
+    final root = timeline.events.where((e) => e.eventId == rootId).firstOrNull;
+    if (root == null) return;
+    unawaited(
+      _cache.put(_cacheKey, [
+        root.toJson(),
+        ...timeline.events
+            .where((e) => e.eventId != rootId && e.status.isSynced)
+            .take(89)
+            .map((e) => e.toJson()),
+      ]),
+    );
   }
 
   @override
   Future<void> loadMore() async {
     final timeline = _timeline;
-    if (_disposed || _loading || !_more || timeline == null) return;
+    if (!_active || _loading || !_more || timeline == null) return;
     _loading = true;
     _error = null;
     _changed();
     try {
-      final page = await backend._matrix.getRelatingEventsWithRelType(
+      final page = await client.getRelatingEventsWithRelType(
         room.id,
         rootId,
         RelationshipTypes.thread,
@@ -140,14 +338,14 @@ class _MatrixThreadSession extends ThreadSession {
       );
       final events = <Event>[];
       for (final raw in page.chunk) {
+        if (!_active) return;
         var event = Event.fromMatrixEvent(raw, room);
-        if (event.type == EventTypes.Encrypted &&
-            backend._matrix.encryption != null) {
-          event = await backend._matrix.encryption!.decryptRoomEvent(event);
+        if (event.type == EventTypes.Encrypted && client.encryption != null) {
+          event = await client.encryption!.decryptRoomEvent(event);
         }
         events.add(event);
       }
-      if (_disposed) return;
+      if (!_active) return;
       final ids = timeline.events.map((event) => event.eventId).toSet();
       timeline.events.addAll(events.where((event) => ids.add(event.eventId)));
       timeline.events.sort(
@@ -184,6 +382,7 @@ class _MatrixThreadSession extends ThreadSession {
       if (!_disposed) _error = backend._friendlyError(error);
     } finally {
       _loading = false;
+      _persistSnapshot();
       _changed();
     }
   }
@@ -195,7 +394,7 @@ class _MatrixThreadSession extends ThreadSession {
     String? editMessageId,
     String? replyToMessageId,
   }) {
-    if (_disposed) throw StateError('This discussion has been closed.');
+    if (!_active) throw StateError('This discussion has been closed.');
     if (editMessageId != null &&
         !messages.any(
           (m) =>
@@ -225,18 +424,23 @@ class _MatrixThreadSession extends ThreadSession {
   }
 
   @override
-  Future<void> attach(AttachmentDraft attachment) {
-    if (_disposed) throw StateError('This discussion has been closed.');
+  Future<void> attach(AttachmentDraft attachment, {String? replyToMessageId}) {
+    if (!_active) throw StateError('This discussion has been closed.');
     return backend._sendAttachment(
       attachment,
       roomId: roomId,
       threadRootEventId: rootId,
+      replyToMessageId: replyToMessageId,
     );
   }
 
   @override
   Future<void> markRead(String eventId) async {
-    if (_disposed || !backend._applicationForeground || eventId == _lastRead) {
+    if (!_active ||
+        !_viewVisible ||
+        !backend._applicationForeground ||
+        backend._manualUnreadHolds.contains(roomId) ||
+        eventId == _lastRead) {
       return;
     }
     if (!messages.any(
@@ -246,14 +450,14 @@ class _MatrixThreadSession extends ThreadSession {
     }
     _lastRead = eventId;
     try {
-      await backend._matrix.postReceipt(
+      await client.postReceipt(
         roomId,
         ReceiptType.mReadPrivate,
         eventId,
         threadId: rootId,
       );
-      if (backend.preferences.sendReadReceipts && !_disposed) {
-        await backend._matrix.postReceipt(
+      if (backend.preferences.sendReadReceipts && _active) {
+        await client.postReceipt(
           roomId,
           ReceiptType.mRead,
           eventId,
@@ -268,7 +472,15 @@ class _MatrixThreadSession extends ThreadSession {
   @override
   void dispose() {
     if (_disposed) return;
+    _persistSnapshot();
     _disposed = true;
+    _typingStop?.cancel();
+    if (_lastTyping != null &&
+        lease.isCurrent &&
+        identical(backend._client, client)) {
+      unawaited(room.setTyping(false).catchError((Object _) {}));
+    }
+    backend.removeListener(_backendChanged);
     _timeline?.cancelSubscriptions();
     _timeline = null;
     backend._threadSessions.remove(this);

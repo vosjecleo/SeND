@@ -27,6 +27,7 @@ class _MessageComposer extends StatefulWidget {
     required this.maxHeight,
     this.replyToMessageId,
     this.sending = false,
+    this.conversationTarget,
     super.key,
   });
 
@@ -55,6 +56,7 @@ class _MessageComposer extends StatefulWidget {
   final double maxHeight;
   final String? replyToMessageId;
   final bool sending;
+  final ConversationSendTarget? conversationTarget;
 
   @override
   State<_MessageComposer> createState() => _MessageComposerState();
@@ -288,31 +290,48 @@ class _MessageComposerState extends State<_MessageComposer> {
   }
 
   Future<void> showEmojiPicker() async {
-    final roomId = widget.backend.selectedRoom?.id;
+    final target = widget.conversationTarget;
+    final roomId = target?.roomId ?? widget.backend.selectedRoom?.id;
     final replyTo = widget.replyToMessageId;
     final result = await showExpressionPicker(
       context,
       widget.backend,
       _pickerGiphy,
     );
-    if (!mounted || widget.backend.selectedRoom?.id != roomId) return;
+    if (!mounted ||
+        roomId == null ||
+        (target == null && widget.backend.selectedRoom?.id != roomId)) {
+      return;
+    }
     try {
       if (result is EmojiEntry) {
         _insertEmoji(result);
       } else if (result is StickerSummary) {
-        await widget.backend.sendSticker(result, roomId: roomId);
+        await widget.backend.enqueueRoomSend(
+          roomId,
+          () => target == null
+              ? widget.backend.sendSticker(result, roomId: roomId)
+              : target.sticker?.call(result) ??
+                    Future<void>.error(StateError('Stickers are unavailable.')),
+        );
       } else if (result is GifSearchResult) {
         final bytes = await _pickerGiphy.download(result);
-        await widget.backend.sendAttachment(
-          AttachmentDraft(
-            bytes: bytes,
-            name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
-            gifSource: result.shareUrl,
-            mimeType: 'image/gif',
-            spoiler: false,
-          ),
-          roomId: roomId,
-          replyToMessageId: replyTo,
+        final draft = AttachmentDraft(
+          bytes: bytes,
+          name: 'klipy-${DateTime.now().millisecondsSinceEpoch}.gif',
+          gifSource: result.shareUrl,
+          mimeType: 'image/gif',
+          spoiler: false,
+        );
+        await widget.backend.enqueueRoomSend(
+          roomId,
+          () => target == null
+              ? widget.backend.sendAttachment(
+                  draft,
+                  roomId: roomId,
+                  replyToMessageId: replyTo,
+                )
+              : target.attach(draft, replyToMessageId: replyTo),
         );
       }
     } catch (_) {

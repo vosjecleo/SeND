@@ -53,6 +53,13 @@ class MediaAlbumIndex {
 
   final Map<String, List<ChatMessage>> albums;
   final Set<String> hiddenMessageIds;
+  String visibleMessageId(String eventId) {
+    if (!hiddenMessageIds.contains(eventId)) return eventId;
+    for (final entry in albums.entries) {
+      if (entry.value.any((m) => m.id == eventId)) return entry.key;
+    }
+    return eventId;
+  }
 
   static bool _eligible(ChatMessage message) {
     final attachment = message.attachment;

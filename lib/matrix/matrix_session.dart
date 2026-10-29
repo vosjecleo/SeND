@@ -7,6 +7,7 @@ part of 'matrix_backend.dart';
 /// generation established by this lifecycle.
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
+    _sessionScope.invalidate();
     cancelQueuedSends();
     if (kIsWeb) BrowserPushPreviews.stop();
     try {
@@ -38,9 +39,10 @@ extension _MatrixSession on MatrixBackend {
       _mediaIndexOffset.clear();
       _indexFingerprints.clear();
       _indexedEventRooms.clear();
-      _settingsSaveTimer?.cancel();
-      _pendingPreferences = null;
+      _preferenceWriter.reset();
+      _devicePreferencesLoaded = false;
       _settingsEchoGuard.clear();
+      _platformSettingsEchoGuard.clear();
       await _syncSubscription?.cancel();
       await _loginSubscription?.cancel();
       await _syncStatusSubscription?.cancel();
@@ -58,6 +60,13 @@ extension _MatrixSession on MatrixBackend {
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((update) {
+        acknowledgeQueuedTransactions([
+          for (final room in update.rooms?.join?.values ?? <JoinedRoomUpdate>[])
+            for (final event in room.timeline?.events ?? <MatrixEvent>[])
+              if (event.senderId == _matrix.userID &&
+                  event.unsigned?['transaction_id'] is String)
+                event.unsigned!['transaction_id'] as String,
+        ]);
         final syncingClient = _client;
         final indexGeneration = _historyConfigurationGeneration;
         _historySyncQueue = _historySyncQueue
@@ -205,6 +214,7 @@ extension _MatrixSession on MatrixBackend {
     required String password,
   }) async {
     _status = SessionStatus.signingIn;
+    _sessionScope.invalidate();
     _connectionStatus = ConnectionStatus.connecting;
     _error = null;
     _notifyBackendListeners();
@@ -232,6 +242,7 @@ extension _MatrixSession on MatrixBackend {
     required String password,
   }) async {
     _status = SessionStatus.signingIn;
+    _sessionScope.invalidate();
     _connectionStatus = ConnectionStatus.connecting;
     _error = null;
     _notifyBackendListeners();
@@ -308,6 +319,10 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    _sessionScope.invalidate();
+    _preferenceWriter.reset();
+    _settingsEchoGuard.clear();
+    _platformSettingsEchoGuard.clear();
     cancelQueuedSends();
     await _indexEventSubscription?.cancel();
     _historyDownload?.dispose();
@@ -346,9 +361,9 @@ extension _MatrixSession on MatrixBackend {
     }
     try {
       await _stopActivities(clear: true);
-      _settingsSaveTimer?.cancel();
-      _pendingPreferences = null;
+      _preferenceWriter.reset();
       _settingsEchoGuard.clear();
+      _platformSettingsEchoGuard.clear();
       _stopProfileRefreshTimer();
       await _disposeVoice();
       await _closeTimeline();
@@ -448,6 +463,11 @@ extension _MatrixSession on MatrixBackend {
       _profileRequests.clear();
       _accountPreferences = null;
       _deviceAppearance = null;
+      _devicePreferences = null;
+      _threadHistory?.dispose();
+      _threadHistory = null;
+      _devicePreferencesLoadFailed = false;
+      _devicePreferencesLoaded = false;
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _mediaRangeProxy.clear();
@@ -858,7 +878,17 @@ extension _MatrixSession on MatrixBackend {
     }
   }
 
+  bool _visibleDiscussionFor(Event event) =>
+      event.relationshipType == RelationshipTypes.thread &&
+      _threadSessions.any(
+        (session) =>
+            session.visible &&
+            session.roomId == event.room.id &&
+            session.rootId == event.relationshipEventId,
+      );
+
   Future<void> _notifyNewMessages() async {
+    final lease = _sessionScope.capture();
     if (!_matrix.isLogged() ||
         !_preferences.notificationsEnabled ||
         _presenceMode == PresenceMode.doNotDisturb) {
@@ -893,6 +923,7 @@ extension _MatrixSession on MatrixBackend {
       return;
     }
     for (final room in rooms) {
+      if (!lease.isCurrent) return;
       final invited = room.membership == Membership.invite;
       if (invited) {
         final senderId = room
@@ -937,6 +968,7 @@ extension _MatrixSession on MatrixBackend {
               alertCadence: _preferences.notificationAlertCadence,
             );
           } catch (_) {
+            if (!lease.isCurrent) return;
             _notificationError =
                 'Could not show the room invitation notification.';
             _notifyBackendListeners();
@@ -952,8 +984,8 @@ extension _MatrixSession on MatrixBackend {
       _lastNotificationEventIds[room.id] = event.eventId;
       if (activeDesktopOwnsExternalNotifications ||
           (_applicationForeground &&
-              room.id == _selectedRoomId &&
-              _conversationVisible) ||
+              ((room.id == _selectedRoomId && _conversationVisible) ||
+                  _visibleDiscussionFor(event))) ||
           event.senderId == _matrix.userID ||
           room.pushRuleState == PushRuleState.dontNotify ||
           (!invited &&
@@ -983,14 +1015,16 @@ extension _MatrixSession on MatrixBackend {
             )
           : 'New room activity';
       final notificationAvatar = await _notificationAvatarFor(room, event);
+      if (!lease.isCurrent) return;
       final notificationImage = await _notificationImageFor(displayEvent);
+      if (!lease.isCurrent || !_preferences.notificationsEnabled) return;
       // Avatar/media enrichment is asynchronous. The user may open this room
       // while those bytes are loading; re-check immediately before posting so
       // a stale task cannot resurrect a notification that room-open cleared.
       if (activeDesktopOwnsExternalNotifications ||
           (_applicationForeground &&
-              room.id == _selectedRoomId &&
-              _conversationVisible) ||
+              ((room.id == _selectedRoomId && _conversationVisible) ||
+                  _visibleDiscussionFor(displayEvent))) ||
           event.senderId == _matrix.userID) {
         InAppNotificationCenter.dismissRoom(room.id);
         unawaited(_notifications.clearRoom(room.id));
@@ -1059,8 +1093,10 @@ extension _MatrixSession on MatrixBackend {
               ? room.notificationCount
               : room.highlightCount,
         );
+        if (!lease.isCurrent) return;
         _notificationError = null;
       } catch (_) {
+        if (!lease.isCurrent) return;
         _notificationError =
             'System notification delivery failed. Open Notifications settings to test and retry.';
         _notifyBackendListeners();
@@ -1171,21 +1207,46 @@ extension _MatrixSession on MatrixBackend {
 
   void _loadSettings() {
     final previousPresence = _effectiveClientPresence;
-    final content =
+    final accountContent =
         _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
+    final platformContent =
+        _matrix.accountData[_platformPreferencesType]?.content;
+    // Do not capture defaults before initial account data has arrived.
+    if (_devicePreferences == null &&
+        _devicePreferencesLoaded &&
+        !_devicePreferencesLoadFailed &&
+        _settingsHydrated) {
+      final migrated = PreferenceScopes.migrateDevice(accountContent);
+      _devicePreferences = migrated;
+      final user = _matrix.userID;
+      if (user != null) {
+        unawaited(
+          _devicePreferencesStore.save(user, migrated).catchError((Object _) {
+            _error = 'Device settings could not be saved.';
+            _notifyBackendListeners();
+          }),
+        );
+      }
+    }
+    final content = PreferenceScopes.overlay(
+      accountContent,
+      _devicePreferences,
+      _preferencesPlatform,
+      platformSettings: platformContent,
+    );
     _notificationPreviewsEnabled =
-        content?.tryGet<bool>('notification_previews') ?? true;
+        content.tryGet<bool>('notification_previews') ?? true;
     if (kIsWeb) {
       BrowserPushPreviews.setAllowed(
         _notificationPreviewsEnabled &&
-            (content?.tryGet<bool>('notifications_enabled') ?? true),
+            (content.tryGet<bool>('notifications_enabled') ?? true),
       );
     }
     _loadAdvancedAccountData();
     _collapsedChannelCategories
       ..clear()
       ..addEntries(
-        (content?.tryGetMap<String, Object?>('collapsed_channel_categories') ??
+        (content.tryGetMap<String, Object?>('collapsed_channel_categories') ??
                 const {})
             .entries
             .map(
@@ -1195,7 +1256,9 @@ extension _MatrixSession on MatrixBackend {
               ),
             ),
       );
-    if (_pendingPreferences != null || !_settingsEchoGuard.accepts(content)) {
+    if (_pendingPreferences != null ||
+        !_settingsEchoGuard.accepts(accountContent) ||
+        !_platformSettingsEchoGuard.accepts(platformContent)) {
       _configureClientPresence();
       if (previousPresence != _effectiveClientPresence) {
         unawaited(_refreshDesktopPresence());
@@ -1203,125 +1266,122 @@ extension _MatrixSession on MatrixBackend {
       return;
     }
     final accountPreferences = AppPreferences(
-      density: content?.tryGet<String>('density') == 'cozy'
+      density: content.tryGet<String>('density') == 'cozy'
           ? InterfaceDensity.cozy
           : InterfaceDensity.compact,
       compactness:
-          (content?['compactness'] as num?)?.toDouble().clamp(0, 1) ??
-          (content?.tryGet<String>('density') == 'cozy' ? 0.15 : 0.5),
+          (content['compactness'] as num?)?.toDouble().clamp(0, 1) ??
+          (content.tryGet<String>('density') == 'cozy' ? 0.15 : 0.5),
       themeMode: _readThemeMode(content),
-      themeJson: content?.tryGet<String>('theme_document') ?? '',
+      themeJson: content.tryGet<String>('theme_document') ?? '',
       themeSettings:
-          content?.tryGetMap<String, Object?>('theme_parameters') ?? const {},
+          content.tryGetMap<String, Object?>('theme_parameters') ?? const {},
       interfaceScale:
-          (content?['interface_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ??
-          1,
+          (content['interface_scale'] as num?)?.toDouble().clamp(0.8, 1.4) ?? 1,
       fontScale: _readPlatformFontScale(content),
-      use24HourTime: content?.tryGet<bool>('use_24_hour_time') ?? true,
+      use24HourTime: content.tryGet<bool>('use_24_hour_time') ?? true,
       roomPanelWidth:
-          (content?['room_panel_width'] as num?)?.toDouble().clamp(220, 420) ??
+          (content['room_panel_width'] as num?)?.toDouble().clamp(220, 420) ??
           280,
       sidePanelWidth:
-          (content?['side_panel_width'] as num?)?.toDouble().clamp(260, 460) ??
+          (content['side_panel_width'] as num?)?.toDouble().clamp(260, 460) ??
           310,
-      reducedMotion: content?.tryGet<bool>('reduced_motion') ?? false,
-      highContrast: content?.tryGet<bool>('high_contrast') ?? false,
-      autoplayGifs: content?.tryGet<bool>('autoplay_gifs') ?? true,
+      reducedMotion: content.tryGet<bool>('reduced_motion') ?? false,
+      highContrast: content.tryGet<bool>('high_contrast') ?? false,
+      autoplayGifs: content.tryGet<bool>('autoplay_gifs') ?? true,
       animateTimelineAvatars:
-          content?.tryGet<bool>('animate_timeline_avatars') ?? false,
+          content.tryGet<bool>('animate_timeline_avatars') ?? false,
       notificationsEnabled:
-          content?.tryGet<bool>('notifications_enabled') ?? true,
-      notificationSound: content?.tryGet<bool>('notification_sound') ?? true,
-      optimizeVideos: content?.tryGet<bool>('optimize_videos') ?? true,
+          content.tryGet<bool>('notifications_enabled') ?? true,
+      notificationSound: content.tryGet<bool>('notification_sound') ?? true,
+      optimizeVideos: content.tryGet<bool>('optimize_videos') ?? true,
       shareUploadCategories:
-          content?.tryGet<bool>('share_upload_categories') ?? true,
+          content.tryGet<bool>('share_upload_categories') ?? true,
       imageCompression: ImageCompressionPreset.parse(
-        content?['image_compression'],
+        content['image_compression'],
       ),
       videoCompression: VideoCompressionPreset.parse(
-        content?['video_compression'],
+        content['video_compression'],
       ),
       notificationVolume: readNotificationVolume(content),
-      callVolume:
-          (content?['call_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
+      callVolume: (content['call_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
       notificationVibration:
-          content?.tryGet<bool>('notification_vibration') ?? true,
+          content.tryGet<bool>('notification_vibration') ?? true,
       notificationAlertCadence:
           NotificationAlertCadence.values
               .where(
                 (value) =>
                     value.name ==
-                    content?.tryGet<String>('notification_alert_cadence'),
+                    content.tryGet<String>('notification_alert_cadence'),
               )
               .firstOrNull ??
           NotificationAlertCadence.fiveMinuteCooldown,
-      sendReadReceipts: content?.tryGet<bool>('send_read_receipts') ?? true,
+      sendReadReceipts: content.tryGet<bool>('send_read_receipts') ?? true,
       sendTypingNotifications:
-          content?.tryGet<bool>('send_typing_notifications') ?? true,
-      sharePresence: content?.tryGet<bool>('share_presence') ?? true,
-      desktopIdleMinutes: (content?.tryGet<int>('desktop_idle_minutes') ?? 5)
+          content.tryGet<bool>('send_typing_notifications') ?? true,
+      sharePresence: content.tryGet<bool>('share_presence') ?? true,
+      desktopIdleMinutes: (content.tryGet<int>('desktop_idle_minutes') ?? 5)
           .clamp(1, 120),
       directLinkPreviewMode:
           DirectLinkPreviewMode.values
               .where(
                 (value) =>
                     value.name ==
-                    content?.tryGet<String>('direct_link_preview_mode'),
+                    content.tryGet<String>('direct_link_preview_mode'),
               )
               .firstOrNull ??
-          ((content?.tryGet<bool>('fetch_direct_link_previews') ?? false)
+          ((content.tryGet<bool>('fetch_direct_link_previews') ?? false)
               ? DirectLinkPreviewMode.allPublicSites
               : DirectLinkPreviewMode.none),
       trustedPreviewDomainsAdded: _stringSet(
-        content?['trusted_preview_domains_added'],
+        content['trusted_preview_domains_added'],
       ),
       trustedPreviewDomainsRemoved: _stringSet(
-        content?['trusted_preview_domains_removed'],
+        content['trusted_preview_domains_removed'],
       ),
       improveTwitterLinks:
-          content?.tryGet<bool>('improve_twitter_links') ?? true,
-      accentColor: content?.tryGet<int>('accent_color') ?? 0xff6975d9,
+          content.tryGet<bool>('improve_twitter_links') ?? true,
+      accentColor: content.tryGet<int>('accent_color') ?? 0xff6975d9,
       fontFamily: _supportedInterfaceFont(
-        content?.tryGet<String>('font_family'),
+        content.tryGet<String>('font_family'),
       ),
       emojiFontFamily: normalizeEmojiFontFamily(
-        content?.tryGet<String>('emoji_font_family'),
+        content.tryGet<String>('emoji_font_family'),
       ),
-      showNativeTitleBar:
-          content?.tryGet<bool>('show_native_title_bar') ?? true,
+      showNativeTitleBar: content.tryGet<bool>('show_native_title_bar') ?? true,
       rememberWindowState:
-          content?.tryGet<bool>('remember_window_state') ?? true,
+          content.tryGet<bool>('remember_window_state') ?? true,
       shortcutBindings: _shortcutBindingsFrom(content),
-      sendWithCtrlEnter: content?.tryGet<bool>('send_with_ctrl_enter') ?? false,
+      sendWithCtrlEnter: content.tryGet<bool>('send_with_ctrl_enter') ?? false,
       readReceiptMemberThreshold:
-          content?.tryGet<int>('receipt_member_threshold') ?? 10,
-      timelineChunkSize: content?.tryGet<int>('timeline_chunk_size') ?? 30,
-      timelineChunkCap: content?.tryGet<int>('timeline_chunk_cap') ?? 3,
+          content.tryGet<int>('receipt_member_threshold') ?? 10,
+      timelineChunkSize: content.tryGet<int>('timeline_chunk_size') ?? 30,
+      timelineChunkCap: content.tryGet<int>('timeline_chunk_cap') ?? 3,
       preferredAudioInputId:
-          content?.tryGet<String>('preferred_audio_input') ?? '',
+          content.tryGet<String>('preferred_audio_input') ?? '',
       preferredAudioOutputId:
-          content?.tryGet<String>('preferred_audio_output') ?? '',
-      preferredCameraId: content?.tryGet<String>('preferred_camera') ?? '',
-      echoCancellation: content?.tryGet<bool>('echo_cancellation') ?? true,
-      noiseSuppression: content?.tryGet<bool>('noise_suppression') ?? true,
-      autoGainControl: content?.tryGet<bool>('auto_gain_control') ?? true,
+          content.tryGet<String>('preferred_audio_output') ?? '',
+      preferredCameraId: content.tryGet<String>('preferred_camera') ?? '',
+      echoCancellation: content.tryGet<bool>('echo_cancellation') ?? true,
+      noiseSuppression: content.tryGet<bool>('noise_suppression') ?? true,
+      autoGainControl: content.tryGet<bool>('auto_gain_control') ?? true,
       microphoneVolume:
-          (content?['microphone_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
+          (content['microphone_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
       outputVolume:
-          (content?['output_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
-      callSound: content?.tryGet<bool>('call_sound') ?? true,
-      shareDesktopAudio: content?.tryGet<bool>('share_desktop_audio') ?? false,
+          (content['output_volume'] as num?)?.toDouble().clamp(0, 1) ?? 1,
+      callSound: content.tryGet<bool>('call_sound') ?? true,
+      shareDesktopAudio: content.tryGet<bool>('share_desktop_audio') ?? false,
       enableChannelDragAndDrop:
-          content?.tryGet<bool>('enable_channel_drag_and_drop') ?? false,
+          content.tryGet<bool>('enable_channel_drag_and_drop') ?? false,
       roomEventVisibility: RoomEventVisibility.fromJson(
-        content?['room_event_visibility'],
+        content['room_event_visibility'],
       ),
-      followedThreads: content?['followed_threads'] is List
-          ? (content!['followed_threads'] as List).whereType<String>().toSet()
+      followedThreads: content['followed_threads'] is List
+          ? (content['followed_threads'] as List).whereType<String>().toSet()
           : const {},
       participantVolumes:
           content
-              ?.tryGetMap<String, Object?>('participant_volumes')
+              .tryGetMap<String, Object?>('participant_volumes')
               ?.map(
                 (userId, volume) => MapEntry(
                   userId,
@@ -1331,8 +1391,10 @@ extension _MatrixSession on MatrixBackend {
           const {},
     );
     _accountPreferences = accountPreferences;
-    _preferences =
-        _deviceAppearance?.applyTo(accountPreferences) ?? accountPreferences;
+    _preferences = PreferenceScopes.keepDeviceLayout(
+      _deviceAppearance?.applyTo(accountPreferences) ?? accountPreferences,
+      accountPreferences,
+    );
     _configureClientPresence();
     _matrix.receiptsPublicByDefault = _preferences.sendReadReceipts;
     if (previousPresence != _effectiveClientPresence) {
@@ -1342,10 +1404,30 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _loadDeviceAppearance() async {
-    final userId = _matrix.userID;
-    _deviceAppearance = userId == null
+    final lease = _sessionScope.capture();
+    final client = _client;
+    final userId = client?.userID;
+    final appearance = userId == null
         ? null
         : await _deviceAppearanceStore.load(userId);
+    Map<String, Object?>? device;
+    bool failed = false;
+    try {
+      device = userId == null
+          ? null
+          : await _devicePreferencesStore.load(userId);
+    } catch (_) {
+      failed = true;
+    }
+    if (!lease.isCurrent || !identical(client, _client)) return;
+    _deviceAppearance = appearance;
+    _devicePreferences = device;
+    _devicePreferencesLoaded = true;
+    _devicePreferencesLoadFailed = failed;
+    if (failed) {
+      _error =
+          'Device settings could not be read. Existing settings were kept.';
+    }
   }
 
   String _supportedInterfaceFont(String? stored) =>
@@ -1369,12 +1451,17 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _updatePreferences(AppPreferences preferences) async {
+    final lease = _sessionScope.capture();
+    final syncedChanged = !SettingsEchoGuard.equivalent(
+      PreferenceScopes.syncedValues(_serializePreferences(_preferences)),
+      PreferenceScopes.syncedValues(_serializePreferences(preferences)),
+    );
     final categoryChoiceChanged =
         preferences.shareUploadCategories != _preferences.shareUploadCategories;
     final activityPrivacyChanged =
         preferences.sharePresence != _preferences.sharePresence;
     if (_matrix.userID == null) return;
-    if (!_settingsHydrated) {
+    if (!_settingsHydrated || !_devicePreferencesLoaded) {
       throw StateError(
         'Settings are still synchronizing. Please try again shortly.',
       );
@@ -1385,6 +1472,28 @@ extension _MatrixSession on MatrixBackend {
       await disableRegisteredBrowserPush(_matrix);
     }
     final userId = _matrix.userID!;
+    final client = _client;
+    final revision = ++_devicePreferencesRevision;
+    final local = PreferenceScopes.captureDevice(preferences);
+    final deviceChanged =
+        jsonEncode(local) !=
+        jsonEncode(PreferenceScopes.captureDevice(_preferences));
+    if (_devicePreferencesLoadFailed && deviceChanged) {
+      throw StateError(
+        'Device settings could not be read. Restart SeND before changing them.',
+      );
+    }
+    if (!_devicePreferencesLoadFailed && deviceChanged) {
+      await _devicePreferencesStore.save(userId, local);
+    }
+    // A logout/account switch while the keyring is writing must not apply
+    // hardware or alert choices to the replacement session.
+    if (!lease.isCurrent ||
+        !identical(_client, client) ||
+        _devicePreferencesRevision != revision) {
+      return;
+    }
+    if (!_devicePreferencesLoadFailed) _devicePreferences = local;
     final previewPolicyChanged =
         preferences.directLinkPreviewMode !=
             _preferences.directLinkPreviewMode ||
@@ -1430,12 +1539,9 @@ extension _MatrixSession on MatrixBackend {
       unawaited(_deviceAppearanceStore.save(userId, preferences));
     }
     _voice?.applyPreferences(preferences);
-    _pendingPreferences = preferences;
-    _settingsSaveTimer?.cancel();
-    _settingsSaveTimer = Timer(const Duration(milliseconds: 300), () {
-      final pending = _pendingPreferences;
-      if (pending != null) unawaited(_persistPreferences(pending));
-    });
+    if (syncedChanged || _pendingPreferences != null) {
+      _preferenceWriter.request(preferences);
+    }
     _notifyBackendListeners();
     final timeline = _timeline;
     if (previewPolicyChanged && timeline != null) {
@@ -1457,117 +1563,130 @@ extension _MatrixSession on MatrixBackend {
       return;
     }
 
-    final next = useDeviceAppearance
+    final appearance = useDeviceAppearance
         ? _preferences.copyWith(syncAppearance: true)
         : DeviceAppearanceSnapshot.capture(
             _accountPreferences ?? _preferences,
           ).applyTo(_preferences).copyWith(syncAppearance: true);
+    final next = PreferenceScopes.keepDeviceLayout(appearance, _preferences);
     _deviceAppearance = null;
     await _deviceAppearanceStore.clear(userId);
     await _updatePreferences(next);
   }
 
-  Future<void> _persistPreferences(AppPreferences preferences) {
-    final queued = _preferencesWriteQueue.then((_) async {
-      // A newer local edit can supersede a queued request before it starts.
-      if (identical(_pendingPreferences, preferences)) {
-        await _writePreferences(preferences);
-      }
-    });
-    _preferencesWriteQueue = queued.catchError((Object _) {});
-    return queued;
-  }
+  Map<String, Object?> _serializePreferences(AppPreferences preferences) => {
+    if (preferences.syncAppearance) ...{
+      'density': preferences.density.name,
+      'compactness': preferences.compactness,
+      'theme_mode': preferences.themeMode.name,
+      'theme_document': preferences.themeJson,
+      'theme_parameters': preferences.themeSettings,
+      // Version 1 had only light/dark/oled. Keeping an explicit schema
+      // marker lets legacy `dark` retain its old Regular appearance
+      // while version 2 can use `dark` for the deeper charcoal palette.
+      'theme_schema_version': 2,
+      'interface_scale': preferences.interfaceScale,
+      _platformFontScaleKey: preferences.fontScale,
+      'room_panel_width': preferences.roomPanelWidth,
+      'side_panel_width': preferences.sidePanelWidth,
+      'reduced_motion': preferences.reducedMotion,
+      'high_contrast': preferences.highContrast,
+      'autoplay_gifs': preferences.autoplayGifs,
+      'animate_timeline_avatars': preferences.animateTimelineAvatars,
+      'accent_color': preferences.accentColor,
+      'font_family': preferences.fontFamily,
+      'emoji_font_family': preferences.emojiFontFamily,
+      'show_native_title_bar': preferences.showNativeTitleBar,
+    },
+    'use_24_hour_time': preferences.use24HourTime,
+    'notifications_enabled': preferences.notificationsEnabled,
+    'notification_sound': preferences.notificationSound,
+    'optimize_videos': preferences.optimizeVideos,
+    'share_upload_categories': preferences.shareUploadCategories,
+    'video_compression': preferences.videoCompression.name,
+    'image_compression': preferences.imageCompression.name,
+    notificationVolumeSettingKey: preferences.notificationVolume,
+    'call_volume': preferences.callVolume,
+    'notification_vibration': preferences.notificationVibration,
+    'notification_alert_cadence': preferences.notificationAlertCadence.name,
+    'send_read_receipts': preferences.sendReadReceipts,
+    'send_typing_notifications': preferences.sendTypingNotifications,
+    'share_presence': preferences.sharePresence,
+    'desktop_idle_minutes': preferences.desktopIdleMinutes,
+    'fetch_direct_link_previews': preferences.fetchDirectLinkPreviews,
+    'direct_link_preview_mode': preferences.directLinkPreviewMode.name,
+    'trusted_preview_domains_added':
+        preferences.trustedPreviewDomainsAdded.toList()..sort(),
+    'trusted_preview_domains_removed':
+        preferences.trustedPreviewDomainsRemoved.toList()..sort(),
+    'improve_twitter_links': preferences.improveTwitterLinks,
+    'remember_window_state': preferences.rememberWindowState,
+    'shortcut_bindings': {
+      for (final entry in preferences.shortcutBindings.entries)
+        entry.key.name: entry.value,
+    },
+    'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
+    'receipt_member_threshold': preferences.readReceiptMemberThreshold,
+    'timeline_chunk_size': preferences.timelineChunkSize,
+    'timeline_chunk_cap': preferences.timelineChunkCap,
+    'preferred_audio_input': preferences.preferredAudioInputId,
+    'preferred_audio_output': preferences.preferredAudioOutputId,
+    'preferred_camera': preferences.preferredCameraId,
+    'echo_cancellation': preferences.echoCancellation,
+    'noise_suppression': preferences.noiseSuppression,
+    'auto_gain_control': preferences.autoGainControl,
+    'microphone_volume': preferences.microphoneVolume,
+    'output_volume': preferences.outputVolume,
+    'call_sound': preferences.callSound,
+    'share_desktop_audio': preferences.shareDesktopAudio,
+    'enable_channel_drag_and_drop': preferences.enableChannelDragAndDrop,
+    'participant_volumes': preferences.participantVolumes,
+    'room_event_visibility': preferences.roomEventVisibility.toJson(),
+    'followed_threads': preferences.followedThreads.toList(),
+  };
 
   Future<void> _writePreferences(AppPreferences preferences) async {
-    if (_matrix.userID == null || !_settingsHydrated) return;
+    final lease = _sessionScope.capture();
+    final client = _client;
+    final user = client?.userID;
+    if (client == null || user == null || !_settingsHydrated) return;
     final existing =
-        _matrix.accountData[MatrixBackend._settingsAccountDataType]?.content;
+        client.accountData[MatrixBackend._settingsAccountDataType]?.content;
     try {
-      final payload = <String, Object?>{
-        ...?existing,
-        if (preferences.syncAppearance) ...{
-          'density': preferences.density.name,
-          'compactness': preferences.compactness,
-          'theme_mode': preferences.themeMode.name,
-          'theme_document': preferences.themeJson,
-          'theme_parameters': preferences.themeSettings,
-          // Version 1 had only light/dark/oled. Keeping an explicit schema
-          // marker lets legacy `dark` retain its old Regular appearance
-          // while version 2 can use `dark` for the deeper charcoal palette.
-          'theme_schema_version': 2,
-          'interface_scale': preferences.interfaceScale,
-          _platformFontScaleKey: preferences.fontScale,
-          'room_panel_width': preferences.roomPanelWidth,
-          'side_panel_width': preferences.sidePanelWidth,
-          'reduced_motion': preferences.reducedMotion,
-          'high_contrast': preferences.highContrast,
-          'autoplay_gifs': preferences.autoplayGifs,
-          'animate_timeline_avatars': preferences.animateTimelineAvatars,
-          'accent_color': preferences.accentColor,
-          'font_family': preferences.fontFamily,
-          'emoji_font_family': preferences.emojiFontFamily,
-          'show_native_title_bar': preferences.showNativeTitleBar,
-        },
-        'use_24_hour_time': preferences.use24HourTime,
-        'notifications_enabled': preferences.notificationsEnabled,
-        'notification_sound': preferences.notificationSound,
-        'optimize_videos': preferences.optimizeVideos,
-        'share_upload_categories': preferences.shareUploadCategories,
-        'video_compression': preferences.videoCompression.name,
-        'image_compression': preferences.imageCompression.name,
-        notificationVolumeSettingKey: preferences.notificationVolume,
-        'call_volume': preferences.callVolume,
-        'notification_vibration': preferences.notificationVibration,
-        'notification_alert_cadence': preferences.notificationAlertCadence.name,
-        'send_read_receipts': preferences.sendReadReceipts,
-        'send_typing_notifications': preferences.sendTypingNotifications,
-        'share_presence': preferences.sharePresence,
-        'desktop_idle_minutes': preferences.desktopIdleMinutes,
-        'fetch_direct_link_previews': preferences.fetchDirectLinkPreviews,
-        'direct_link_preview_mode': preferences.directLinkPreviewMode.name,
-        'trusted_preview_domains_added':
-            preferences.trustedPreviewDomainsAdded.toList()..sort(),
-        'trusted_preview_domains_removed':
-            preferences.trustedPreviewDomainsRemoved.toList()..sort(),
-        'improve_twitter_links': preferences.improveTwitterLinks,
-        'remember_window_state': preferences.rememberWindowState,
-        'shortcut_bindings': {
-          for (final entry in preferences.shortcutBindings.entries)
-            entry.key.name: entry.value,
-        },
-        'send_with_ctrl_enter': preferences.sendWithCtrlEnter,
-        'receipt_member_threshold': preferences.readReceiptMemberThreshold,
-        'timeline_chunk_size': preferences.timelineChunkSize,
-        'timeline_chunk_cap': preferences.timelineChunkCap,
-        'preferred_audio_input': preferences.preferredAudioInputId,
-        'preferred_audio_output': preferences.preferredAudioOutputId,
-        'preferred_camera': preferences.preferredCameraId,
-        'echo_cancellation': preferences.echoCancellation,
-        'noise_suppression': preferences.noiseSuppression,
-        'auto_gain_control': preferences.autoGainControl,
-        'microphone_volume': preferences.microphoneVolume,
-        'output_volume': preferences.outputVolume,
-        'call_sound': preferences.callSound,
-        'share_desktop_audio': preferences.shareDesktopAudio,
-        'enable_channel_drag_and_drop': preferences.enableChannelDragAndDrop,
-        'participant_volumes': preferences.participantVolumes,
-        'room_event_visibility': preferences.roomEventVisibility.toJson(),
-        'followed_threads': preferences.followedThreads.toList(),
-      };
-      _settingsEchoGuard.expect(existing, payload);
-      await _matrix.setAccountData(
-        _matrix.userID!,
-        MatrixBackend._settingsAccountDataType,
-        payload,
-      );
-      if (preferences.syncAppearance) _accountPreferences = preferences;
-      if (identical(_pendingPreferences, preferences)) {
-        _pendingPreferences = null;
+      final values = _serializePreferences(preferences);
+      final fullPayload = <String, Object?>{...?existing, ...values};
+      final payload = PreferenceScopes.accountPayload(fullPayload, existing);
+      if (!SettingsEchoGuard.equivalent(existing, payload)) {
+        _settingsEchoGuard.expect(existing, payload);
+        await client.setAccountData(
+          user,
+          MatrixBackend._settingsAccountDataType,
+          payload,
+        );
       }
+      if (!lease.isCurrent || !identical(client, _client)) return;
+      final previousPlatform =
+          client.accountData[_platformPreferencesType]?.content;
+      final platformPayload = PreferenceScopes.platformPayload(
+        values,
+        previousPlatform,
+      );
+      if (!SettingsEchoGuard.equivalent(previousPlatform, platformPayload)) {
+        _platformSettingsEchoGuard.expect(previousPlatform, platformPayload);
+        await client.setAccountData(
+          user,
+          _platformPreferencesType,
+          platformPayload,
+        );
+      }
+      if (!lease.isCurrent || !identical(client, _client)) return;
+      if (preferences.syncAppearance) _accountPreferences = preferences;
       _notifyBackendListeners();
     } catch (exception) {
+      if (!lease.isCurrent || !identical(client, _client)) return;
       _error = _friendlyError(exception);
       _notifyBackendListeners();
+      rethrow;
     }
   }
 

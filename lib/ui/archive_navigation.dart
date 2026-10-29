@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/semantics.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import 'threshold_feedback.dart';
 
 /// Archive is a Home-list mode, not a separate page or dialog.
 Future<void> openArchive(
@@ -245,15 +246,12 @@ class _ArchivePullListState extends State<ArchivePullList>
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  ready
+                                ThresholdFeedbackIcon(
+                                  active: ready,
+                                  haptics: !_wheel,
+                                  icon: ready
                                       ? Icons.archive_outlined
                                       : Icons.keyboard_double_arrow_down,
-                                  color: ready
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
                                 ),
                                 const SizedBox(height: 6),
                                 Text(

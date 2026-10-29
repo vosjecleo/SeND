@@ -142,48 +142,11 @@ class _ConversationState extends State<_Conversation> {
     _timelineUserInputUntil = DateTime.now().add(const Duration(seconds: 1));
   }
 
-  (String, double)? _captureVisibleAnchor() {
-    final viewport = _timelineViewportKey.currentContext?.findRenderObject();
-    if (viewport is! RenderBox || !viewport.attached) return null;
-    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
-    final viewportBottom = viewportTop + viewport.size.height;
-    (String, double)? closest;
-    var closestDistance = double.infinity;
-    for (final entry in _messageKeys.entries) {
-      final renderObject = entry.value.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.attached) continue;
-      final offset = renderObject.localToGlobal(Offset.zero);
-      final bottom = offset.dy + renderObject.size.height;
-      if (bottom < viewportTop || offset.dy > viewportBottom) {
-        continue;
-      }
-      // Anchor the row nearest the leading viewport edge. Unlike a centre
-      // heuristic this remains deterministic when very tall media spans most
-      // of the screen.
-      final distance = (offset.dy - viewportTop).abs();
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closest = (entry.key, offset.dy);
-      }
-    }
-    return closest;
-  }
+  (String, double)? _captureVisibleAnchor() =>
+      captureTimelineAnchor(_timelineViewportKey, _messageKeys);
 
-  void _restoreVisibleAnchor((String, double)? anchor) {
-    if (anchor == null || !_scrollController.hasClients) return;
-    final renderObject = _messageKeys[anchor.$1]?.currentContext
-        ?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.attached) return;
-    final newOffset = renderObject.localToGlobal(Offset.zero).dy;
-    // The timeline is reversed. Increasing the scroll offset moves a retained
-    // row toward the bottom, so compensate with the inverse displacement.
-    final corrected =
-        (_scrollController.position.pixels - (newOffset - anchor.$2)).clamp(
-          0.0,
-          _scrollController.position.maxScrollExtent,
-        );
-    _scrollController.jumpTo(corrected);
-  }
+  void _restoreVisibleAnchor((String, double)? anchor) =>
+      restoreTimelineAnchor(_scrollController, _messageKeys, anchor);
 
   Future<void> _loadPageAnchored(
     Future<void> Function(String? anchorEventId) load,
@@ -462,23 +425,20 @@ class _ConversationState extends State<_Conversation> {
     int generation, {
     bool waitForBuild = false,
   }) async {
-    final attempts = waitForBuild ? 8 : 1;
-    for (var attempt = 0; attempt < attempts; attempt++) {
-      if (!mounted || generation != _navigationGeneration) return false;
-      final targetContext = _messageKeys[eventId]?.currentContext;
-      if (targetContext != null && targetContext.mounted) {
-        await Scrollable.ensureVisible(
-          targetContext,
-          alignment: 0.5,
-          duration: widget.backend.preferences.reducedMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 160),
-        );
-        return true;
-      }
-      await WidgetsBinding.instance.endOfFrame;
-    }
-    return false;
+    if (waitForBuild) await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || generation != _navigationGeneration) return false;
+    final messages = widget.backend.timelineMessages;
+    final target = MediaAlbumIndex.fromNewestFirst(
+      messages,
+    ).visibleMessageId(eventId);
+    return scrollToTimelineRow(
+      controller: _scrollController,
+      rowKeys: _messageKeys,
+      ids: messages.map((m) => m.id).toList(),
+      id: target,
+      isCurrent: () => mounted && generation == _navigationGeneration,
+      reducedMotion: widget.backend.preferences.reducedMotion,
+    );
   }
 
   Future<void> _blinkMessage(String eventId, int generation) async {

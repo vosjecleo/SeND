@@ -12,9 +12,13 @@ extension _MatrixTimelineSupport on MatrixBackend {
   List<Event> _timelineWindowEvents(Timeline timeline) => timeline.events;
 
   Future<void> _hydrateSenderAvatars(Timeline timeline) async {
+    final lease = _sessionScope.capture();
+    final client = timeline.room.client;
+    bool current() => lease.isCurrent && identical(client, _client);
     final missing = <(String, Uri)>[];
     final seen = <String>{};
     for (final event in _timelineWindowEvents(timeline)) {
+      if (!current()) return;
       if (event.type == EventTypes.Message ||
           event.type == EventTypes.Encrypted ||
           event.type == EventTypes.Sticker) {
@@ -66,6 +70,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
     }
 
     for (var start = 0; start < missing.length; start += 4) {
+      if (!current()) return;
       final end = min(start + 4, missing.length);
       await Future.wait(
         missing.sublist(start, end).map((entry) async {
@@ -74,7 +79,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
               entry.$2,
               AvatarMediaPool.rowDimension,
             );
-            if (bytes != null && _senderAvatarUris[entry.$1] == entry.$2) {
+            if (current() &&
+                bytes != null &&
+                _senderAvatarUris[entry.$1] == entry.$2) {
               _senderAvatarBytes[entry.$1] = bytes;
             }
           } catch (_) {
@@ -87,18 +94,23 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _hydrateReplies(Timeline timeline) async {
+    final lease = _sessionScope.capture();
+    final client = timeline.room.client;
+    bool current() => lease.isCurrent && identical(client, _client);
     for (final event in timeline.events) {
+      if (!current()) return;
       if (event.type != EventTypes.Message ||
           event.inReplyToEventId() == null ||
           _replyPreviews.containsKey(event.eventId)) {
         continue;
       }
       var repliedTo = await event.getReplyEvent(timeline);
+      if (!current()) return;
       if (repliedTo == null) continue;
-      if (repliedTo.type == EventTypes.Encrypted &&
-          _matrix.encryption != null) {
-        repliedTo = await _matrix.encryption!.decryptRoomEvent(repliedTo);
+      if (repliedTo.type == EventTypes.Encrypted && client.encryption != null) {
+        repliedTo = await client.encryption!.decryptRoomEvent(repliedTo);
       }
+      if (!current()) return;
       if (repliedTo.type != EventTypes.Message) continue;
       // Keep the original event ID as the navigation target, but render its
       // latest replacement so reply previews cannot preserve a stale body.
@@ -201,14 +213,17 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _hydratePollResponses(Timeline timeline) async {
+    final lease = _sessionScope.capture();
     final pending = timeline.events.where(
       (event) =>
           event.type == PollEventContent.startType &&
           !_hydratedPollResponseIds.contains(event.eventId),
     );
     for (final event in pending) {
+      if (!lease.isCurrent) return;
       try {
         await event.fetchPollResponses(timeline);
+        if (!lease.isCurrent) return;
         _hydratedPollResponseIds.add(event.eventId);
       } catch (_) {
         // Polls remain usable with responses already present in the timeline;

@@ -5,6 +5,8 @@ from datetime import date
 import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -15,7 +17,18 @@ def main():
     asset = f"SeND-{release}-linux-debian-amd64.deb"
     base = f"https://github.com/VosjeCleo/SeND/releases/download/{tag}/"
     with urllib.request.urlopen(base + "SHA256SUMS", timeout=60) as response:
-        checksums = response.read().decode()
+        checksum_bytes = response.read(1024 * 1024 + 1)
+    with urllib.request.urlopen(base + "SHA256SUMS.sig", timeout=60) as response:
+        signature_bytes = response.read(4097)
+    if len(checksum_bytes) > 1024 * 1024 or len(signature_bytes) > 4096:
+        raise ValueError("Release metadata is too large")
+    with tempfile.TemporaryDirectory(prefix="send-flatpak-verify-") as temporary:
+        source, signature = Path(temporary)/'SHA256SUMS', Path(temporary)/'SHA256SUMS.sig'
+        source.write_bytes(checksum_bytes)
+        signature.write_bytes(signature_bytes)
+        subprocess.run(['python3', str(Path(__file__).with_name('sign-release.py')),
+                        str(source), str(signature), '--verify'], check=True)
+    checksums = checksum_bytes.decode()
     expected = dict((line.split()[1].removeprefix("*"), line.split()[0]) for line in checksums.splitlines())[asset]
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("Invalid package checksum")
