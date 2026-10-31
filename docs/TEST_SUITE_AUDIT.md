@@ -139,8 +139,8 @@ Local native timings, from the test runner's JSON completion event:
 These runs used one worker, a 4 GiB memory ceiling and a two-core CPU quota.
 They were not isolated performance benchmarks. The final run was slower even
 for unchanged cases; the cause was not established. No local runtime improvement
-is claimed. CI now avoids three repeated full-suite executions, but actual
-GitHub timings still need measurement after the changes are pushed.
+is claimed. CI now avoids three repeated full-suite executions. The first GitHub
+timing observations after publication are recorded below.
 
 Analysis and formatting passed. All eight workflow files parsed, their job
 dependencies resolved, and 50 embedded shell blocks plus the packaging scripts
@@ -156,6 +156,47 @@ and the existing failure screenshot instead of reporting only a missing selector
 The other browser checks covered authenticated worker decryption, storage
 migrations and interrupted imports, RTC crypto vectors, download-page metadata
 and actual WebCodecs output. No production behaviour was changed to pass them.
+
+## First published CI run after cleanup
+
+Build 135 (`c02c434`, 2026-10-31) passed all required workflows on the first
+attempt. The later user-requested UI and sound work added regression cases;
+this release ran 975 native tests with the same four skips. That is separate
+from the audit-only 906-test result above.
+
+Workflow wall times, from GitHub's `run_started_at` and `updated_at` timestamps:
+
+| Workflow | Build 134 | Build 135 |
+| --- | ---: | ---: |
+| Shared validation | Not separate | 7m 13s |
+| Windows | 17m 37s | 11m 19s |
+| Linux packages and AppImage smoke | 13m 06s | 10m 10s |
+| Android | 18m 51s | 15m 58s |
+| Web/PWA | 9m 12s | 7m 45s |
+| Signed GitHub publication | 45s | 1m 23s |
+| Flatpak build and publication | 3m 14s | 3m 18s |
+
+The slowest required package workflow fell from 18m 51s to 15m 58s. Validation
+ran alongside packaging; it did not add seven minutes after the package jobs.
+These are observations from two different commits, runners and cache states,
+not an isolated benchmark or a promise about future builds.
+
+Sources: [build 134 Android](https://github.com/VosjeCleo/SeND/actions/runs/40791487520),
+[Windows](https://github.com/VosjeCleo/SeND/actions/runs/40791487519),
+[Linux](https://github.com/VosjeCleo/SeND/actions/runs/40791487540),
+[Web](https://github.com/VosjeCleo/SeND/actions/runs/40791487566);
+build 135 [validation](https://github.com/VosjeCleo/SeND/actions/runs/41155182307),
+[Android](https://github.com/VosjeCleo/SeND/actions/runs/41155182309),
+[Windows](https://github.com/VosjeCleo/SeND/actions/runs/41155182305),
+[Linux](https://github.com/VosjeCleo/SeND/actions/runs/41155182298),
+[Web](https://github.com/VosjeCleo/SeND/actions/runs/41155182365),
+[publication](https://github.com/VosjeCleo/SeND/actions/runs/41156478932) and
+[Flatpak](https://github.com/VosjeCleo/SeND/actions/runs/41156593738).
+
+The first mirror attempt stopped because the old channel metadata was unsigned.
+After checking that legacy metadata over SSH and against the published download
+hashes, the documented one-time signing bootstrap completed. New signatures,
+artifact hashes, PWA metadata and unchanged Stable lists were verified live.
 
 ## Remaining gaps
 

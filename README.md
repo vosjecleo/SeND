@@ -3,7 +3,7 @@
 An open-source Matrix messenger with familiar servers, channels, calls and profiles.
 Linux, Windows, Android, and the web, including iPhone/iPad as an installed PWA.
 
-**Current source: version 0.9.42 build 135.** Latest publication is being prepared; Stable is unchanged.
+**Latest: version 0.9.42 build 135.** Stable is unchanged.
 
 [Download SeND](https://deltie.net/SeND/) · [Open the web app](https://chat.deltie.net) ·
 [Installation](INSTALL.md) · [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
@@ -171,7 +171,7 @@ less frequent use. Expect occasional bugs. No slow memory leaks have been
 reported over many hundreds of cumulative usage hours. Cleo's populated account
 idles around 450 MB; usage varies with platform, account and open media.
 
-0.9.42 build 135 targets **Latest** only. Stable promotion waits for further testing.
+0.9.42 build 135 is published to **Latest** only. Stable promotion waits for further testing.
 Work toward 1.0 continues on performance, accessibility,
 interoperability and reliability. See the [1.0 readiness checklist](docs/RELEASE_READINESS.md).
 

@@ -91,11 +91,12 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
-## Release candidate: 0.9.42+135
+## Recorded release: 0.9.42+135
 
-Build-number-only update for Latest; Stable is unchanged. Cleo approved the
-installed Linux preview. The current source passed 975 native tests with four
-existing skips and clean static analysis. Targeted checks cover composer wrap
+Published to Latest on 2026-10-31 from `c02c434`, tag `v0.9.42-b135`. Stable is
+unchanged. Cleo approved the installed Linux preview. The release passed 975
+native tests with four existing skips and clean static analysis, locally and
+in shared CI. Targeted checks cover composer wrap
 boundaries, cursor-anchored menus at multiple scales, message handoff, animated
 avatar retention, typing alignment and bounded sound mixing.
 
@@ -103,7 +104,23 @@ This release also carries the browser storage/import safety, signed updater,
 preference scopes and shared-chat work committed after build 134, plus the
 [test audit](TEST_SUITE_AUDIT.md) and centralised CI validation. Physical Android
 and iOS acceptance, native audio output and long-session GPU checks remain
-separate from widget/unit-test results. CI publication and deployment are pending.
+separate from widget/unit-test results.
+
+Windows, Linux, Android and Web/PWA workflows passed, including clean AppImage
+launch, Windows integration tests, Android's compiled push tests and browser
+checks. Flatpak build, sandbox checks, publication and mirroring passed too.
+Signed checksums verified all 12 core downloads and both Flatpak files. The live
+PWA reports build 135; its same-origin release metadata and signature match the
+download site's signed bytes. Stable's version fields and file lists were
+compared before/after and are unchanged.
+
+This was the first signed mirror publication. The legacy build 134 metadata
+was read over authenticated SSH, compared byte-for-byte with HTTPS, and its
+download hashes checked against the published build 134 checksum lists before
+the documented one-time bootstrap. Future publication requires signed metadata.
+The current manifest expires on 2027-01-29; renewal instructions are in the
+[signing guide](RELEASE_SIGNING.md). The release tool did not replace the local
+inspection preview with the final CI package.
 
 ## Recorded release: 0.9.42+134
 
