@@ -141,8 +141,8 @@ last_ci_status=''
 for _ in $(seq 1 90); do
   if runs="$(curl --fail --silent --show-error --connect-timeout 15 --max-time 45 \
       "https://api.github.com/repos/VosjeCleo/SeND/actions/runs?head_sha=$commit&per_page=30&poll=$(date +%s)")"; then
-    required='["Windows release","Linux packages","Android release","Web PWA"]'
-    if $web_only; then required='["Web PWA"]'; fi
+    required='["Validation","Windows release","Linux packages","Android release","Web PWA"]'
+    if $web_only; then required='["Validation","Web PWA"]'; fi
     summary="$(jq -c --argjson required "$required" '
       [.workflow_runs[] | select(.event == "push") | select(.name as $name | $required | index($name))] |
       group_by(.name) | map(max_by(.id)) |

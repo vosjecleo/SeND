@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../activity_widgets.dart';
+import '../emoji_typography.dart';
 import '../message_action_menu.dart';
 import '../queued_attachment_preview.dart';
 import '../../services/queued_message.dart';
@@ -62,6 +63,7 @@ String _extensionForMime(String mimeType) => switch (mimeType) {
 
 class MobileTimelineView extends StatefulWidget {
   const MobileTimelineView({
+    this.desktopKeyboard = false,
     required this.backend,
     required this.room,
     required this.onOpenNavigation,
@@ -77,6 +79,7 @@ class MobileTimelineView extends StatefulWidget {
   final ChatBackend backend;
   final RoomSummary room;
   final VoidCallback onOpenNavigation;
+  final bool desktopKeyboard;
   final VoidCallback onOpenDetails;
   final VoidCallback onOpenSettings;
   final bool navigationGestureActive;
@@ -639,13 +642,17 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       (_) => _reportTimelineAtPresent(),
     );
     _preserveAnchorAcrossMetadataLayout(messages);
-    final currentMessageIds = messages.map((message) => message.id).toSet();
+    final currentMessageIds = messages
+        .expand((message) => [message.id, message.timelineKey])
+        .toSet();
     final staleMessageIds = _messageKeys.keys
         .where((messageId) => !currentMessageIds.contains(messageId))
         .toList(growable: false);
     for (final messageId in staleMessageIds) {
       final key = _messageKeys.remove(messageId);
-      if (key != null) _messageIdsByKey.remove(key);
+      if (key != null && !_messageKeys.containsValue(key)) {
+        _messageIdsByKey.remove(key);
+      }
     }
     final messageIndexes = <String, int>{
       for (var index = 0; index < messages.length; index++)
@@ -683,9 +690,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             child: Row(
               children: [
                 MobileRoomAvatar(
+                  key: const ValueKey('conversation-header-avatar'),
                   room: widget.room,
                   size: 40,
-                  showPresence: false,
+                  autoplay: true,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -707,8 +715,6 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                           presence: widget.room.presence,
                           fallback: Row(
                             children: [
-                              HeaderPresenceDot(presence: widget.room.presence),
-                              const SizedBox(width: 5),
                               Flexible(
                                 child: Text(
                                   mobilePresenceLabel(widget.room.presence),
@@ -891,11 +897,11 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                               controller: _scroll,
                               reverse: true,
                               physics: const ClampingScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(
+                              padding: EdgeInsets.fromLTRB(
                                 0,
                                 8,
                                 0,
-                                typingIndicatorHeight + 1,
+                                typingIndicatorHeightFor(context) + 1,
                               ),
                               itemCount:
                                   messages.length +
@@ -968,13 +974,15 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                       message.timestamp.toLocal(),
                                     );
                                 final rowKey = _messageKeys.putIfAbsent(
-                                  message.id,
+                                  message.timelineKey,
                                   () {
                                     final key = GlobalKey();
                                     _messageIdsByKey[key] = message.id;
                                     return key;
                                   },
                                 );
+                                _messageKeys[message.id] = rowKey;
+                                _messageIdsByKey[rowKey] = message.id;
                                 return KeyedSubtree(
                                   key: rowKey,
                                   child: Column(
@@ -1077,6 +1085,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                           // scaling cannot expose a seam above the composer.
                           bottom: -physicalPixel,
                           child: TypingIndicator(
+                            textInset: 62,
+                            avatarInset: 14,
                             names: backend.typingUserNames,
                           ),
                         ),
@@ -1090,6 +1100,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
               replyToMessageId: _reply?.id,
               onSent: () => setState(() => _reply = null),
               builder: (startRecording) => _MobileComposer(
+                desktopKeyboard: widget.desktopKeyboard,
                 backend: backend,
                 controller: _composer,
                 focusNode: _focus,
@@ -1660,6 +1671,20 @@ class _MobileDaySeparator extends StatelessWidget {
   }
 }
 
+double _mobileReplyHeight(BuildContext context) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: 'Ag',
+      style: DefaultTextStyle.of(context).style.copyWith(fontSize: 12),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  final height = max(20.0, painter.height) + 2;
+  painter.dispose();
+  return height;
+}
+
 class _MobileMessageBodyRow extends StatelessWidget {
   const _MobileMessageBodyRow({
     required this.message,
@@ -1670,40 +1695,103 @@ class _MobileMessageBodyRow extends StatelessWidget {
   final bool eligible;
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      var center = false;
-      if (eligible &&
-          message.reply == null &&
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style;
+    double lineHeight(TextStyle lineStyle, {String text = 'Ag'}) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: lineStyle),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    return _MeasuredMessageRow(
+      eligible:
+          eligible &&
           message.attachment == null &&
           message.poll == null &&
           message.reactions.isEmpty &&
           message.linkPreview == null &&
           message.additionalLinkPreviews.isEmpty &&
-          message.threadReplyCount == 0 &&
-          message.threadRootId == null &&
-          message.formattedBody == null &&
-          !message.body.contains('\n')) {
-        final text = TextPainter(
-          text: TextSpan(
-            text: message.body,
-            style: DefaultTextStyle.of(context).style.copyWith(height: 1.28),
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-          maxLines: 1,
-        )..layout(maxWidth: max(1, constraints.maxWidth - 48));
-        center = !text.didExceedMaxLines;
-        text.dispose();
-      }
-      return Row(
-        crossAxisAlignment: center
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
-        children: children,
+          message.threadReplyCount == 0,
+      singleEntryHeight:
+          lineHeight(style.copyWith(fontWeight: FontWeight.w700)) +
+          (isUnicodeEmojiOnly(message.body)
+              ? lineHeight(
+                  colourEmojiStyle(style.copyWith(fontSize: 64, height: 1)),
+                  text: message.body,
+                )
+              : lineHeight(style.copyWith(height: 1.28))) +
+          4 +
+          (message.reply == null ? 0 : _mobileReplyHeight(context)),
+      children: children,
+    );
+  }
+}
+
+// Use the rendered content height, not a plain-text guess. Formatting, escaped
+// markers and mentions can all make the fallback differ from what is painted.
+class _MeasuredMessageRow extends MultiChildRenderObjectWidget {
+  const _MeasuredMessageRow({
+    required this.eligible,
+    required this.singleEntryHeight,
+    required super.children,
+  });
+  final bool eligible;
+  final double singleEntryHeight;
+  @override
+  _RenderMessageRow createRenderObject(BuildContext context) =>
+      _RenderMessageRow(
+        eligible,
+        singleEntryHeight,
+        Directionality.of(context),
       );
-    },
-  );
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMessageRow renderObject,
+  ) {
+    renderObject
+      ..centerShortEntry = eligible
+      ..singleEntryHeight = singleEntryHeight
+      ..textDirection = Directionality.of(context);
+    renderObject.markNeedsLayout();
+  }
+}
+
+class _RenderMessageRow extends RenderFlex {
+  _RenderMessageRow(
+    this.centerShortEntry,
+    this.singleEntryHeight,
+    TextDirection direction,
+  ) : super(
+        direction: Axis.horizontal,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        textDirection: direction,
+      );
+  bool centerShortEntry;
+  double singleEntryHeight;
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (!centerShortEntry ||
+        lastChild == null ||
+        lastChild!.size.height > singleEntryHeight) {
+      return;
+    }
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final data = child.parentData! as FlexParentData;
+      data.offset = Offset(
+        data.offset.dx,
+        (size.height - child.size.height) / 2,
+      );
+      child = data.nextSibling;
+    }
+  }
 }
 
 class _MobileMessageRow extends StatelessWidget {
@@ -1815,9 +1903,14 @@ class _MobileMessageRow extends StatelessWidget {
                           ? null
                           : Padding(
                               padding: EdgeInsets.only(
-                                top: message.reply == null ? 0 : 22,
+                                top: message.reply == null
+                                    ? 0
+                                    : _mobileReplyHeight(context),
                               ),
                               child: GestureDetector(
+                                key: ValueKey(
+                                  'mobile-message-avatar-${message.id}',
+                                ),
                                 onTap: onProfile,
                                 child: MobileAvatar(
                                   bytes: message.avatarBytes,
@@ -1852,7 +1945,7 @@ class _MobileMessageRow extends StatelessWidget {
                                           color: context.deltiecord.muted,
                                         ),
                                       ),
-                                      const SizedBox(width: 5),
+                                      const SizedBox(width: 8),
                                       Flexible(
                                         child: Text.rich(
                                           TextSpan(
@@ -1900,6 +1993,8 @@ class _MobileMessageRow extends StatelessWidget {
                                   Flexible(
                                     child: Text(
                                       message.sender,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: message.senderColor == null
                                             ? null
@@ -1926,15 +2021,6 @@ class _MobileMessageRow extends StatelessWidget {
                                       messageId: message.id,
                                     ),
                                   ),
-                                  if (message.pending) ...[
-                                    const SizedBox(width: 5),
-                                    const SizedBox.square(
-                                      dimension: 10,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1.5,
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -2044,10 +2130,6 @@ class _MobileMessageRow extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          if (message.queued &&
-                              message.pending &&
-                              message.attachment != null)
-                            QueuedSendProgress(message: message),
                           for (final preview in message.linkPreviews)
                             Padding(
                               padding: const EdgeInsets.only(top: 5),
@@ -2270,6 +2352,7 @@ String _mobileMessageTimestamp(
 
 class _MobileComposer extends StatefulWidget {
   const _MobileComposer({
+    required this.desktopKeyboard,
     required this.backend,
     required this.controller,
     required this.focusNode,
@@ -2298,6 +2381,7 @@ class _MobileComposer extends StatefulWidget {
     required this.onMentionSelected,
   });
   final ChatBackend backend;
+  final bool desktopKeyboard;
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool sending;
@@ -2392,21 +2476,44 @@ class _MobileComposerState extends State<_MobileComposer> {
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || widget.emojiMatches.isEmpty) {
+    if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
-    if (event.logicalKey == LogicalKeyboardKey.tab) {
-      widget.onEmojiSelectionChanged(
-        (widget.emojiSelection + 1) % widget.emojiMatches.length,
-      );
+    if (event.logicalKey == LogicalKeyboardKey.escape && widget.editing) {
+      widget.onClearContext();
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.enter) {
-      widget.onEmojiSelected(widget.emojiMatches[widget.emojiSelection]);
-      return KeyEventResult.handled;
+    if (widget.emojiMatches.isNotEmpty) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+          event.logicalKey == LogicalKeyboardKey.arrowRight ||
+          event.logicalKey == LogicalKeyboardKey.arrowUp ||
+          event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        final backwards =
+            event.logicalKey == LogicalKeyboardKey.arrowDown ||
+            event.logicalKey == LogicalKeyboardKey.arrowLeft;
+        widget.onEmojiSelectionChanged(
+          (widget.emojiSelection + (backwards ? -1 : 1)) %
+              widget.emojiMatches.length,
+        );
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.tab) {
+        widget.onEmojiSelected(widget.emojiMatches[widget.emojiSelection]);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        widget.onDismissEmojiCompletion();
+        return KeyEventResult.handled;
+      }
     }
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      widget.onDismissEmojiCompletion();
+    if (widget.desktopKeyboard &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isShiftPressed &&
+        (widget.backend.preferences.sendWithCtrlEnter ==
+            HardwareKeyboard.instance.isControlPressed) &&
+        (!widget.controller.value.composing.isValid ||
+            widget.controller.value.composing.isCollapsed)) {
+      widget.onSend();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -2472,7 +2579,10 @@ class _MobileComposerState extends State<_MobileComposer> {
                               size: 20,
                             )
                           else
-                            Text(widget.emojiMatches[index].emoji),
+                            Text(
+                              widget.emojiMatches[index].emoji,
+                              style: colourEmojiStyle(const TextStyle()),
+                            ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -2579,42 +2689,50 @@ class _MobileComposerState extends State<_MobileComposer> {
                         minHeight: 48,
                         maxHeight: MediaQuery.sizeOf(context).height / 3,
                       ),
-                      child: Focus(
-                        onKeyEvent: _handleKey,
-                        child: TextField(
-                          key: const ValueKey('mobile-composer-field'),
-                          controller: widget.controller,
-                          focusNode: widget.focusNode,
-                          minLines: 1,
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          // IMEs can finish composition when changing language.
-                          // Sending and dismissing are separate composer actions;
-                          // an editing-complete callback must not drop focus.
-                          onEditingComplete: () {},
-                          textCapitalization: TextCapitalization.sentences,
-                          contextMenuBuilder: _buildSelectionToolbar,
-                          style: TextStyle(color: context.deltiecord.text),
-                          cursorColor: Theme.of(context).colorScheme.primary,
-                          contentInsertionConfiguration:
-                              ContentInsertionConfiguration(
-                                allowedMimeTypes: const [
-                                  'image/png',
-                                  'image/jpeg',
-                                  'image/webp',
-                                  'image/gif',
-                                ],
-                                onContentInserted: widget.onContentInserted,
-                              ),
-                          decoration: const InputDecoration(
-                            hintText: 'Message',
-                            border: InputBorder.none,
-                            filled: false,
-                            // EditableText keeps a four-pixel caret inset of
-                            // its own. 6 + 48 + 4 + that caret inset lands on
-                            // the 62px text column used by timeline messages.
-                            contentPadding: EdgeInsets.only(left: 4, right: 2),
+                      child: Padding(
+                        key: const ValueKey('mobile-composer-field-surface'),
+                        padding: const EdgeInsets.fromLTRB(4, 12, 2, 12),
+                        child: Focus(
+                          onKeyEvent: _handleKey,
+                          child: TextField(
+                            key: const ValueKey('mobile-composer-field'),
+                            controller: widget.controller,
+                            focusNode: widget.focusNode,
+                            selectAllOnFocus: false,
+                            textAlignVertical: TextAlignVertical.top,
+                            minLines: 1,
+                            maxLines: null,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            // IMEs can finish composition when changing language.
+                            // Sending and dismissing are separate composer actions;
+                            // an editing-complete callback must not drop focus.
+                            onEditingComplete: () {},
+                            textCapitalization: TextCapitalization.sentences,
+                            contextMenuBuilder: _buildSelectionToolbar,
+                            style: TextStyle(color: context.deltiecord.text),
+                            cursorColor: Theme.of(context).colorScheme.primary,
+                            contentInsertionConfiguration:
+                                ContentInsertionConfiguration(
+                                  allowedMimeTypes: const [
+                                    'image/png',
+                                    'image/jpeg',
+                                    'image/webp',
+                                    'image/gif',
+                                  ],
+                                  onContentInserted: widget.onContentInserted,
+                                ),
+                            decoration: const InputDecoration(
+                              hintText: 'Message',
+                              hintMaxLines: 1,
+                              border: InputBorder.none,
+                              filled: false,
+                              // EditableText keeps a four-pixel caret inset of
+                              // its own. 6 + 48 + 4 + that caret inset lands on
+                              // the 62px text column used by timeline messages.
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
                           ),
                         ),
                       ),
@@ -3064,7 +3182,10 @@ class _MobileEmojiPickerState extends State<_MobileEmojiPicker> {
                       emoji: entry.customEmoji!.customEmoji!,
                       size: 30,
                     )
-                  : Text(entry.emoji, style: const TextStyle(fontSize: 27)),
+                  : Text(
+                      entry.emoji,
+                      style: colourEmojiStyle(const TextStyle(fontSize: 27)),
+                    ),
             ),
             if (favourite)
               const Positioned(

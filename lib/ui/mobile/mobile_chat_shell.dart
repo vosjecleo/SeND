@@ -533,6 +533,7 @@ class _MobileChatShellState extends State<MobileChatShell>
                       : CallAndChatLayout(
                           call: backend.activeVoiceRoomId == room.id
                               ? MobileVoiceView(
+                                  compact: true,
                                   backend: backend,
                                   room: room,
                                   onOpenNavigation: () =>

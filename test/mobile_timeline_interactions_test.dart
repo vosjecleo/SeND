@@ -1,3 +1,5 @@
+import 'package:deltiecord/ui/deltiecord_theme.dart';
+import 'package:deltiecord/ui/mobile/mobile_media.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -391,5 +393,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
+  testWidgets('mobile file attachments expose download without long press', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+        ),
+        home: Scaffold(
+          body: MobileAttachmentView(
+            backend: FakeBackend(),
+            message: ChatMessage(
+              id: 'file',
+              pending: false,
+              sender: 'Test',
+              body: '',
+              timestamp: DateTime(2026),
+              attachment: const ChatAttachment(
+                kind: AttachmentKind.file,
+                name: 'document.pdf',
+                mimeType: 'application/pdf',
+                size: 10,
+                encrypted: false,
+                spoiler: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byTooltip('Download file'), findsOneWidget);
   });
 }

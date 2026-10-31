@@ -891,6 +891,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
           : Size(maxWidth, maxWidth / ratio);
       return FutureBuilder<Uint8List>(
         future: _imageBytes,
+        initialData: widget.backend.cachedAttachmentPreview(widget.messageId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _FileTile(
@@ -945,15 +946,20 @@ class _AttachmentViewState extends State<_AttachmentView> {
 
   Future<Uint8List> _loadImage() async {
     late Uint8List bytes;
-    try {
-      bytes = await widget.backend.downloadAttachment(
-        widget.messageId,
-        thumbnail: !widget.attachment.animated,
-      );
-    } catch (_) {
-      // Homeservers occasionally advertise a thumbnail that was never
-      // generated. The full attachment is still a valid inline fallback.
-      bytes = await widget.backend.downloadAttachment(widget.messageId);
+    final cached = widget.backend.cachedAttachmentPreview(widget.messageId);
+    if (cached != null) {
+      bytes = cached;
+    } else {
+      try {
+        bytes = await widget.backend.downloadAttachment(
+          widget.messageId,
+          thumbnail: !widget.attachment.animated,
+        );
+      } catch (_) {
+        // Homeservers occasionally advertise a thumbnail that was never
+        // generated. The full attachment is still a valid inline fallback.
+        bytes = await widget.backend.downloadAttachment(widget.messageId);
+      }
     }
     final dimensions = await readEncodedImageDimensions(bytes);
     if (dimensions != null && mounted && dimensions != _decodedDimensions) {
@@ -1365,6 +1371,10 @@ class _InlineVideoState extends State<_InlineVideo> {
         ? fallback
         : FutureBuilder<Uint8List>(
             future: _thumbnail,
+            initialData: widget.backend.cachedAttachmentPreview(
+              widget.messageId,
+              thumbnail: true,
+            ),
             builder: (context, snapshot) => snapshot.data == null
                 ? fallback ?? const SizedBox.shrink()
                 : Image.memory(snapshot.data!, fit: BoxFit.contain),

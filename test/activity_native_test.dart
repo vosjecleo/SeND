@@ -311,4 +311,66 @@ void main() {
     },
     skip: Platform.environment['DELTIECORD_ACTIVITY_HOST_SMOKE'] != '1',
   );
+
+  test(
+    'Minecraft detection requires its client main class, not a launcher',
+    () {
+      expect(
+        isMinecraftClientArguments(['java', 'net.minecraft.client.main.Main']),
+        isTrue,
+      );
+      expect(
+        isMinecraftClientArguments([
+          'java',
+          'net.fabricmc.loader.impl.launch.knot.KnotClient',
+        ]),
+        isTrue,
+      );
+      expect(
+        isMinecraftClientArguments(['java', '-jar', 'minecraft-launcher.jar']),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'local icon lookup supports named raster files and scalable SVGs',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'send-icon-test-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final path = '${directory.path}/icons/hicolor/scalable/apps/blender.svg';
+      await File(path).parent.create(recursive: true);
+      await File(path).writeAsString('<svg/>');
+      expect(findLocalActivityIcon('blender', [directory.path]), path);
+      expect(findLocalActivityIcon('../secret', [directory.path]), isNull);
+    },
+  );
+
+  test(
+    'Minecraft asset index resolves existing icon without network access',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'send-minecraft-icon-test-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final hash = 'aa${List.filled(38, '0').join()}';
+      final icon = File('${directory.path}/objects/aa/$hash');
+      await icon.parent.create(recursive: true);
+      await icon.writeAsBytes(
+        File('assets/icons/tango/actions-list-add.png').readAsBytesSync(),
+      );
+      final index = File('${directory.path}/indexes/test.json');
+      await index.parent.create(recursive: true);
+      await index.writeAsString(
+        jsonEncode({
+          'objects': {
+            'icons/icon_32x32.png': {'hash': hash},
+          },
+        }),
+      );
+      expect(await loadMinecraftActivityIcon(directory.path), isNotNull);
+    },
+  );
 }

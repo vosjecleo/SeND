@@ -319,4 +319,23 @@ void main() {
       backend.dispose();
     },
   );
+
+  test(
+    'retired Aero preferences fall back, custom glass themes still work',
+    () {
+      final source = File('assets/themes/aero.json').readAsStringSync();
+      expect(
+        JsonTheme.fromPreferences(AppPreferences(themeJson: source)),
+        isNull,
+      );
+      expect(
+        JsonTheme.fromPreferences(
+          AppPreferences(
+            themeJson: source.replaceAll('deltiecord.aero', 'custom.glass'),
+          ),
+        ),
+        isNotNull,
+      );
+    },
+  );
 }

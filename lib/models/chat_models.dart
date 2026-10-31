@@ -642,6 +642,7 @@ class ChatMessage {
     this.transferStatus,
     this.preparationProgress,
     this.transactionId,
+    this.decryptionPending = false,
     this.system = false,
     this.own = false,
     this.canRedact = false,
@@ -681,6 +682,12 @@ class ChatMessage {
   final String? transferStatus;
   final double? preparationProgress;
   final String? transactionId;
+  final bool decryptionPending;
+
+  /// UI identity survives the local-echo to server-event handoff. Matrix
+  /// operations must continue to use [id], never this presentation key.
+  String get timelineKey =>
+      own && transactionId?.isNotEmpty == true ? transactionId! : id;
   final bool system;
   final bool own;
   final bool canRedact;

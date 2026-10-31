@@ -1,7 +1,6 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
-import 'package:deltiecord/ui/typing_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +113,9 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('typing-indicator'))).height,
-      typingIndicatorHeight,
+      greaterThanOrEqualTo(
+        tester.getSize(find.text('Alice is typing')).height + 1,
+      ),
     );
     expect(
       tester.getBottomLeft(find.byKey(const Key('typing-indicator'))).dy,
@@ -274,22 +275,28 @@ void main() {
     expect(deafenedButton.style?.foregroundColor?.resolve({}), errorColor);
   });
 
-  testWidgets('room panel width can be resized from its main-screen border', (
+  testWidgets('room panel has a fixed width and no resize handle', (
     tester,
   ) async {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
-    await tester.drag(
-      find.byKey(const Key('room-panel-resize-handle')),
-      const Offset(40, 0),
+    expect(find.byKey(const Key('room-panel-resize-handle')), findsNothing);
+    final width = tester
+        .getSize(find.byKey(const Key('current-user-panel')))
+        .width;
+    expect(width, 349);
+    await backend.updatePreferences(
+      backend.preferences.copyWith(roomPanelWidth: 420),
     );
-    await tester.pump();
-
-    expect(backend.preferences.roomPanelWidth, greaterThan(280));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const Key('current-user-panel'))).width,
+      width,
+    );
   });
 
-  testWidgets('room panel survives transient narrow window constraints', (
+  testWidgets('room navigation stays reachable at narrow window sizes', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(470, 700);
@@ -302,7 +309,11 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const Key('room-panel-resize-handle')), findsOneWidget);
+    expect(find.byKey(const Key('room-panel-resize-handle')), findsNothing);
+    await tester.tap(find.byTooltip('Show chats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('right clicking a DM exposes the compact Home menu', (
@@ -330,7 +341,13 @@ void main() {
     expect(find.text('Mark as read'), findsOneWidget);
     expect(find.text('Mute room'), findsOneWidget);
     expect(find.text('Pin'), findsOneWidget);
-    expect(find.text('Archive'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PopupMenuItem<String>),
+        matching: find.text('Archive'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Leave'), findsOneWidget);
     await tester.tap(find.text('Leave'));
     await tester.pumpAndSettle();

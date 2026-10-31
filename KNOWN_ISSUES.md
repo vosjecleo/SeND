@@ -11,11 +11,16 @@ test lists below do not mean those platforms have gone untested.
 
 ## Open investigations
 
-- **Build 133 search coverage:** each device keeps its own index. Events received
-  on reconnect are indexed, but omitted limited-sync gaps are not automatically
-  backfilled yet. Use the history-download tool within the selected scope and
-  cache limit. Failed decryption now retains reviewable references and supports
-  targeted retry; older downloads saved only a count and need a fresh scan.
+- **Search coverage:** each device keeps its own index. Build 134 added automatic
+  limited-sync gap recovery within the selected scope and budget. Background
+  restrictions and undecryptable events can still delay complete results. Use
+  history download and targeted decryption retry where needed; older downloads
+  that saved only a failure count need a fresh scan for reviewable references.
+- **Build 135 device checks:** the Linux preview was approved. Archive GIF frame
+  retention, composer layout and sound-mix limits have automated coverage, but
+  physical Android/iOS and native-audio output checks are still needed. Android
+  system scrolling screenshots need additional native integration and are not
+  implemented. The long-session GPU/avatar investigation below remains open.
 - **Build 133 browser video:** WebCodecs export passed real Chromium H.264/AAC
   checks, but physical iOS PWA codec/memory acceptance is still outstanding.
   Browser editing is limited to 256 MiB inputs, 4K coded/display dimensions and

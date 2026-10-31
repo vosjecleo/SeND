@@ -304,4 +304,43 @@ void main() {
     expect(expandedHeight, greaterThan(initialHeight));
     expect(expandedHeight, lessThanOrEqualTo((900 - 56) / 3 + 0.1));
   });
+
+  testWidgets(
+    'desktop composer grows on soft wrap without stretching user island',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const room = RoomSummary(
+        id: '!test:example.org',
+        name: 'Test',
+        lastMessage: '',
+        unreadCount: 0,
+        usesChannelIcon: false,
+      );
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..roomList = [room]
+        ..currentRoom = room;
+      await tester.pumpWidget(
+        DeltiecordApp(backend: backend, platformOverride: TargetPlatform.linux),
+      );
+      await tester.pumpAndSettle();
+      final composer = find.byKey(const Key('message-composer-island'));
+      final user = find.byKey(const Key('current-user-island'));
+      final initialHeight = tester.getSize(composer).height;
+      final userHeight = tester.getSize(user).height;
+      tester
+          .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
+          .controller
+          .replaceText(0, 0, 'a long wrapping message ' * 30, null);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(composer).height, greaterThan(initialHeight));
+      expect(tester.getSize(user).height, userHeight);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  TestWidgetsFlutterBinding.ensureInitialized();
 }

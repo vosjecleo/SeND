@@ -106,6 +106,16 @@ class VoiceControlIsland extends StatelessWidget {
               ),
             ),
             IconButton(
+              tooltip: backend.voiceCameraEnabled ? 'Camera off' : 'Camera on',
+              onPressed: () =>
+                  backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled),
+              icon: Icon(
+                backend.voiceCameraEnabled
+                    ? Icons.videocam
+                    : Icons.videocam_off,
+              ),
+            ),
+            IconButton(
               tooltip: 'Disconnect',
               onPressed: backend.leaveVoiceRoom,
               icon: Icon(
@@ -117,5 +127,92 @@ class VoiceControlIsland extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+/// The same primary controls in a full voice room and an embedded DM call.
+class VoiceCallControls extends StatelessWidget {
+  const VoiceCallControls({
+    required this.backend,
+    this.options,
+    this.showConnectivity = false,
+    super.key,
+  });
+  final ChatBackend backend;
+  final Widget? options;
+  final bool showConnectivity;
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('voice-call-controls'),
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      if (showConnectivity) RtcConnectivityIcon(backend: backend),
+      IconButton(
+        tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
+        onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
+        icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
+      ),
+      IconButton(
+        tooltip: backend.voiceDeafened ? 'Undeafen' : 'Deafen',
+        onPressed: () => backend.setVoiceDeafened(!backend.voiceDeafened),
+        icon: Icon(backend.voiceDeafened ? Icons.headset_off : Icons.headset),
+      ),
+      IconButton(
+        tooltip: backend.voiceCameraEnabled ? 'Camera off' : 'Camera on',
+        onPressed: () =>
+            backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled),
+        icon: Icon(
+          backend.voiceCameraEnabled ? Icons.videocam : Icons.videocam_off,
+        ),
+      ),
+      IconButton(
+        tooltip: 'Disconnect',
+        onPressed: backend.leaveVoiceRoom,
+        icon: Icon(Icons.call_end, color: Theme.of(context).colorScheme.error),
+      ),
+      ?options,
+    ],
+  );
+}
+
+/// Embedded calls fit the available stage instead of scrolling oversized tiles.
+class CompactVoiceGrid extends StatelessWidget {
+  const CompactVoiceGrid({
+    required this.itemCount,
+    required this.itemBuilder,
+    super.key,
+  });
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, bounds) {
+      final columns = (bounds.maxWidth >= 720 ? 3 : 2).clamp(
+        1,
+        itemCount > 0 ? itemCount : 1,
+      );
+      final rows = itemCount == 0 ? 1 : (itemCount / columns).ceil();
+      final height = ((bounds.maxHeight - 16 - (rows - 1) * 8) / rows).clamp(
+        60.0,
+        double.infinity,
+      );
+      return GridView.builder(
+        key: const ValueKey('compact-voice-grid'),
+        padding: const EdgeInsets.all(8),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisExtent: height,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
+        itemCount: itemCount,
+        itemBuilder: (context, index) => Center(
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: itemBuilder(context, index),
+          ),
+        ),
+      );
+    },
   );
 }

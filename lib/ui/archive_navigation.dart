@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/physics.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
 import 'threshold_feedback.dart';
@@ -21,6 +22,7 @@ class ArchivePullList extends StatefulWidget {
     this.findChildIndexCallback,
     this.padding,
     this.enabled = true,
+    this.alwaysVisible = false,
     this.onOpenRoom,
     this.onOpenArchive,
     this.emptyLabel = 'No joined rooms',
@@ -32,6 +34,7 @@ class ArchivePullList extends StatefulWidget {
   final int? Function(Key)? findChildIndexCallback;
   final EdgeInsetsGeometry? padding;
   final bool enabled;
+  final bool alwaysVisible;
   final Future<void> Function(RoomSummary)? onOpenRoom;
   final VoidCallback? onOpenArchive;
   final String emptyLabel;
@@ -47,6 +50,8 @@ class _ArchivePullListState extends State<ArchivePullList>
   bool _shown = false, _hiding = false, _wheel = false;
   double _homeOffset = 0;
   Timer? _wheelEnd;
+  int _motionGeneration = 0;
+  bool get _desktop => widget.alwaysVisible;
   @override
   void dispose() {
     _wheelEnd?.cancel();
@@ -58,7 +63,9 @@ class _ArchivePullListState extends State<ArchivePullList>
   @override
   void didUpdateWidget(covariant ArchivePullList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.enabled != widget.enabled) {
+    if (oldWidget.enabled != widget.enabled ||
+        oldWidget.alwaysVisible != widget.alwaysVisible) {
+      _motionGeneration++;
       _wheelEnd?.cancel();
       if (!widget.enabled && _scroll.hasClients) _homeOffset = _scroll.offset;
       _motion.value = widget.enabled && _shown ? _rowHeight : 0;
@@ -83,37 +90,55 @@ class _ArchivePullListState extends State<ArchivePullList>
   }
 
   void _pull(double delta) {
-    if (!widget.enabled || _shown) return;
+    if (!widget.enabled || _shown || _desktop) return;
+    _motionGeneration++;
     _motion.stop();
     final resistance = delta > 0 ? .7 / (1 + _motion.value / 180) : 1.0;
     _motion.value = (_motion.value + delta * resistance).clamp(0, _maximumPull);
   }
 
   void _animate(double target) {
+    final generation = ++_motionGeneration;
     if (MediaQuery.disableAnimationsOf(context)) {
       _motion.value = target;
       return;
     }
-    _motion.animateTo(
-      target,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+    unawaited(
+      _motion
+          .animateWith(
+            SpringSimulation(
+              SpringDescription.withDampingRatio(
+                mass: 1,
+                stiffness: 420,
+                ratio: .9,
+              ),
+              _motion.value,
+              target,
+              0,
+            ),
+          )
+          .then<void>((_) {
+            if (mounted && generation == _motionGeneration) {
+              _motion.value = target;
+            }
+          }),
     );
   }
 
   void _release() {
-    if (!mounted || _shown || _motion.value <= 0) return;
+    if (!mounted || _desktop || _shown || _motion.value <= 0) return;
     final reveal = _motion.value >= _threshold;
     if (reveal) setState(() => _shown = true);
     _animate(reveal ? _rowHeight : 0);
   }
 
   bool _notification(ScrollNotification event) {
-    if (!widget.enabled || event.depth != 0) return false;
+    if (!widget.enabled || _desktop || event.depth != 0) return false;
     if (!_shown) {
       if (event is ScrollStartNotification && event.dragDetails != null) {
         _wheelEnd?.cancel();
         _wheel = false;
+        _motionGeneration++;
         _motion.stop();
       }
       if (event is OverscrollNotification &&
@@ -152,6 +177,7 @@ class _ArchivePullListState extends State<ArchivePullList>
 
   void _pointerSignal(PointerSignalEvent event) {
     if (!widget.enabled ||
+        _desktop ||
         _shown ||
         event is! PointerScrollEvent ||
         !_scroll.hasClients ||
@@ -169,7 +195,29 @@ class _ArchivePullListState extends State<ArchivePullList>
 
   @override
   Widget build(BuildContext context) {
-    final visible = widget.enabled && _shown;
+    final desktop = _desktop;
+    final visible = widget.enabled && (desktop || _shown);
+    final rowHeight = desktop ? 36.0 : _rowHeight;
+    // A permanent leading slot avoids recycling GIF decoders when revealing
+    // or hiding Archive. The visible row itself scrolls with the chats.
+    final listEntry = widget.enabled;
+    Widget entry() => SizedBox(
+      key: const ValueKey('home-archive-entry'),
+      height: rowHeight,
+      child: ListTile(
+        dense: desktop,
+        minVerticalPadding: 0,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        horizontalTitleGap: 12,
+        leading: const SizedBox.square(
+          dimension: 28,
+          child: Icon(Icons.archive_outlined, size: 20),
+        ),
+        title: const Text('Archive'),
+        trailing: Text('${widget.backend.archivedRooms.length}'),
+        onTap: _open,
+      ),
+    );
     final list = ListView.builder(
       key: PageStorageKey('chat-list-${widget.enabled ? 'home' : 'archive'}'),
       controller: _scroll,
@@ -177,43 +225,48 @@ class _ArchivePullListState extends State<ArchivePullList>
         parent: AlwaysScrollableScrollPhysics(),
       ),
       padding: widget.padding,
-      itemCount: widget.itemCount + (visible ? 1 : 0),
+      itemCount: widget.itemCount + (listEntry ? 1 : 0),
       findChildIndexCallback: widget.findChildIndexCallback == null
           ? null
           : (key) {
-              if (key == const ValueKey('home-archive-entry')) {
-                return visible ? 0 : null;
+              if (key == const ValueKey('home-archive-slot')) {
+                return listEntry ? 0 : null;
               }
               final found = widget.findChildIndexCallback!(key);
-              return found == null ? null : found + (visible ? 1 : 0);
+              return found == null ? null : found + (listEntry ? 1 : 0);
             },
       itemBuilder: (context, index) {
-        if (visible && index == 0) {
-          return SizedBox(
-            key: const ValueKey('home-archive-entry'),
-            height: _rowHeight,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-              horizontalTitleGap: 12,
-              leading: const SizedBox.square(
-                dimension: 44,
-                child: Icon(Icons.archive_outlined),
-              ),
-              title: const Text('Archive'),
-              trailing: Text('${widget.backend.archivedRooms.length}'),
-              onTap: _open,
-            ),
+        if (listEntry && index == 0) {
+          return KeyedSubtree(
+            key: const ValueKey('home-archive-slot'),
+            child: visible ? entry() : const SizedBox.shrink(),
           );
         }
-        return widget.itemBuilder(context, index - (visible ? 1 : 0));
+        return widget.itemBuilder(context, index - (listEntry ? 1 : 0));
       },
     );
+    if (desktop) {
+      return ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: Stack(
+          children: [
+            Positioned.fill(child: list),
+            if (widget.itemCount == 0)
+              Center(child: IgnorePointer(child: Text(widget.emptyLabel))),
+          ],
+        ),
+      );
+    }
     return Semantics(
       customSemanticsActions: widget.enabled
           ? {CustomSemanticsAction(label: 'Open Archive'): _open}
           : null,
       child: Listener(
         onPointerSignal: _pointerSignal,
+        // Navigation and gesture cancellation can prevent a ScrollEnd from
+        // reaching the list. Never leave the reveal parked under the finger.
+        onPointerUp: (_) => _release(),
+        onPointerCancel: (_) => _release(),
         child: NotificationListener<ScrollNotification>(
           onNotification: _notification,
           child: ScrollConfiguration(
@@ -231,7 +284,11 @@ class _ArchivePullListState extends State<ArchivePullList>
               child: AnimatedBuilder(
                 animation: _motion,
                 builder: (context, child) {
-                  final pull = widget.enabled ? _motion.value : 0.0;
+                  final pull = desktop
+                      ? (visible ? rowHeight : 0.0)
+                      : widget.enabled
+                      ? _motion.value.clamp(0.0, _maximumPull)
+                      : 0.0;
                   final ready = pull >= _threshold;
                   return Stack(
                     children: [
@@ -243,39 +300,49 @@ class _ArchivePullListState extends State<ArchivePullList>
                           height: pull,
                           child: Opacity(
                             opacity: ((pull - 18) / 45).clamp(0, 1),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                ThresholdFeedbackIcon(
-                                  active: ready,
-                                  haptics: !_wheel,
-                                  icon: ready
-                                      ? Icons.archive_outlined
-                                      : Icons.keyboard_double_arrow_down,
+                            child: ClipRect(
+                              child: OverflowBox(
+                                minHeight: 0,
+                                maxHeight: double.infinity,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ThresholdFeedbackIcon(
+                                      active: ready,
+                                      haptics: !_wheel,
+                                      icon: ready
+                                          ? Icons.archive_outlined
+                                          : Icons.keyboard_double_arrow_down,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      ready
+                                          ? 'Release to show Archive'
+                                          : (_wheel
+                                                ? 'Keep scrolling for Archive'
+                                                : 'Keep pulling for Archive'),
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelMedium,
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  ready
-                                      ? 'Release to show Archive'
-                                      : (_wheel
-                                            ? 'Keep scrolling for Archive'
-                                            : 'Keep pulling for Archive'),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.labelMedium,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       Positioned.fill(
+                        // Keep the active scrollable mounted when the pull
+                        // hint is inserted before it in the stack.
+                        key: const ValueKey('archive-pull-scrollable'),
                         child: Transform.translate(
-                          offset: Offset(0, pull - (visible ? _rowHeight : 0)),
+                          offset: Offset(0, pull - (visible ? rowHeight : 0)),
                           child: child,
                         ),
                       ),
-                      if (widget.itemCount == 0 && !visible)
+                      if (widget.itemCount == 0 && (!visible || desktop))
                         Center(
                           child: IgnorePointer(child: Text(widget.emptyLabel)),
                         ),

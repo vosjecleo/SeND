@@ -40,10 +40,7 @@ Future<void> _confirmFormattedLink(BuildContext context, Uri uri) async {
   if (open == true) await launchUrl(uri);
 }
 
-final _emojiPresentationPattern = RegExp(
-  r'[\u{00A9}\u{00AE}\u{203C}\u{2049}\u{2122}\u{2139}\u{2194}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FAFF}]',
-  unicode: true,
-);
+final _emojiPresentationPattern = colourEmojiPattern;
 
 const _inlineCustomEmojiSize = 20.0;
 const _standaloneEmojiSize = 64.0;

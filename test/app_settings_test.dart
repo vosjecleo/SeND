@@ -46,7 +46,7 @@ void main() {
     });
   }
 
-  testWidgets('opens the v0.4 settings workspace', (tester) async {
+  testWidgets('opens settings and can reach About', (tester) async {
     final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
@@ -65,7 +65,6 @@ void main() {
       ),
     );
     expect(find.text('About', skipOffstage: false), findsOneWidget);
-    expect(find.text('Advanced', skipOffstage: false), findsNothing);
     expect(find.text('@deltie:example.org'), findsWidgets);
   });
 

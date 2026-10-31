@@ -1,22 +1,18 @@
 import 'package:deltiecord/services/attachment_text.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+// Parsing attachment event content must not need an initialized SQL database.
+class _Database extends Fake implements MatrixSdkDatabase {
+  @override
+  Future<void> close() async {}
+}
 
 void main() {
   late Room room;
   late Client client;
-  setUpAll(() async {
-    sqfliteFfiInit();
-    final database = await databaseFactoryFfi.openDatabase(
-      inMemoryDatabasePath,
-    );
-    final sdkDatabase = await MatrixSdkDatabase.init(
-      'attachment-text-test',
-      database: database,
-      sqfliteFactory: databaseFactoryFfi,
-    );
-    client = Client('attachment-text-test', database: sdkDatabase);
+  setUpAll(() {
+    client = Client('attachment-text-test', database: _Database());
     room = Room(id: '!room:example.org', client: client);
   });
   tearDownAll(() => client.dispose());

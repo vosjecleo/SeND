@@ -58,6 +58,8 @@ jobs:
           }
 
           web_only=false
+          # Validation and packages must pass for the exact tagged commit.
+          bash packaging/await-validation.sh "$GITHUB_SHA"
           windows_run='' linux_run='' android_run=''
           if git log -1 --format=%B | grep -Fq '[web-only]'; then
             web_only=true

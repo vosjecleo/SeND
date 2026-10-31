@@ -63,6 +63,12 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   final _scroll = ScrollController();
   final _viewportKey = GlobalKey();
   final _rowKeys = <String, GlobalKey>{};
+  GlobalKey _rowKeyFor(ChatMessage message) {
+    final key = _rowKeys.putIfAbsent(message.timelineKey, GlobalKey.new);
+    _rowKeys[message.id] = key;
+    return key;
+  }
+
   DateTime _userInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
   ThreadSession? _session;
   String? _error;
@@ -169,6 +175,14 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
       TextSelection.collapsed(offset: text.length),
       ChangeSource.local,
     );
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      _editing = null;
+      resetRichComposer(_draft);
+    });
+    _focus.requestFocus();
   }
 
   void _reply(ChatMessage message) {
@@ -584,23 +598,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
     final messages = session?.messages ?? const <ChatMessage>[];
     final positions = {
       for (final (index, message) in messages.indexed)
-        ValueKey('thread-message-${message.id}'): index,
+        ValueKey('thread-message-${message.timelineKey}'): index,
     };
     final receipts = receiptFrontiers(messages);
     final albums = MediaAlbumIndex.fromNewestFirst(messages);
-    final participants = messages
-        .map((m) => m.senderId)
-        .whereType<String>()
-        .toSet();
     return Material(
       color: context.deltiecord.panel,
       child: Column(
         children: [
           ListTile(
             title: const Text('Discussion'),
-            subtitle: Text(
-              '${max(0, messages.length - 1)} loaded replies · ${participants.length} participants',
-            ),
             trailing: IconButton(
               tooltip: 'Close discussion',
               onPressed: widget.onClose,
@@ -639,6 +646,12 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                     key: _viewportKey,
                     children: [
                       ListView.builder(
+                        padding: EdgeInsets.fromLTRB(
+                          0,
+                          8,
+                          0,
+                          typingIndicatorHeightFor(context) + 1,
+                        ),
                         controller: _scroll,
                         key: PageStorageKey(
                           'thread:${widget.roomId}:${widget.rootId}',
@@ -683,13 +696,12 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                                   const Duration(minutes: 7) ||
                               message.reply != null;
                           return GestureDetector(
-                            key: ValueKey('thread-message-${message.id}'),
+                            key: ValueKey(
+                              'thread-message-${message.timelineKey}',
+                            ),
                             onLongPress: () => _messageActions(message),
                             child: KeyedSubtree(
-                              key: _rowKeys.putIfAbsent(
-                                message.id,
-                                GlobalKey.new,
-                              ),
+                              key: _rowKeyFor(message),
                               child: SwipeToReply(
                                 messageId: message.id,
                                 enabled:
@@ -713,7 +725,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                                           ),
                                           child: _MessageRow(
                                             allowThreadNavigation: false,
-                                            key: ValueKey(message.id),
+                                            key: ValueKey(message.timelineKey),
                                             message: message,
                                             albumMessages:
                                                 albums.albums[message.id],
@@ -827,10 +839,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
               trailing: IconButton(
                 tooltip: 'Cancel edit',
                 icon: const Icon(Icons.close),
-                onPressed: () => setState(() {
-                  _editing = null;
-                  resetRichComposer(_draft);
-                }),
+                onPressed: _cancelEditing,
               ),
             ),
           if (_replying case final reply?)
@@ -851,6 +860,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
               thread: session,
               replyToMessageId: _replying?.id,
               builder: (record) => _MessageComposer(
+                onEscape: _editing == null ? null : _cancelEditing,
                 key: _composer,
                 backend: widget.backend,
                 controller: _draft,

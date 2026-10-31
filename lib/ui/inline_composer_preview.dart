@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'emoji_typography.dart';
 
 // Keep source offsets intact. This changes paint, never the draft or selection.
 final inlineMarkupPattern = RegExp(r'(\*\*|__|~~|\|\||\*|_)([^\n]+?)\1');
@@ -7,12 +8,14 @@ TextSpan inlineComposerPreview(String text, TextStyle? style) {
   final children = <InlineSpan>[];
   var offset = 0;
   for (final match in inlineMarkupPattern.allMatches(text)) {
-    children.add(TextSpan(text: text.substring(offset, match.start)));
+    children.add(
+      colourEmojiTextSpan(text.substring(offset, match.start), style),
+    );
     final delimiter = match.group(1)!;
     final content = match.group(2)!;
     if (content.contains('\\') ||
         (match.start > 0 && text[match.start - 1] == '\\')) {
-      children.add(TextSpan(text: match.group(0)));
+      children.add(colourEmojiTextSpan(match.group(0)!, style));
     } else {
       final base = style ?? const TextStyle();
       final marker = base.copyWith(
@@ -27,12 +30,12 @@ TextSpan inlineComposerPreview(String text, TextStyle? style) {
       };
       children.addAll([
         TextSpan(text: delimiter, style: marker),
-        TextSpan(text: content, style: body),
+        colourEmojiTextSpan(content, body),
         TextSpan(text: delimiter, style: marker),
       ]);
     }
     offset = match.end;
   }
-  children.add(TextSpan(text: text.substring(offset)));
+  children.add(colourEmojiTextSpan(text.substring(offset), style));
   return TextSpan(style: style, children: children);
 }

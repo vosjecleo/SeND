@@ -1,0 +1,34 @@
+# Native OS coverage, in addition to the full shared Linux VM suite.
+# Keep sockets, named pipes, filesystem permissions/replacement, SQLCipher/FFI,
+# SDK persistence, TLS and actual process-based codec tests on Windows.
+# Animation and pixel tests also exercise the Windows Flutter engine/codec path.
+test/activity_windows_pipe_test.dart
+test/activity_native_test.dart
+test/auth_browser_native_test.dart
+test/avatar_media_pool_test.dart
+test/avatar_clip_pixels_test.dart
+test/avatar_frame_lifetime_test.dart
+test/lifecycle_memory_image_test.dart
+test/profile_image_cropper_test.dart
+test/media_markup_editor_test.dart
+test/draft_store_test.dart
+test/encrypted_android_database_test.dart
+test/encrypted_desktop_database_test.dart
+test/history_download_backend_test.dart
+test/history_gap_storage_test.dart
+test/history_index_test.dart
+test/history_scope_test.dart
+test/linux_update_test.dart
+test/matrix_voice_controller_test.dart
+test/media_integrity_test.dart
+test/media_range_proxy_test.dart
+test/protected_file_test.dart
+test/rtc_call_lifecycle_test.dart
+test/rtc_membership_lease_test.dart
+test/rtc_room_membership_test.dart
+test/rtc_sync_bridge_test.dart
+test/rtc_transport_api_test.dart
+test/scheduled_message_store_test.dart
+test/socks_proxy_test.dart
+test/temporary_attachment_store_test.dart
+test/video_edit_export_test.dart

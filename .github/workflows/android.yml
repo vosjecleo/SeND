@@ -101,18 +101,6 @@ jobs:
           done
           exit 1
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils
-          flutter test --concurrency=2
-
       - name: Build split Android APKs and app bundle
         shell: bash
         env:
@@ -158,6 +146,12 @@ jobs:
       - name: Test Android RTC logging contract
         shell: bash
         run: bash packaging/android/test-rtc-logging.sh
+
+      - name: Test compiled Android push protocol
+        working-directory: android
+        # The APK/AAB steps already compiled Flutter with release credentials.
+        # JVM-only tests need Android/Kotlin compilation, not another Dart AOT build.
+        run: ./gradlew :app:testReleaseUnitTest -x :app:compileFlutterBuildRelease --no-daemon --max-workers=2
 
       - name: Package Android releases
         shell: bash

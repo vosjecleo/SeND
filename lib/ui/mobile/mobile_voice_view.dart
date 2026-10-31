@@ -26,6 +26,7 @@ class MobileVoiceView extends StatefulWidget {
     required this.onOpenNavigation,
     required this.onOpenDetails,
     this.onOpenChat,
+    this.compact = false,
     super.key,
   });
   final ChatBackend backend;
@@ -33,6 +34,7 @@ class MobileVoiceView extends StatefulWidget {
   final VoidCallback onOpenNavigation;
   final VoidCallback onOpenDetails;
   final VoidCallback? onOpenChat;
+  final bool compact;
 
   @override
   State<MobileVoiceView> createState() => _MobileVoiceViewState();
@@ -70,81 +72,37 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
       if (connected && backend.userId != null) backend.userId!,
     }.toList();
     return Scaffold(
+      primary: !widget.compact,
+      resizeToAvoidBottomInset: !widget.compact,
       key: const ValueKey('mobile-voice-view'),
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: widget.onOpenNavigation,
-          icon: const Icon(Icons.menu),
-        ),
-        title: InkWell(
-          onTap: widget.onOpenDetails,
-          child: Row(
-            children: [
-              const Icon(Icons.volume_up_outlined),
-              const SizedBox(width: 10),
-              Expanded(child: Text(room.name)),
-            ],
-          ),
-        ),
-        actions: [
-          if (widget.onOpenChat != null)
-            IconButton(
-              tooltip: 'Open chat',
-              onPressed: widget.onOpenChat,
-              icon: const Icon(Icons.chat_bubble_outline),
+      appBar: widget.compact
+          ? null
+          : AppBar(
+              leading: IconButton(
+                onPressed: widget.onOpenNavigation,
+                icon: const Icon(Icons.menu),
+              ),
+              title: InkWell(
+                onTap: widget.onOpenDetails,
+                child: Row(
+                  children: [
+                    const Icon(Icons.volume_up_outlined),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(room.name)),
+                  ],
+                ),
+              ),
+              actions: [
+                if (widget.onOpenChat != null)
+                  IconButton(
+                    tooltip: 'Open chat',
+                    onPressed: widget.onOpenChat,
+                    icon: const Icon(Icons.chat_bubble_outline),
+                  ),
+                RtcConnectivityIcon(backend: backend),
+                _voiceOptions(),
+              ],
             ),
-          RtcConnectivityIcon(backend: backend),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz),
-            onSelected: (action) {
-              switch (action) {
-                case 'invite':
-                  showInviteMember(context, backend, roomId: room.id);
-                case 'mute':
-                  backend.setVoiceMuted(!backend.voiceMuted);
-                case 'deafen':
-                  backend.setVoiceDeafened(!backend.voiceDeafened);
-                case 'camera':
-                  backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled);
-                case 'share':
-                  toggleVoiceScreenSharing(context, backend);
-                case 'devices':
-                  _showDeviceSheet();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'invite',
-                child: Text('Invite to channel'),
-              ),
-              PopupMenuItem(
-                value: 'mute',
-                child: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
-              ),
-              PopupMenuItem(
-                value: 'deafen',
-                child: Text(backend.voiceDeafened ? 'Undeafen' : 'Deafen'),
-              ),
-              PopupMenuItem(
-                value: 'camera',
-                child: Text(
-                  backend.voiceCameraEnabled ? 'Camera off' : 'Camera on',
-                ),
-              ),
-              PopupMenuItem(
-                value: 'share',
-                child: Text(
-                  backend.voiceScreenSharing ? 'Stop sharing' : 'Share screen',
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'devices',
-                child: Text('Audio and camera devices'),
-              ),
-            ],
-          ),
-        ],
-      ),
       body: Column(
         children: [
           if (backend.voiceError case final error? when error.isNotEmpty)
@@ -174,15 +132,7 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
           Expanded(
             child: users.isEmpty
                 ? const Center(child: Text('Nobody connected'))
-                : GridView.builder(
-                    padding: const EdgeInsets.all(10),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 360,
-                          childAspectRatio: 1.15,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                        ),
+                : _participants(
                     itemCount: users.length,
                     itemBuilder: (context, index) {
                       final userId = users[index];
@@ -212,13 +162,14 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
           ),
           SafeArea(
             top: false,
+            bottom: !widget.compact,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(widget.compact ? 4 : 12),
               child: connected
-                  ? FilledButton.icon(
-                      onPressed: backend.leaveVoiceRoom,
-                      icon: const Icon(Icons.call_end),
-                      label: const Text('Disconnect'),
+                  ? VoiceCallControls(
+                      backend: backend,
+                      showConnectivity: widget.compact,
+                      options: widget.compact ? _voiceOptions() : null,
                     )
                   : FilledButton.icon(
                       onPressed: () => backend.joinVoiceRoom(widget.room.id),
@@ -231,6 +182,72 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
       ),
     );
   }
+
+  Widget _voiceOptions() {
+    final backend = widget.backend;
+    final room = widget.room;
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz),
+      onSelected: (action) {
+        switch (action) {
+          case 'invite':
+            showInviteMember(context, backend, roomId: room.id);
+          case 'mute':
+            backend.setVoiceMuted(!backend.voiceMuted);
+          case 'deafen':
+            backend.setVoiceDeafened(!backend.voiceDeafened);
+          case 'camera':
+            backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled);
+          case 'share':
+            toggleVoiceScreenSharing(context, backend);
+          case 'devices':
+            _showDeviceSheet();
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'invite', child: Text('Invite to channel')),
+        PopupMenuItem(
+          value: 'mute',
+          child: Text(backend.voiceMuted ? 'Unmute' : 'Mute'),
+        ),
+        PopupMenuItem(
+          value: 'deafen',
+          child: Text(backend.voiceDeafened ? 'Undeafen' : 'Deafen'),
+        ),
+        PopupMenuItem(
+          value: 'camera',
+          child: Text(backend.voiceCameraEnabled ? 'Camera off' : 'Camera on'),
+        ),
+        PopupMenuItem(
+          value: 'share',
+          child: Text(
+            backend.voiceScreenSharing ? 'Stop sharing' : 'Share screen',
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'devices',
+          child: Text('Audio and camera devices'),
+        ),
+      ],
+    );
+  }
+
+  Widget _participants({
+    required int itemCount,
+    required IndexedWidgetBuilder itemBuilder,
+  }) => widget.compact
+      ? CompactVoiceGrid(itemCount: itemCount, itemBuilder: itemBuilder)
+      : GridView.builder(
+          padding: const EdgeInsets.all(10),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 360,
+            childAspectRatio: 1.15,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+          ),
+          itemCount: itemCount,
+          itemBuilder: itemBuilder,
+        );
 
   Future<void> _showDeviceSheet() async {
     await widget.backend.refreshAudioInputs();
@@ -586,13 +603,16 @@ class MobileCallIsland extends StatelessWidget {
           children: [
             RtcConnectivityIcon(backend: backend),
             const SizedBox(width: 8),
-            Text(
-              backend.voiceConnectionStatus ==
-                      VoiceConnectionStatus.reconnecting
-                  ? 'Reconnecting…'
-                  : 'Voice chat',
+            Flexible(
+              child: Text(
+                backend.voiceConnectionStatus ==
+                        VoiceConnectionStatus.reconnecting
+                    ? 'Reconnecting…'
+                    : 'Voice chat',
+              ),
             ),
             IconButton(
+              tooltip: backend.voiceMuted ? 'Unmute' : 'Mute',
               visualDensity: VisualDensity.compact,
               onPressed: () => backend.setVoiceMuted(!backend.voiceMuted),
               icon: Icon(backend.voiceMuted ? Icons.mic_off : Icons.mic),
@@ -606,6 +626,18 @@ class MobileCallIsland extends StatelessWidget {
               ),
             ),
             IconButton(
+              tooltip: backend.voiceCameraEnabled ? 'Camera off' : 'Camera on',
+              visualDensity: VisualDensity.compact,
+              onPressed: () =>
+                  backend.setVoiceCameraEnabled(!backend.voiceCameraEnabled),
+              icon: Icon(
+                backend.voiceCameraEnabled
+                    ? Icons.videocam
+                    : Icons.videocam_off,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Disconnect',
               visualDensity: VisualDensity.compact,
               color: Colors.redAccent,
               onPressed: backend.leaveVoiceRoom,

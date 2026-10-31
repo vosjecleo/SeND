@@ -176,9 +176,15 @@ jobs:
     needs: [ubuntu-test, nix-test]
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Require validation of the packaging commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/await-validation.sh "$(git rev-parse HEAD)"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: appimage-repackage

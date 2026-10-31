@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../version.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'platform_io.dart';
 
@@ -117,6 +118,7 @@ ReleaseCheckResult parseReleaseManifest(
   required String currentVersion,
   required int currentBuild,
   bool stableOnly = false,
+  bool currentIsPreview = deltiecordIsPreview,
 }) {
   final decoded = jsonDecode(source);
   if (decoded is! Map<String, dynamic>) {
@@ -176,7 +178,10 @@ ReleaseCheckResult parseReleaseManifest(
     build: build,
     artifacts: List.unmodifiable(artifacts),
     updateAvailable:
-        comparison > 0 || (comparison == 0 && build > currentBuild),
+        comparison > 0 ||
+        (comparison == 0 &&
+            (build > currentBuild ||
+                (currentIsPreview && build == currentBuild))),
   );
 }
 

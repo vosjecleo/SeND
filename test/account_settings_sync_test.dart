@@ -1,3 +1,4 @@
+import 'package:deltiecord/services/settings_echo_guard.dart';
 import 'dart:async';
 
 import 'package:deltiecord/services/account_settings_sync.dart';
@@ -43,4 +44,22 @@ void main() {
       throwsA(isA<TimeoutException>()),
     );
   });
+
+  test('late settings echoes cannot replace local choices', () {
+    final guard = SettingsEchoGuard();
+    guard.expect({'theme': 'light'}, {'theme': 'dark'});
+    guard.expect({'theme': 'light'}, {'theme': 'night'});
+    expect(guard.accepts({'theme': 'light'}), isFalse);
+    expect(guard.accepts({'theme': 'dark'}), isFalse);
+    expect(guard.accepts({'theme': 'night'}), isTrue);
+    expect(guard.accepts({'theme': 'light'}), isTrue);
+    guard.expect({'theme': 'light'}, {'theme': 'dark'});
+    expect(
+      guard.accepts({'theme': 'gray'}),
+      isTrue,
+      reason: 'Allow a new edit from another device',
+    );
+  });
+
+  TestWidgetsFlutterBinding.ensureInitialized();
 }

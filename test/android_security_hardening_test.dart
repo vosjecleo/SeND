@@ -26,34 +26,6 @@ void main() {
     );
     expect(clear, contains('invalidateRoomAlertState(context, roomId)'));
   });
-  test('Android excludes all app-private state from backup and transfer', () {
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsStringSync();
-    expect(manifest, contains('android:allowBackup="false"'));
-    expect(manifest, contains('@xml/backup_rules'));
-    expect(manifest, contains('@xml/data_extraction_rules'));
-
-    final legacy = File(
-      'android/app/src/main/res/xml/backup_rules.xml',
-    ).readAsStringSync();
-    final modern = File(
-      'android/app/src/main/res/xml/data_extraction_rules.xml',
-    ).readAsStringSync();
-    for (final domain in [
-      'root',
-      'file',
-      'database',
-      'sharedpref',
-      'external',
-      'device_root',
-      'device_file',
-      'device_database',
-      'device_sharedpref',
-    ]) {
-      expect('$legacy\n$modern', contains('domain="$domain"'));
-    }
-  });
 
   test(
     'notification bridge bounds bitmap allocation and reply persistence',

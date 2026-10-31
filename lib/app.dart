@@ -443,6 +443,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
               child: ActivityScope(
                 backend: backend,
                 child: VideoPreparationOverlay(
+                  backend: backend,
                   child: mobile
                       ? _InAppNotificationOverlay(child: child)
                       : routeContent,

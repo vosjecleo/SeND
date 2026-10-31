@@ -299,6 +299,11 @@ class _MobileImageState extends State<_MobileImage>
   ({int width, int height})? _decodedDimensions;
 
   Future<Uint8List> _load() async {
+    final cached = widget.backend.cachedAttachmentPreview(widget.message.id);
+    if (cached != null) {
+      await _learnDimensions(cached);
+      return cached;
+    }
     final attachment = widget.message.attachment!;
     if (attachment.hasThumbnail && !attachment.animated) {
       try {
@@ -380,6 +385,9 @@ class _MobileImageState extends State<_MobileImage>
               : context.deltiecord.elevated,
           child: FutureBuilder<Uint8List>(
             future: _bytes,
+            initialData: widget.backend.cachedAttachmentPreview(
+              widget.message.id,
+            ),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(

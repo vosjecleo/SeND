@@ -17,12 +17,14 @@ class VoiceRoomView extends StatefulWidget {
     required this.backend,
     required this.room,
     this.onOpenChat,
+    this.compact = false,
     super.key,
   });
 
   final ChatBackend backend;
   final RoomSummary room;
   final VoidCallback? onOpenChat;
+  final bool compact;
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -113,15 +115,16 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     }
     return Column(
       children: [
-        _VoiceHeader(
-          onOpenChat: widget.onOpenChat,
-          room: room,
-          backend: backend,
-          showOwnPreview: _showOwnPreview,
-          onToggleOwnPreview: () =>
-              setState(() => _showOwnPreview = !_showOwnPreview),
-          onOpenDevices: _showDeviceSettings,
-        ),
+        if (!widget.compact)
+          _VoiceHeader(
+            onOpenChat: widget.onOpenChat,
+            room: room,
+            backend: backend,
+            showOwnPreview: _showOwnPreview,
+            onToggleOwnPreview: () =>
+                setState(() => _showOwnPreview = !_showOwnPreview),
+            onOpenDevices: _showDeviceSettings,
+          ),
         if (backend.voiceScreenSharing)
           Container(
             width: double.infinity,
@@ -144,6 +147,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               connectedHere &&
                   (streams.isNotEmpty || backend.voiceCameraEnabled)
               ? _VideoStage(
+                  compact: widget.compact,
                   backend: backend,
                   streams: streams,
                   pinnedStreamId: _pinnedStreamId,
@@ -155,11 +159,31 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                   ),
                 )
               : _VoiceLobby(
+                  compact: widget.compact,
                   backend: backend,
                   room: room,
                   profileFor: _profileFor,
                 ),
         ),
+        if (connectedHere)
+          SafeArea(
+            top: false,
+            bottom: !widget.compact,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: widget.compact
+                  ? _VoiceHeader(
+                      room: room,
+                      backend: backend,
+                      compact: true,
+                      showOwnPreview: _showOwnPreview,
+                      onToggleOwnPreview: () =>
+                          setState(() => _showOwnPreview = !_showOwnPreview),
+                      onOpenDevices: _showDeviceSettings,
+                    )
+                  : VoiceCallControls(backend: backend),
+            ),
+          ),
       ],
     );
   }
@@ -173,6 +197,7 @@ class _VoiceHeader extends StatelessWidget {
     required this.onToggleOwnPreview,
     required this.onOpenDevices,
     this.onOpenChat,
+    this.compact = false,
   });
 
   final RoomSummary room;
@@ -181,25 +206,29 @@ class _VoiceHeader extends StatelessWidget {
   final VoidCallback onToggleOwnPreview;
   final VoidCallback onOpenDevices;
   final VoidCallback? onOpenChat;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 56,
-    padding: const EdgeInsets.symmetric(horizontal: 18),
+    height: compact ? 48 : 56,
+    padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 18),
     decoration: BoxDecoration(
       color: context.deltiecord.surface,
       border: Border(bottom: BorderSide(color: context.deltiecord.divider)),
     ),
     child: Row(
       children: [
-        const Icon(Icons.volume_up_outlined, size: 20),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            room.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+        if (!compact) ...[
+          const Icon(Icons.volume_up_outlined, size: 20),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              room.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
-        ),
+        ],
+        if (compact) Expanded(child: VoiceCallControls(backend: backend)),
         if (backend.voiceConnectionStatus == VoiceConnectionStatus.connecting)
           const Text('Connecting…')
         else if (backend.voiceConnectionStatus ==
@@ -215,11 +244,13 @@ class _VoiceHeader extends StatelessWidget {
             onPressed: onOpenChat,
             icon: const Icon(Icons.chat_bubble_outline),
           ),
-        IconButton(
-          tooltip: 'Invite to channel',
-          onPressed: () => showInviteMember(context, backend, roomId: room.id),
-          icon: const Icon(Icons.person_add_alt_1),
-        ),
+        if (!compact)
+          IconButton(
+            tooltip: 'Invite to channel',
+            onPressed: () =>
+                showInviteMember(context, backend, roomId: room.id),
+            icon: const Icon(Icons.person_add_alt_1),
+          ),
         PopupMenuButton<_VoiceMenuAction>(
           tooltip: 'Voice options',
           icon: const Icon(Icons.more_horiz),
@@ -354,11 +385,13 @@ class _VoiceLobby extends StatelessWidget {
     required this.backend,
     required this.room,
     required this.profileFor,
+    this.compact = false,
   });
 
   final ChatBackend backend;
   final RoomSummary room;
   final Future<UserProfileSummary> Function(String userId) profileFor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Stack(
@@ -367,6 +400,7 @@ class _VoiceLobby extends StatelessWidget {
         const Center(child: Text('Nobody is connected'))
       else
         _ParticipantGrid(
+          compact: compact,
           backend: backend,
           participants: room.voiceParticipants,
           profileFor: profileFor,
@@ -410,15 +444,27 @@ class _ParticipantGrid extends StatelessWidget {
     required this.backend,
     required this.participants,
     required this.profileFor,
+    this.compact = false,
   });
 
   final ChatBackend backend;
   final List<VoiceParticipantSummary> participants;
   final Future<UserProfileSummary> Function(String userId) profileFor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      if (compact) {
+        return CompactVoiceGrid(
+          itemCount: participants.length,
+          itemBuilder: (context, index) => _ParticipantCard(
+            backend: backend,
+            participant: participants[index],
+            profile: profileFor(participants[index].userId),
+          ),
+        );
+      }
       final columns = constraints.maxWidth >= 1100
           ? 4
           : constraints.maxWidth >= 760
@@ -736,6 +782,7 @@ class _VideoStage extends StatelessWidget {
     required this.profileFor,
     required this.onFullscreen,
     required this.onPin,
+    this.compact = false,
   });
 
   final ChatBackend backend;
@@ -745,6 +792,7 @@ class _VideoStage extends StatelessWidget {
   final Future<UserProfileSummary> Function(String userId) profileFor;
   final ValueChanged<RtcMediaStreamSummary> onFullscreen;
   final ValueChanged<String> onPin;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -804,6 +852,31 @@ class _VideoStage extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
+        Widget tile(BuildContext context, int index) {
+          if (index >= streams.length) {
+            final participant = cameraOffParticipants[index - streams.length];
+            return _RtcAvatarTile(
+              backend: backend,
+              participant: participant,
+              profile: profileFor(participant.userId),
+            );
+          }
+          final stream = streams[index];
+          return _RtcVideoTile(
+            stream: stream,
+            speaking: _speaking(stream.userId),
+            pinned: false,
+            onPin: () => onPin(stream.id),
+            onFullscreen: () => onFullscreen(stream),
+          );
+        }
+
+        if (compact) {
+          return CompactVoiceGrid(
+            itemCount: streams.length + cameraOffParticipants.length,
+            itemBuilder: tile,
+          );
+        }
         final columns = constraints.maxWidth >= 1000
             ? 3
             : constraints.maxWidth >= 620

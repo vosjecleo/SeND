@@ -1,3 +1,4 @@
+import 'support/game_activity_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,7 +6,6 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/models/user_activity.dart';
 import 'package:deltiecord/services/activity_candidate.dart';
 import 'package:deltiecord/services/activity_controller.dart';
-import 'package:deltiecord/services/activity_source.dart';
 import 'package:deltiecord/services/lastfm_activity.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
@@ -18,25 +18,6 @@ LastFmTrack track() => LastFmTrack(
   url: Uri.parse('https://www.last.fm/music/Artist/_/Track'),
   playedAt: DateTime.now().subtract(const Duration(minutes: 5)),
 );
-
-class Games extends DesktopActivitySource {
-  bool playing = false;
-  @override
-  bool get supported => true;
-  @override
-  Future<List<ActivityCandidate>> scan(ActivitySettings settings) async =>
-      playing && settings.detect
-      ? [
-          const ActivityCandidate(
-            id: 'game',
-            name: 'Game',
-            kind: ActivityKind.game,
-          ),
-        ]
-      : [];
-  @override
-  Future<void> dispose() async {}
-}
 
 class Feed extends LastFmActivitySource {
   @override

@@ -1,3 +1,4 @@
+import 'package:deltiecord/ui/video_playback_status.dart';
 import 'dart:typed_data';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/video_preparation.dart';
@@ -51,5 +52,17 @@ void main() {
     expect(preparation.active, isFalse);
     expect(preparation.failure, isNull);
     preparation.dispose();
+  });
+
+  test('large encrypted videos get a bounded longer startup allowance', () {
+    expect(videoStartupTimeout(null), const Duration(seconds: 60));
+    expect(
+      videoStartupTimeout(100 * 1024 * 1024),
+      const Duration(seconds: 260),
+    );
+    expect(
+      videoStartupTimeout(1024 * 1024 * 1024),
+      const Duration(minutes: 10),
+    );
   });
 }

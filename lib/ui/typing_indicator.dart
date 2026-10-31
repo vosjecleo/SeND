@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'deltiecord_theme.dart';
 
-const double typingIndicatorHeight = 20;
+const double typingIndicatorHeight = 16;
+
+double typingIndicatorHeightFor(BuildContext context) =>
+    (MediaQuery.textScalerOf(context).scale(DeltiecordTypeScale.small) * 1.2 +
+            1)
+        .clamp(typingIndicatorHeight, double.infinity)
+        .ceilToDouble();
 
 /// A translucent timeline overlay for live typing activity.
 ///
@@ -10,9 +16,15 @@ const double typingIndicatorHeight = 20;
 /// a separate row. Messages therefore keep their natural proximity to the
 /// composer and remain visible through the fade when typing starts.
 class TypingIndicator extends StatefulWidget {
-  const TypingIndicator({required this.names, super.key});
+  const TypingIndicator({
+    required this.names,
+    this.textInset = 60,
+    this.avatarInset = 10,
+    super.key,
+  });
 
   final List<String> names;
+  final double textInset, avatarInset;
 
   @override
   State<TypingIndicator> createState() => _TypingIndicatorState();
@@ -69,7 +81,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
       child: IgnorePointer(
         child: SizedBox(
           key: const Key('typing-indicator'),
-          height: typingIndicatorHeight,
+          height: typingIndicatorHeightFor(context),
           child: DecoratedBox(
             key: const Key('typing-indicator-gradient'),
             decoration: BoxDecoration(
@@ -93,37 +105,56 @@ class _TypingIndicatorState extends State<TypingIndicator>
                   : const Duration(milliseconds: 120),
               opacity: visible ? 1 : 0,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 1, 8, 0),
+                padding: const EdgeInsets.fromLTRB(0, 1, 8, 0),
                 child: Row(
                   children: [
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, _) => Row(
-                        children: [
-                          for (var index = 0; index < 3; index++) ...[
-                            Opacity(
-                              opacity: _dotOpacity(_controller.value, index),
-                              child: Text(
-                                '•',
-                                style: TextStyle(
-                                  color: context.deltiecord.muted,
-                                  fontWeight: FontWeight.w800,
+                    SizedBox(
+                      width: widget.textInset,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          left: widget.avatarInset,
+                          right: (widget.textInset - widget.avatarInset - 40)
+                              .clamp(0, double.infinity),
+                        ),
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, _) => Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              for (var index = 0; index < 3; index++) ...[
+                                Opacity(
+                                  opacity: _dotOpacity(
+                                    _controller.value,
+                                    index,
+                                  ),
+                                  child: SizedBox.square(
+                                    key: ValueKey('typing-dot-$index'),
+                                    dimension: MediaQuery.textScalerOf(
+                                      context,
+                                    ).scale(3).clamp(3, 5),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: context.deltiecord.muted,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            if (index < 2) const SizedBox(width: 1),
-                          ],
-                        ],
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
+                        key: const ValueKey('typing-indicator-label'),
                         visible ? typingLabel(widget.names) : '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: DeltiecordTypeScale.small,
+                          height: 1.2,
                           color: context.deltiecord.muted,
                         ),
                       ),

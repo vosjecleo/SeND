@@ -1,6 +1,31 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  void _rememberUploadedAttachment(String eventId, AttachmentDraft draft) {
+    if (draft.mimeType.startsWith('image/')) {
+      _cacheMediaBytes('$eventId:original', draft.bytes);
+    }
+    if (draft.videoThumbnail case final thumbnail?) {
+      _cacheMediaBytes('$eventId:thumbnail', thumbnail);
+    }
+  }
+
+  void _cacheMediaBytes(String key, Uint8List bytes) {
+    if (bytes.isEmpty || bytes.length > 16 * 1024 * 1024) return;
+    _attachmentBytesCacheSize -= _attachmentBytesCache.remove(key)?.length ?? 0;
+    _attachmentBytesCache[key] = bytes;
+    _attachmentBytesCacheSize += bytes.length;
+    while (_attachmentBytesCache.length >
+            MatrixBackend._maximumCachedAttachments ||
+        _attachmentBytesCacheSize >
+            MatrixBackend._maximumCachedAttachmentBytes) {
+      final removed = _attachmentBytesCache.remove(
+        _attachmentBytesCache.keys.first,
+      );
+      _attachmentBytesCacheSize -= removed?.length ?? 0;
+    }
+  }
+
   Future<Event?> _resolveAttachmentEvent(String id) async {
     final cached = _currentAttachmentEvent(id);
     if (cached != null) return cached;
@@ -320,18 +345,8 @@ extension _MatrixMedia on MatrixBackend {
     // Cache only bounded media. This avoids repeatedly downloading/decrypting
     // GIFs as virtualized rows leave and re-enter the viewport without turning
     // a single huge attachment into permanent process memory.
-    if (generation == _attachmentCacheGeneration &&
-        bytes.length <= 16 * 1024 * 1024) {
-      _attachmentBytesCache[cacheKey] = bytes;
-      _attachmentBytesCacheSize += bytes.length;
-      while (_attachmentBytesCache.length >
-              MatrixBackend._maximumCachedAttachments ||
-          _attachmentBytesCacheSize >
-              MatrixBackend._maximumCachedAttachmentBytes) {
-        final oldestKey = _attachmentBytesCache.keys.first;
-        final removed = _attachmentBytesCache.remove(oldestKey);
-        _attachmentBytesCacheSize -= removed?.length ?? 0;
-      }
+    if (generation == _attachmentCacheGeneration) {
+      _cacheMediaBytes(cacheKey, bytes);
     }
     return bytes;
   }

@@ -16,6 +16,17 @@ try {
   const logins = [];
   let registrations = 0;
   let leaked = false;
+  let formReady = false;
+  const startupErrors = [], failedResources = [];
+  page.on('pageerror', error => {
+    if (!formReady && startupErrors.length < 10) startupErrors.push(error.message.slice(0, 300));
+  });
+  page.on('requestfailed', request => {
+    if (!formReady && failedResources.length < 10) {
+      failedResources.push({path: new URL(request.url()).pathname.slice(0, 200),
+        error: request.failure()?.errorText?.slice(0, 200)});
+    }
+  });
   await page.setRequestInterception(true);
   page.on('request', req => {
     const url = new URL(req.url());
@@ -40,7 +51,14 @@ try {
     return respond(404, {});
   });
   await page.goto('http://127.0.0.1:8139/');
-  await page.waitForSelector('#deltiecord-password', {visible: true, timeout: 60000});
+  try {
+    await page.waitForSelector('#deltiecord-password', {visible: true, timeout: 60000});
+  } catch (error) {
+    await page.screenshot({path: 'web-autofill-failure.png'});
+    console.error('Autofill startup failure', {startupErrors, failedResources});
+    throw error;
+  }
+  formReady = true;
   const attributes = await page.$eval('#deltiecord-login', form => ({
     method: form.method,
     user: form.querySelector('[name=username]').autocomplete,

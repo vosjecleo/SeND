@@ -58,6 +58,8 @@ class _MessageRow extends StatefulWidget {
 }
 
 class _MessageRowState extends State<_MessageRow> {
+  final _senderMeasureKey = GlobalKey();
+  final _bodyMeasureKey = GlobalKey();
   Timer? _dismissActionsTimer;
   final _actionsOverlay = OverlayPortalController();
   bool _hovered = false;
@@ -97,16 +99,11 @@ class _MessageRowState extends State<_MessageRow> {
 
   void _showActions(Offset globalPosition) {
     _dismissActionsTimer?.cancel();
-    final viewport = MediaQuery.sizeOf(context);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
     setState(() {
       _actionsHovered = false;
-      _actionsPosition = Offset(
-        globalPosition.dx.clamp(0, max(0, viewport.width - 248)),
-        globalPosition.dy.clamp(
-          0,
-          max(0, viewport.height - min(550, viewport.height - 24)),
-        ),
-      );
+      _actionsPosition = overlay.globalToLocal(globalPosition);
     });
     widget.onActionsShown(_hideActions);
     if (!_actionsKeyRegistered) {
@@ -210,13 +207,13 @@ class _MessageRowState extends State<_MessageRow> {
     }
     return OverlayPortal(
       controller: _actionsOverlay,
-      overlayChildBuilder: (context) => Positioned(
-        left: _actionsPosition.dx,
-        top: _actionsPosition.dy,
+      overlayChildBuilder: (context) => CustomSingleChildLayout(
+        delegate: _MessageMenuPosition(_actionsPosition),
         child: MouseRegion(
           onEnter: _actionsEnter,
           onExit: _actionsExit,
           child: Material(
+            key: const ValueKey('message-context-menu'),
             type: MaterialType.transparency,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -324,6 +321,10 @@ class _MessageRowState extends State<_MessageRow> {
                     : _hovered || widget.highlighted
                     ? context.deltiecord.hover
                     : Colors.transparent,
+              ),
+              // A painted stripe must not add Container's implicit border
+              // padding to the message column.
+              foregroundDecoration: BoxDecoration(
                 border: pinged
                     ? Border(
                         left: BorderSide(
@@ -335,8 +336,16 @@ class _MessageRowState extends State<_MessageRow> {
               ),
               child: Opacity(
                 opacity: message.pending ? 0.55 : 1,
-                child: Stack(
-                  clipBehavior: Clip.none,
+                child: MeasuredAvatarStack(
+                  senderKey: _senderMeasureKey,
+                  bodyKey: _bodyMeasureKey,
+                  enabled:
+                      widget.startsGroup &&
+                      message.attachment == null &&
+                      message.poll == null &&
+                      message.reactions.isEmpty &&
+                      message.linkPreviews.isEmpty &&
+                      message.threadReplyCount == 0,
                   children: [
                     Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -370,7 +379,7 @@ class _MessageRowState extends State<_MessageRow> {
                                               color: context.deltiecord.muted,
                                             ),
                                           ),
-                                          const SizedBox(width: 5),
+                                          const SizedBox(width: 8),
                                           Flexible(
                                             child: Text.rich(
                                               TextSpan(
@@ -420,50 +429,56 @@ class _MessageRowState extends State<_MessageRow> {
                                       context,
                                       message.id,
                                     ))
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: InkWell(
-                                          onTap: _showSenderProfile,
-                                          onTapDown: (details) =>
-                                              _profileAnchorPosition =
-                                                  details.globalPosition,
-                                          child: Text(
-                                            message.sender,
-                                            key: ValueKey(
-                                              'message-sender-${message.id}',
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: message.senderColor == null
-                                                  ? null
-                                                  : Color(message.senderColor!),
-                                              fontSize:
-                                                  DeltiecordTypeScale.bigChat,
-                                              fontWeight: FontWeight.w600,
-                                              height: 1.15,
+                                  AvatarMeasureAnchor(
+                                    key: _senderMeasureKey,
+                                    child: Row(
+                                      children: [
+                                        Flexible(
+                                          child: InkWell(
+                                            onTap: _showSenderProfile,
+                                            onTapDown: (details) =>
+                                                _profileAnchorPosition =
+                                                    details.globalPosition,
+                                            child: Text(
+                                              message.sender,
+                                              key: ValueKey(
+                                                'message-sender-${message.id}',
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color:
+                                                    message.senderColor == null
+                                                    ? null
+                                                    : Color(
+                                                        message.senderColor!,
+                                                      ),
+                                                fontSize:
+                                                    DeltiecordTypeScale.bigChat,
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.15,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        time,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              fontSize:
-                                                  DeltiecordTypeScale.small,
-                                              color: context.deltiecord.muted,
-                                            ),
-                                      ),
-                                      Flexible(
-                                        child: HeaderMessageMetadata(
-                                          messageId: message.id,
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          time,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                fontSize:
+                                                    DeltiecordTypeScale.small,
+                                                color: context.deltiecord.muted,
+                                              ),
                                         ),
-                                      ),
-                                    ],
+                                        Flexible(
+                                          child: HeaderMessageMetadata(
+                                            messageId: message.id,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 if (widget.startsGroup ||
                                     HeaderMessageMetadata.has(
@@ -474,42 +489,47 @@ class _MessageRowState extends State<_MessageRow> {
                                 if (widget.albumMessages == null &&
                                     message.body.isNotEmpty &&
                                     message.poll == null)
-                                  KeyedSubtree(
-                                    key: ValueKey('message-body-${message.id}'),
-                                    child: message.formattedBody != null
-                                        ? MatrixHtmlText(
-                                            trailing: messageMetadata(
-                                              context,
-                                              message,
-                                              showReceipt: widget.showReceipt,
+                                  AvatarMeasureAnchor(
+                                    key: _bodyMeasureKey,
+                                    child: KeyedSubtree(
+                                      key: ValueKey(
+                                        'message-body-${message.id}',
+                                      ),
+                                      child: message.formattedBody != null
+                                          ? MatrixHtmlText(
+                                              trailing: messageMetadata(
+                                                context,
+                                                message,
+                                                showReceipt: widget.showReceipt,
+                                              ),
+                                              html: message.formattedBody!,
+                                              fallback: message.body,
+                                              backend: widget.backend,
+                                              onCustomEmojiTap: (emoji) =>
+                                                  showStickerPackForEmoji(
+                                                    context,
+                                                    widget.backend,
+                                                    emoji,
+                                                  ),
+                                            )
+                                          : MatrixPlainText(
+                                              trailing: messageMetadata(
+                                                context,
+                                                message,
+                                                showReceipt: widget.showReceipt,
+                                              ),
+                                              text: message.body,
+                                              style: TextStyle(
+                                                height: 1.16,
+                                                fontStyle: message.redacted
+                                                    ? FontStyle.italic
+                                                    : FontStyle.normal,
+                                                color: message.redacted
+                                                    ? context.deltiecord.muted
+                                                    : null,
+                                              ),
                                             ),
-                                            html: message.formattedBody!,
-                                            fallback: message.body,
-                                            backend: widget.backend,
-                                            onCustomEmojiTap: (emoji) =>
-                                                showStickerPackForEmoji(
-                                                  context,
-                                                  widget.backend,
-                                                  emoji,
-                                                ),
-                                          )
-                                        : MatrixPlainText(
-                                            trailing: messageMetadata(
-                                              context,
-                                              message,
-                                              showReceipt: widget.showReceipt,
-                                            ),
-                                            text: message.body,
-                                            style: TextStyle(
-                                              height: 1.16,
-                                              fontStyle: message.redacted
-                                                  ? FontStyle.italic
-                                                  : FontStyle.normal,
-                                              color: message.redacted
-                                                  ? context.deltiecord.muted
-                                                  : null,
-                                            ),
-                                          ),
+                                    ),
                                   ),
                                 if (message.poll != null)
                                   Padding(
@@ -585,10 +605,6 @@ class _MessageRowState extends State<_MessageRow> {
                                       ),
                                     ),
                                   ),
-                                if (message.queued &&
-                                    message.pending &&
-                                    message.attachment != null)
-                                  QueuedSendProgress(message: message),
                                 for (final preview in message.linkPreviews)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 6),
@@ -597,15 +613,7 @@ class _MessageRowState extends State<_MessageRow> {
                                       backend: widget.backend,
                                     ),
                                   ),
-                                if (message.queued)
-                                  const Text(
-                                    'Queued — retrying after reconnect',
-                                    style: TextStyle(
-                                      fontSize: DeltiecordTypeScale.normal,
-                                      color: Color(0xffffc857),
-                                    ),
-                                  )
-                                else if (message.failed)
+                                if (message.failed)
                                   Row(
                                     children: [
                                       const Text(
@@ -621,9 +629,11 @@ class _MessageRowState extends State<_MessageRow> {
                                       ),
                                     ],
                                   ),
-                                if (message.transferStatus case final status?)
+                                if (!message.pending &&
+                                    !message.queued &&
+                                    message.transferStatus != null)
                                   Text(
-                                    status,
+                                    message.transferStatus!,
                                     style: const TextStyle(
                                       fontSize: DeltiecordTypeScale.normal,
                                       color: Color(0xffb8bfff),
@@ -779,6 +789,27 @@ class _MessageRowState extends State<_MessageRow> {
       ),
     );
   }
+}
+
+class _MessageMenuPosition extends SingleChildLayoutDelegate {
+  _MessageMenuPosition(this.anchor);
+  final Offset anchor;
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints.loose(
+        Size(
+          min(248, max(0, constraints.maxWidth - 16)),
+          max(0, constraints.maxHeight - 16),
+        ),
+      );
+  @override
+  Offset getPositionForChild(Size size, Size childSize) => Offset(
+    anchor.dx.clamp(8, max(8, size.width - childSize.width - 8)),
+    anchor.dy.clamp(8, max(8, size.height - childSize.height - 8)),
+  );
+  @override
+  bool shouldRelayout(covariant _MessageMenuPosition oldDelegate) =>
+      oldDelegate.anchor != anchor;
 }
 
 class _ReplyConnectorPainter extends CustomPainter {

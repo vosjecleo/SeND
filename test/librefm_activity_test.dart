@@ -10,8 +10,8 @@ import 'package:deltiecord/services/lastfm_activity.dart';
 import 'package:deltiecord/ui/activity_settings.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
-import 'lastfm_resume_test.dart' show Client, Response;
-import 'lastfm_recent_test.dart' show Games;
+import 'support/lastfm_http_fixtures.dart' show Client, Response;
+import 'support/game_activity_source.dart' show Games;
 import 'support/fake_backend.dart';
 
 Map<String, Object?> feed() => {

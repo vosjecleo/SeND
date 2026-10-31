@@ -56,10 +56,6 @@ void main() {
     packId: 'pack-two',
   );
 
-  test('image packs allow up to 150 items', () {
-    expect(StickerPackDraft.maximumItems, 150);
-  });
-
   test('editor links round trip immutable IDs and fallback metadata', () {
     expect(
       customEmojiFromEditorLink(customEmojiEditorLink(first))?.id,

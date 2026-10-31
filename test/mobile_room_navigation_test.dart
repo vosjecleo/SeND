@@ -1,3 +1,5 @@
+import 'package:deltiecord/app.dart';
+import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
@@ -339,5 +341,61 @@ void main() {
       find.byKey(const ValueKey('mobile-details-panel')).hitTestable(),
       findsNothing,
     );
+  });
+
+  testWidgets('mobile conversation spacing is stable through reordering', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final rooms = List.generate(
+      4,
+      (i) => RoomSummary(
+        id: '!r$i:test',
+        name: 'Friend $i',
+        lastMessage: '',
+        unreadCount: 0,
+        usesChannelIcon: false,
+        isDirect: true,
+      ),
+    );
+    final backend = FakeBackend()
+      ..currentStatus = SessionStatus.signedIn
+      ..roomList = rooms;
+    await tester.pumpWidget(
+      DeltiecordApp(backend: backend, platformOverride: TargetPlatform.android),
+    );
+    await tester.pumpAndSettle();
+    final height = tester.getSize(find.byKey(ValueKey(rooms.first.id))).height;
+    for (var i = 0; i < 6; i++) {
+      backend.roomList = backend.roomList.reversed.toList();
+      backend.notifyListeners();
+      await tester.pumpAndSettle();
+      for (final room in rooms) {
+        expect(tester.getSize(find.byKey(ValueKey(room.id))).height, height);
+      }
+    }
+  });
+
+  testWidgets('server room identity uses its type icon, not an avatar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MobileRoomAvatar(
+          room: RoomSummary(
+            id: '!server-room:test',
+            name: 'General',
+            lastMessage: '',
+            unreadCount: 0,
+            usesChannelIcon: true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(MobileAvatar), findsNothing);
+    expect(find.byIcon(Icons.tag), findsOneWidget);
   });
 }

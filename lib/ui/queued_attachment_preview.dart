@@ -25,6 +25,7 @@ class QueuedAttachmentPreview extends StatelessWidget {
             : bytes != null
             ? Image.memory(
                 bytes,
+                gaplessPlayback: true,
                 fit: BoxFit.contain,
                 cacheWidth: 840,
                 errorBuilder: (_, _, _) => _fallback(),
@@ -52,31 +53,6 @@ class QueuedAttachmentPreview extends StatelessWidget {
             Text(draft.name, maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
-      ),
-    ),
-  );
-}
-
-class QueuedSendProgress extends StatelessWidget {
-  const QueuedSendProgress({required this.message, super.key});
-  final ChatMessage message;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 6, bottom: 4),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            message.transferStatus ?? 'Sending',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-          if (message.attachment != null) ...[
-            const SizedBox(height: 4),
-            LinearProgressIndicator(value: message.preparationProgress),
-          ],
-        ],
       ),
     ),
   );

@@ -39,21 +39,44 @@ class QueuedMessage {
   String status = 'Waiting to send';
   double? progress;
   bool completed = false;
+  bool acknowledged = false;
+  DateTime? _acknowledgedAt;
+  void acknowledge() {
+    acknowledged = true;
+    _acknowledgedAt ??= DateTime.now();
+  }
+
+  bool handoffExpired(DateTime now) =>
+      _acknowledgedAt != null &&
+      now.difference(_acknowledgedAt!) >= const Duration(minutes: 2);
   bool cancelled = false;
+  int? _attachmentSize;
+  int get retainedMediaBytes =>
+      (draft?.bytes.length ?? 0) + (draft?.videoThumbnail?.length ?? 0);
+  void releaseUploadedFile() {
+    final file = draft;
+    if (file == null || file.mimeType.startsWith('image/')) return;
+    _attachmentSize ??= file.bytes.length;
+    draft = file.copyWith(bytes: Uint8List(0));
+  }
+
   ChatMessage get message => ChatMessage(
     id: id,
+    transactionId: id,
     sender: sender,
     senderId: senderId,
     avatarBytes: avatar,
     body: body,
     formattedBody: formattedBody,
     timestamp: timestamp,
+    // This is still a local presentation with no actionable Matrix event ID.
+    // The mapped server event replaces it atomically in conversationMessages.
     pending: true,
     queued: true,
     own: true,
     reply: reply,
     threadRootId: threadRootId,
-    transferStatus: status,
+    transferStatus: acknowledged ? null : status,
     preparationProgress: progress,
     attachment: draft == null
         ? null
@@ -67,7 +90,7 @@ class QueuedMessage {
                 : AttachmentKind.file,
             name: draft!.name,
             mimeType: draft!.mimeType,
-            size: draft!.bytes.length,
+            size: _attachmentSize ?? draft!.bytes.length,
             encrypted: true,
             spoiler: draft!.spoiler,
             caption: body.isEmpty ? null : body,

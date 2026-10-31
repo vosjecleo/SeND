@@ -140,8 +140,6 @@ class TimelineActivityStatus extends StatelessWidget {
       return Row(
         key: const ValueKey('timeline-activity-status'),
         children: [
-          HeaderPresenceDot(presence: presence),
-          const SizedBox(width: 5),
           if (activity != null) ...[
             Icon(activityIcon(activity.kind), size: 14, color: color),
             const SizedBox(width: 4),

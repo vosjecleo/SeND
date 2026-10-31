@@ -638,9 +638,9 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ),
         OutlinedButton.icon(
-          onPressed: AppSounds.callConnected,
+          onPressed: AppSounds.previewRingtone,
           icon: const Icon(Icons.play_arrow),
-          label: const Text('Test call sound'),
+          label: const Text('Test ringtone'),
         ),
         Text(
           'Call sound volume: ${(backend.preferences.callVolume * 100).round()}%',
@@ -1064,7 +1064,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           },
         ),
       Text(
-        'SeND v$deltiecordVersion+$deltiecordBuildNumber\nSeND is Not Discord.',
+        'SeND v$deltiecordDisplayVersion+$deltiecordBuildNumber\nSeND is Not Discord.',
       ),
       const SizedBox(height: 12),
       Text('Diagnostics', style: Theme.of(context).textTheme.titleMedium),
@@ -1074,7 +1074,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       OutlinedButton.icon(
         onPressed: () {
           final report = [
-            'SeND v$deltiecordVersion ($deltiecordBuildNumber)',
+            'SeND v$deltiecordDisplayVersion ($deltiecordBuildNumber)',
             'session=${backend.status.name}',
             'homeserver=${backend.homeserver}',
             'device=${backend.deviceId}',
@@ -1126,7 +1126,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         onPressed: () => showAboutDialog(
           context: context,
           applicationName: 'SeND',
-          applicationVersion: '$deltiecordVersion+$deltiecordBuildNumber',
+          applicationVersion:
+              '$deltiecordDisplayVersion+$deltiecordBuildNumber',
           children: [
             TextButton(
               onPressed: () => launchUrl(
@@ -1303,16 +1304,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
 
       const SizedBox(height: 20),
       if (defaultTargetPlatform != TargetPlatform.android) ...[
-        Text('Room panel — ${preferences.roomPanelWidth.round()} px'),
-        Slider(
-          value: preferences.roomPanelWidth,
-          min: 220,
-          max: 420,
-          divisions: 10,
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(roomPanelWidth: value),
-          ),
-        ),
         Text('Side panel — ${preferences.sidePanelWidth.round()} px'),
         Slider(
           value: preferences.sidePanelWidth,

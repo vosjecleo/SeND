@@ -8,16 +8,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
-// Compare the production clip with two proposed isolation strategies. The
+// The unclipped positive control proves this detects escaped pixels. The
 // outer capture boundary is test instrumentation, not an avatar boundary.
 void main() {
   for (final size in [34.0, 124.0]) {
-    for (final mode in [
-      'current',
-      'boundary',
-      'offscreen',
-      'unclipped control',
-    ]) {
+    for (final mode in ['current', 'unclipped control']) {
       testWidgets('$size avatar: $mode pixel containment', (tester) async {
         final first = img.Image(width: 64, height: 64);
         img.fill(first, color: img.ColorRgb8(255, 0, 0));
@@ -39,11 +34,9 @@ void main() {
                 child: ValueListenableBuilder<int>(
                   valueListenable: state,
                   builder: (context, tick, _) {
-                    Widget avatar = ThemeAvatarClip(
+                    final avatar = ThemeAvatarClip(
                       clipBehavior: mode == 'unclipped control'
                           ? Clip.none
-                          : mode == 'offscreen'
-                          ? Clip.antiAliasWithSaveLayer
                           : Clip.antiAlias,
                       child: LifecycleMemoryImage(
                         bytes: bytes,
@@ -52,9 +45,6 @@ void main() {
                         fit: BoxFit.cover,
                       ),
                     );
-                    if (mode == 'boundary') {
-                      avatar = RepaintBoundary(child: avatar);
-                    }
                     return ColoredBox(
                       color: tick.isEven ? Colors.green : Colors.yellow,
                       child: SizedBox.square(

@@ -1,3 +1,5 @@
+import 'package:deltiecord/ui/deltiecord_theme.dart';
+import 'package:html/parser.dart' as html;
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/custom_emoji.dart';
 import 'package:deltiecord/ui/rich_message.dart';
@@ -80,7 +82,6 @@ void main() {
     final message = serializePlainComposer(document);
     expect(message.plainText, 'bold changed');
     expect(message.html, isNull);
-    expect(message.plainText, 'bold changed');
   });
   test('selected custom emoji does not disable typed Markdown', () {
     final emoji = CustomEmojiReference(
@@ -200,4 +201,106 @@ void main() {
     final height = tester.getSize(find.byType(SelectableText)).height;
     expect(height, lessThan(30));
   });
+
+  test('legacy formatted edits start from the plain fallback', () {
+    final restored = plainMessageDocument(
+      'bold secret',
+      '<p><strong>bold</strong> <span data-mx-spoiler>secret</span></p>',
+    );
+    final result = serializePlainComposer(restored);
+    expect(result.plainText, 'bold secret');
+    expect(result.html, isNull);
+  });
+
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('legacy styles cannot reactivate WYSIWYG in outgoing drafts', () {
+    final doc = Document()..insert(0, 'ordinary text');
+    doc.format(0, 8, Attribute.bold);
+    doc.format(0, 8, const BackgroundAttribute('#ffffff'));
+    final message = serializePlainComposer(doc);
+    expect(message.plainText, 'ordinary text');
+    expect(message.html, isNull);
+  });
+
+  test('selected Matrix mentions survive plain serialization', () {
+    final doc = Document()..insert(0, '#general **hello**');
+    doc.format(0, 8, const LinkAttribute('https://matrix.to/#/!general:test'));
+    final result = serializePlainComposer(doc);
+    expect(
+      html.parseFragment(result.html!).querySelector('a')!.attributes['href'],
+      'https://matrix.to/#/!general:test',
+    );
+    expect(result.html, contains('<strong>hello</strong>'));
+    expect(result.plainText, '#general **hello**');
+  });
+
+  for (final value in [
+    '*first*\nsecond',
+    '*first*\n\nsecond',
+    '*first*\n\n\nsecond',
+  ]) {
+    testWidgets('typed line breaks survive serialization: $value', (
+      tester,
+    ) async {
+      final message = serializeMarkdownEmojiMessage(value, const []);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+          ),
+          home: MatrixHtmlText(html: message.html!, fallback: value),
+        ),
+      );
+      final text = tester.widget<SelectableText>(find.byType(SelectableText));
+      expect(text.textSpan!.toPlainText(), value.replaceAll('*', ''));
+    });
+  }
+
+  test('only lightweight inline formatting is emitted', () {
+    final message = serializeMarkdownEmojiMessage(
+      '*italic* **bold** _italic too_ __underlined__ ~~struck~~ ||secret||',
+      const [],
+    );
+    for (final tag in ['em', 'strong', 'u', 'del']) {
+      expect(message.html, contains('<$tag>'));
+    }
+    expect(message.html, contains('<span data-mx-spoiler>secret</span>'));
+    expect(message.html, isNot(contains('<p>')));
+    expect(message.html, isNot(endsWith('\n')));
+  });
+
+  for (final literal in [
+    '>hello',
+    '# heading',
+    '- item',
+    '1. item',
+    '```\ncode\n```',
+    '[link](https://example.org)',
+    '<b>not HTML</b>',
+  ]) {
+    testWidgets(
+      'block syntax stays literal beside inline formatting: $literal',
+      (tester) async {
+        final source = '$literal\n\n*italic*\nnext';
+        final message = serializeMarkdownEmojiMessage(source, const []);
+        expect(message.html, isNot(contains('<blockquote>')));
+        expect(message.html, isNot(contains('<p>')));
+        expect(message.html, isNot(contains('<pre>')));
+        expect(message.html, isNot(contains('<ul>')));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MatrixHtmlText(
+                html: message.html!,
+                fallback: message.plainText,
+              ),
+            ),
+          ),
+        );
+        final text = tester.widget<SelectableText>(find.byType(SelectableText));
+        expect(text.textSpan!.toPlainText(), '$literal\n\nitalic\nnext');
+      },
+    );
+  }
 }

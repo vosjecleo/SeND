@@ -17,7 +17,7 @@ class PlayingBackend extends FakeBackend {
 }
 
 void main() {
-  testWidgets('timeline custom status keeps the coloured presence dot', (
+  testWidgets('timeline status leaves presence to the header avatar', (
     tester,
   ) async {
     final backend = PlayingBackend()..activity = null;
@@ -39,7 +39,7 @@ void main() {
     );
     expect(find.text('Making tea'), findsOneWidget);
     expect(find.text('Away'), findsNothing);
-    expect(find.byKey(const ValueKey('header-presence-away')), findsOneWidget);
+    expect(find.byKey(const ValueKey('header-presence-away')), findsNothing);
   });
   testWidgets(
     'timeline replaces presence with icon and bare name; list wording unchanged',

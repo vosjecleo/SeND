@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import '../services/video_preparation.dart';
+import '../services/image_preparation.dart';
+import '../backend/chat_backend.dart';
 
 class VideoPreparationOverlay extends StatelessWidget {
-  const VideoPreparationOverlay({required this.child, super.key});
+  const VideoPreparationOverlay({required this.child, this.backend, super.key});
   final Widget child;
+  final ChatBackend? backend;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: VideoPreparation.instance,
+    listenable: Listenable.merge([
+      VideoPreparation.instance,
+      ImagePreparation.instance,
+      ?backend,
+    ]),
     child: child,
     builder: (context, child) {
       final state = VideoPreparation.instance;
+      final image = ImagePreparation.instance;
+      final video = state.active;
+      final upload = backend?.activeAttachmentUploads.firstOrNull;
+      final preparing = video || image.active;
       return Stack(
         children: [
           child!,
-          if (state.active)
+          if (preparing || upload != null)
             Positioned(
               top: 12,
               left: 16,
@@ -34,20 +45,25 @@ class VideoPreparationOverlay extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    state.failure == null
-                                        ? 'Optimizing ${state.name}'
+                                    !preparing
+                                        ? 'Uploading ${upload!.attachment!.name}'
+                                        : !video || state.failure == null
+                                        ? 'Optimizing ${video ? state.name : image.name}'
                                         : 'Could not optimize ${state.name}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                TextButton(
-                                  onPressed: state.cancel,
-                                  child: const Text('Cancel'),
-                                ),
+                                if (preparing)
+                                  TextButton(
+                                    onPressed: video
+                                        ? state.cancel
+                                        : image.cancel,
+                                    child: const Text('Cancel'),
+                                  ),
                               ],
                             ),
-                            if (state.failure != null) ...[
+                            if (video && state.failure != null) ...[
                               ConstrainedBox(
                                 constraints: const BoxConstraints(
                                   maxHeight: 120,
@@ -74,13 +90,16 @@ class VideoPreparationOverlay extends StatelessWidget {
                               ),
                             ] else ...[
                               LinearProgressIndicator(
-                                value: state.progress == 0
+                                value: !preparing
+                                    ? upload?.preparationProgress
+                                    : !video || state.progress == 0
                                     ? null
                                     : state.progress,
                               ),
-                              const Text(
-                                'Local preparation · not uploaded yet',
-                              ),
+                              if (preparing)
+                                const Text(
+                                  'Local preparation · not uploaded yet',
+                                ),
                             ],
                           ],
                         ),

@@ -23,61 +23,19 @@ void main() {
       );
     },
   );
-  test('local shell profiling does not enable debugging', () {
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsStringSync();
-    expect(manifest, contains('<profileable android:shell="true"'));
-    expect(manifest, isNot(contains('android:debuggable="true"')));
-  });
-  test('Android exposes bounded text and media share targets', () {
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsStringSync();
+
+  // Configuration is parsed by packaging/test_android_configuration.py. These
+  // source guards remain until Android instrumentation covers the native limits.
+  test('Android bounds incoming shared media before reading it', () {
     final activity = File(
       'android/app/src/main/kotlin/net/deltie/deltiecord/MainActivity.kt',
     ).readAsStringSync();
 
-    expect(manifest, contains('android.intent.action.SEND'));
-    expect(manifest, contains('android.intent.action.SEND_MULTIPLE'));
-    expect(manifest, contains('android:mimeType="text/plain"'));
-    expect(manifest, contains('android:mimeType="image/*"'));
-    expect(manifest, contains('android:mimeType="video/*"'));
     expect(activity, contains('MAX_SHARED_ITEM_BYTES'));
     expect(activity, contains('MAX_SHARED_TOTAL_BYTES'));
     expect(activity, contains('uris.size > 20'));
     expect(activity, contains('MAX_SHARED_TOTAL_BYTES = 256 * 1024 * 1024'));
     expect(activity, contains('return mapOf("error"'));
-  });
-
-  test('UnifiedPush receiver can wake SeND while Flutter is stopped', () {
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
-    ).readAsStringSync();
-    final receiverStart =
-        RegExp(
-          r'<receiver\s+android:name="\.DeltiecordPushService"',
-        ).firstMatch(manifest)?.start ??
-        -1;
-    expect(receiverStart, greaterThanOrEqualTo(0));
-    final receiverEnd = manifest.indexOf('</receiver>', receiverStart);
-    expect(receiverEnd, greaterThan(receiverStart));
-    final declaration = manifest.substring(receiverStart, receiverEnd);
-
-    expect(declaration, contains('android:exported="true"'));
-    for (final action in [
-      'MESSAGE',
-      'UNREGISTERED',
-      'NEW_ENDPOINT',
-      'REGISTRATION_FAILED',
-      'REGISTRATION_REFUSED',
-    ]) {
-      expect(
-        declaration,
-        contains('org.unifiedpush.android.connector.$action'),
-      );
-    }
-    expect(declaration, isNot(contains('PUSH_EVENT')));
   });
 
   test('background push decrypts locally into bounded rich notifications', () {

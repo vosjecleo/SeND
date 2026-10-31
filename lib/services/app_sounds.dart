@@ -16,9 +16,54 @@ abstract interface class AppSoundPlayback {
   Future<void> dispose();
 }
 
+abstract interface class AppSoundVoice {
+  Stream<bool> get completed;
+  Future<void> open(String uri, {required bool loop});
+  Future<void> setGain(double gain);
+  Future<void> play();
+  Future<void> stop();
+  Future<void> dispose();
+}
+
+final class _MediaKitSoundVoice implements AppSoundVoice {
+  final _player = Player();
+  @override
+  Stream<bool> get completed => _player.stream.completed;
+  @override
+  Future<void> open(String uri, {required bool loop}) async {
+    await _player.setPlaylistMode(
+      loop ? PlaylistMode.single : PlaylistMode.none,
+    );
+    await _player.open(Media(uri), play: false);
+  }
+
+  @override
+  Future<void> setGain(double gain) =>
+      _player.setVolume(gain.clamp(0, 1) * 100);
+  @override
+  Future<void> play() => _player.play();
+  @override
+  Future<void> stop() => _player.stop();
+  @override
+  Future<void> dispose() => _player.dispose();
+}
+
 final class MediaKitAppSoundPlayback implements AppSoundPlayback {
-  final _players = <String, Player>{};
-  final _pending = <String, Future<void>>{};
+  MediaKitAppSoundPlayback({
+    AppSoundVoice Function()? createVoice,
+    Future<void> Function(Duration)? delay,
+  }) : _createVoice = createVoice ?? _MediaKitSoundVoice.new,
+       _delay = delay ?? ((duration) => Future<void>.delayed(duration));
+  final AppSoundVoice Function() _createVoice;
+  final Future<void> Function(Duration) _delay;
+  final _players = <String, AppSoundVoice>{};
+  final _subscriptions = <String, StreamSubscription<bool>>{};
+  final _generations = <String, int>{};
+  final _playingGeneration = <String, int>{};
+  final _looping = <String, bool>{};
+  final _requested = <String, double>{};
+  final _gain = <String, double>{};
+  Future<void> _pending = Future<void>.value();
   bool _disposed = false;
 
   String _category(String uri) => uri.endsWith('/ringtone.wav')
@@ -27,13 +72,68 @@ final class MediaKitAppSoundPlayback implements AppSoundPlayback {
       ? 'notification'
       : 'voice';
 
-  Future<void> _queue(String category, Future<void> Function() action) {
-    final next = (_pending[category] ?? Future<void>.value())
+  Future<void> _queue(Future<void> Function() action) {
+    if (_disposed) return Future<void>.value();
+    final next = _pending
         .catchError((_) {})
         .then((_) => _disposed ? Future<void>.value() : action());
-    _pending[category] = next;
+    _pending = next;
     return next;
   }
+
+  Future<void> _fadeMix() async {
+    final total = _requested.values.fold<double>(
+      0,
+      (sum, value) => sum + value,
+    );
+    final divisor = total > 1 ? total : 1.0;
+    final start = {for (final key in _players.keys) key: _gain[key] ?? 0.0};
+    final target = {
+      for (final key in _players.keys) key: (_requested[key] ?? 0) / divisor,
+    };
+    if (start.keys.every(
+      (key) => (start[key]! - target[key]!).abs() < .00001,
+    )) {
+      return;
+    }
+    for (var step = 1; step <= 4; step++) {
+      final values = [
+        for (final key in _players.keys)
+          MapEntry(key, start[key]! + (target[key]! - start[key]!) * step / 4),
+      ];
+      // Lower gains first: intermediate native updates must retain headroom,
+      // not just the final state of the mix.
+      values.sort(
+        (a, b) => (a.value - (_gain[a.key] ?? 0)).compareTo(
+          b.value - (_gain[b.key] ?? 0),
+        ),
+      );
+      for (final value in values) {
+        await _players[value.key]!.setGain(value.value);
+        _gain[value.key] = value.value;
+      }
+      await _delay(const Duration(milliseconds: 5));
+    }
+  }
+
+  AppSoundVoice _voice(String category) => _players.putIfAbsent(category, () {
+    final voice = _createVoice();
+    _subscriptions[category] = voice.completed.listen((done) {
+      if (!done || _looping[category] == true || _disposed) return;
+      final generation = _playingGeneration[category];
+      unawaited(
+        _queue(() async {
+          if (_playingGeneration[category] != generation ||
+              _generations[category] != generation) {
+            return;
+          }
+          _requested.remove(category);
+          await _fadeMix();
+        }).catchError((_) {}),
+      );
+    });
+    return voice;
+  });
 
   @override
   Future<void> play(
@@ -44,30 +144,59 @@ final class MediaKitAppSoundPlayback implements AppSoundPlayback {
     if (_disposed) return;
     if (volume <= 0) return;
     final category = _category(assetUri);
-    await _queue(category, () async {
-      final player = _players.putIfAbsent(category, Player.new);
-      await player.setVolume(volume.clamp(0, 1) * 100);
-      await player.setPlaylistMode(
-        loop ? PlaylistMode.single : PlaylistMode.none,
-      );
-      await player.open(Media(assetUri), play: true);
+    final generation = (_generations[category] ?? 0) + 1;
+    _generations[category] = generation;
+    await _queue(() async {
+      if (_generations[category] != generation) return;
+      final player = _voice(category);
+      _requested.remove(category);
+      await _fadeMix();
+      await player.stop();
+      _gain[category] = 0;
+      if (_disposed || _generations[category] != generation) return;
+      await player.setGain(0);
+      await player.open(assetUri, loop: loop);
+      if (_disposed || _generations[category] != generation) return;
+      _looping[category] = loop;
+      _playingGeneration[category] = generation;
+      _requested[category] = volume.clamp(0, 1);
+      await player.play();
+      await _fadeMix();
     });
   }
 
   @override
-  Future<void> stop(String assetUri) => _queue(_category(assetUri), () async {
-    await _players[_category(assetUri)]?.stop();
-  });
+  Future<void> stop(String assetUri) {
+    final category = _category(assetUri);
+    final generation = (_generations[category] ?? 0) + 1;
+    _generations[category] = generation;
+    return _queue(() async {
+      if (_generations[category] != generation) return;
+      _requested.remove(category);
+      try {
+        await _fadeMix();
+      } finally {
+        await _players[category]?.stop();
+        _gain[category] = 0;
+      }
+    });
+  }
 
   @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    await _pending.catchError((_) {});
+    _requested.clear();
+    try {
+      await _fadeMix();
+    } catch (_) {}
     await Future.wait(
-      _pending.values.map((pending) => pending.catchError((_) {})),
+      _subscriptions.values.map((subscription) => subscription.cancel()),
     );
     await Future.wait(_players.values.map((player) => player.dispose()));
     _players.clear();
+    _subscriptions.clear();
   }
 }
 
@@ -83,6 +212,11 @@ abstract final class AppSounds {
 
   static Future<void> callConnected() =>
       _play('asset:///assets/audio/vc_join.wav');
+
+  static Future<void> previewRingtone() async {
+    if (_ringTimer != null) return;
+    await _play(_ringtone);
+  }
 
   static Future<void> callDisconnected() =>
       _play('asset:///assets/audio/vc_disconnect.wav');

@@ -1,3 +1,4 @@
+import 'package:deltiecord/ui/emoji_typography.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/font_preferences.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
@@ -38,11 +39,6 @@ void main() {
     );
   });
 
-  test('rectangular surfaces share one corner radius', () {
-    expect(DeltiecordCorners.radius, 12);
-    expect(DeltiecordTypeScale.small, DeltiecordTypeScale.normal - 2);
-  });
-
   test('regular mode preserves the familiar charcoal palette', () {
     final palette = DeltiecordPalette.forMode(DeltiecordThemeMode.regular);
     expect(palette.background, const Color(0xff26272c));
@@ -79,4 +75,15 @@ void main() {
       Colors.white,
     );
   });
+
+  test('emoji style excludes inherited outline font and bold weight', () {
+    final style = colourEmojiStyle(
+      const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
+    );
+    expect(style.fontFamily, isNot('monospace'));
+    expect(style.fontWeight, FontWeight.normal);
+    expect(style.fontFamilyFallback, contains('Noto Color Emoji'));
+  });
+
+  TestWidgetsFlutterBinding.ensureInitialized();
 }

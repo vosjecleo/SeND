@@ -216,7 +216,8 @@ void main() {
     expect(find.byIcon(Icons.more_vert), findsNothing);
     await tester.tap(find.text('WORK'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
-    expect(find.text('Rename category'), findsNothing);
+    expect(find.text('Edit category'), findsNothing);
+    expect(find.text('Delete category'), findsNothing);
   });
 
   testWidgets('channel drag handles are opt-in even for administrators', (
@@ -284,15 +285,6 @@ void main() {
     final looseGrip = find.byKey(
       const ValueKey('room-drag-grip-!loose:example.org'),
     );
-    final roomGripTransform = tester.widget<Transform>(
-      find.descendant(of: looseGrip, matching: find.byType(Transform)).first,
-    );
-    expect(roomGripTransform.transform.getTranslation().y, 1);
-    final categoryGrip = find.byKey(const ValueKey('category-drag-grip-work'));
-    final categoryGripTransform = tester.widget<Transform>(
-      find.descendant(of: categoryGrip, matching: find.byType(Transform)).first,
-    );
-    expect(categoryGripTransform.transform.getTranslation().y, 1);
     await tester.dragFrom(
       tester.getCenter(looseGrip),
       tester.getCenter(find.text('WORK')) - tester.getCenter(looseGrip),

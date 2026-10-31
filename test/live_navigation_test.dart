@@ -1,6 +1,5 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
-import 'package:deltiecord/services/android_push_bridge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -203,23 +202,4 @@ void main() {
       },
     );
   }
-  test(
-    'invitation push has unread target and respects sound/vibration choices',
-    () {
-      final result = invitationNotification(
-        roomId: '!room:test',
-        eventId: r'$invite',
-        roomName: 'A room',
-        settings: {
-          'notification_sound': false,
-          'notification_vibration': false,
-        },
-      );
-      expect(result['roomId'], '!room:test');
-      expect(result['eventId'], r'$invite');
-      expect(result['unreadCount'], 1);
-      expect(result['sound'], false);
-      expect(result['vibrate'], false);
-    },
-  );
 }

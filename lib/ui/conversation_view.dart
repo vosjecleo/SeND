@@ -313,8 +313,9 @@ class _ConversationState extends State<_Conversation> {
     }
   }
 
-  GlobalKey _messageKeyFor(String eventId) {
-    final key = _messageKeys.putIfAbsent(eventId, GlobalKey.new);
+  GlobalKey _messageKeyFor(ChatMessage message) {
+    final key = _messageKeys.putIfAbsent(message.timelineKey, GlobalKey.new);
+    _messageKeys[message.id] = key;
     return key;
   }
 
@@ -579,11 +580,13 @@ class _ConversationState extends State<_Conversation> {
       (_) => _reportTimelineAtPresent(),
     );
     _preserveAnchorAcrossMetadataLayout(messages);
-    final retainedIds = messages.map((message) => message.id).toSet();
+    final retainedIds = messages
+        .expand((message) => [message.id, message.timelineKey])
+        .toSet();
     _messageKeys.removeWhere((eventId, _) => !retainedIds.contains(eventId));
     final messageIndexes = <String, int>{
       for (var index = 0; index < messages.length; index++)
-        messages[index].id: index,
+        messages[index].timelineKey: index,
     };
     final mediaMessages = messages
         .where(
@@ -617,7 +620,21 @@ class _ConversationState extends State<_Conversation> {
                       alignment: Alignment.centerLeft,
                       child: Row(
                         children: [
-                          _RoomIcon(room: room, size: 30),
+                          if (_DesktopNavigation.of(context)?.openRooms
+                              case final open?)
+                            IconButton(
+                              tooltip: 'Show chats',
+                              icon: const Icon(Icons.menu),
+                              onPressed: open,
+                            ),
+                          _RoomIcon(
+                            key: const ValueKey('conversation-header-avatar'),
+                            room: room,
+                            size: 30,
+                            showPresence:
+                                room.isDirect && !room.usesChannelIcon,
+                            autoplay: true,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -871,18 +888,18 @@ class _ConversationState extends State<_Conversation> {
                                   ? const Center(
                                       child: CircularProgressIndicator(),
                                     )
-                                  : backend.messages.isEmpty
+                                  : messages.isEmpty
                                   ? const Center(child: Text('No messages yet'))
                                   : ListView.builder(
                                       key: const Key('message-timeline'),
                                       controller: _scrollController,
                                       reverse: true,
                                       physics: const ClampingScrollPhysics(),
-                                      padding: const EdgeInsets.fromLTRB(
+                                      padding: EdgeInsets.fromLTRB(
                                         0,
                                         10,
                                         0,
-                                        typingIndicatorHeight + 1,
+                                        typingIndicatorHeightFor(context) + 1,
                                       ),
                                       itemCount:
                                           messages.length +
@@ -953,7 +970,7 @@ class _ConversationState extends State<_Conversation> {
                                                 const Duration(minutes: 7) ||
                                             message.reply != null;
                                         return Column(
-                                          key: ValueKey(message.id),
+                                          key: ValueKey(message.timelineKey),
                                           children: [
                                             if (older == null ||
                                                 !DateUtils.isSameDay(
@@ -967,7 +984,7 @@ class _ConversationState extends State<_Conversation> {
                                                 backend.firstUnreadMessageId)
                                               const _UnreadDivider(),
                                             _MessageRow(
-                                              key: _messageKeyFor(message.id),
+                                              key: _messageKeyFor(message),
                                               message: message,
                                               receiptIds: receipts,
                                               showReceipt: receipts.contains(
@@ -1114,6 +1131,12 @@ class _ConversationState extends State<_Conversation> {
                     replyToMessageId: widget.replyingTo?.id,
                     onSent: widget.onCancelComposerAction,
                     builder: (startRecording) => _MessageComposer(
+                      onEscape: widget.editingMessage == null
+                          ? null
+                          : () {
+                              dismissTemporaryUi();
+                              widget.onCancelComposerAction();
+                            },
                       key: widget.composerKey,
                       backend: backend,
                       controller: widget.controller,
@@ -1189,11 +1212,11 @@ class _ConversationPresence extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (presence) {
-      UserPresence.online => ('Online', const Color(0xff43b581)),
-      UserPresence.away => ('Away', const Color(0xffffc857)),
-      UserPresence.doNotDisturb => ('Do not disturb', const Color(0xffe5484d)),
-      UserPresence.offline => ('Offline', const Color(0xff747680)),
+    final label = switch (presence) {
+      UserPresence.online => 'Online',
+      UserPresence.away => 'Away',
+      UserPresence.doNotDisturb => 'Do not disturb',
+      UserPresence.offline => 'Offline',
     };
     return Semantics(
       label: 'Presence: $label',
@@ -1201,12 +1224,6 @@ class _ConversationPresence extends StatelessWidget {
         key: ValueKey('conversation-presence-${presence.name}'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(

@@ -4,7 +4,7 @@ import 'package:deltiecord/models/user_activity.dart';
 import 'package:deltiecord/services/activity_controller.dart';
 import 'package:deltiecord/services/activity_service_error.dart';
 import 'package:deltiecord/services/lastfm_activity.dart';
-import 'activity_multidevice_test.dart' show Source, Feed, recentTrack;
+import 'support/activity_fixtures.dart' show Source, Feed, recentTrack;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

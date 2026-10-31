@@ -94,17 +94,16 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get --enforce-lockfile
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
+      - name: Test Windows native integrations
         shell: pwsh
         run: |
           $output = Join-Path $env:RUNNER_TEMP 'flutter-test-output.txt'
-          & flutter test --concurrency=2 --reporter=json 2>&1 | Tee-Object -FilePath $output
+          $suites = @(Get-Content tool/test-suites/windows.txt | Where-Object { $_ -and -not $_.StartsWith('#') })
+          if ($suites.Count -eq 0) { throw 'Windows suite selection is empty.' }
+          foreach ($suite in $suites) {
+            if (-not (Test-Path $suite -PathType Leaf)) { throw "Missing Windows suite: $suite" }
+          }
+          & flutter test --no-pub --concurrency=2 --reporter=json @suites 2>&1 | Tee-Object -FilePath $output
           $testExit = $LASTEXITCODE
           if ($testExit -ne 0) {
             $failures = foreach ($line in Get-Content $output) {

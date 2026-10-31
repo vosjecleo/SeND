@@ -1,7 +1,7 @@
 import 'package:deltiecord/matrix/rtc/rtc_room_membership.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
-import 'rtc_transport_api_test.dart' show wireClient, jsonResponse;
+import 'support/rtc_wire_fixture.dart' show wireClient, jsonResponse;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

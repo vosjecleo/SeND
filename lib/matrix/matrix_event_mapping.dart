@@ -149,6 +149,7 @@ extension _MatrixEventMapping on MatrixBackend {
               return ChatMessage(
                 id: event.eventId,
                 transactionId: event.unsigned?['transaction_id'] as String?,
+                decryptionPending: displayEvent.type == EventTypes.Encrypted,
                 forumPost: ForumPost.fromJson(
                   displayEvent.content[forumPostKey] ??
                       event.content[forumPostKey],

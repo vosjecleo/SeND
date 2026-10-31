@@ -74,7 +74,7 @@ void main() {
           sent: [],
           threadRootId: 'closed',
         ),
-        isEmpty,
+        hasLength(50),
       );
       thread.onSend = null;
       await backend.submitComposerMessage(
@@ -87,8 +87,43 @@ void main() {
         sent: [],
         threadRootId: 'closed',
       );
-      expect(pending.length, 1);
-      backend.acknowledgeQueuedTransactions([pending.single.id]);
+      final late = pending.singleWhere((m) => m.body == 'late ack');
+      backend.acknowledgeQueuedTransactions([late.id]);
+      expect(
+        backend.conversationMessages(
+          roomId: 'room',
+          sent: [],
+          threadRootId: 'closed',
+        ),
+        hasLength(50),
+      );
+      final bridges = backend.conversationMessages(
+        roomId: 'room',
+        sent: [],
+        threadRootId: 'closed',
+      );
+      final mapped = [
+        for (final bridge in bridges)
+          ChatMessage(
+            id: 'remote-${bridge.id}',
+            transactionId: bridge.id,
+            sender: 'Me',
+            body: bridge.body,
+            timestamp: bridge.timestamp,
+            own: true,
+            pending: false,
+          ),
+      ];
+      expect(
+        backend
+            .conversationMessages(
+              roomId: 'room',
+              sent: mapped,
+              threadRootId: 'closed',
+            )
+            .every((m) => !m.pending),
+        isTrue,
+      );
       expect(
         backend.conversationMessages(
           roomId: 'room',

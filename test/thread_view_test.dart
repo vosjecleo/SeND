@@ -4,6 +4,8 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/chat_shell.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:deltiecord/models/forum_post.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_backend.dart';
 
@@ -67,6 +69,52 @@ class _Backend extends FakeBackend {
 }
 
 void main() {
+  for (final forum in [false, true]) {
+    testWidgets(
+      'Enter sends in ${forum ? 'forum' : 'discussion'} conversations; Shift+Enter does not',
+      (tester) async {
+        final backend = _Backend();
+        backend.session.items.add(
+          ChatMessage(
+            id: r'$root',
+            sender: 'Author',
+            body: 'Root post',
+            timestamp: DateTime(2026),
+            pending: false,
+            forumPost: forum ? const ForumPost(title: 'Forum post') : null,
+          ),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(
+              extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+            ),
+            home: Scaffold(
+              body: ThreadView(
+                backend: backend,
+                roomId: '!room',
+                rootId: r'$root',
+                onClose: () {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final field = find.byType(TextField).last;
+        await tester.enterText(field, 'Reply');
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.pump();
+        expect(backend.session.sent, isEmpty);
+        await tester.enterText(field, 'Reply');
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+        expect(backend.session.sent, ['Reply']);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   testWidgets('discussion visibility follows routes and app lifecycle', (
     tester,
   ) async {
@@ -88,6 +136,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.textContaining('loaded replies'), findsNothing);
+    final timeline = tester.widget<ListView>(find.byType(ListView));
+    expect(
+      timeline.padding!.resolve(TextDirection.ltr).bottom,
+      tester.getSize(find.byKey(const Key('typing-indicator'))).height + 1,
+    );
     expect(backend.session.visible, true);
     navigation.currentState!.push(
       MaterialPageRoute<void>(

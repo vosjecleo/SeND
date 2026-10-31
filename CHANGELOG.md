@@ -3,6 +3,66 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 135 (2026-10-31)
+
+- Keep pending messages visible until the matching Matrix event is mapped and
+  decrypted. Preserve media previews during upload, prevent duplicate echoes,
+  retain failed-send recovery and remove queued labels and message spinners.
+  Bound the temporary handoff cache and release uploaded video bytes.
+- Show image/video compression and attachment uploads in the same top progress
+  panel, without another bar beneath the message. Reuse cached uploaded images
+  and posters instead of briefly blanking or downloading them again.
+- Size the desktop composer from the actual editor, including soft wraps and
+  emoji. Keep multiline padding on desktop and mobile. Editing puts the caret
+  at the end; Escape cancels an edit without sending it.
+- Use arrow keys to choose emoji suggestions and Tab to insert. Enter follows
+  the normal send/newline setting, including desktop voice-channel text chat.
+  Composer and search emoji use the timeline's colour-emoji font selection.
+- Align reply authors and one-line avatars with the rendered message. Keep
+  receipts, pin icons and bookmark icons from changing message height. Show
+  chat pins beside their activity time, and align typing names with message
+  text while spacing the dots across the avatar gutter.
+- Fix Archive pulls losing their drag when the hint appears. Preserve GIF
+  decoder state while revealing/hiding the row. Archive scrolls inside the
+  desktop DM list, and the DM sidebar now has a fixed width.
+- Collapse desktop navigation into slide-out panels at narrow widths. Keep
+  drafts while resizing and show a clear minimum-window-size notice. Anchor
+  message menus to the cursor correctly with interface scaling.
+- Add threshold haptics and brief icon feedback for Archive and swipe-to-reply.
+  Keep one presence dot on DM header avatars and animate the active avatar.
+- Reuse ordinary message rendering, composers, actions, history and read state
+  for discussions, forums and voice-channel text. Add category rename/delete
+  menus; deleting a category keeps its channels.
+- Fit compact DM call tiles without excess space and expose mute, deafen,
+  camera and disconnect controls. Keep thread/forum messages above the typing
+  fade without showing internal loaded-message counts.
+- Fade short sound cues when replacing them, skip superseded rapid toggles and
+  keep overlapping cue gains within the mix's headroom. Test ringtone now plays
+  the incoming-call ringtone once, not the voice-join cue.
+- Make browser database exports non-destructive. Validate imports before
+  replacing data, restore all exported collections and keep failed imports
+  atomic. Enumerate encrypted keys without decrypting entire collections and
+  bound plaintext caches. Existing accounts and encryption sessions are retained.
+- Verify release metadata and checksums with the embedded Ed25519 publisher
+  key, retaining artifact hashes and package-manager checks. Reject invalid or
+  replayed metadata and do not offer older builds as upgrades. Previews remain
+  eligible for release updates. Signing-key rotation and recovery are documented.
+- Separate account, comparable-platform and device-local settings without
+  discarding existing choices. Keep hardware IDs and device choices from
+  overwriting another installation; preserve appearance-sync controls.
+- Preserve authored Twitter/X links in sent events while allowing FxTwitter
+  to supply alternative previews. Tighten asynchronous lifecycle ownership for
+  settings, session work and conversation history.
+- Consolidate historical tests into feature suites, share fixtures and remove
+  only redundant/obsolete coverage. Run common validation once in CI, retain
+  platform-specific checks and gate publication on the exact tested commit.
+
+Linux desktop previews were approved for publication. Local preflight recorded
+975 passing native tests, four existing skips and clean static analysis. Physical
+Android GIF/composer checks and native-audio acceptance remain device checks;
+Android system scrolling screenshots are not implemented in this release.
+Publish to Latest only; Stable is unchanged.
+
 ## SeND 0.9.42 build 134 (2026-10-29)
 
 - Show a one-time changelog popup after updating, with a link to the full log.

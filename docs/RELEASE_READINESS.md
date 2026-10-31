@@ -91,6 +91,20 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
+## Release candidate: 0.9.42+135
+
+Build-number-only update for Latest; Stable is unchanged. Cleo approved the
+installed Linux preview. The current source passed 975 native tests with four
+existing skips and clean static analysis. Targeted checks cover composer wrap
+boundaries, cursor-anchored menus at multiple scales, message handoff, animated
+avatar retention, typing alignment and bounded sound mixing.
+
+This release also carries the browser storage/import safety, signed updater,
+preference scopes and shared-chat work committed after build 134, plus the
+[test audit](TEST_SUITE_AUDIT.md) and centralised CI validation. Physical Android
+and iOS acceptance, native audio output and long-session GPU checks remain
+separate from widget/unit-test results. CI publication and deployment are pending.
+
 ## Recorded release: 0.9.42+134
 
 Published to Latest on 2026-10-29 from `a5d712c`, tag `v0.9.42-b134`. Windows,

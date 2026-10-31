@@ -1,3 +1,5 @@
+import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/services/unavailable_history.dart';
 import 'package:deltiecord/services/timeline_window_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -141,5 +143,25 @@ void main() {
       );
       expect(window.toSet().length, window.length);
     }
+  });
+
+  test('unavailable history collapse is presentation-only and recoverable', () {
+    final messages = [
+      for (var i = 0; i < 4; i++)
+        ChatMessage(
+          id: '$i',
+          sender: 'User',
+          body: 'Unable to decrypt this message',
+          timestamp: DateTime(2026, 1, i + 1),
+          pending: false,
+        ),
+    ];
+    final collapsed = collapseUnavailableHistory(messages, {'0', '1'});
+    expect(collapsed.length, 3);
+    expect(collapsed.first.system, isTrue);
+    expect(collapsed.first.body, contains('2 earlier messages'));
+    expect(collapsed[1], same(messages[2]));
+    expect(collapseUnavailableHistory(messages, {}), same(messages));
+    expect(messages.length, 4);
   });
 }

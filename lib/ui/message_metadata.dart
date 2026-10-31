@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../models/chat_models.dart';
 
+bool _hasMessageAnnotations(ChatMessage message) =>
+    message.edited || message.pinned || message.bookmarked;
+
 InlineSpan messageMetadata(
   BuildContext context,
   ChatMessage message, {
@@ -36,6 +39,22 @@ InlineSpan messageMetadata(
   final span = TextSpan(
     style: TextStyle(fontSize: 10, color: color, fontStyle: FontStyle.normal),
     children: [
+      if (message.pinned)
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Tooltip(
+            message: 'Pinned message',
+            child: Icon(Icons.push_pin, size: 10, color: color),
+          ),
+        ),
+      if (message.bookmarked)
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Tooltip(
+            message: 'Bookmarked message',
+            child: Icon(Icons.bookmark, size: 10, color: color),
+          ),
+        ),
       if (showReceipt) receipt(message.readBy, 'Sent to homeserver'),
       if (message.edited) const TextSpan(text: ' (edited)'),
       if (showReceipt &&
@@ -45,7 +64,7 @@ InlineSpan messageMetadata(
         receipt(message.editReadBy, 'Edit sent'),
     ],
   );
-  return inHeader || (!showReceipt && !message.edited)
+  return inHeader || (!showReceipt && !_hasMessageAnnotations(message))
       ? span
       : MessageMetadataSpan(message.id, span);
 }
@@ -80,7 +99,7 @@ class TrailingMessageMetadata extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Flexible(child: child),
-          Text.rich(span),
+          _MetadataText(span),
         ],
       );
     }
@@ -88,9 +107,22 @@ class TrailingMessageMetadata extends StatelessWidget {
     return _MeasuredMetadata(
       text: text,
       report: (overflow) => scope?.report(keys, overflow),
-      children: [child, Text.rich(span, maxLines: 1, softWrap: false)],
+      children: [child, _MetadataText(span)],
     );
   }
+}
+
+class _MetadataText extends StatelessWidget {
+  const _MetadataText(this.span);
+  final InlineSpan span;
+  @override
+  Widget build(BuildContext context) => Text.rich(
+    span,
+    style: const TextStyle(fontSize: 10, height: 1),
+    strutStyle: const StrutStyle(fontSize: 10, height: 1),
+    maxLines: 1,
+    softWrap: false,
+  );
 }
 
 class _MeasuredMetadata extends MultiChildRenderObjectWidget {
@@ -179,7 +211,7 @@ class _MetadataLayout extends RenderBox
     body.layout(constraints.loosen(), parentUsesSize: true);
     marker.layout(const BoxConstraints(), parentUsesSize: true);
     final end = isText ? _lastLine(body) : null;
-    final x = (end?.right ?? body.size.width) + 3;
+    final x = end?.right ?? body.size.width;
     final bottom = end?.bottom ?? body.size.height;
     _overflow = x + marker.size.width > constraints.maxWidth;
     (body.parentData as ContainerBoxParentData).offset = Offset.zero;
@@ -192,9 +224,7 @@ class _MetadataLayout extends RenderBox
         _overflow
             ? body.size.width
             : (x + marker.size.width).clamp(body.size.width, double.infinity),
-        _overflow
-            ? body.size.height
-            : body.size.height.clamp(marker.size.height, double.infinity),
+        body.size.height,
       ),
     );
     final overflow = _overflow;
@@ -258,9 +288,13 @@ class MediaWithMessageMetadata extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!enabled) return child;
     final entries = album.isEmpty
-        ? [if (showReceipt || message.edited) message]
+        ? [if (showReceipt || _hasMessageAnnotations(message)) message]
         : album
-              .where((item) => (receiptIds.contains(item.id) || item.edited))
+              .where(
+                (item) =>
+                    (receiptIds.contains(item.id) ||
+                    _hasMessageAnnotations(item)),
+              )
               .toList();
     if (entries.isEmpty) return child;
     return TrailingMessageMetadata(
@@ -337,7 +371,10 @@ class _ReceiptPlacementState extends State<ReceiptPlacement> {
       final relocated = <String>{};
       for (var i = 0; i < messages.length; i++) {
         final message = messages[i];
-        if (!receiptIds.contains(message.id) && !message.edited) continue;
+        if (!receiptIds.contains(message.id) &&
+            !_hasMessageAnnotations(message)) {
+          continue;
+        }
         if (!_overflow.contains(message.id)) continue;
         var anchor = i;
         // Only move within a contiguous sender group, never across another
@@ -411,7 +448,7 @@ class HeaderMessageMetadata extends StatelessWidget {
           Tooltip(
             message:
                 'Message status · ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(message.timestamp.toLocal()))}',
-            child: Text.rich(
+            child: _MetadataText(
               messageMetadata(
                 context,
                 message,

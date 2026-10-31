@@ -5,7 +5,7 @@ import 'package:deltiecord/ui/profile_card.dart';
 import 'package:deltiecord/ui/mobile/mobile_profile_sheet.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
-import 'activity_multidevice_test.dart' show MultiBackend;
+import 'support/activity_fixtures.dart' show MultiBackend;
 
 class ProfileBackend extends MultiBackend {
   @override

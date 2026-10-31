@@ -31,6 +31,9 @@ abstract class ChatBackend extends ChangeNotifier {
   }
 
   final _outgoing = <String, QueuedMessage>{};
+  // Sync can acknowledge a send before timeline decryption/mapping finishes.
+  // Keep a bounded presentation bridge, separate from the pending-send limit.
+  final _deliveredOutgoing = <String, QueuedMessage>{};
   final _acknowledgedOutgoing = <String>{};
   bool _outgoingDisposed = false;
   void _notifyOutgoing() {
@@ -38,7 +41,44 @@ abstract class ChatBackend extends ChangeNotifier {
   }
 
   int _outgoingSequence = 0;
-  AttachmentDraft? queuedAttachment(String id) => _outgoing[id]?.draft;
+  AttachmentDraft? queuedAttachment(String id) =>
+      (_outgoing[id] ?? _deliveredOutgoing[id])?.draft;
+  List<ChatMessage> get activeAttachmentUploads => _outgoing.values
+      .where(
+        (item) =>
+            item.draft != null &&
+            item.status == 'Uploading' &&
+            !item.completed &&
+            !item.cancelled &&
+            !item.acknowledged,
+      )
+      .map((item) => item.message)
+      .toList(growable: false);
+  void cacheOutgoingAttachment(String eventId, AttachmentDraft draft) {}
+  Uint8List? cachedAttachmentPreview(
+    String eventId, {
+    bool thumbnail = false,
+  }) => null;
+
+  void _retainDelivered(QueuedMessage item) {
+    _outgoing.remove(item.id);
+    if (item.cancelled || _outgoingDisposed) return;
+    item.acknowledge();
+    item.releaseUploadedFile();
+    _deliveredOutgoing.removeWhere(
+      (_, entry) => entry.handoffExpired(DateTime.now()),
+    );
+    _deliveredOutgoing[item.id] = item;
+    var bytes = _deliveredOutgoing.values.fold<int>(
+      0,
+      (sum, entry) => sum + entry.retainedMediaBytes,
+    );
+    while (_deliveredOutgoing.length > 50 || bytes > 64 * 1024 * 1024) {
+      final oldest = _deliveredOutgoing.remove(_deliveredOutgoing.keys.first)!;
+      bytes -= oldest.retainedMediaBytes;
+    }
+  }
+
   bool get reconcilesOutgoingTransactions => false;
 
   /// Sync acknowledgements are independent of which conversation is visible.
@@ -48,18 +88,24 @@ abstract class ChatBackend extends ChangeNotifier {
     for (final id in ids) {
       final item = _outgoing[id];
       if (item == null) continue;
+      item.acknowledge();
       if (item.completed) {
-        _outgoing.remove(id);
+        _retainDelivered(item);
         _acknowledgedOutgoing.remove(id);
         removed = true;
       } else {
         _acknowledgedOutgoing.add(id);
+        removed = true;
       }
     }
     if (removed) _notifyOutgoing();
   }
 
   bool cancelLocalQueuedMessage(String id) {
+    if (_deliveredOutgoing.containsKey(id) ||
+        _outgoing[id]?.acknowledged == true) {
+      return true;
+    }
     if (messages.any((m) => m.id == id || m.transactionId == id)) return false;
     final item = _outgoing.remove(id);
     _acknowledgedOutgoing.remove(id);
@@ -77,21 +123,44 @@ abstract class ChatBackend extends ChangeNotifier {
     required List<ChatMessage> sent,
     String? threadRootId,
   }) {
-    final visible = sent.expand((m) => [m.id, ?m.transactionId]).toSet();
+    final visible = <String>{};
+    // A ready SDK error must also replace its placeholder so Retry remains
+    // available. Undecrypted events are not ready to replace local content.
+    for (final message in sent.where(
+      (m) => m.own && !m.pending && !m.decryptionPending,
+    )) {
+      for (final id in [message.id, ?message.transactionId]) {
+        visible.add(id);
+        final local = _outgoing[id] ?? _deliveredOutgoing[id];
+        if (local?.draft case final draft?) {
+          cacheOutgoingAttachment(message.id, draft);
+        }
+      }
+    }
     _outgoing.removeWhere((id, item) => item.completed && visible.contains(id));
+    final now = DateTime.now();
+    _deliveredOutgoing.removeWhere(
+      (id, item) => visible.contains(id) || item.handoffExpired(now),
+    );
     _acknowledgedOutgoing.removeWhere((id) => !_outgoing.containsKey(id));
+    final local =
+        [..._deliveredOutgoing.values, ..._outgoing.values]
+            .where(
+              (item) =>
+                  item.room == roomId &&
+                  item.threadRootId == threadRootId &&
+                  !visible.contains(item.id),
+            )
+            .toList()
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final covered = local.map((item) => item.id).toSet();
     return [
-      ..._outgoing.values
-          .where(
-            (item) =>
-                item.room == roomId &&
-                item.threadRootId == threadRootId &&
-                !visible.contains(item.id),
-          )
-          .toList()
-          .reversed
-          .map((item) => item.message),
-      ...sent,
+      ...local.map((item) => item.message),
+      ...sent.where(
+        (m) =>
+            !m.own ||
+            (!covered.contains(m.id) && !covered.contains(m.transactionId)),
+      ),
     ];
   }
 
@@ -239,17 +308,24 @@ abstract class ChatBackend extends ChangeNotifier {
                   ),
           );
           item.completed = true;
-          if (!reconcilesOutgoingTransactions ||
-              _acknowledgedOutgoing.remove(item.id)) {
+          if (!reconcilesOutgoingTransactions) {
             _outgoing.remove(item.id);
+          } else if (_acknowledgedOutgoing.remove(item.id)) {
+            _retainDelivered(item);
           }
         }
       });
     } catch (error) {
       for (final item in items) {
-        _outgoing.remove(item.id);
+        if (item.acknowledged) {
+          item.completed = true;
+          _retainDelivered(item);
+        } else if (!item.completed) {
+          _outgoing.remove(item.id);
+        }
         _acknowledgedOutgoing.remove(item.id);
       }
+      if (items.every((item) => item.completed || item.cancelled)) return;
       if (items.any((item) => item.completed) &&
           items.any((item) => !item.completed && !item.cancelled)) {
         throw PartialComposerSendFailure(
@@ -277,6 +353,7 @@ abstract class ChatBackend extends ChangeNotifier {
       item.cancelled = true;
     }
     _outgoing.clear();
+    _deliveredOutgoing.clear();
     _acknowledgedOutgoing.clear();
   }
 

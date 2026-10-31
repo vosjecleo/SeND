@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('reused client identity does not authorize old account work', () async {
-    final client = Object(), scope = SessionScope();
+    final scope = SessionScope();
     final old = scope.capture(), gate = Completer<void>();
     var published = false;
     final pending = () async {
@@ -15,7 +15,6 @@ void main() {
     final next = scope.capture();
     gate.complete();
     await pending;
-    expect(identical(client, client), true);
     expect(old.isCurrent, false);
     expect(next.isCurrent, true);
     expect(published, false);

@@ -1,3 +1,4 @@
+import 'package:deltiecord/services/favourite_reactions_store.dart';
 import 'package:deltiecord/services/emoji_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -89,4 +90,45 @@ void main() {
     final crying = (await EmojiRepository.instance.search('sob')).first;
     expect(crying.name, 'Loudly crying face');
   });
+
+  test(
+    'sending counts complete Unicode emoji and custom IDs, not literal aliases',
+    () async {
+      final store = FavouriteReactionsStore.instance;
+      final before = store.emojiUsage['😭'] ?? 0;
+      await store.recordSentMessage(
+        '😭 :not_sent: :wave:',
+        '<img data-mx-emoticon src="mxc://test/wave" alt=":wave:">',
+      );
+      expect(store.emojiUsage['😭'], before + 1);
+      expect(store.emojiUsage.containsKey(':not_sent:'), isFalse);
+      expect(store.emojiUsage['mxc://test/wave'], greaterThan(0));
+    },
+  );
+
+  test(
+    'primary shortcodes beat incidental keywords; sobbing stays an alias',
+    () async {
+      final repository = EmojiRepository.instance;
+      for (final pair in {
+        'grinning': '😀',
+        'smile': '😄',
+        'confounded': '😖',
+        'sob': '😭',
+        'sobbing': '😭',
+      }.entries) {
+        expect((await repository.exactAlias(pair.key))?.emoji, pair.value);
+      }
+      expect(
+        (await repository.search('cheerful')).any((e) => e.emoji == '😀'),
+        isTrue,
+      );
+      final entries = await repository.load();
+      expect(entries.every((e) => e.shortcode.isNotEmpty), isTrue);
+      expect(
+        entries.firstWhere((e) => e.emoji == '😖').shortcode,
+        'confounded',
+      );
+    },
+  );
 }

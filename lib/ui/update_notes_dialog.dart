@@ -21,14 +21,13 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
           ),
           child: const Text(
             'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
-            '• Automatic search catch-up after being offline\n\n'
-            '• Attachment size checks after compression\n\n'
-            '• Encrypted local storage\n\n'
-            '• Tidier chat menus and a pull-down Archive\n\n'
-            '• Queued messages and media progress in the timeline\n\n'
-            '• Call history in DMs and group chats\n\n'
-            '• Legacy-upload pruning controls\n\n'
-            '• PWA image-editor and image-sending fixes\n\n'
+            '• Smoother message sending and media progress\n\n'
+            '• Composer wrapping, padding and editing fixes\n\n'
+            '• Clearer emoji completion and matching fonts\n\n'
+            '• Better Archive gestures and compact desktop navigation\n\n'
+            '• Aligned replies, avatars and typing indicators\n\n'
+            '• Clearer call controls and smoother sound cues\n\n'
+            '• Safer browser storage and signed updates\n\n'
             '• Various bug fixes',
           ),
         ),

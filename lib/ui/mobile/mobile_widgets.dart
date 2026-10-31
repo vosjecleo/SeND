@@ -148,6 +148,7 @@ class MobileAvatar extends StatelessWidget {
             right: -1,
             bottom: -1,
             child: Container(
+              key: ValueKey('avatar-presence-${presence.name}'),
               width: size * 0.27,
               height: size * 0.27,
               decoration: BoxDecoration(

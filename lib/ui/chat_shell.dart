@@ -5,6 +5,9 @@ import 'video_playback_status.dart';
 import 'activity_widgets.dart';
 import 'home_room_menu.dart';
 import 'archive_navigation.dart';
+import 'chat_activity_stamp.dart';
+import 'measured_avatar_stack.dart';
+import 'emoji_typography.dart';
 import 'channel_category_menu.dart';
 import 'message_action_menu.dart';
 import 'threshold_feedback.dart';
@@ -61,7 +64,6 @@ import 'profile_dialog.dart';
 import 'profile_card.dart';
 import 'app_shortcuts.dart';
 import 'rich_message.dart';
-import 'inline_composer_preview.dart';
 import 'message_metadata.dart';
 import '../services/receipt_frontiers.dart';
 import 'matrix_html_text.dart';
@@ -141,6 +143,21 @@ double _densityBetween(
   return ui.lerpDouble(roomy, compact, value)!;
 }
 
+class _DesktopNavigation extends InheritedWidget {
+  const _DesktopNavigation({
+    required this.openSpaces,
+    required this.openRooms,
+    required this.close,
+    required super.child,
+  });
+  final VoidCallback? openSpaces, openRooms;
+  final VoidCallback close;
+  static _DesktopNavigation? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_DesktopNavigation>();
+  @override
+  bool updateShouldNotify(_DesktopNavigation oldWidget) => true;
+}
+
 class ChatShell extends StatefulWidget {
   const ChatShell({required this.backend, super.key});
 
@@ -171,6 +188,12 @@ class _ChatShellState extends State<ChatShell> {
   String? _draftRoomId;
   bool _restoringDraft = false;
   bool _sidePanelVisible = true;
+  // 0: closed, 1: spaces, 2: chats/channels.
+  int _navigationDrawer = 0;
+  void _closeNavigation() {
+    if (_navigationDrawer != 0) setState(() => _navigationDrawer = 0);
+  }
+
   String? _threadRootId;
   bool _voiceChatVisible = false;
   final Map<String, ({String text, List<CustomEmojiTextSpan> emojis})>
@@ -607,7 +630,7 @@ class _ChatShellState extends State<ChatShell> {
       message.formattedBody,
     );
     _message.updateSelection(
-      TextSelection(baseOffset: 0, extentOffset: _message.document.length - 1),
+      TextSelection.collapsed(offset: _message.document.length - 1),
       ChangeSource.local,
     );
     setState(() {
@@ -817,8 +840,13 @@ class _ChatShellState extends State<ChatShell> {
       if (activator != null && callback != null) bindings[activator] = callback;
     }
     bindings[const SingleActivator(LogicalKeyboardKey.escape)] = () {
-      if (Navigator.of(context).canPop()) {
+      if (_navigationDrawer != 0) {
+        _closeNavigation();
+      } else if (Navigator.of(context).canPop()) {
         Navigator.of(context).maybePop();
+      } else if (_editingMessage != null) {
+        _conversationKey.currentState?.dismissTemporaryUi();
+        _cancelComposerAction();
       } else if (_conversationKey.currentState?.dismissTemporaryUi() == true) {
         _composerFocus.requestFocus();
       } else if (_replyingTo != null || _editingMessage != null) {
@@ -840,6 +868,18 @@ class _ChatShellState extends State<ChatShell> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final showSpaceRail = constraints.maxWidth >= 760;
+                    final showRoomPanel = constraints.maxWidth >= 600;
+                    if (constraints.maxWidth < 400 ||
+                        constraints.maxHeight < 300) {
+                      _navigationDrawer = 0;
+                      _reportConversationVisibility(false);
+                      return ColoredBox(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        child: const Center(child: Text('Too small! >.<')),
+                      );
+                    }
                     final selectedRoom = widget.backend.selectedRoom;
                     _reportConversationVisibility(
                       selectedRoom != null &&
@@ -862,292 +902,410 @@ class _ChatShellState extends State<ChatShell> {
                         (widget.backend.selectedSpaceId != null ||
                             otherRoomMembers.length > 1);
                     final hasSidePanel =
-                        (constraints.maxWidth >= 1100 || _voiceChatVisible) &&
+                        (constraints.maxWidth >= 1100 ||
+                            (_voiceChatVisible &&
+                                constraints.maxWidth >= 900)) &&
                         (directRecipient != null ||
                             showMemberSidebar ||
                             _threadRootId != null ||
                             _voiceChatVisible);
                     _sidePanelAvailable = hasSidePanel;
-                    final preferredPanel =
-                        widget.backend.preferences.roomPanelWidth;
-                    final maximumRoomPanelWidth = max(
-                      0.0,
-                      constraints.maxWidth * 0.46,
-                    );
-                    final minimumRoomPanelWidth = min(
-                      220.0,
-                      maximumRoomPanelWidth,
-                    );
-                    final panelWidth = preferredPanel.clamp(
-                      minimumRoomPanelWidth,
-                      maximumRoomPanelWidth,
-                    );
+                    const panelWidth = 280.0;
                     final railWidth = showSpaceRail ? 69.0 : 0.0;
-                    final navigationWidth = panelWidth + railWidth;
-                    return Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Row(
-                            children: [
-                              if (showSpaceRail) ...[
-                                SizedBox(
-                                  width: 68,
-                                  child: _SpaceBar(backend: widget.backend),
-                                ),
-                                const VerticalDivider(
-                                  width: 1,
-                                  color: Colors.transparent,
-                                ),
-                              ],
-                              SizedBox(
-                                width: panelWidth,
-                                child: ClipRRect(
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: DeltiecordCorners.corner,
+                    final navigationWidth =
+                        (showRoomPanel ? panelWidth : 0) + railWidth;
+                    final drawer = _navigationDrawer == 1 && !showSpaceRail
+                        ? 1
+                        : _navigationDrawer == 2 && !showRoomPanel
+                        ? 2
+                        : 0;
+                    // A drawer that becomes a permanent sidebar must not
+                    // reopen by itself when the window shrinks again.
+                    _navigationDrawer = drawer;
+                    return _DesktopNavigation(
+                      openSpaces: showSpaceRail
+                          ? null
+                          : () => setState(() => _navigationDrawer = 1),
+                      openRooms: showRoomPanel
+                          ? null
+                          : () => setState(() => _navigationDrawer = 2),
+                      close: _closeNavigation,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Row(
+                              children: [
+                                if (showSpaceRail) ...[
+                                  SizedBox(
+                                    width: 68,
+                                    child: _SpaceBar(backend: widget.backend),
                                   ),
-                                  child: _RoomPanel(backend: widget.backend),
-                                ),
-                              ),
-                              Expanded(
-                                child: selectedRoom == null
-                                    ? const _EmptyConversation()
-                                    : selectedRoom.isVoice
-                                    ? VoiceRoomView(
+                                  const VerticalDivider(
+                                    width: 1,
+                                    color: Colors.transparent,
+                                  ),
+                                ],
+                                if (showRoomPanel)
+                                  SizedBox(
+                                    width: panelWidth,
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: DeltiecordCorners.corner,
+                                      ),
+                                      child: _RoomPanel(
                                         backend: widget.backend,
-                                        room: selectedRoom,
-                                        onOpenChat: () => setState(() {
-                                          _voiceChatVisible = true;
-                                          _sidePanelVisible = true;
-                                        }),
-                                      )
-                                    : selectedRoom.presentation ==
-                                          RoomPresentation.forum
-                                    ? ForumView(
-                                        backend: widget.backend,
-                                        room: selectedRoom,
-                                      )
-                                    : CallAndChatLayout(
-                                        call:
-                                            widget.backend.activeVoiceRoomId ==
-                                                selectedRoom.id
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      if (!showRoomPanel &&
+                                          (selectedRoom == null ||
+                                              selectedRoom.isVoice ||
+                                              selectedRoom.presentation ==
+                                                  RoomPresentation.forum))
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: IconButton(
+                                            tooltip: 'Show chats',
+                                            icon: const Icon(Icons.menu),
+                                            onPressed: () => setState(
+                                              () => _navigationDrawer = 2,
+                                            ),
+                                          ),
+                                        ),
+                                      Expanded(
+                                        child: selectedRoom == null
+                                            ? const _EmptyConversation()
+                                            : selectedRoom.isVoice
                                             ? VoiceRoomView(
                                                 backend: widget.backend,
                                                 room: selectedRoom,
+                                                onOpenChat: () => setState(() {
+                                                  _voiceChatVisible = true;
+                                                  _sidePanelVisible = true;
+                                                }),
                                               )
-                                            : null,
-                                        chat: _Conversation(
-                                          key: _conversationKey,
-                                          composerKey: _composerKey,
-                                          backend: widget.backend,
-                                          controller: _message,
-                                          composerFocus: _composerFocus,
-                                          sending: _sending,
-                                          replyingTo: _replyingTo,
-                                          editingMessage: _editingMessage,
-                                          onSend: _send,
-                                          onSchedule: _scheduleCurrentMessage,
-                                          onPoll: _createPoll,
-                                          onSticker: _sendSticker,
-                                          onReply: _replyTo,
-                                          onEdit: _edit,
-                                          onCancelComposerAction:
-                                              _cancelComposerAction,
-                                          onAttach: _attachFile,
-                                          onGif: _showGifPicker,
-                                          onPasteImage: _pasteClipboardImage,
-                                          onDropAttachments: _queueAttachments,
-                                          pendingAttachments:
-                                              _pendingAttachments,
-                                          onRemoveAttachment:
-                                              _removePendingAttachment,
-                                          onEditAttachment: (index) async {
-                                            final old =
-                                                _pendingAttachments[index];
-                                            final edited =
-                                                await showAttachmentImageEditor(
-                                                  context,
-                                                  old,
-                                                  preferences: widget
-                                                      .backend
-                                                      .preferences,
-                                                );
-                                            if (!mounted || edited == null) {
-                                              return;
-                                            }
-                                            final current = _pendingAttachments
-                                                .indexOf(old);
-                                            if (current >= 0) {
-                                              setState(
-                                                () =>
-                                                    _pendingAttachments[current] =
-                                                        edited.copyWith(
-                                                          uploadTooLarge: false,
-                                                        ),
-                                              );
-                                            }
-                                          },
-                                          onToggleAttachmentSpoiler:
-                                              _togglePendingSpoiler,
-                                          mentionSuggestions:
-                                              _mentionSuggestions,
-                                          mentionSelectionIndex:
-                                              _mentionSelectionIndex,
-                                          onMentionSelected: _insertMention,
-                                          onMentionSelectionChanged: (index) =>
-                                              setState(
-                                                () => _mentionSelectionIndex =
-                                                    index,
+                                            : selectedRoom.presentation ==
+                                                  RoomPresentation.forum
+                                            ? ForumView(
+                                                backend: widget.backend,
+                                                room: selectedRoom,
+                                              )
+                                            : CallAndChatLayout(
+                                                call:
+                                                    widget
+                                                            .backend
+                                                            .activeVoiceRoomId ==
+                                                        selectedRoom.id
+                                                    ? VoiceRoomView(
+                                                        compact: true,
+                                                        backend: widget.backend,
+                                                        room: selectedRoom,
+                                                      )
+                                                    : null,
+                                                chat: _Conversation(
+                                                  key: _conversationKey,
+                                                  composerKey: _composerKey,
+                                                  backend: widget.backend,
+                                                  controller: _message,
+                                                  composerFocus: _composerFocus,
+                                                  sending: _sending,
+                                                  replyingTo: _replyingTo,
+                                                  editingMessage:
+                                                      _editingMessage,
+                                                  onSend: _send,
+                                                  onSchedule:
+                                                      _scheduleCurrentMessage,
+                                                  onPoll: _createPoll,
+                                                  onSticker: _sendSticker,
+                                                  onReply: _replyTo,
+                                                  onEdit: _edit,
+                                                  onCancelComposerAction:
+                                                      _cancelComposerAction,
+                                                  onAttach: _attachFile,
+                                                  onGif: _showGifPicker,
+                                                  onPasteImage:
+                                                      _pasteClipboardImage,
+                                                  onDropAttachments:
+                                                      _queueAttachments,
+                                                  pendingAttachments:
+                                                      _pendingAttachments,
+                                                  onRemoveAttachment:
+                                                      _removePendingAttachment,
+                                                  onEditAttachment: (index) async {
+                                                    final old =
+                                                        _pendingAttachments[index];
+                                                    final edited =
+                                                        await showAttachmentImageEditor(
+                                                          context,
+                                                          old,
+                                                          preferences: widget
+                                                              .backend
+                                                              .preferences,
+                                                        );
+                                                    if (!mounted ||
+                                                        edited == null) {
+                                                      return;
+                                                    }
+                                                    final current =
+                                                        _pendingAttachments
+                                                            .indexOf(old);
+                                                    if (current >= 0) {
+                                                      setState(
+                                                        () =>
+                                                            _pendingAttachments[current] =
+                                                                edited.copyWith(
+                                                                  uploadTooLarge:
+                                                                      false,
+                                                                ),
+                                                      );
+                                                    }
+                                                  },
+                                                  onToggleAttachmentSpoiler:
+                                                      _togglePendingSpoiler,
+                                                  mentionSuggestions:
+                                                      _mentionSuggestions,
+                                                  mentionSelectionIndex:
+                                                      _mentionSelectionIndex,
+                                                  onMentionSelected:
+                                                      _insertMention,
+                                                  onMentionSelectionChanged:
+                                                      (index) => setState(
+                                                        () =>
+                                                            _mentionSelectionIndex =
+                                                                index,
+                                                      ),
+                                                  onShowMembers:
+                                                      _showMembersPanel,
+                                                  onShowProfile: (request) =>
+                                                      _showProfilePopover(
+                                                        request.$1,
+                                                        request.$2,
+                                                      ),
+                                                ),
                                               ),
-                                          onShowMembers: _showMembersPanel,
-                                          onShowProfile: (request) =>
-                                              _showProfilePopover(
-                                                request.$1,
-                                                request.$2,
-                                              ),
-                                        ),
                                       ),
-                              ),
-                              if (hasSidePanel)
-                                _SidePanelRegion(
-                                  visible: _sidePanelVisible,
-                                  width: widget
-                                      .backend
-                                      .preferences
-                                      .sidePanelWidth
-                                      .clamp(
-                                        260,
-                                        min(460, constraints.maxWidth * 0.4),
-                                      ),
-                                  onToggle: () => setState(
-                                    () =>
-                                        _sidePanelVisible = !_sidePanelVisible,
+                                    ],
                                   ),
-                                  onResize: (delta) {
-                                    final width =
-                                        (widget
-                                                    .backend
-                                                    .preferences
-                                                    .sidePanelWidth -
-                                                delta)
-                                            .clamp(260.0, 460.0);
-                                    widget.backend.updatePreferences(
-                                      widget.backend.preferences.copyWith(
-                                        sidePanelWidth: width,
-                                      ),
-                                    );
-                                  },
-                                  child:
-                                      _voiceChatVisible && selectedRoom != null
-                                      ? MobileTimelineView(
-                                          key: ValueKey(
-                                            'voice-chat-${selectedRoom.id}',
-                                          ),
-                                          backend: widget.backend,
-                                          room: selectedRoom,
-                                          onOpenNavigation: _showMembersPanel,
-                                          onOpenDetails: _showMembersPanel,
-                                          onOpenSettings: () =>
-                                              showDeltiecordSettings(
-                                                context,
-                                                widget.backend,
-                                              ),
-                                          navigationGestureActive: false,
-                                          initialDraft:
-                                              _voiceChatDrafts[selectedRoom.id]
-                                                  ?.text ??
-                                              '',
-                                          initialCustomEmojis:
-                                              _voiceChatDrafts[selectedRoom.id]
-                                                  ?.emojis ??
-                                              const [],
-                                          onDraftChanged: (draft) =>
-                                              _voiceChatDrafts[selectedRoom
-                                                      .id] =
-                                                  draft,
-                                        )
-                                      : _threadRootId != null
-                                      ? ThreadView(
-                                          key: ValueKey(_threadRootId),
-                                          backend: widget.backend,
-                                          roomId: selectedRoom!.id,
-                                          rootId: _threadRootId!,
-                                          onClose: () => setState(
-                                            () => _threadRootId = null,
-                                          ),
-                                        )
-                                      : _sidePanelView ==
-                                                _SidePanelView.profile &&
-                                            (_sidePanelMember ??
-                                                    directRecipient) !=
-                                                null
-                                      ? _RecipientProfilePanel(
-                                          backend: widget.backend,
-                                          onClose: _showMembersPanel,
-                                          member:
-                                              _sidePanelMember ??
-                                              directRecipient!,
-                                        )
-                                      : _MemberSidebar(
-                                          backend: widget.backend,
-                                          members: roomMembers,
-                                          onMemberSelected: (member) =>
-                                              _showProfilePanel(member),
-                                        ),
                                 ),
-                            ],
-                          ),
-                        ),
-                        // The resize target straddles the visual boundary. It
-                        // must not consume layout width: doing so shifted the
-                        // whole conversation and let the lower user panel
-                        // bleed five pixels into it.
-                        Positioned(
-                          left: navigationWidth - 2.5,
-                          top: 0,
-                          bottom: 0,
-                          width: 5,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.resizeColumn,
-                            child: GestureDetector(
-                              key: const Key('room-panel-resize-handle'),
-                              behavior: HitTestBehavior.opaque,
-                              onHorizontalDragUpdate: (details) {
-                                final width =
-                                    (widget.backend.preferences.roomPanelWidth +
-                                            details.delta.dx)
+                                if (hasSidePanel)
+                                  _SidePanelRegion(
+                                    visible: _sidePanelVisible,
+                                    width: widget
+                                        .backend
+                                        .preferences
+                                        .sidePanelWidth
                                         .clamp(
-                                          minimumRoomPanelWidth,
-                                          maximumRoomPanelWidth,
-                                        );
-                                widget.backend.updatePreferences(
-                                  widget.backend.preferences.copyWith(
-                                    roomPanelWidth: width,
+                                          260,
+                                          min(460, constraints.maxWidth * 0.4),
+                                        ),
+                                    onToggle: () => setState(
+                                      () => _sidePanelVisible =
+                                          !_sidePanelVisible,
+                                    ),
+                                    onResize: (delta) {
+                                      final width =
+                                          (widget
+                                                      .backend
+                                                      .preferences
+                                                      .sidePanelWidth -
+                                                  delta)
+                                              .clamp(260.0, 460.0);
+                                      widget.backend.updatePreferences(
+                                        widget.backend.preferences.copyWith(
+                                          sidePanelWidth: width,
+                                        ),
+                                      );
+                                    },
+                                    child:
+                                        _voiceChatVisible &&
+                                            selectedRoom != null
+                                        ? MobileTimelineView(
+                                            desktopKeyboard: true,
+                                            key: ValueKey(
+                                              'voice-chat-${selectedRoom.id}',
+                                            ),
+                                            backend: widget.backend,
+                                            room: selectedRoom,
+                                            onOpenNavigation: _showMembersPanel,
+                                            onOpenDetails: _showMembersPanel,
+                                            onOpenSettings: () =>
+                                                showDeltiecordSettings(
+                                                  context,
+                                                  widget.backend,
+                                                ),
+                                            navigationGestureActive: false,
+                                            initialDraft:
+                                                _voiceChatDrafts[selectedRoom
+                                                        .id]
+                                                    ?.text ??
+                                                '',
+                                            initialCustomEmojis:
+                                                _voiceChatDrafts[selectedRoom
+                                                        .id]
+                                                    ?.emojis ??
+                                                const [],
+                                            onDraftChanged: (draft) =>
+                                                _voiceChatDrafts[selectedRoom
+                                                        .id] =
+                                                    draft,
+                                          )
+                                        : _threadRootId != null
+                                        ? ThreadView(
+                                            key: ValueKey(_threadRootId),
+                                            backend: widget.backend,
+                                            roomId: selectedRoom!.id,
+                                            rootId: _threadRootId!,
+                                            onClose: () => setState(
+                                              () => _threadRootId = null,
+                                            ),
+                                          )
+                                        : _sidePanelView ==
+                                                  _SidePanelView.profile &&
+                                              (_sidePanelMember ??
+                                                      directRecipient) !=
+                                                  null
+                                        ? _RecipientProfilePanel(
+                                            backend: widget.backend,
+                                            onClose: _showMembersPanel,
+                                            member:
+                                                _sidePanelMember ??
+                                                directRecipient!,
+                                          )
+                                        : _MemberSidebar(
+                                            backend: widget.backend,
+                                            members: roomMembers,
+                                            onMemberSelected: (member) =>
+                                                _showProfilePanel(member),
+                                          ),
                                   ),
-                                );
-                              },
+                              ],
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          bottom: 0,
-                          width: navigationWidth,
-                          child: _CurrentUserPanel(backend: widget.backend),
-                        ),
-                        if (widget.backend.activeVoiceRoomId != null ||
-                            widget.backend.voiceConnectionStatus ==
-                                VoiceConnectionStatus.error)
-                          Positioned(
-                            left: 12,
-                            bottom: _bottomPanelHeightFor(context) + 4,
-                            width: navigationWidth - 24,
-                            child: VoiceControlIsland(backend: widget.backend),
-                          ),
-                        if (widget.backend.incomingCall != null)
+                          if (showRoomPanel)
+                            Positioned(
+                              left: 0,
+                              bottom: 0,
+                              width: navigationWidth,
+                              child: _CurrentUserPanel(backend: widget.backend),
+                            ),
+                          if ((widget.backend.activeVoiceRoomId != null &&
+                                  widget.backend.activeVoiceRoomId !=
+                                      selectedRoom?.id) ||
+                              widget.backend.voiceConnectionStatus ==
+                                  VoiceConnectionStatus.error)
+                            Positioned(
+                              left: 12,
+                              bottom: _bottomPanelHeightFor(context) + 4,
+                              width: showRoomPanel
+                                  ? navigationWidth - 24
+                                  : min(340, constraints.maxWidth - 24),
+                              child: VoiceControlIsland(
+                                backend: widget.backend,
+                              ),
+                            ),
                           Positioned.fill(
-                            child: IncomingCallBanner(backend: widget.backend),
+                            child: AnimatedSwitcher(
+                              duration: Duration(
+                                milliseconds:
+                                    MediaQuery.disableAnimationsOf(context)
+                                    ? 0
+                                    : 160,
+                              ),
+                              child: drawer == 0
+                                  ? const SizedBox.shrink()
+                                  : BlockSemantics(
+                                      key: ValueKey(
+                                        'desktop-navigation-drawer-$drawer',
+                                      ),
+                                      child: FocusScope(
+                                        autofocus: true,
+                                        child: Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: GestureDetector(
+                                                key: const ValueKey(
+                                                  'desktop-navigation-scrim',
+                                                ),
+                                                onTap: _closeNavigation,
+                                                child: ColoredBox(
+                                                  color: Colors.black
+                                                      .withValues(alpha: .45),
+                                                ),
+                                              ),
+                                            ),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: TweenAnimationBuilder<Offset>(
+                                                tween: Tween(
+                                                  begin: const Offset(-1, 0),
+                                                  end: Offset.zero,
+                                                ),
+                                                duration: Duration(
+                                                  milliseconds:
+                                                      MediaQuery.disableAnimationsOf(
+                                                        context,
+                                                      )
+                                                      ? 0
+                                                      : 160,
+                                                ),
+                                                builder:
+                                                    (context, offset, child) =>
+                                                        FractionalTranslation(
+                                                          translation: offset,
+                                                          child: child,
+                                                        ),
+                                                child: SizedBox(
+                                                  width: drawer == 1
+                                                      ? 68
+                                                      : panelWidth,
+                                                  height: double.infinity,
+                                                  child: Material(
+                                                    color: context
+                                                        .deltiecord
+                                                        .panel,
+                                                    child: drawer == 1
+                                                        ? _SpaceBar(
+                                                            backend:
+                                                                widget.backend,
+                                                          )
+                                                        : Stack(
+                                                            children: [
+                                                              _RoomPanel(
+                                                                backend: widget
+                                                                    .backend,
+                                                              ),
+                                                              Positioned(
+                                                                left: 0,
+                                                                right: 0,
+                                                                bottom: 0,
+                                                                child: _CurrentUserPanel(
+                                                                  backend: widget
+                                                                      .backend,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                            ),
                           ),
-                      ],
+                          if (widget.backend.incomingCall != null)
+                            Positioned.fill(
+                              child: IncomingCallBanner(
+                                backend: widget.backend,
+                              ),
+                            ),
+                        ],
+                      ),
                     );
                   },
                 ),

@@ -14,6 +14,7 @@ import '../space_settings_screen.dart';
 import '../personal_organisation.dart';
 import '../home_room_menu.dart';
 import '../archive_navigation.dart';
+import '../chat_activity_stamp.dart';
 import '../channel_category_menu.dart';
 import '../member_management.dart';
 import '../chat_shell.dart' show showChannelActions, showCreateChannelCategory;
@@ -914,6 +915,7 @@ class _RoomList extends StatelessWidget {
     itemBuilder: (context, index) {
       final room = rooms[index];
       final age = compactActivityAge(room.lastActivityAt);
+      final pinned = backend.personalData?.pinned(room.id) ?? false;
       return ActivityWatch(
         key: _RoomRowKey(room.id),
         backend: backend,
@@ -963,7 +965,7 @@ class _RoomList extends StatelessWidget {
                       status: room.statusMessage,
                     )
                   : null,
-              trailing: room.unreadCount == 0 && age.isEmpty
+              trailing: room.unreadCount == 0 && age.isEmpty && !pinned
                   ? null
                   : Column(
                       mainAxisSize: MainAxisSize.min,
@@ -980,15 +982,8 @@ class _RoomList extends StatelessWidget {
                           ),
                         if (room.unreadCount > 0 && age.isNotEmpty)
                           const SizedBox(height: 2),
-                        if (age.isNotEmpty)
-                          Text(
-                            age,
-                            style: TextStyle(
-                              color: context.deltiecord.muted,
-                              fontSize: DeltiecordTypeScale.small,
-                              height: 1.05,
-                            ),
-                          ),
+                        if (age.isNotEmpty || pinned)
+                          ChatActivityStamp(age: age, pinned: pinned),
                       ],
                     ),
               onTap: () => onOpenRoom(room),

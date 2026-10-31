@@ -2,6 +2,19 @@ import 'package:deltiecord/services/update_checker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('official release replaces a preview without offering older builds', () {
+    ReleaseCheckResult check(int build, {bool preview = true}) =>
+        parseReleaseManifest(
+          '{"version":"0.9.42","build":$build}',
+          currentVersion: '0.9.42',
+          currentBuild: 134,
+          currentIsPreview: preview,
+        );
+    expect(check(134).updateAvailable, isTrue);
+    expect(check(135).updateAvailable, isTrue);
+    expect(check(133).updateAvailable, isFalse);
+    expect(check(134, preview: false).updateAvailable, isFalse);
+  });
   test('release manifest compares version and build independently', () {
     final newerBuild = parseReleaseManifest(
       '{"version":"0.9.19","build":65}',

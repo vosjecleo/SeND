@@ -1,3 +1,6 @@
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:deltiecord/models/space_administration.dart';
+import 'package:deltiecord/ui/rich_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/services/room_mentions.dart';
@@ -168,4 +171,40 @@ void main() {
       },
     );
   }
+
+  test('role mentions notify only assigned members of this room', () {
+    const roles = SpaceRoles(
+      roles: [SpaceRole(id: 'mods', name: 'Mod Team', powerLevel: 50)],
+      members: {
+        '@me:test': {'mods'},
+        '@in:test': {'mods'},
+        '@elsewhere:test': {'mods'},
+        '@plain:test': {},
+      },
+    );
+    const room = {'@me:test', '@in:test', '@plain:test'};
+    expect(roles.mentionedMembers('hi @Mod Team!', room, exclude: '@me:test'), {
+      '@in:test',
+    });
+    expect(roles.mentionedMembers('@Mod Teamster', room), isEmpty);
+    expect(roles.mentionedMembers('@Mod Team:example.org', room), isEmpty);
+  });
+
+  testWidgets('full Matrix mentions display localpart and keep target link', (
+    tester,
+  ) async {
+    final sent = serializePlainComposer(
+      Document()..insert(0, 'Hello @friend:example.org'),
+    );
+    expect(sent.html, contains('https://matrix.to/#/@friend:example.org'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MatrixHtmlText(html: sent.html!, fallback: sent.plainText),
+        ),
+      ),
+    );
+    final text = tester.widget<SelectableText>(find.byType(SelectableText));
+    expect(text.textSpan!.toPlainText(), 'Hello @friend');
+  });
 }

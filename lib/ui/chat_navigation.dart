@@ -526,6 +526,7 @@ class _SpaceBar extends StatelessWidget {
                   onTap: () {
                     backend.setArchiveOpen(false);
                     backend.selectSpace(null);
+                    _DesktopNavigation.of(context)?.close();
                   },
                   attentionCount: backend.directUnreadCount,
                   unread: backend.directUnreadCount > 0,
@@ -551,7 +552,10 @@ class _SpaceBar extends StatelessWidget {
                       holdDraggable: true,
                       tooltip: space.name,
                       selected: backend.selectedSpaceId == space.id,
-                      onTap: () => backend.selectSpace(space.id),
+                      onTap: () {
+                        backend.selectSpace(space.id);
+                        _DesktopNavigation.of(context)?.close();
+                      },
                       attentionCount: backend.pingCountForSpace(space.id),
                       unread: backend.hasUnreadForSpace(space.id),
                       child: space.avatarBytes == null
@@ -1015,6 +1019,7 @@ class _RoomPanelState extends State<_RoomPanel> {
         const SingleActivator(LogicalKeyboardKey.escape): () {
           _roomSearchController.clear();
           setState(() => _roomQuery = '');
+          _DesktopNavigation.of(context)?.close();
         },
       },
       child: Focus(
@@ -1049,6 +1054,21 @@ class _RoomPanelState extends State<_RoomPanel> {
                                 ),
                                 child: Row(
                                   children: [
+                                    if (_DesktopNavigation.of(
+                                          context,
+                                        )?.openSpaces
+                                        case final open?)
+                                      IconButton(
+                                        tooltip: 'Show spaces',
+                                        padding: EdgeInsets.zero,
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                              width: 28,
+                                              height: 28,
+                                            ),
+                                        icon: const Icon(Icons.menu, size: 20),
+                                        onPressed: open,
+                                      ),
                                     if (backend.archiveOpen)
                                       IconButton(
                                         tooltip: 'Back to Home',
@@ -1196,6 +1216,7 @@ class _RoomPanelState extends State<_RoomPanel> {
                   Expanded(
                     child: backend.selectedSpaceId == null
                         ? ArchivePullList(
+                            alwaysVisible: true,
                             key: const ValueKey('desktop-chats'),
                             backend: backend,
                             enabled: !backend.archiveOpen,
@@ -2313,7 +2334,10 @@ class _RoomListTile extends StatelessWidget {
           trailing: backend.selectedSpaceId == null && room.unreadCount > 0
               ? Badge(label: Text('${room.unreadCount}'))
               : null,
-          onTap: () => backend.selectRoom(room.id),
+          onTap: () {
+            backend.selectRoom(room.id);
+            _DesktopNavigation.of(context)?.close();
+          },
         ),
       ),
     );
@@ -2366,6 +2390,7 @@ class _HomeRoomListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = backend.selectedRoom?.id == room.id;
     final age = compactActivityAge(room.lastActivityAt);
+    final pinned = backend.personalData?.pinned(room.id) ?? false;
     return ActivityWatch(
       backend: backend,
       roomId: room.id,
@@ -2395,7 +2420,10 @@ class _HomeRoomListTile extends StatelessWidget {
                       ).colorScheme.primary.withValues(alpha: .13)
                 : Colors.transparent,
             child: InkWell(
-              onTap: () => backend.selectRoom(room.id),
+              onTap: () {
+                backend.selectRoom(room.id);
+                _DesktopNavigation.of(context)?.close();
+              },
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minHeight: _densityBetween(
@@ -2469,7 +2497,7 @@ class _HomeRoomListTile extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (room.unreadCount > 0 || age.isNotEmpty) ...[
+                      if (room.unreadCount > 0 || age.isNotEmpty || pinned) ...[
                         const SizedBox(width: 8),
                         Column(
                           mainAxisSize: MainAxisSize.min,
@@ -2488,15 +2516,8 @@ class _HomeRoomListTile extends StatelessWidget {
                               ),
                             if (room.unreadCount > 0 && age.isNotEmpty)
                               const SizedBox(height: 2),
-                            if (age.isNotEmpty)
-                              Text(
-                                age,
-                                style: TextStyle(
-                                  color: context.deltiecord.muted,
-                                  fontSize: DeltiecordTypeScale.small,
-                                  height: 1.05,
-                                ),
-                              ),
+                            if (age.isNotEmpty || pinned)
+                              ChatActivityStamp(age: age, pinned: pinned),
                           ],
                         ),
                       ],
@@ -2514,6 +2535,7 @@ class _HomeRoomListTile extends StatelessWidget {
 
 class _RoomIcon extends StatelessWidget {
   const _RoomIcon({
+    super.key,
     required this.room,
     required this.size,
     this.showPresence = false,

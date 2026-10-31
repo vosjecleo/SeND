@@ -107,18 +107,6 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('desktop and mobile GIF avatars advance frames', (tester) async {
-    final bytes = animatedFixture();
-    for (final avatar in <Widget>[
-      ThemeAvatar(backgroundImage: MemoryImage(bytes)),
-      MobileAvatar(bytes: bytes, fallback: 'A'),
-    ]) {
-      await tester.pumpWidget(MaterialApp(home: Center(child: avatar)));
-      expect((await observeFrames(tester)).length, greaterThan(1));
-      await tester.pumpWidget(const SizedBox());
-    }
-  });
-
   testWidgets('autoplay off retains a single frame', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

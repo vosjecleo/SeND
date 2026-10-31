@@ -9,6 +9,7 @@ class _MessageComposer extends StatefulWidget {
     required this.enabled,
     required this.onSend,
     this.onRecord,
+    this.onEscape,
     required this.onSchedule,
     required this.onPoll,
     required this.onSticker,
@@ -38,6 +39,7 @@ class _MessageComposer extends StatefulWidget {
   final bool enabled;
   final VoidCallback onSend;
   final VoidCallback? onRecord;
+  final VoidCallback? onEscape;
   final VoidCallback onSchedule;
   final VoidCallback onPoll;
   final VoidCallback onSticker;
@@ -121,7 +123,6 @@ class _MessageComposerState extends State<_MessageComposer> {
   int? _emojiStart;
   int _emojiGeneration = 0;
   bool _replacingEmoji = false;
-  int _visibleLineCount = 1;
 
   @override
   void initState() {
@@ -132,17 +133,8 @@ class _MessageComposerState extends State<_MessageComposer> {
   void _updateEmojiCompletion() {
     if (_replacingEmoji) return;
     final text = widget.controller.document.toPlainText();
-    final lineCount = max(
-      1,
-      '\n'
-              .allMatches(
-                text.endsWith('\n') ? text.substring(0, text.length - 1) : text,
-              )
-              .length +
-          1,
-    );
-    // Soft-wrapped lines change height even without a newline character.
-    setState(() => _visibleLineCount = lineCount);
+    // Refresh send/record controls. The editor measures its rendered draft.
+    setState(() {});
     final cursor = widget.controller.selection.extentOffset.clamp(
       0,
       text.length,
@@ -361,10 +353,6 @@ class _MessageComposerState extends State<_MessageComposer> {
         MediaQuery.textScalerOf(context).scale(DeltiecordTypeScale.normal) *
         1.2;
     final editorVerticalPadding = max(7.0, (editorHeight - lineHeight) / 2);
-    final expandedEditorHeight = min(
-      widget.maxHeight,
-      editorHeight + ((_visibleLineCount - 1) * lineHeight),
-    );
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
       child: OverlayPortal(
@@ -425,9 +413,8 @@ class _MessageComposerState extends State<_MessageComposer> {
                                         )
                                       : Text(
                                           _emojiMatches[index].emoji,
-                                          style: TextStyle(
-                                            fontFamily:
-                                                context.deltiecordEmojiFont,
+                                          style: colourEmojiStyle(
+                                            const TextStyle(),
                                           ),
                                         ),
                                 ),
@@ -610,147 +597,137 @@ class _MessageComposerState extends State<_MessageComposer> {
                                   style: const TextStyle(
                                     fontSize: DeltiecordTypeScale.normal,
                                   ),
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final painter =
-                                          TextPainter(
-                                            text: inlineComposerPreview(
-                                              '${widget.controller.document.toPlainText().replaceFirst(RegExp(r'\n$'), '')}\u200b',
-                                              DefaultTextStyle.of(
-                                                context,
-                                              ).style.copyWith(
-                                                fontSize:
-                                                    DeltiecordTypeScale.normal,
-                                                height: 1.2,
-                                              ),
-                                            ),
-                                            textDirection: Directionality.of(
-                                              context,
-                                            ),
-                                            textScaler: MediaQuery.textScalerOf(
-                                              context,
-                                            ),
-                                          )..layout(
-                                            maxWidth: max(
-                                              1,
-                                              constraints.maxWidth - 22,
-                                            ),
-                                          );
-                                      final height = max(
-                                        expandedEditorHeight,
-                                        painter.height +
-                                            editorVerticalPadding * 2,
-                                      ).clamp(editorHeight, widget.maxHeight);
-                                      painter.dispose();
-                                      return SizedBox(
-                                        height: height,
-                                        child: PlainMessageEditor(
-                                          controller: widget.controller,
-                                          backend: widget.backend,
-                                          focusNode: widget.focusNode,
-                                          scrollController: _scrollController,
-                                          enabled: widget.enabled,
-                                          onPasteImage: widget.onPasteImage,
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 11,
-                                            vertical: editorVerticalPadding,
-                                          ),
-                                          style: TextStyle(
-                                            fontSize:
-                                                DeltiecordTypeScale.normal,
-                                            height: 1.2,
-                                            color: context.deltiecord.text,
-                                          ),
-                                          hintStyle: TextStyle(
-                                            color: context.deltiecord.muted,
-                                          ),
-                                          placeholder:
-                                              'Message #${widget.roomName}',
-                                          onKeyEvent: (_, event) {
-                                            if (event is KeyDownEvent &&
-                                                _emojiMatches.isNotEmpty) {
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.tab) {
-                                                setState(
-                                                  () => _emojiSelection =
-                                                      (_emojiSelection + 1) %
-                                                      _emojiMatches.length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.enter) {
-                                                _acceptEmoji(
-                                                  _emojiMatches[_emojiSelection],
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.escape) {
-                                                _clearEmojiCompletion();
-                                                return KeyEventResult.handled;
-                                              }
-                                            }
-                                            if (event is KeyDownEvent &&
-                                                widget
-                                                    .mentionSuggestions
-                                                    .isNotEmpty) {
-                                              if (event.logicalKey ==
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: editorHeight,
+                                      maxHeight: widget.maxHeight,
+                                    ),
+                                    child: PlainMessageEditor(
+                                      controller: widget.controller,
+                                      backend: widget.backend,
+                                      focusNode: widget.focusNode,
+                                      scrollController: _scrollController,
+                                      enabled: widget.enabled,
+                                      onPasteImage: widget.onPasteImage,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 11,
+                                        vertical: editorVerticalPadding,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: DeltiecordTypeScale.normal,
+                                        height: 1.2,
+                                        color: context.deltiecord.text,
+                                      ),
+                                      hintStyle: TextStyle(
+                                        color: context.deltiecord.muted,
+                                      ),
+                                      placeholder:
+                                          'Message #${widget.roomName}',
+                                      onKeyEvent: (_, event) {
+                                        if (event is KeyDownEvent &&
+                                            event.logicalKey ==
+                                                LogicalKeyboardKey.escape &&
+                                            widget.onEscape != null) {
+                                          widget.onEscape!();
+                                          return KeyEventResult.handled;
+                                        }
+                                        if (event is KeyDownEvent &&
+                                            _emojiMatches.isNotEmpty) {
+                                          if (event.logicalKey ==
                                                   LogicalKeyboardKey
-                                                      .arrowDown) {
-                                                widget.onMentionSelectionChanged(
-                                                  (widget.mentionSelectionIndex +
-                                                          1) %
-                                                      widget
-                                                          .mentionSuggestions
-                                                          .length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                  LogicalKeyboardKey.arrowUp) {
-                                                widget.onMentionSelectionChanged(
-                                                  (widget.mentionSelectionIndex -
-                                                          1) %
-                                                      widget
-                                                          .mentionSuggestions
-                                                          .length,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                              if (event.logicalKey ==
-                                                      LogicalKeyboardKey
-                                                          .enter &&
-                                                  !HardwareKeyboard
-                                                      .instance
-                                                      .isShiftPressed) {
-                                                widget.onMentionSelected(
-                                                  widget
-                                                      .mentionSuggestions[widget
-                                                          .mentionSelectionIndex]
-                                                      .matrixId,
-                                                );
-                                                return KeyEventResult.handled;
-                                              }
-                                            }
-                                            if (event is KeyDownEvent &&
+                                                      .arrowDown ||
+                                              event.logicalKey ==
+                                                  LogicalKeyboardKey
+                                                      .arrowRight ||
+                                              event.logicalKey ==
+                                                  LogicalKeyboardKey.arrowUp ||
+                                              event.logicalKey ==
+                                                  LogicalKeyboardKey
+                                                      .arrowLeft) {
+                                            final backwards =
                                                 event.logicalKey ==
-                                                    LogicalKeyboardKey.enter &&
-                                                !HardwareKeyboard
+                                                    LogicalKeyboardKey
+                                                        .arrowDown ||
+                                                event.logicalKey ==
+                                                    LogicalKeyboardKey
+                                                        .arrowLeft;
+                                            setState(
+                                              () => _emojiSelection =
+                                                  (_emojiSelection +
+                                                      (backwards ? -1 : 1)) %
+                                                  _emojiMatches.length,
+                                            );
+                                            return KeyEventResult.handled;
+                                          }
+                                          if (event.logicalKey ==
+                                              LogicalKeyboardKey.tab) {
+                                            _acceptEmoji(
+                                              _emojiMatches[_emojiSelection],
+                                            );
+                                            return KeyEventResult.handled;
+                                          }
+                                          if (event.logicalKey ==
+                                              LogicalKeyboardKey.escape) {
+                                            _clearEmojiCompletion();
+                                            return KeyEventResult.handled;
+                                          }
+                                        }
+                                        if (event is KeyDownEvent &&
+                                            widget
+                                                .mentionSuggestions
+                                                .isNotEmpty) {
+                                          if (event.logicalKey ==
+                                              LogicalKeyboardKey.arrowDown) {
+                                            widget.onMentionSelectionChanged(
+                                              (widget.mentionSelectionIndex +
+                                                      1) %
+                                                  widget
+                                                      .mentionSuggestions
+                                                      .length,
+                                            );
+                                            return KeyEventResult.handled;
+                                          }
+                                          if (event.logicalKey ==
+                                              LogicalKeyboardKey.arrowUp) {
+                                            widget.onMentionSelectionChanged(
+                                              (widget.mentionSelectionIndex -
+                                                      1) %
+                                                  widget
+                                                      .mentionSuggestions
+                                                      .length,
+                                            );
+                                            return KeyEventResult.handled;
+                                          }
+                                          if (event.logicalKey ==
+                                                  LogicalKeyboardKey.enter &&
+                                              !HardwareKeyboard
+                                                  .instance
+                                                  .isShiftPressed) {
+                                            widget.onMentionSelected(
+                                              widget
+                                                  .mentionSuggestions[widget
+                                                      .mentionSelectionIndex]
+                                                  .matrixId,
+                                            );
+                                            return KeyEventResult.handled;
+                                          }
+                                        }
+                                        if (event is KeyDownEvent &&
+                                            event.logicalKey ==
+                                                LogicalKeyboardKey.enter &&
+                                            !HardwareKeyboard
+                                                .instance
+                                                .isShiftPressed &&
+                                            (widget.sendWithCtrlEnter ==
+                                                HardwareKeyboard
                                                     .instance
-                                                    .isShiftPressed &&
-                                                (widget.sendWithCtrlEnter ==
-                                                    HardwareKeyboard
-                                                        .instance
-                                                        .isControlPressed)) {
-                                              widget.onSend();
-                                              return KeyEventResult.handled;
-                                            }
-                                            return KeyEventResult.ignored;
-                                          },
-                                        ),
-                                      );
-                                    },
+                                                    .isControlPressed)) {
+                                          widget.onSend();
+                                          return KeyEventResult.handled;
+                                        }
+                                        return KeyEventResult.ignored;
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),

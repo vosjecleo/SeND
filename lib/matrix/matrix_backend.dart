@@ -2578,6 +2578,17 @@ class MatrixBackend extends ChatBackend {
   }) => _downloadAttachment(messageId, thumbnail: thumbnail);
 
   @override
+  void cacheOutgoingAttachment(String eventId, AttachmentDraft draft) =>
+      _rememberUploadedAttachment(eventId, draft);
+
+  @override
+  Uint8List? cachedAttachmentPreview(
+    String eventId, {
+    bool thumbnail = false,
+  }) =>
+      _attachmentBytesCache['$eventId:${thumbnail ? 'thumbnail' : 'original'}'];
+
+  @override
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) =>
       _getMediaPlaybackSource(messageId);
 

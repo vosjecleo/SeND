@@ -75,6 +75,7 @@ jobs:
     needs: flatpak
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -84,6 +85,10 @@ jobs:
         with:
           name: flatpak-release
           path: dist
+      - name: Require validation of the packaging commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/await-validation.sh "$(git rev-parse HEAD)"
       - name: Add Flatpak without replacing existing packages or checksum lists
         env:
           GH_TOKEN: ${{ github.token }}

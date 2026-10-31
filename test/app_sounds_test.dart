@@ -2,6 +2,31 @@ import 'package:deltiecord/services/app_sounds.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'ringtone preview uses the actual ringtone once, at call volume',
+    () async {
+      final playback = _FakePlayback();
+      AppSounds.replacePlaybackForTesting(playback);
+      AppSounds.callVolume = .4;
+      await AppSounds.previewRingtone();
+      expect(playback.assets, ['asset:///assets/audio/ringtone.wav']);
+      expect(playback.loops, [false]);
+      expect(playback.volumes, [.4]);
+      AppSounds.callVolume = 1;
+    },
+  );
+
+  testWidgets('preview cannot replace an incoming call ringtone', (
+    tester,
+  ) async {
+    final playback = _FakePlayback();
+    AppSounds.replacePlaybackForTesting(playback);
+    await AppSounds.startRingtone();
+    await AppSounds.previewRingtone();
+    expect(playback.assets, hasLength(1));
+    expect(playback.loops, [true]);
+    await AppSounds.stopRingtone();
+  });
   test('all voice and control cues use the v3 sound pack', () async {
     final playback = _FakePlayback();
     AppSounds.replacePlaybackForTesting(playback);
