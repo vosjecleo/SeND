@@ -1,5 +1,17 @@
 import 'package:matrix/matrix.dart';
 
+/// Preserve an unsupported image's original MIME/bytes without asking Matrix
+/// clients to decode it as an inline image.
+class RawImageMatrixFile extends MatrixFile {
+  RawImageMatrixFile({
+    required super.bytes,
+    required super.name,
+    required super.mimeType,
+  });
+  @override
+  String get msgType => MessageTypes.File;
+}
+
 /// Adds dimensions without decoding animation frames or generating thumbnails.
 class SizedMatrixFile extends MatrixFile {
   SizedMatrixFile({

@@ -3,19 +3,41 @@ import 'emoji_typography.dart';
 
 // Keep source offsets intact. This changes paint, never the draft or selection.
 final inlineMarkupPattern = RegExp(r'(\*\*|__|~~|\|\||\*|_)([^\n]+?)\1');
+final _mentionPattern = RegExp(
+  r'(?<![A-Za-z0-9_@/\\])@(?:[A-Za-z0-9._=/-]+:[A-Za-z0-9][A-Za-z0-9.:-]*|everyone|all|room)(?![A-Za-z0-9_:/-]|\.[A-Za-z0-9])',
+);
+
+TextSpan _composerText(String text, TextStyle? style) {
+  if (!_mentionPattern.hasMatch(text)) return colourEmojiTextSpan(text, style);
+  final spans = <InlineSpan>[];
+  var offset = 0;
+  for (final match in _mentionPattern.allMatches(text)) {
+    spans.add(colourEmojiTextSpan(text.substring(offset, match.start), style));
+    spans.add(
+      TextSpan(
+        text: match.group(0),
+        style: (style ?? const TextStyle()).copyWith(
+          color: const Color(0xff408cff),
+          backgroundColor: const Color(0x403fa9f5),
+        ),
+      ),
+    );
+    offset = match.end;
+  }
+  spans.add(colourEmojiTextSpan(text.substring(offset), style));
+  return TextSpan(style: style, children: spans);
+}
 
 TextSpan inlineComposerPreview(String text, TextStyle? style) {
   final children = <InlineSpan>[];
   var offset = 0;
   for (final match in inlineMarkupPattern.allMatches(text)) {
-    children.add(
-      colourEmojiTextSpan(text.substring(offset, match.start), style),
-    );
+    children.add(_composerText(text.substring(offset, match.start), style));
     final delimiter = match.group(1)!;
     final content = match.group(2)!;
     if (content.contains('\\') ||
         (match.start > 0 && text[match.start - 1] == '\\')) {
-      children.add(colourEmojiTextSpan(match.group(0)!, style));
+      children.add(_composerText(match.group(0)!, style));
     } else {
       final base = style ?? const TextStyle();
       final marker = base.copyWith(
@@ -30,12 +52,12 @@ TextSpan inlineComposerPreview(String text, TextStyle? style) {
       };
       children.addAll([
         TextSpan(text: delimiter, style: marker),
-        colourEmojiTextSpan(content, body),
+        _composerText(content, body),
         TextSpan(text: delimiter, style: marker),
       ]);
     }
     offset = match.end;
   }
-  children.add(colourEmojiTextSpan(text.substring(offset), style));
+  children.add(_composerText(text.substring(offset), style));
   return TextSpan(style: style, children: children);
 }

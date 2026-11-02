@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/chat_models.dart';
 import '../models/media_compression.dart';
 import 'video_optimizer.dart';
+import 'raw_image.dart';
 
 enum VideoRecovery { retry, original, cancel }
 
@@ -21,7 +22,9 @@ class VideoPreparation extends ChangeNotifier {
   final VideoOptimizer? _optimizer;
   final bool _supported;
   static Future<AttachmentDraft> probe(AttachmentDraft draft) =>
-      probeVideo(draft);
+      isRawImageFile(draft.name, draft.mimeType)
+      ? Future.value(draft)
+      : probeVideo(draft);
   static final instance = VideoPreparation();
   bool active = false;
   bool _canceled = false;
@@ -44,7 +47,8 @@ class VideoPreparation extends ChangeNotifier {
     AttachmentDraft draft, {
     VideoCompressionPreset preset = VideoCompressionPreset.balanced,
   }) async {
-    if (!draft.mimeType.startsWith('video/')) {
+    if (!draft.mimeType.startsWith('video/') ||
+        isRawImageFile(draft.name, draft.mimeType)) {
       return draft;
     }
     if (!_supported) return VideoPreparation.probe(draft);

@@ -103,6 +103,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Present'), findsOneWidget);
+    await tester.tap(find.text('Present'));
+    await tester.pumpAndSettle();
+    expect(backend.jumpPresentRequests, 1);
   });
 
   testWidgets('Android exposes older history even before a row is mapped', (

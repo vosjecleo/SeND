@@ -92,6 +92,8 @@ import 'sized_matrix_file.dart';
 import 'media_range_proxy.dart';
 import 'matrix_push_reconciliation.dart';
 import 'matrix_voice_controller.dart';
+import 'timeline_segments.dart';
+import '../services/raw_image.dart';
 
 part 'matrix_event_mapping.dart';
 part 'matrix_timeline_support.dart';
@@ -713,10 +715,21 @@ class MatrixBackend extends ChatBackend {
   String? _selectedSpaceId;
   int _timelineGeneration = 0;
   bool _timelineLoading = false;
-  bool _historyLoading = false;
-  int _timelineDatabaseOffset = 0;
-  bool _timelineDatabaseExhausted = false;
-  bool _timelineServerExhausted = false;
+  late final _timelineSegments = MatrixTimelineSegments(
+    _onTimelineSegmentsChanged,
+  );
+  final _segmentDecryptSeen = <String>{};
+  bool get _historyLoading => _timelineSegments.active?.loading ?? false;
+
+  bool get _timelineDatabaseExhausted =>
+      _timelineSegments.active?.databaseExhausted ?? true;
+
+  bool get _timelineServerExhausted =>
+      _timelineSegments.active?.serverExhausted ?? false;
+  set _timelineServerExhausted(bool value) {
+    _timelineSegments.active?.serverExhausted = value;
+  }
+
   bool _timelineHydrationRunning = false;
   bool _timelineHydrationRequested = false;
   bool _resumeTimelineRefreshRunning = false;
@@ -1303,9 +1316,18 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
-  bool get canLoadMoreFuture => _timeline?.canRequestFuture ?? false;
+  bool get canLoadMoreFuture =>
+      timelineHasGap || (_timeline?.canRequestFuture ?? false);
   @override
-  bool get atTimelinePresent => !(_timeline?.canRequestFuture ?? false);
+  bool get atTimelinePresent =>
+      _timelineSegments.active?.live == true &&
+      identical(_timelineSegments.active, _timelineSegments.live) &&
+      !(_timeline?.canRequestFuture ?? false);
+  @override
+  String? get timelineSegmentId => _timelineSegments.active?.id;
+  @override
+  bool get timelineHasGap =>
+      _timelineSegments.active != null && !atTimelinePresent;
   @override
   String? get firstUnreadMessageId => _firstUnreadEventIds[_selectedRoomId];
   @override
@@ -1709,6 +1731,7 @@ class MatrixBackend extends ChatBackend {
       _applicationForeground &&
       _conversationVisible &&
       _conversationAtPresent &&
+      atTimelinePresent &&
       !_manualUnreadHolds.contains(_selectedRoomId);
 
   final _manualUnreadHolds = <String>{};
@@ -2433,6 +2456,15 @@ class MatrixBackend extends ChatBackend {
   Future<void> jumpToEvent(String eventId) => _jumpToEvent(eventId);
 
   @override
+  bool canSendMessagesToRoom(String roomId) {
+    final room = _client?.getRoomById(roomId);
+    return room != null &&
+        room.membership == Membership.join &&
+        !room.isSpace &&
+        room.canSendEvent(EventTypes.Message);
+  }
+
+  @override
   Future<void> sendMessage(
     String body, {
     String? roomId,
@@ -2600,7 +2632,7 @@ class MatrixBackend extends ChatBackend {
   Future<String?> getAttachmentReference(String messageId) async =>
       _getAttachmentReference(messageId);
 
-  Future<void> _closeTimeline() async {
+  Future<void> _closeTimeline({bool preserveSegments = false}) async {
     _forumRoots.clear();
     _forumCursor = null;
     _forumHasMore = true;
@@ -2610,11 +2642,12 @@ class MatrixBackend extends ChatBackend {
     }
     _timelineGeneration++;
     _timelineHydrationRequested = false;
-    _timeline?.cancelSubscriptions();
+    if (!preserveSegments) {
+      _timelineSegments.dispose();
+      _segmentDecryptSeen.clear();
+    }
     _timeline = null;
-    _timelineDatabaseOffset = 0;
-    _timelineDatabaseExhausted = false;
-    _timelineServerExhausted = false;
+    _timelineSegments.active = null;
     _replyPreviews.clear();
     _linkPreviews.clear();
     _hydratedPollResponseIds.clear();
@@ -2637,6 +2670,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _timelineSegments.dispose();
     _sessionScope.dispose();
     _threadHistory?.dispose();
     _historyDisposed = true;

@@ -52,6 +52,36 @@ void main() {
       {'insert': '**hello**\n\nnext\n'},
     ]);
     expect(find.byType(QuillEditor), findsNothing);
+    // Picking a suggestion stores a Matrix link attribute, not plain text.
+    // It must get the same preview as a manually typed mention.
+    controller.document = Document()..insert(0, '@friend:test');
+    controller.formatText(
+      0,
+      12,
+      LinkAttribute('https://matrix.to/#/@friend:test'),
+    );
+    await tester.pump();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final preview = field.controller!.buildTextSpan(
+      context: tester.element(find.byType(TextField)),
+      style: const TextStyle(),
+      withComposing: false,
+    );
+    final highlighted = <TextSpan>[];
+    void walk(InlineSpan span) {
+      if (span is TextSpan) {
+        if (span.style?.backgroundColor == const Color(0x403fa9f5)) {
+          highlighted.add(span);
+        }
+        for (final child in span.children ?? <InlineSpan>[]) {
+          walk(child);
+        }
+      }
+    }
+
+    walk(preview);
+    expect(highlighted.single.text, '@friend:test');
+    expect(preview.toPlainText(), '@friend:test');
     tester.testTextInput.updateEditingValue(
       const TextEditingValue(
         text: 'composing',

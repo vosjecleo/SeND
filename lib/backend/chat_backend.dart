@@ -544,6 +544,8 @@ abstract class ChatBackend extends ChangeNotifier {
   bool get canLoadMoreSearchResults => false;
   bool get canLoadMoreFuture;
   bool get atTimelinePresent;
+  String? get timelineSegmentId => selectedRoom?.id;
+  bool get timelineHasGap => false;
   String? get firstUnreadMessageId;
   VoiceConnectionStatus get voiceConnectionStatus;
   RtcConnectivity get rtcConnectivity => const RtcConnectivity();
@@ -850,6 +852,8 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> toggleMessageBookmarked(String messageId) async {}
   Future<void> jumpToPresent();
   Future<void> jumpToEvent(String eventId);
+  bool canSendMessagesToRoom(String roomId) => true;
+
   Future<void> sendMessage(
     String text, {
     String? roomId,

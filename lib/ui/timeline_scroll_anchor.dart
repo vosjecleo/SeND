@@ -1,5 +1,54 @@
 import 'package:flutter/material.dart';
 
+/// Explicit navigation owns the viewport until the new list has laid out.
+/// Finish at the true extent, not at an offset captured before hydration.
+Future<void> scrollToTimelinePresent({
+  required ScrollController controller,
+  required bool Function() isCurrent,
+  bool reducedMotion = false,
+}) async {
+  if (!isCurrent()) return;
+  WidgetsBinding.instance.scheduleFrame();
+  await WidgetsBinding.instance.endOfFrame;
+  if (!isCurrent() || !controller.hasClients) return;
+  await controller.animateTo(
+    controller.position.minScrollExtent,
+    duration: reducedMotion ? Duration.zero : const Duration(milliseconds: 180),
+    curve: Curves.easeOut,
+  );
+  for (var frame = 0; frame < 3; frame++) {
+    WidgetsBinding.instance.scheduleFrame();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!isCurrent() || !controller.hasClients) return;
+    controller.jumpTo(controller.position.minScrollExtent);
+  }
+}
+
+class SegmentTimelineAnchor {
+  const SegmentTimelineAnchor(this.segmentId, this.position);
+  final String? segmentId;
+  final (String, double) position;
+}
+
+SegmentTimelineAnchor? captureSegmentTimelineAnchor(
+  GlobalKey viewport,
+  Map<String, GlobalKey> rows,
+  String? segmentId,
+) {
+  final position = captureTimelineAnchor(viewport, rows);
+  return position == null ? null : SegmentTimelineAnchor(segmentId, position);
+}
+
+void restoreSegmentTimelineAnchor(
+  ScrollController controller,
+  Map<String, GlobalKey> rows,
+  SegmentTimelineAnchor? anchor,
+  String? segmentId,
+) {
+  if (anchor == null || anchor.segmentId != segmentId) return;
+  restoreTimelineAnchor(controller, rows, anchor.position);
+}
+
 /// Jump within an already loaded reversed timeline without refetching the room.
 /// Lazy rows are located with bounded offset bisection, then aligned precisely.
 Future<bool> scrollToTimelineRow({

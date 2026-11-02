@@ -448,20 +448,21 @@ extension _MatrixRoomOperations on MatrixBackend {
     _notifyBackendListeners();
   }
 
-  Future<void> _selectRoom(String roomId) async {
+  Future<void> _selectRoom(String roomId, {bool forcePresent = false}) async {
     _manualUnreadHolds.remove(roomId);
     _lastForegroundAlertAt.remove(roomId);
     InAppNotificationCenter.dismissRoom(roomId);
     unawaited(_notifications.clearRoom(roomId));
-    if (_selectedRoomId == roomId && _timeline != null) return;
+    if (!forcePresent && _selectedRoomId == roomId && _timeline != null) return;
     final totalTimer = Stopwatch()..start();
     final stageTimer = Stopwatch()..start();
     final cacheHit = _roomMessageCache.containsKey(roomId);
     var keyBackupMs = 0;
     var timelineMs = 0;
     var decryptMs = 0;
+    final previousSegment = forcePresent ? _timelineSegments.active : null;
     _cacheCurrentRoomMessages();
-    await _closeTimeline();
+    await _closeTimeline(preserveSegments: forcePresent);
     final generation = _timelineGeneration;
     _selectedRoomId = roomId;
     _timelineLoading = true;
@@ -495,7 +496,7 @@ extension _MatrixRoomOperations on MatrixBackend {
         (event) => event.eventId,
       );
       _timeline = timeline;
-      _timelineDatabaseOffset = timeline.events.length;
+      _timelineSegments.adopt(timeline, isLive: !timeline.canRequestFuture);
       if (!timeline.events.any(
             (event) =>
                 _isVisibleTimelineEvent(event) &&
@@ -522,6 +523,7 @@ extension _MatrixRoomOperations on MatrixBackend {
       if (!_isCurrentTimeline(timeline, generation)) return;
       _roomMessageCache[roomId] = List.unmodifiable(_mappedMessages);
       _timelineLoading = false;
+      _timelineSegments.reconcile(_timelineSegments.active!);
       _notifyBackendListeners();
       _debugRoomOpenTiming(
         'usable_ms=${totalTimer.elapsedMilliseconds} '
@@ -535,6 +537,10 @@ extension _MatrixRoomOperations on MatrixBackend {
       unawaited(_markSelectedRoomRead());
     } catch (exception) {
       if (_isCurrentSelection(roomId, generation)) {
+        if (previousSegment != null &&
+            _timelineSegments.ranges.contains(previousSegment)) {
+          _timelineSegments.select(previousSegment);
+        }
         _error = _friendlyError(exception);
       }
     } finally {
@@ -548,17 +554,25 @@ extension _MatrixRoomOperations on MatrixBackend {
   Future<void> _jumpToPresent() async {
     final roomId = _selectedRoomId;
     if (roomId == null) return;
-    await _closeTimeline();
-    await _selectRoom(roomId);
+    await _selectRoom(roomId, forcePresent: true);
   }
 
   Future<void> _jumpToEvent(String eventId) async {
     final roomId = _selectedRoomId;
     final room = _matrix.getRoomById(roomId ?? '');
     if (room == null) return;
-    await _closeTimeline();
+    final previousSegment = _timelineSegments.active;
+    final cached = _timelineSegments.ranges
+        .where((s) => s.events.any((e) => e.eventId == eventId))
+        .firstOrNull;
+    if (cached != null) {
+      _timelineSegments.select(cached);
+      return;
+    }
+    await _closeTimeline(preserveSegments: true);
     final generation = _timelineGeneration;
     _timelineLoading = true;
+    _error = null;
     _notifyBackendListeners();
     try {
       final timeline = await room.getTimeline(
@@ -575,14 +589,17 @@ extension _MatrixRoomOperations on MatrixBackend {
         (event) => event.eventId,
       );
       _timeline = timeline;
-      _timelineDatabaseOffset = timeline.events.length;
-      _timelineDatabaseExhausted = true;
+      _timelineSegments.adopt(timeline, isLive: !timeline.canRequestFuture);
       await _decryptTimelineEvents(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
       await _hydrateTimelineMetadata(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
     } catch (exception) {
       if (_isCurrentSelection(room.id, generation)) {
+        if (previousSegment != null &&
+            _timelineSegments.ranges.contains(previousSegment)) {
+          _timelineSegments.select(previousSegment);
+        }
         _error = _friendlyError(exception);
       }
     } finally {

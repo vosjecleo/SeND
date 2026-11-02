@@ -469,7 +469,13 @@ extension _MatrixMessages on MatrixBackend {
     if (timeline == null || _historyLoading || !canLoadMoreHistory) {
       return;
     }
-    _historyLoading = true;
+    final segment = _timelineSegments.forTimeline(timeline);
+    if (segment == null) return;
+    final epoch = segment.epoch;
+    bool current() =>
+        identical(_timeline, timeline) &&
+        _timelineSegments.current(segment, timeline, epoch);
+    segment.loading = true;
     _notifyBackendListeners();
     try {
       final pageSize = _preferences.timelineChunkSize;
@@ -489,11 +495,12 @@ extension _MatrixMessages on MatrixBackend {
         if (!_timelineDatabaseExhausted) {
           pageLoaded = await _appendStoredHistory(timeline, pageSize);
         }
+        if (!current()) return;
         if (pageLoaded == 0 && _timelineDatabaseExhausted) {
           pageLoaded = await _appendServerHistory(timeline, pageSize);
         }
         loaded += pageLoaded;
-        if (!identical(timeline, _timeline)) return;
+        if (!current()) return;
         visibleLoaded += timeline.events.where((event) {
           return !beforeIds.contains(event.eventId) &&
               _isVisibleTimelineEvent(event) &&
@@ -502,67 +509,94 @@ extension _MatrixMessages on MatrixBackend {
         }).length;
         if (pageLoaded == 0 && !canLoadMoreHistory) break;
       }
-      if (!identical(timeline, _timeline)) return;
+      if (!current()) return;
       if (loaded == 0) return;
       await _decryptTimelineEvents(timeline);
-      if (!identical(timeline, _timeline)) return;
-      unawaited(_hydrateCurrentTimeline(timeline, _timelineGeneration));
+      if (!current()) return;
+      _timelineSegments.reconcile(segment);
+      unawaited(_hydrateCurrentTimeline(segment.timeline, _timelineGeneration));
     } catch (exception) {
-      _error = _friendlyError(exception);
+      if (current()) _error = _friendlyError(exception);
     } finally {
-      _historyLoading = false;
+      if (segment.epoch == epoch) segment.loading = false;
       _notifyBackendListeners();
     }
   }
 
   Future<int> _appendStoredHistory(Timeline timeline, int pageSize) async {
+    final segment = _timelineSegments.forTimeline(timeline);
+    if (segment == null) return 0;
+    final epoch = segment.epoch;
     var added = 0;
     final knownEventIds = timeline.events.map((event) => event.eventId).toSet();
-    while (added < pageSize && !_timelineDatabaseExhausted) {
+    while (added < pageSize && !segment.databaseExhausted) {
       final requested = pageSize - added;
+      final start = segment.databaseOffset;
       final stored = await _matrix.database.getEventList(
         timeline.room,
-        start: _timelineDatabaseOffset,
+        start: start,
         limit: requested,
       );
-      _timelineDatabaseOffset = TimelineWindowPolicy.advanceDatabaseOffset(
-        _timelineDatabaseOffset,
+      if (!_timelineSegments.current(segment, timeline, epoch) ||
+          !identical(_timeline, timeline)) {
+        return 0;
+      }
+      final page = await _decodeTimelinePage(
+        stored.where((e) => !knownEventIds.contains(e.eventId)).toList(),
+      );
+      if (!_timelineSegments.current(segment, timeline, epoch) ||
+          !identical(_timeline, timeline)) {
+        return 0;
+      }
+      segment.databaseOffset = TimelineWindowPolicy.advanceDatabaseOffset(
+        start,
         stored.length,
       );
-      if (stored.length < requested) _timelineDatabaseExhausted = true;
+      if (stored.length < requested) {
+        segment.databaseExhausted = true;
+        if (!segment.olderCursorAnchored && timeline.chunk.prevBatch.isEmpty) {
+          timeline.chunk.prevBatch = timeline.room.prev_batch ?? '';
+        }
+        segment.olderCursorAnchored = true;
+      }
       if (stored.isEmpty) break;
-      for (final event in stored) {
+      for (final event in page) {
         if (!knownEventIds.add(event.eventId)) continue;
-        timeline.addAggregatedEvent(event);
-        timeline.events.add(event);
         added++;
       }
+      _timelineSegments.appendRows(segment, page, Direction.b);
     }
     return added;
   }
 
   Future<int> _appendServerHistory(Timeline timeline, int pageSize) async {
-    if (timeline.chunk.prevBatch.isEmpty) {
-      timeline.chunk.prevBatch = timeline.room.prev_batch ?? '';
+    final segment = _timelineSegments.forTimeline(timeline);
+    if (segment == null) return 0;
+    final epoch = segment.epoch;
+    if (!segment.olderCursorAnchored) {
+      final connected = await _timelineSegments.loadBoundary(
+        segment,
+        Direction.b,
+      );
+      if (!connected &&
+          identical(_timelineSegments.active, segment) &&
+          segment.epoch == epoch) {
+        throw StateError('Could not connect this history range. Try again.');
+      }
+      return 0;
     }
     if (timeline.chunk.prevBatch.isEmpty) {
       _timelineServerExhausted = true;
       return 0;
     }
-    // Once local history is consumed, paginate with the chunk token directly.
-    // SeND's separate database cursor may have consumed local rows even
-    // when the SDK timeline still has a usable server continuation token.
-    timeline.isFragmentedTimeline = true;
     final beforeIds = timeline.events.map((event) => event.eventId).toSet();
     final previousToken = timeline.chunk.prevBatch;
-    await timeline.getRoomEvents(
-      historyCount: pageSize,
-      direction: Direction.b,
-    );
-    TimelineWindowPolicy.deduplicateBy(
-      timeline.events,
-      (event) => event.eventId,
-    );
+    final result = await _requestTimelinePage(segment, Direction.b, pageSize);
+    if (!_timelineSegments.current(segment, timeline, epoch) ||
+        !identical(_timeline, timeline)) {
+      return 0;
+    }
+    if (!result) return 0;
     final loaded = timeline.events
         .where((event) => !beforeIds.contains(event.eventId))
         .length;
@@ -573,31 +607,111 @@ extension _MatrixMessages on MatrixBackend {
     return loaded;
   }
 
+  Future<List<Event>> _decodeTimelinePage(List<Event> page) async {
+    final encryption = _matrix.encryption;
+    if (encryption == null) return page;
+    return [
+      for (final event in page)
+        if (event.type == EventTypes.Encrypted)
+          await encryption.decryptRoomEvent(event)
+        else
+          event,
+    ];
+  }
+
+  /// Fetch into a request-local list. SDK pagination mutates Timeline.events
+  /// before returning, which can splice a stale response into a new sync range.
+  Future<bool> _requestTimelinePage(
+    MatrixTimelineSegment segment,
+    Direction direction,
+    int count,
+  ) async {
+    final timeline = segment.timeline;
+    final epoch = segment.epoch;
+    final from = direction == Direction.b
+        ? timeline.chunk.prevBatch
+        : timeline.chunk.nextBatch;
+    final response = await timeline.room.client.getRoomEvents(
+      timeline.room.id,
+      direction,
+      from: from,
+      limit: count,
+      filter: jsonEncode(StateFilter(lazyLoadMembers: true).toJson()),
+    );
+    if (!_timelineSegments.current(segment, timeline, epoch) ||
+        !identical(_timeline, timeline)) {
+      return false;
+    }
+    var page = await _decodeTimelinePage(
+      response.chunk
+          .map((e) => Event.fromMatrixEvent(e, timeline.room))
+          .toList(),
+    );
+    if (!_timelineSegments.current(segment, timeline, epoch) ||
+        !identical(_timeline, timeline)) {
+      return false;
+    }
+    if (direction == Direction.f) page = page.reversed.toList();
+    _timelineSegments.appendRows(segment, page, direction);
+    if (direction == Direction.b) {
+      timeline.chunk.prevBatch = response.end ?? '';
+      segment.olderCursorAnchored = true;
+    } else {
+      timeline.chunk.nextBatch = response.end ?? '';
+      if (response.end == null || response.end == from) {
+        _timelineSegments.reachedLiveEnd(segment);
+      }
+    }
+    return true;
+  }
+
   Future<void> _loadMoreFuture({String? anchorEventId}) async {
-    final timeline = _timeline;
-    if (timeline == null || _historyLoading || !timeline.canRequestFuture) {
+    var timeline = _timeline;
+    if (timeline == null || _historyLoading || !canLoadMoreFuture) {
       return;
     }
-    _historyLoading = true;
+    final segment = _timelineSegments.forTimeline(timeline);
+    if (segment == null) return;
+    var epoch = segment.epoch;
+    bool current() =>
+        identical(_timelineSegments.active, segment) &&
+        _timelineSegments.current(segment, timeline!, epoch);
+    segment.loading = true;
     _notifyBackendListeners();
     try {
+      if (segment.newer != null && timeline.chunk.nextBatch.isEmpty) {
+        if (!await _timelineSegments.loadBoundary(segment, Direction.f)) {
+          if (current()) {
+            throw StateError(
+              'Could not connect this history range. Try again.',
+            );
+          }
+          return;
+        }
+        timeline = segment.timeline;
+        epoch = segment.epoch;
+        segment.loading = true;
+      }
       if (timeline.canRequestFuture) {
-        await timeline.requestFuture(
-          historyCount: _preferences.timelineChunkSize,
+        await _requestTimelinePage(
+          segment,
+          Direction.f,
+          _preferences.timelineChunkSize,
         );
       }
-      if (!identical(timeline, _timeline)) return;
+      if (!current()) return;
       TimelineWindowPolicy.deduplicateBy(
         timeline.events,
         (event) => event.eventId,
       );
       await _decryptTimelineEvents(timeline);
-      if (!identical(timeline, _timeline)) return;
-      unawaited(_hydrateCurrentTimeline(timeline, _timelineGeneration));
+      if (!current()) return;
+      _timelineSegments.reconcile(segment);
+      unawaited(_hydrateCurrentTimeline(segment.timeline, _timelineGeneration));
     } catch (exception) {
-      _error = _friendlyError(exception);
+      if (current()) _error = _friendlyError(exception);
     } finally {
-      _historyLoading = false;
+      if (segment.epoch == epoch) segment.loading = false;
       _notifyBackendListeners();
     }
   }
@@ -621,9 +735,11 @@ extension _MatrixMessages on MatrixBackend {
       await _prepareEncryptedSend(room);
       final transactionId =
           queuedTransactionId ?? _matrix.generateUniqueTransactionId();
-      final replyEvent = replyToMessageId == null
-          ? null
-          : _eventById(replyToMessageId);
+      final original = editMessageId == null ? null : _eventById(editMessageId);
+      final replyId =
+          replyToMessageId ??
+          (original == null ? null : messageReplyTarget(original.content));
+      final replyEvent = replyId == null ? null : _eventById(replyId);
       late Future<String?> operation;
       final outgoingFormattedBody = formattedBody;
       final mentions = _mentionsFor(value, replyEvent, room);
@@ -763,7 +879,7 @@ extension _MatrixMessages on MatrixBackend {
     userIds.addAll(
       roles.mentionedMembers(text, joined, exclude: _matrix.userID),
     );
-    if (replyEvent != null && replyEvent.senderId != _matrix.userID) {
+    if (replyEvent != null) {
       userIds.add(replyEvent.senderId);
     }
     final everyone = containsRoomMention(text);

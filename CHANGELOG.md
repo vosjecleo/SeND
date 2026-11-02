@@ -3,6 +3,46 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 136 (2026-11-02)
+
+- Keep disconnected history in separate timeline ranges with their own cursors
+  and pending requests. Join ranges only after pagination proves overlap.
+  Preserve loaded messages and scroll anchors without reintroducing trimming.
+- Reject stale history responses after navigation or limited sync. Do not count
+  pending local sends as stored history rows. Obtain pagination tokens for the
+  retained range rather than borrowing a newer live range's token.
+- Make Present resolve the live timeline and finish at the actual bottom after
+  layout. Cancel older scroll restores that could pull the view back up. Load
+  history through scrolling rather than exposing a manual gap button.
+- Continue applying edits, reactions and redactions to retained older messages
+  without inserting unrelated new rows. Assign decrypted events by identity,
+  not by a list position that may have moved while awaiting a key.
+- Highlight the source message while replying or editing. Clicking reply
+  previews in the composer or timeline jumps to the target and briefly pulses
+  its neutral hover background twice, temporarily overriding mention colours.
+- Preserve reply-recipient highlighting after edits and allow self-reply
+  highlights without self-notifications. Preview member, everyone and all
+  mentions in blue while composing.
+- Keep URLs clickable and underlined in plain and formatted messages, including
+  reply bodies. Use conventional link colours separately from draft highlights.
+- Place receipts after complete Unicode emoji characters and fixed-width custom
+  emoji. Keep receipt, pin, bookmark and edit markers from adding another row.
+- Remove mobile server-channel avatar placeholders. Align channel names beside
+  the hamburger, add bottom safe-area padding to member lists and match desktop
+  message-group spacing outside highlight backgrounds. Wrap long date labels
+  safely at larger text sizes.
+- Centre Archive's icon, label and count together and use a compact mobile row.
+- Replace the composer with a short notice when room permissions prohibit
+  posting. Reading and public/private read-receipt preferences are unchanged.
+- Block RAW image editing before decoding and show an external-editor notice.
+  Use file tiles, skip image/video preparation for RAW files and send their
+  original bytes and MIME type as downloadable files.
+
+Cleo tested the Linux and Android previews and approved publication. Final
+Present, editing and colour refinements have regression coverage. Existing
+accounts, sessions and encryption keys are retained; no database migration is
+required. This release targets Latest only, leaving Stable unchanged.
+
 ## SeND 0.9.42 build 135 (2026-10-31)
 
 - Keep pending messages visible until the matching Matrix event is mapped and

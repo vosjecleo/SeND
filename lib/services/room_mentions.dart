@@ -6,6 +6,14 @@ final roomMentionPattern = RegExp(
 );
 bool containsRoomMention(String text) => roomMentionPattern.hasMatch(text);
 
+/// Edits replace message content, not the original reply target.
+String? messageReplyTarget(Map<String, Object?> content) {
+  final relation = content['m.relates_to'];
+  final reply = relation is Map ? relation['m.in_reply_to'] : null;
+  final id = reply is Map ? reply['event_id'] : null;
+  return id is String ? id : null;
+}
+
 bool messageMentionsUser({
   required String body,
   required String userId,

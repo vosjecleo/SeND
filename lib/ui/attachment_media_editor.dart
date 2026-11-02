@@ -5,6 +5,7 @@ import '../services/encoded_image_dimensions.dart';
 import '../services/image_animation.dart';
 import '../services/image_markup.dart';
 import '../services/image_preparation.dart';
+import '../services/raw_image.dart';
 import 'lifecycle_memory_image.dart' show LifecycleMemoryImage;
 import 'media_edit_canvas.dart';
 import 'media_editor_layout.dart';
@@ -14,14 +15,33 @@ Future<AttachmentDraft?> showAttachmentImageEditor(
   BuildContext context,
   AttachmentDraft draft, {
   AppPreferences preferences = const AppPreferences(),
-}) => Navigator.of(context).push<AttachmentDraft>(
-  MaterialPageRoute(
-    fullscreenDialog: true,
-    builder: (_) => draft.mimeType.startsWith('video/')
-        ? VideoAttachmentEditor(draft: draft, preferences: preferences)
-        : _ImageEditor(draft: draft, preferences: preferences),
-  ),
-);
+}) async {
+  if (isRawImageFile(draft.name, draft.mimeType)) {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: const Text(
+          "RAW images can't be edited. Use a tool like Lightroom or Rawtherapee.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Okay'),
+          ),
+        ],
+      ),
+    );
+    return null;
+  }
+  return Navigator.of(context).push<AttachmentDraft>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => draft.mimeType.startsWith('video/')
+          ? VideoAttachmentEditor(draft: draft, preferences: preferences)
+          : _ImageEditor(draft: draft, preferences: preferences),
+    ),
+  );
+}
 
 class _ImageEditor extends StatefulWidget {
   const _ImageEditor({required this.draft, required this.preferences});

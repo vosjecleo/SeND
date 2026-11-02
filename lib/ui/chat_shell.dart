@@ -10,6 +10,9 @@ import 'measured_avatar_stack.dart';
 import 'emoji_typography.dart';
 import 'channel_category_menu.dart';
 import 'message_action_menu.dart';
+import 'message_highlight.dart';
+import 'read_only_conversation.dart';
+import '../services/raw_image.dart';
 import 'threshold_feedback.dart';
 import 'queued_attachment_preview.dart';
 import '../services/queued_message.dart';
@@ -450,6 +453,10 @@ class _ChatShellState extends State<ChatShell> {
 
   Future<void> _send() async {
     final sendingRoomId = widget.backend.selectedRoom?.id;
+    if (sendingRoomId == null ||
+        !widget.backend.canSendMessagesToRoom(sendingRoomId)) {
+      return;
+    }
     final serialized = serializePlainComposer(_message.document);
     final text = _withoutAttachmentPlaceholders(
       unescapeLiteralEmojiAliases(serialized.plainText),
@@ -459,8 +466,7 @@ class _ChatShellState extends State<ChatShell> {
         : _withoutAttachmentPlaceholders(
             unescapeLiteralEmojiAliases(serialized.html!),
           );
-    if ((text.isEmpty && _pendingAttachments.isEmpty) ||
-        sendingRoomId == null) {
+    if (text.isEmpty && _pendingAttachments.isEmpty) {
       return;
     }
     var submittedDelta = _message.document.toDelta().toJson();

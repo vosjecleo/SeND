@@ -18,6 +18,7 @@ class _MessageRow extends StatefulWidget {
     this.allowThreadNavigation = true,
     this.albumMessages,
     required this.highlighted,
+    this.replying = false,
     required this.startsGroup,
     required this.onReply,
     required this.onEdit,
@@ -39,6 +40,7 @@ class _MessageRow extends StatefulWidget {
   final bool allowThreadNavigation;
   final List<ChatMessage>? albumMessages;
   final bool highlighted;
+  final bool replying;
   final bool startsGroup;
   final VoidCallback onReply;
   final VoidCallback? onEdit;
@@ -178,6 +180,13 @@ class _MessageRowState extends State<_MessageRow> {
             ) ??
             false);
     final compactness = widget.backend.preferences.compactness;
+    final highlight = messageHighlightDecoration(
+      context,
+      mentioned: pinged,
+      replying: widget.replying,
+      flashing: widget.highlighted,
+      idleColour: _hovered ? context.deltiecord.hover : Colors.transparent,
+    );
     final rowPadding = (7 - compactness * 5) / 2;
     final groupGap = 7 - compactness * 2;
     final local = message.timestamp.toLocal();
@@ -313,27 +322,10 @@ class _MessageRowState extends State<_MessageRow> {
               duration: widget.backend.preferences.reducedMotion
                   ? Duration.zero
                   : const Duration(milliseconds: 110),
-              decoration: BoxDecoration(
-                color: pinged
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.11)
-                    : _hovered || widget.highlighted
-                    ? context.deltiecord.hover
-                    : Colors.transparent,
-              ),
+              decoration: BoxDecoration(color: highlight.color),
               // A painted stripe must not add Container's implicit border
               // padding to the message column.
-              foregroundDecoration: BoxDecoration(
-                border: pinged
-                    ? Border(
-                        left: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        ),
-                      )
-                    : null,
-              ),
+              foregroundDecoration: BoxDecoration(border: highlight.border),
               child: Opacity(
                 opacity: message.pending ? 0.55 : 1,
                 child: MeasuredAvatarStack(

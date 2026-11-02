@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import '../models/chat_models.dart';
+import 'raw_image.dart';
 
 final _transactionZone = Object();
 
@@ -55,7 +56,11 @@ class QueuedMessage {
       (draft?.bytes.length ?? 0) + (draft?.videoThumbnail?.length ?? 0);
   void releaseUploadedFile() {
     final file = draft;
-    if (file == null || file.mimeType.startsWith('image/')) return;
+    if (file == null ||
+        (file.mimeType.startsWith('image/') &&
+            !isRawImageFile(file.name, file.mimeType))) {
+      return;
+    }
     _attachmentSize ??= file.bytes.length;
     draft = file.copyWith(bytes: Uint8List(0));
   }
@@ -81,7 +86,9 @@ class QueuedMessage {
     attachment: draft == null
         ? null
         : ChatAttachment(
-            kind: draft!.mimeType.startsWith('image/')
+            kind: isRawImageFile(draft!.name, draft!.mimeType)
+                ? AttachmentKind.file
+                : draft!.mimeType.startsWith('image/')
                 ? AttachmentKind.image
                 : draft!.mimeType.startsWith('video/')
                 ? AttachmentKind.video

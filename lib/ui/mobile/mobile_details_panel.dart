@@ -36,10 +36,17 @@ class MobileDetailsPanel extends StatelessWidget {
         title: const Text('Details'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         children: [
-          Center(child: MobileRoomAvatar(room: room, size: 92)),
-          const SizedBox(height: 12),
+          if (!room.usesChannelIcon) ...[
+            Center(child: MobileRoomAvatar(room: room, size: 92)),
+            const SizedBox(height: 12),
+          ],
           Text(
             room.name,
             textAlign: TextAlign.center,

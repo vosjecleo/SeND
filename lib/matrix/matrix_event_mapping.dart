@@ -39,7 +39,8 @@ extension _MatrixEventMapping on MatrixBackend {
     if (_presentationFor(timeline.room) == RoomPresentation.forum) {
       final events = <String, Event>{
         ..._forumRoots,
-        for (final event in timeline.events) event.eventId: event,
+        for (final event in _timelineWindowEvents(timeline))
+          event.eventId: event,
       };
       return _mapTimelineEvents(
         timeline,
@@ -221,10 +222,8 @@ extension _MatrixEventMapping on MatrixBackend {
                 hasVisualMention: messageHasVisualMention(
                   body: body,
                   isReply:
-                      displayEvent.content
-                          .tryGetMap<String, Object?>('m.relates_to')
-                          ?.containsKey('m.in_reply_to') ==
-                      true,
+                      messageReplyTarget(event.content) != null ||
+                      messageReplyTarget(displayEvent.content) != null,
                   formattedBody: displayEvent.isRichMessage
                       ? displayEvent.formattedText
                       : null,
@@ -250,7 +249,7 @@ extension _MatrixEventMapping on MatrixBackend {
     required String body,
   }) {
     final userId = _matrix.userID;
-    if (userId == null || source.senderId == userId) return false;
+    if (userId == null) return false;
     final mentions = display.content.tryGetMap<String, Object?>('m.mentions');
     if (messageMentionsUser(
       body: body,
@@ -261,17 +260,17 @@ extension _MatrixEventMapping on MatrixBackend {
     )) {
       return true;
     }
-    final relatesTo = display.content.tryGetMap<String, Object?>(
-      'm.relates_to',
-    );
-    final repliedEventId = relatesTo
-        ?.tryGetMap<String, Object?>('m.in_reply_to')
-        ?.tryGet<String>('event_id');
+    final repliedEventId =
+        messageReplyTarget(source.content) ??
+        messageReplyTarget(display.content);
     if (repliedEventId == null) return false;
     final replied = timeline.events
         .where((candidate) => candidate.eventId == repliedEventId)
         .firstOrNull;
-    return replied?.senderId == userId;
+    final preview = _replyPreviews[source.eventId];
+    return (replied?.senderId ??
+            (preview?.eventId == repliedEventId ? preview?.senderId : null)) ==
+        userId;
   }
 
   List<ReceiptReaderSummary> _readersFor(Event event, Timeline timeline) {
@@ -283,7 +282,8 @@ extension _MatrixEventMapping on MatrixBackend {
         _preferences.readReceiptMemberThreshold) {
       return const [];
     }
-    final eventIndex = timeline.events.indexWhere(
+    final visibleEvents = _timelineWindowEvents(timeline);
+    final eventIndex = visibleEvents.indexWhere(
       (candidate) => candidate.eventId == event.eventId,
     );
     if (eventIndex < 0) return const [];
@@ -301,8 +301,7 @@ extension _MatrixEventMapping on MatrixBackend {
     final seen = readersAtOrBeyond(
       eventIndex: eventIndex,
       eventPositions: {
-        for (final (index, item) in timeline.events.indexed)
-          item.eventId: index,
+        for (final (index, item) in visibleEvents.indexed) item.eventId: index,
       },
       streams: receipts.map(
         (stream) => {

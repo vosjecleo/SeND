@@ -178,10 +178,14 @@ class _MetadataLayout extends RenderBox
         _ => null,
       };
       if (span != null) {
-        final length = span.toPlainText().length;
+        final text = span.toPlainText();
+        final length = text.length;
         if (length > 0) {
           final selection = TextSelection(
-            baseOffset: length - 1,
+            // A UTF-16 code unit can split a surrogate pair or a joined emoji.
+            // Flutter then returns no glyph box and we incorrectly fall back
+            // to the full paragraph width instead of the final glyph.
+            baseOffset: length - text.characters.last.length,
             extentOffset: length,
           );
           boxes = switch (object) {

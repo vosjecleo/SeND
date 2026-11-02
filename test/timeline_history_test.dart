@@ -305,42 +305,42 @@ void main() {
     expect(timeline.position.pixels, 0);
   });
 
-  testWidgets('historical timelines expose a load newer control', (
-    tester,
-  ) async {
-    final backend = FakeBackend()
-      ..currentStatus = SessionStatus.signedIn
-      ..moreFuture = true
-      ..roomList = const [
-        RoomSummary(
-          id: '!history:example.org',
-          name: 'history',
-          lastMessage: 'Historical message',
-          unreadCount: 0,
-          usesChannelIcon: true,
-        ),
-      ]
-      ..messageList = [
-        ChatMessage(
-          id: r'$historical',
-          sender: 'Alice',
-          body: 'Historical message',
-          timestamp: DateTime(2026, 8, 13, 12),
-          pending: false,
-        ),
-      ];
-    await tester.pumpWidget(DeltiecordApp(backend: backend));
-    await tester.tap(find.text('history'));
-    await tester.pump();
+  testWidgets(
+    'historical timelines offer Present without a manual gap control',
+    (tester) async {
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..moreFuture = true
+        ..roomList = const [
+          RoomSummary(
+            id: '!history:example.org',
+            name: 'history',
+            lastMessage: 'Historical message',
+            unreadCount: 0,
+            usesChannelIcon: true,
+          ),
+        ]
+        ..messageList = [
+          ChatMessage(
+            id: r'$historical',
+            sender: 'Alice',
+            body: 'Historical message',
+            timestamp: DateTime(2026, 8, 13, 12),
+            pending: false,
+          ),
+        ];
+      await tester.pumpWidget(DeltiecordApp(backend: backend));
+      await tester.tap(find.text('history'));
+      await tester.pump();
 
-    expect(find.text('Load newer messages'), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const Key('load-newer-messages')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('load-newer-messages')));
-    await tester.pump();
-    expect(backend.futureRequests, 1);
-    expect(backend.lastFutureAnchor, isNull);
-  });
+      expect(find.text('Load newer messages'), findsNothing);
+      expect(find.text('Load messages across gap'), findsNothing);
+      expect(find.byKey(const Key('load-newer-messages')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+      await tester.pumpAndSettle();
+      expect(backend.jumpPresentRequests, 1);
+    },
+  );
 
   testWidgets('offers jump to present after scrolling away from recent chat', (
     tester,

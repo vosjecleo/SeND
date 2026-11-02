@@ -28,6 +28,7 @@ void main() {
           body: 'My actual reply',
           timestamp: DateTime(2026, 8, 13, 12),
           pending: false,
+          pingedCurrentUser: true,
           reply: const ReplyPreview(
             eventId: r'$reply',
             sender: 'Bob',
@@ -42,15 +43,26 @@ void main() {
     expect(find.textContaining('Original message'), findsOneWidget);
     expect(find.text('My actual reply'), findsOneWidget);
     expect(find.textContaining('> <'), findsNothing);
+    Color? rowColour() =>
+        (tester
+                    .widget<AnimatedContainer>(
+                      find.byKey(const Key(r'message-row-$reply')),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .color;
+    final mentionColour = rowColour();
 
     await revealMessageActions(tester, find.text('My actual reply'));
     await tester.tap(find.byKey(const Key('message-action-reply')));
     await tester.pump();
     expect(find.text('Replying to Alice'), findsOneWidget);
+    expect(rowColour(), const Color(0xff408cff).withValues(alpha: .17));
     await enterComposer(tester, 'A second reply');
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
     expect(backend.lastReplyToMessageId, r'$reply');
+    expect(rowColour(), mentionColour);
   });
 
   testWidgets('repeated reply jumps retain their event targets and blink', (

@@ -325,12 +325,34 @@ void main() {
     await tester.tap(find.text('General').last);
     await tester.pumpAndSettle();
     expect(
+      find.byKey(const ValueKey('conversation-header-avatar')),
+      findsNothing,
+    );
+    final title = find.descendant(
+      of: find.byKey(const ValueKey('mobile-open-details')),
+      matching: find.text('General'),
+    );
+    expect(
+      tester.getTopLeft(title).dx -
+          tester
+              .getTopRight(find.byKey(const ValueKey('mobile-open-navigation')))
+              .dx,
+      inInclusiveRange(0, 12),
+    );
+    expect(
       find.byKey(const ValueKey('mobile-details-panel')).hitTestable(),
       findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('mobile-open-details')));
     await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('mobile-details-panel')),
+        matching: find.byType(MobileRoomAvatar),
+      ),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('mobile-details-panel')).hitTestable(),
       findsOneWidget,

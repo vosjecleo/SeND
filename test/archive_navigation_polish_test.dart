@@ -50,6 +50,21 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('home-archive-entry')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('home-archive-entry'))).height,
+        36,
+      );
+      final entry = find.byKey(const ValueKey('home-archive-entry'));
+      for (final child in [
+        find.byIcon(Icons.archive_outlined),
+        find.text('Archive'),
+        find.text('1'),
+      ]) {
+        expect(
+          tester.getCenter(find.descendant(of: entry, matching: child)).dy,
+          closeTo(tester.getCenter(entry).dy, .01),
+        );
+      }
       await tester.drag(list, const Offset(0, -220));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('home-archive-entry')), findsNothing);
@@ -113,6 +128,19 @@ void main() {
     final entry = find.byKey(const ValueKey('home-archive-entry'));
     expect(entry, findsOneWidget);
     expect(tester.getSize(entry).height, lessThan(56));
+    final icon = find.descendant(
+      of: entry,
+      matching: find.byIcon(Icons.archive_outlined),
+    );
+    expect(tester.getCenter(icon).dy, closeTo(tester.getCenter(entry).dy, .01));
+    for (final label in ['Archive', '1']) {
+      expect(
+        tester
+            .getCenter(find.descendant(of: entry, matching: find.text(label)))
+            .dy,
+        closeTo(tester.getCenter(entry).dy, .01),
+      );
+    }
     final position = tester.getCenter(find.byType(ListView));
     await tester.sendEventToBinding(
       PointerScrollEvent(

@@ -129,12 +129,15 @@ extension _MatrixMedia on MatrixBackend {
         throw AttachmentBudgetExceeded([attachment]);
       }
       await _validateUploadSize(attachment.bytes.length);
+      final rawImage = isRawImageFile(attachment.name, attachment.mimeType);
       final animatedImage =
+          !rawImage &&
           attachment.mimeType.startsWith('image/') &&
           hasAnimatedImageHeader(attachment.bytes);
       // Standard Matrix info travels with the (encrypted) event, so receivers
       // can lay out images before downloading them, including animated GIFs.
-      final imageDimensions = attachment.mimeType.startsWith('image/')
+      final imageDimensions =
+          !rawImage && attachment.mimeType.startsWith('image/')
           ? await readEncodedImageDimensions(attachment.bytes)
           : null;
       final posterDimensions = attachment.videoThumbnail == null
@@ -147,9 +150,14 @@ extension _MatrixMedia on MatrixBackend {
       // MatrixFile still derives m.image from the GIF MIME type, while
       // deliberately avoiding MatrixImageFile's synchronous GIF decode and
       // thumbnail generation on Flutter's UI isolate.
-      final file =
-          attachment.mimeType.startsWith('video/') &&
-              attachment.videoWidth != null
+      final file = rawImage
+          ? RawImageMatrixFile(
+              bytes: attachment.bytes,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+            )
+          : attachment.mimeType.startsWith('video/') &&
+                attachment.videoWidth != null
           ? MatrixVideoFile(
               bytes: attachment.bytes,
               name: attachment.name,

@@ -44,6 +44,11 @@ final _emojiPresentationPattern = colourEmojiPattern;
 
 const _inlineCustomEmojiSize = 20.0;
 const _standaloneEmojiSize = 64.0;
+Color _linkColour(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xff00a8fc)
+    : const Color(0xff0068e0);
+final _httpUrlPattern = RegExp(r'https?://[^\s<>]+');
 
 /// Whether [text] consists only of Unicode emoji and whitespace.
 ///
@@ -89,9 +94,50 @@ List<InlineSpan> _emojiAwareTextSpans(
   String text,
   TextStyle style, {
   bool roomMentions = true,
+  bool linkify = false,
   List<TapGestureRecognizer>? emojiRecognizers,
 }) {
   if (text.isEmpty) return const [];
+  if (linkify && emojiRecognizers != null) {
+    final spans = <InlineSpan>[];
+    var offset = 0;
+    for (final match in _httpUrlPattern.allMatches(text)) {
+      spans.addAll(
+        _emojiAwareTextSpans(
+          context,
+          text.substring(offset, match.start),
+          style,
+          roomMentions: roomMentions,
+          emojiRecognizers: emojiRecognizers,
+        ),
+      );
+      final url = match.group(0)!.replaceFirst(RegExp(r'[.,;:!?]+$'), '');
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () => _confirmFormattedLink(context, Uri.parse(url));
+      emojiRecognizers.add(recognizer);
+      spans.add(
+        TextSpan(
+          text: url,
+          style: style.copyWith(
+            color: _linkColour(context),
+            decoration: TextDecoration.underline,
+          ),
+          recognizer: recognizer,
+        ),
+      );
+      offset = match.start + url.length;
+    }
+    spans.addAll(
+      _emojiAwareTextSpans(
+        context,
+        text.substring(offset),
+        style,
+        roomMentions: roomMentions,
+        emojiRecognizers: emojiRecognizers,
+      ),
+    );
+    return spans;
+  }
   if (roomMentions && style.fontFamily != 'monospace') {
     final matches = roomMentionPattern.allMatches(text).toList();
     if (matches.isNotEmpty) {
@@ -253,7 +299,7 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
                 ? (Theme.of(context).brightness == Brightness.dark
                       ? const Color(0xff80c7ff)
                       : const Color(0xff12518a))
-                : const Color(0xffaeb7ff),
+                : _linkColour(context),
             backgroundColor: mention ? const Color(0x403fa9f5) : null,
             decoration: mention
                 ? TextDecoration.none
@@ -439,7 +485,9 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
       }
       var parent = node.parent;
       var preformatted = false;
+      var literalLink = false;
       while (parent != null) {
+        literalLink |= {'a', 'code', 'pre'}.contains(parent.localName);
         if (parent.localName == 'pre') {
           preformatted = true;
           break;
@@ -463,6 +511,7 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
         preformatted ? text : text.replaceAll(RegExp(r'[\t\r\n]+'), ' '),
         style,
         roomMentions: !preformatted,
+        linkify: !literalLink,
         emojiRecognizers: _linkRecognizers,
       );
     }
@@ -559,7 +608,7 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
         );
       case 'a':
         childStyle = style.copyWith(
-          color: const Color(0xffaeb7ff),
+          color: _linkColour(context),
           decoration: TextDecoration.underline,
         );
     }

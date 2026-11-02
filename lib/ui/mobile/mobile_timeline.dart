@@ -3,10 +3,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../activity_widgets.dart';
 import '../emoji_typography.dart';
 import '../message_action_menu.dart';
+import '../message_highlight.dart';
+import '../read_only_conversation.dart';
+import '../../services/raw_image.dart';
 import '../queued_attachment_preview.dart';
 import '../../services/queued_message.dart';
 import '../attachment_image_editor.dart';
 import '../inline_composer_preview.dart';
+import '../timeline_scroll_anchor.dart' show scrollToTimelinePresent;
 import '../selection_toolbar.dart';
 import 'dart:math';
 
@@ -113,6 +117,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   int? _timelineLayoutFingerprint;
   int _layoutAnchorGeneration = 0;
   int _navigationGeneration = 0;
+  int? _presentNavigation;
+  String? get _composerTargetId => _edit?.id ?? _reply?.id;
   bool _scrolledAwayFromPresent = false;
   String? _highlightedMessageId;
   Timer? _highlightTimer;
@@ -234,6 +240,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     _edit = null;
     _attachments.clear();
     _scrolledAwayFromPresent = false;
+    _navigationGeneration++;
+    _layoutAnchorGeneration++;
+    _presentNavigation = null;
     _messageKeys.clear();
     _messageIdsByKey.clear();
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -459,12 +468,19 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   void _noteTimelineUserInput(PointerEvent _) {
+    if (_presentNavigation != null) {
+      _navigationGeneration++;
+      setState(() => _presentNavigation = null);
+    }
     _timelineUserInputUntil = DateTime.now().add(const Duration(seconds: 1));
   }
 
   Future<void> _loadTimelinePage({required bool older}) async {
     if (_pageLoadInFlight) return;
     _pageLoadInFlight = true;
+    final anchor = _captureScrollAnchor();
+    final navigation = _navigationGeneration;
+    final inputUntil = _timelineUserInputUntil;
     _suppressPaginationUntil = DateTime.now().add(
       const Duration(milliseconds: 700),
     );
@@ -473,6 +489,13 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
         await backend.loadMoreHistory();
       } else {
         await backend.loadMoreFuture();
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted &&
+          navigation == _navigationGeneration &&
+          _presentNavigation == null &&
+          inputUntil == _timelineUserInputUntil) {
+        _restoreScrollAnchor(anchor);
       }
     } finally {
       _pageLoadInFlight = false;
@@ -495,14 +518,19 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       final distance = (top - viewportTop).abs();
       if (distance < bestDistance) {
         bestDistance = distance;
-        best = _TimelineScrollAnchor(entry.key, top);
+        best = _TimelineScrollAnchor(entry.key, top, backend.timelineSegmentId);
       }
     }
     return best;
   }
 
   void _restoreScrollAnchor(_TimelineScrollAnchor? anchor) {
-    if (anchor == null || !mounted || !_scroll.hasClients) return;
+    if (anchor == null ||
+        !mounted ||
+        !_scroll.hasClients ||
+        anchor.segmentId != backend.timelineSegmentId) {
+      return;
+    }
     final box = _messageKeys[anchor.eventId]?.currentContext
         ?.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return;
@@ -521,7 +549,38 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     _restoringScrollAnchor = false;
   }
 
+  Future<void> _returnToPresent() async {
+    if (_presentNavigation != null) return;
+    final generation = ++_navigationGeneration;
+    _layoutAnchorGeneration++;
+    _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
+    _suppressPaginationUntil = DateTime.now().add(const Duration(seconds: 1));
+    setState(() => _presentNavigation = generation);
+    try {
+      await backend.jumpToPresent();
+      await scrollToTimelinePresent(
+        controller: _scroll,
+        isCurrent: () =>
+            mounted &&
+            generation == _navigationGeneration &&
+            backend.atTimelinePresent,
+        reducedMotion: backend.preferences.reducedMotion,
+      );
+      if (mounted &&
+          generation == _navigationGeneration &&
+          backend.atTimelinePresent) {
+        setState(() => _scrolledAwayFromPresent = false);
+        _reportTimelineAtPresent();
+      }
+    } finally {
+      if (mounted && _presentNavigation == generation) {
+        setState(() => _presentNavigation = null);
+      }
+    }
+  }
+
   Future<void> _jumpToEvent(String eventId) async {
+    _presentNavigation = null;
     final generation = ++_navigationGeneration;
     _suppressPaginationUntil = DateTime.now().add(const Duration(seconds: 1));
     if (!await _scrollToMessage(eventId, generation)) {
@@ -530,8 +589,11 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       await _scrollToMessage(eventId, generation, waitForBuild: true);
     }
     if (!mounted || generation != _navigationGeneration) return;
+    final target = MediaAlbumIndex.fromNewestFirst(
+      backend.timelineMessages,
+    ).visibleMessageId(eventId);
     for (var pulse = 0; pulse < 2; pulse++) {
-      setState(() => _highlightedMessageId = eventId);
+      setState(() => _highlightedMessageId = target);
       await _waitForHighlight(const Duration(milliseconds: 180));
       if (!mounted || generation != _navigationGeneration) return;
       setState(() => _highlightedMessageId = null);
@@ -601,6 +663,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     final scrolledAway = _scroll.hasClients && _scroll.position.pixels > 48;
     if (previous == null ||
         previous == next ||
+        _presentNavigation != null ||
         _pageLoadInFlight ||
         !scrolledAway ||
         DateTime.now().isBefore(_timelineUserInputUntil)) {
@@ -689,13 +752,15 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             onTap: widget.onOpenDetails,
             child: Row(
               children: [
-                MobileRoomAvatar(
-                  key: const ValueKey('conversation-header-avatar'),
-                  room: widget.room,
-                  size: 40,
-                  autoplay: true,
-                ),
-                const SizedBox(width: 10),
+                if (!widget.room.usesChannelIcon) ...[
+                  MobileRoomAvatar(
+                    key: const ValueKey('conversation-header-avatar'),
+                    room: widget.room,
+                    size: 40,
+                    autoplay: true,
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -960,7 +1025,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                     older.senderId == message.senderId &&
                                     message.timestamp.difference(
                                           older.timestamp,
-                                        ) <
+                                        ) <=
                                         const Duration(minutes: 7) &&
                                     message.reply == null &&
                                     DateUtils.isSameDay(
@@ -992,6 +1057,16 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                         _MobileDaySeparator(
                                           date: message.timestamp.toLocal(),
                                         ),
+                                      if (!grouped && !message.system)
+                                        SizedBox(
+                                          key: ValueKey(
+                                            'mobile-group-gap-${message.id}',
+                                          ),
+                                          height:
+                                              7 -
+                                              backend.preferences.compactness *
+                                                  2,
+                                        ),
                                       _MobileMessageRow(
                                         receiptIds: receipts,
                                         backend: backend,
@@ -1006,6 +1081,15 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                         grouped: grouped,
                                         highlighted:
                                             _highlightedMessageId == message.id,
+                                        replying:
+                                            _composerTargetId == message.id ||
+                                            (mediaAlbums.albums[message.id]
+                                                    ?.any(
+                                                      (m) =>
+                                                          m.id ==
+                                                          _composerTargetId,
+                                                    ) ??
+                                                false),
                                         onJumpToReply: _jumpToEvent,
                                         onReply: () => setState(() {
                                           _reply = message;
@@ -1056,24 +1140,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                             right: 14,
                             bottom: 10,
                             child: FilledButton.icon(
-                              onPressed: () async {
-                                if (!backend.atTimelinePresent) {
-                                  await backend.jumpToPresent();
-                                }
-                                if (_scroll.hasClients) {
-                                  await _scroll.animateTo(
-                                    0,
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOutCubic,
-                                  );
-                                }
-                                if (mounted && _scrolledAwayFromPresent) {
-                                  setState(
-                                    () => _scrolledAwayFromPresent = false,
-                                  );
-                                }
-                                backend.setConversationAtPresent(true);
-                              },
+                              key: const ValueKey('jump-to-present'),
+                              onPressed: _presentNavigation == null
+                                  ? _returnToPresent
+                                  : null,
                               icon: const Icon(Icons.arrow_downward),
                               label: const Text('Present'),
                             ),
@@ -1093,74 +1163,80 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                       ],
                     ),
             ),
-            VoiceMessageComposer(
-              key: ValueKey('voice-composer-${widget.room.id}'),
-              backend: backend,
-              roomId: widget.room.id,
-              replyToMessageId: _reply?.id,
-              onSent: () => setState(() => _reply = null),
-              builder: (startRecording) => _MobileComposer(
-                desktopKeyboard: widget.desktopKeyboard,
+            if (!backend.canSendMessagesToRoom(widget.room.id))
+              const ReadOnlyConversationNotice()
+            else
+              VoiceMessageComposer(
+                key: ValueKey('voice-composer-${widget.room.id}'),
                 backend: backend,
-                controller: _composer,
-                focusNode: _focus,
-                sending: _sending,
-                attachments: _attachments,
-                contextMessage: _edit ?? _reply,
-                editing: _edit != null,
-                onClearContext: () => setState(() {
-                  if (_edit != null) {
-                    _customEmojiSpans = [];
-                    _composer.clear();
-                  }
-                  _reply = null;
-                  _edit = null;
-                }),
-                onRemoveAttachment: (attachment) =>
-                    setState(() => _attachments.remove(attachment)),
-                onEditAttachment: (attachment) async {
-                  final edited = await showAttachmentImageEditor(
-                    context,
-                    attachment,
-                    preferences: widget.backend.preferences,
-                  );
-                  if (!mounted || edited == null) return;
-                  final index = _attachments.indexOf(attachment);
-                  if (index >= 0) {
-                    setState(
-                      () => _attachments[index] = edited.copyWith(
-                        uploadTooLarge: false,
-                      ),
+                roomId: widget.room.id,
+                replyToMessageId: _reply?.id,
+                onSent: () => setState(() => _reply = null),
+                builder: (startRecording) => _MobileComposer(
+                  desktopKeyboard: widget.desktopKeyboard,
+                  backend: backend,
+                  controller: _composer,
+                  focusNode: _focus,
+                  sending: _sending,
+                  attachments: _attachments,
+                  contextMessage: _edit ?? _reply,
+                  onJumpToContext: _reply == null
+                      ? null
+                      : () => _jumpToEvent(_reply!.id),
+                  editing: _edit != null,
+                  onClearContext: () => setState(() {
+                    if (_edit != null) {
+                      _customEmojiSpans = [];
+                      _composer.clear();
+                    }
+                    _reply = null;
+                    _edit = null;
+                  }),
+                  onRemoveAttachment: (attachment) =>
+                      setState(() => _attachments.remove(attachment)),
+                  onEditAttachment: (attachment) async {
+                    final edited = await showAttachmentImageEditor(
+                      context,
+                      attachment,
+                      preferences: widget.backend.preferences,
                     );
-                  }
-                },
-                onToggleAttachmentSpoiler: (attachment) {
-                  final index = _attachments.indexOf(attachment);
-                  if (index < 0) return;
-                  setState(() {
-                    _attachments[index] = attachment.copyWith(
-                      spoiler: !attachment.spoiler,
-                    );
-                  });
-                },
-                onAdd: _showAddMenu,
-                onEmoji: _showEmojiPicker,
-                onPasteImage: _pasteClipboardImage,
-                onSend: _send,
-                onRecord: _edit == null ? startRecording : null,
-                onSchedule: _scheduleCurrentMessage,
-                onContentInserted: _insertKeyboardContent,
-                emojiMatches: _emojiMatches,
-                emojiCompletionActive: _emojiStart != null,
-                emojiSelection: _emojiSelection,
-                onEmojiSelected: _acceptEmojiCompletion,
-                onEmojiSelectionChanged: (index) =>
-                    setState(() => _emojiSelection = index),
-                onDismissEmojiCompletion: _clearEmojiCompletion,
-                mentionMatches: _mentionMatches,
-                onMentionSelected: _acceptMention,
+                    if (!mounted || edited == null) return;
+                    final index = _attachments.indexOf(attachment);
+                    if (index >= 0) {
+                      setState(
+                        () => _attachments[index] = edited.copyWith(
+                          uploadTooLarge: false,
+                        ),
+                      );
+                    }
+                  },
+                  onToggleAttachmentSpoiler: (attachment) {
+                    final index = _attachments.indexOf(attachment);
+                    if (index < 0) return;
+                    setState(() {
+                      _attachments[index] = attachment.copyWith(
+                        spoiler: !attachment.spoiler,
+                      );
+                    });
+                  },
+                  onAdd: _showAddMenu,
+                  onEmoji: _showEmojiPicker,
+                  onPasteImage: _pasteClipboardImage,
+                  onSend: _send,
+                  onRecord: _edit == null ? startRecording : null,
+                  onSchedule: _scheduleCurrentMessage,
+                  onContentInserted: _insertKeyboardContent,
+                  emojiMatches: _emojiMatches,
+                  emojiCompletionActive: _emojiStart != null,
+                  emojiSelection: _emojiSelection,
+                  onEmojiSelected: _acceptEmojiCompletion,
+                  onEmojiSelectionChanged: (index) =>
+                      setState(() => _emojiSelection = index),
+                  onDismissEmojiCompletion: _clearEmojiCompletion,
+                  mentionMatches: _mentionMatches,
+                  onMentionSelected: _acceptMention,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1207,6 +1283,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   }
 
   Future<void> _send() async {
+    if (!backend.canSendMessagesToRoom(widget.room.id)) return;
     final serialized = serializeMarkdownEmojiMessage(
       _composer.text,
       _customEmojiSpans,
@@ -1628,10 +1705,11 @@ class _CustomEmojiEditingController extends TextEditingController {
 }
 
 final class _TimelineScrollAnchor {
-  const _TimelineScrollAnchor(this.eventId, this.screenTop);
+  const _TimelineScrollAnchor(this.eventId, this.screenTop, this.segmentId);
 
   final String eventId;
   final double screenTop;
+  final String? segmentId;
 }
 
 class _MobileDaySeparator extends StatelessWidget {
@@ -1650,22 +1728,30 @@ class _MobileDaySeparator extends StatelessWidget {
         : MaterialLocalizations.of(context).formatFullDate(localDate);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: context.deltiecord.divider)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: context.deltiecord.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Expanded(child: Divider(color: context.deltiecord.divider)),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: max(0, constraints.maxWidth - 40),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: context.deltiecord.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-          Expanded(child: Divider(color: context.deltiecord.divider)),
-        ],
+            Expanded(child: Divider(color: context.deltiecord.divider)),
+          ],
+        ),
       ),
     );
   }
@@ -1804,6 +1890,7 @@ class _MobileMessageRow extends StatelessWidget {
     this.albumMessages,
     required this.grouped,
     required this.highlighted,
+    this.replying = false,
     required this.onJumpToReply,
     required this.onReply,
     required this.onEdit,
@@ -1817,6 +1904,7 @@ class _MobileMessageRow extends StatelessWidget {
   final List<ChatMessage>? albumMessages;
   final bool grouped;
   final bool highlighted;
+  final bool replying;
   final ValueChanged<String> onJumpToReply;
   final VoidCallback onReply;
   final VoidCallback? onEdit;
@@ -1859,34 +1947,18 @@ class _MobileMessageRow extends StatelessWidget {
             onLongPress: () => _showActions(context),
             onSecondaryTap: () => _showActions(context),
             child: DecoratedBox(
-              decoration: BoxDecoration(
-                color:
+              key: ValueKey('message-highlight-${message.id}'),
+              decoration: messageHighlightDecoration(
+                context,
+                replying: replying,
+                flashing: highlighted,
+                mentioned:
                     message.pingedCurrentUser ||
-                        message.hasVisualMention ||
-                        (albumMessages?.any(
-                              (m) => m.pingedCurrentUser || m.hasVisualMention,
-                            ) ??
-                            false)
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.11)
-                    : highlighted
-                    ? context.deltiecord.hover
-                    : Colors.transparent,
-                border:
-                    message.pingedCurrentUser ||
-                        message.hasVisualMention ||
-                        (albumMessages?.any(
-                              (m) => m.pingedCurrentUser || m.hasVisualMention,
-                            ) ??
-                            false)
-                    ? Border(
-                        left: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 3,
-                        ),
-                      )
-                    : null,
+                    message.hasVisualMention ||
+                    (albumMessages?.any(
+                          (m) => m.pingedCurrentUser || m.hasVisualMention,
+                        ) ??
+                        false),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -2359,6 +2431,7 @@ class _MobileComposer extends StatefulWidget {
     required this.sending,
     required this.attachments,
     required this.contextMessage,
+    this.onJumpToContext,
     required this.editing,
     required this.onClearContext,
     required this.onRemoveAttachment,
@@ -2387,6 +2460,7 @@ class _MobileComposer extends StatefulWidget {
   final bool sending;
   final List<AttachmentDraft> attachments;
   final ChatMessage? contextMessage;
+  final VoidCallback? onJumpToContext;
   final bool editing;
   final VoidCallback onClearContext;
   final ValueChanged<AttachmentDraft> onRemoveAttachment;
@@ -2616,21 +2690,25 @@ class _MobileComposerState extends State<_MobileComposer> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (widget.contextMessage case final message?)
-                ListTile(
-                  dense: true,
-                  title: Text(
-                    widget.editing
-                        ? 'Editing message'
-                        : 'Replying to ${message.sender}',
-                  ),
-                  subtitle: Text(
-                    message.body,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: IconButton(
-                    onPressed: widget.onClearContext,
-                    icon: const Icon(Icons.close),
+                Material(
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    dense: true,
+                    onTap: widget.onJumpToContext,
+                    title: Text(
+                      widget.editing
+                          ? 'Editing message'
+                          : 'Replying to ${message.sender}',
+                    ),
+                    subtitle: Text(
+                      message.body,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: IconButton(
+                      onPressed: widget.onClearContext,
+                      icon: const Icon(Icons.close),
+                    ),
                   ),
                 ),
               if (widget.attachments.isNotEmpty)
@@ -2810,7 +2888,8 @@ class _PendingAttachmentPreview extends StatelessWidget {
         child: Wrap(
           children: [
             if (attachment.mimeType.startsWith('image/') ||
-                attachment.mimeType.startsWith('video/'))
+                attachment.mimeType.startsWith('video/') ||
+                isRawImageFile(attachment.name, attachment.mimeType))
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Edit media'),
@@ -2843,11 +2922,12 @@ class _PendingAttachmentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isImage = attachment.mimeType.startsWith('image/');
+    final raw = isRawImageFile(attachment.name, attachment.mimeType);
+    final isImage = attachment.mimeType.startsWith('image/') && !raw;
     final isVideo = attachment.mimeType.startsWith('video/');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: isImage || isVideo ? onEdit : () => _showActions(context),
+      onTap: raw || isImage || isVideo ? onEdit : () => _showActions(context),
       onLongPress: () => _showActions(context),
       child: SizedBox.square(
         dimension: 80,

@@ -807,7 +807,8 @@ class _PendingAttachmentTile extends StatelessWidget {
       ),
       items: [
         if (attachment.mimeType.startsWith('image/') ||
-            attachment.mimeType.startsWith('video/'))
+            attachment.mimeType.startsWith('video/') ||
+            isRawImageFile(attachment.name, attachment.mimeType))
           const PopupMenuItem(value: 'edit', child: Text('Edit media')),
         PopupMenuItem(
           value: 'spoiler',
@@ -838,10 +839,11 @@ class _PendingAttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isImage = attachment.mimeType.startsWith('image/');
+    final raw = isRawImageFile(attachment.name, attachment.mimeType);
+    final isImage = attachment.mimeType.startsWith('image/') && !raw;
     final isVideo = attachment.mimeType.startsWith('video/');
     return GestureDetector(
-      onTap: isImage || isVideo ? onEdit : null,
+      onTap: raw || isImage || isVideo ? onEdit : null,
       onSecondaryTapDown: (details) =>
           _showMenu(context, details.globalPosition),
       child: Tooltip(
@@ -940,11 +942,13 @@ class _ComposerContext extends StatelessWidget {
     required this.label,
     required this.body,
     required this.onCancel,
+    this.onTap,
   });
 
   final String label;
   final String body;
   final VoidCallback onCancel;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -955,26 +959,29 @@ class _ComposerContext extends StatelessWidget {
         const ThemeIcon(Icons.subdirectory_arrow_right, size: 16),
         const SizedBox(width: 8),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: DeltiecordTypeScale.normal,
-                  fontWeight: FontWeight.w600,
+          child: InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: DeltiecordTypeScale.normal,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              Text(
-                body.replaceAll('\n', ' '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: DeltiecordTypeScale.normal,
-                  color: Color(0xff989aa5),
+                Text(
+                  body.replaceAll('\n', ' '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: DeltiecordTypeScale.normal,
+                    color: Color(0xff989aa5),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         IconButton(

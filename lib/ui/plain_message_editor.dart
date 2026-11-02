@@ -254,7 +254,10 @@ class _PlainController extends TextEditingController {
       if (inserted is! String || offset >= text.length) continue;
       final end = (offset + inserted.length).clamp(0, text.length);
       children.add(
-        (op['attributes'] as Map?)?['link'] == null
+        customEmojiFromEditorLink(
+                  (op['attributes'] as Map?)?['link'] as String?,
+                ) ==
+                null
             ? inlineComposerPreview(text.substring(offset, end), style)
             : composerEmojiSpan(
                 backend: backend,

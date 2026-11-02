@@ -9,7 +9,48 @@ extension _MatrixTimelineSupport on MatrixBackend {
   // Flutter's lazy sliver materializes only visible rows. Keep stable event
   // identities in that sliver instead of replacing both ends of a bounded UI
   // window; the latter made the scroll position irrecoverable after paging.
-  List<Event> _timelineWindowEvents(Timeline timeline) => timeline.events;
+  List<Event> _timelineWindowEvents(Timeline timeline) {
+    final segment = _timelineSegments.forTimeline(timeline);
+    if (segment == null) return timeline.events;
+    _timelineSegments.refreshKnown(segment);
+    return segment.events;
+  }
+
+  void _onTimelineSegmentsChanged() {
+    final active = _timelineSegments.active;
+    final encrypted =
+        active?.events
+            .where((e) => e.type == EventTypes.Encrypted)
+            .map((e) => e.eventId)
+            .toList() ??
+        <String>[];
+    if (active != null &&
+        (!identical(_timeline, active.timeline) ||
+            encrypted.any((id) => !_segmentDecryptSeen.contains(id)))) {
+      _timeline = active.timeline;
+      _segmentDecryptSeen.addAll(encrypted);
+      final timeline = active.timeline;
+      final generation = _timelineGeneration;
+      final lease = _sessionScope.capture();
+      unawaited(() async {
+        try {
+          await _loadRoomBackupKeys(timeline.room, timeline);
+          if (!lease.isCurrent || !_isCurrentTimeline(timeline, generation)) {
+            return;
+          }
+          await _decryptTimelineEvents(timeline);
+          if (!lease.isCurrent || !_isCurrentTimeline(timeline, generation)) {
+            return;
+          }
+          await _hydrateCurrentTimeline(timeline, generation);
+        } catch (_) {
+          // Key recovery and media hydration remain retryable. Retain the
+          // existing events and their SDK decryption status on failure.
+        }
+      }());
+    }
+    _notifyBackendListeners();
+  }
 
   Future<void> _hydrateSenderAvatars(Timeline timeline) async {
     final lease = _sessionScope.capture();
@@ -161,14 +202,33 @@ extension _MatrixTimelineSupport on MatrixBackend {
     final encryption = _matrix.encryption;
     if (encryption == null) return;
     await _matrix.database.transaction(() async {
-      for (var index = 0; index < timeline.events.length; index++) {
-        final event = timeline.events[index];
+      final pending = List<Event>.of(timeline.events);
+      var positions = {
+        for (final (i, event) in timeline.events.indexed) event.eventId: i,
+      };
+      for (final event in pending) {
         if (event.type != EventTypes.Encrypted) continue;
-        timeline.events[index] = await encryption.decryptRoomEvent(
+        final decrypted = await encryption.decryptRoomEvent(
           event,
           store: true,
           updateType: EventUpdateType.history,
         );
+        var index = positions[event.eventId];
+        if (index == null ||
+            index >= timeline.events.length ||
+            timeline.events[index].eventId != event.eventId) {
+          positions = {
+            for (final (i, event) in timeline.events.indexed) event.eventId: i,
+          };
+          index = positions[event.eventId];
+        }
+        // Paging or live sync may move a row while decryption is awaiting a
+        // session. Never write its plaintext into a different event's slot.
+        if (index != null &&
+            timeline.events[index].type == EventTypes.Encrypted &&
+            !timeline.events[index].redacted) {
+          timeline.events[index] = decrypted;
+        }
       }
     });
     _notifyBackendListeners();
@@ -368,7 +428,7 @@ extension _MatrixTimelineSupport on MatrixBackend {
           roomId == _selectedRoomId &&
           _mayAdvanceReadMarker) {
         String? newestSyncedEventId;
-        for (final event in initialTimeline.events) {
+        for (final event in _timelineWindowEvents(initialTimeline)) {
           if (event.status.isSynced &&
               event.relationshipType != RelationshipTypes.thread) {
             newestSyncedEventId = event.eventId;

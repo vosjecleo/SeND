@@ -233,9 +233,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
       setState(() => _error = 'Load older replies to find this message.');
       return;
     }
-    setState(() => _highlightedMessage = target);
-    await Future<void>.delayed(const Duration(milliseconds: 420));
-    if (current()) setState(() => _highlightedMessage = null);
+    for (var pulse = 0; pulse < 2; pulse++) {
+      if (!current()) return;
+      setState(() => _highlightedMessage = target);
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      if (!current()) return;
+      setState(() => _highlightedMessage = null);
+      if (pulse == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 110));
+      }
+    }
   }
 
   Future<void> _open() async {
@@ -332,6 +339,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   }
 
   Future<void> _send() async {
+    if (!widget.backend.canSendMessagesToRoom(widget.roomId)) return;
     final session = _session;
     final value = serializePlainComposer(_draft.document);
     if (session == null ||
@@ -736,6 +744,17 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                                             highlighted:
                                                 _highlightedMessage ==
                                                 message.id,
+                                            replying:
+                                                (_editing?.id ??
+                                                        _replying?.id) ==
+                                                    message.id ||
+                                                (albums.albums[message.id]?.any(
+                                                      (m) =>
+                                                          m.id ==
+                                                          (_editing?.id ??
+                                                              _replying?.id),
+                                                    ) ??
+                                                    false),
                                             startsGroup: startsGroup,
                                             backend: widget.backend,
                                             mediaMessages: messages,
@@ -846,54 +865,59 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
             ListTile(
               dense: true,
               title: Text('Replying to ${reply.sender}'),
+              onTap: () => _jumpToReply(reply.id),
               trailing: IconButton(
                 tooltip: 'Cancel reply',
                 icon: const Icon(Icons.close),
                 onPressed: () => setState(() => _replying = null),
               ),
             ),
-          SafeArea(
-            top: false,
-            child: VoiceMessageComposer(
-              backend: widget.backend,
-              roomId: widget.roomId,
-              thread: session,
-              replyToMessageId: _replying?.id,
-              builder: (record) => _MessageComposer(
-                onEscape: _editing == null ? null : _cancelEditing,
-                key: _composer,
+          if (!widget.backend.canSendMessagesToRoom(widget.roomId))
+            const ReadOnlyConversationNotice()
+          else
+            SafeArea(
+              top: false,
+              child: VoiceMessageComposer(
                 backend: widget.backend,
-                controller: _draft,
-                conversationTarget: session?.sendTarget,
-                focusNode: _focus,
-                roomName: 'Discussion',
-                enabled: session != null,
-                maxHeight: MediaQuery.sizeOf(context).height * .35,
-                sendWithCtrlEnter: widget.backend.preferences.sendWithCtrlEnter,
-                onSend: _send,
-                onRecord: _editing == null ? record : null,
-                onSchedule: _schedule,
-                onPoll: _poll,
-                onSticker: _sticker,
-                onAttach: _attach,
-                onGif: _gif,
-                onPasteImage: _pasteImage,
-                pendingAttachments: _attachments,
-                onRemoveAttachment: (index) =>
-                    setState(() => _attachments.removeAt(index)),
-                onEditAttachment: _editAttachment,
-                onToggleAttachmentSpoiler: (index) => setState(() {
-                  final old = _attachments[index];
-                  _attachments[index] = old.copyWith(spoiler: !old.spoiler);
-                }),
-                mentionSuggestions: _mentions,
-                mentionSelectionIndex: _mentionIndex,
-                onMentionSelected: _insertMention,
-                onMentionSelectionChanged: (index) =>
-                    setState(() => _mentionIndex = index),
+                roomId: widget.roomId,
+                thread: session,
+                replyToMessageId: _replying?.id,
+                builder: (record) => _MessageComposer(
+                  onEscape: _editing == null ? null : _cancelEditing,
+                  key: _composer,
+                  backend: widget.backend,
+                  controller: _draft,
+                  conversationTarget: session?.sendTarget,
+                  focusNode: _focus,
+                  roomName: 'Discussion',
+                  enabled: session != null,
+                  maxHeight: MediaQuery.sizeOf(context).height * .35,
+                  sendWithCtrlEnter:
+                      widget.backend.preferences.sendWithCtrlEnter,
+                  onSend: _send,
+                  onRecord: _editing == null ? record : null,
+                  onSchedule: _schedule,
+                  onPoll: _poll,
+                  onSticker: _sticker,
+                  onAttach: _attach,
+                  onGif: _gif,
+                  onPasteImage: _pasteImage,
+                  pendingAttachments: _attachments,
+                  onRemoveAttachment: (index) =>
+                      setState(() => _attachments.removeAt(index)),
+                  onEditAttachment: _editAttachment,
+                  onToggleAttachmentSpoiler: (index) => setState(() {
+                    final old = _attachments[index];
+                    _attachments[index] = old.copyWith(spoiler: !old.spoiler);
+                  }),
+                  mentionSuggestions: _mentions,
+                  mentionSelectionIndex: _mentionIndex,
+                  onMentionSelected: _insertMention,
+                  onMentionSelectionChanged: (index) =>
+                      setState(() => _mentionIndex = index),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

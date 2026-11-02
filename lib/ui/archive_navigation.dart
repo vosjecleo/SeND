@@ -44,7 +44,7 @@ class ArchivePullList extends StatefulWidget {
 
 class _ArchivePullListState extends State<ArchivePullList>
     with SingleTickerProviderStateMixin {
-  static const _rowHeight = 56.0, _threshold = 104.0, _maximumPull = 176.0;
+  static const _rowHeight = 36.0, _threshold = 104.0, _maximumPull = 176.0;
   final _scroll = ScrollController();
   late final _motion = AnimationController.unbounded(vsync: this);
   bool _shown = false, _hiding = false, _wheel = false;
@@ -204,18 +204,22 @@ class _ArchivePullListState extends State<ArchivePullList>
     Widget entry() => SizedBox(
       key: const ValueKey('home-archive-entry'),
       height: rowHeight,
-      child: ListTile(
-        dense: desktop,
-        minVerticalPadding: 0,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        horizontalTitleGap: 12,
-        leading: const SizedBox.square(
-          dimension: 28,
-          child: Icon(Icons.archive_outlined, size: 20),
-        ),
-        title: const Text('Archive'),
-        trailing: Text('${widget.backend.archivedRooms.length}'),
+      child: InkWell(
         onTap: _open,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 28,
+                child: Icon(Icons.archive_outlined, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Archive')),
+              Text('${widget.backend.archivedRooms.length}'),
+            ],
+          ),
+        ),
       ),
     );
     final list = ListView.builder(

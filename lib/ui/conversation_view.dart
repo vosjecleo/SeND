@@ -83,6 +83,9 @@ class _ConversationState extends State<_Conversation> {
   DateTime _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _suppressPaginationUntil = DateTime.fromMillisecondsSinceEpoch(0);
   int _navigationGeneration = 0;
+  int? _presentNavigation;
+  String? get _composerTargetId =>
+      widget.editingMessage?.id ?? widget.replyingTo?.id;
   int? _timelineLayoutFingerprint;
   int _layoutAnchorGeneration = 0;
   String? _newestMessageId;
@@ -139,25 +142,48 @@ class _ConversationState extends State<_Conversation> {
   }
 
   void _noteTimelineUserInput(PointerEvent _) {
+    if (_presentNavigation != null) {
+      _navigationGeneration++;
+      setState(() => _presentNavigation = null);
+    }
     _timelineUserInputUntil = DateTime.now().add(const Duration(seconds: 1));
   }
 
-  (String, double)? _captureVisibleAnchor() =>
-      captureTimelineAnchor(_timelineViewportKey, _messageKeys);
+  SegmentTimelineAnchor? _captureVisibleAnchor() =>
+      captureSegmentTimelineAnchor(
+        _timelineViewportKey,
+        _messageKeys,
+        widget.backend.timelineSegmentId,
+      );
 
-  void _restoreVisibleAnchor((String, double)? anchor) =>
-      restoreTimelineAnchor(_scrollController, _messageKeys, anchor);
+  void _restoreVisibleAnchor(SegmentTimelineAnchor? anchor) =>
+      restoreSegmentTimelineAnchor(
+        _scrollController,
+        _messageKeys,
+        anchor,
+        widget.backend.timelineSegmentId,
+      );
 
   Future<void> _loadPageAnchored(
     Future<void> Function(String? anchorEventId) load,
   ) async {
     if (_loadingAnchoredHistory || !_scrollController.hasClients) return;
     _loadingAnchoredHistory = true;
+    final anchor = _captureVisibleAnchor();
+    final navigation = _navigationGeneration;
+    final inputUntil = _timelineUserInputUntil;
     _suppressPaginationUntil = DateTime.now().add(
       const Duration(milliseconds: 700),
     );
     try {
       await load(null);
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted &&
+          navigation == _navigationGeneration &&
+          _presentNavigation == null &&
+          inputUntil == _timelineUserInputUntil) {
+        _restoreVisibleAnchor(anchor);
+      }
     } catch (_) {
       // The backend reports its user-facing pagination error separately.
     } finally {
@@ -226,6 +252,7 @@ class _ConversationState extends State<_Conversation> {
     _timelineLayoutFingerprint = next;
     if (previous == null ||
         previous == next ||
+        _presentNavigation != null ||
         _loadingAnchoredHistory ||
         !_scrolledAwayFromPresent ||
         DateTime.now().isBefore(_timelineUserInputUntil)) {
@@ -247,25 +274,33 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _returnToPresent() async {
-    // Reconstruct the recent timeline even when the button was triggered only
-    // by local scrolling. This prevents a pruned/stale recent window from
-    // masquerading as the current room state.
-    await widget.backend.jumpToPresent();
-    if (!mounted) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (_scrollController.hasClients) {
-      await _scrollController.animateTo(
-        0,
-        duration: widget.backend.preferences.reducedMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
+    if (_presentNavigation != null) return;
+    final generation = ++_navigationGeneration;
+    _layoutAnchorGeneration++;
+    _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
+    _suppressPaginationUntil = DateTime.now().add(const Duration(seconds: 1));
+    setState(() => _presentNavigation = generation);
+    try {
+      await widget.backend.jumpToPresent();
+      await scrollToTimelinePresent(
+        controller: _scrollController,
+        isCurrent: () =>
+            mounted &&
+            generation == _navigationGeneration &&
+            widget.backend.atTimelinePresent,
+        reducedMotion: widget.backend.preferences.reducedMotion,
       );
+      if (mounted &&
+          generation == _navigationGeneration &&
+          widget.backend.atTimelinePresent) {
+        setState(() => _scrolledAwayFromPresent = false);
+        _reportTimelineAtPresent();
+      }
+    } finally {
+      if (mounted && _presentNavigation == generation) {
+        setState(() => _presentNavigation = null);
+      }
     }
-    if (mounted && _scrolledAwayFromPresent) {
-      setState(() => _scrolledAwayFromPresent = false);
-    }
-    widget.backend.setConversationAtPresent(true);
   }
 
   @override
@@ -289,6 +324,7 @@ class _ConversationState extends State<_Conversation> {
       _scrolledAwayFromPresent = false;
       _messageKeys.clear();
       _navigationGeneration++;
+      _presentNavigation = null;
       _highlightedMessageId = null;
       _newestMessageId = newestMessageId;
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
@@ -410,6 +446,7 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _jumpToEvent(String eventId) async {
+    _presentNavigation = null;
     final generation = ++_navigationGeneration;
     _suppressPaginationUntil = DateTime.now().add(const Duration(seconds: 1));
     if (!await _scrollToMessage(eventId, generation)) {
@@ -418,7 +455,12 @@ class _ConversationState extends State<_Conversation> {
       await _scrollToMessage(eventId, generation, waitForBuild: true);
     }
     if (!mounted || generation != _navigationGeneration) return;
-    await _blinkMessage(eventId, generation);
+    await _blinkMessage(
+      MediaAlbumIndex.fromNewestFirst(
+        widget.backend.timelineMessages,
+      ).visibleMessageId(eventId),
+      generation,
+    );
   }
 
   Future<bool> _scrollToMessage(
@@ -995,6 +1037,17 @@ class _ConversationState extends State<_Conversation> {
                                               highlighted:
                                                   _highlightedMessageId ==
                                                   message.id,
+                                              replying:
+                                                  _composerTargetId ==
+                                                      message.id ||
+                                                  (mediaAlbums
+                                                          .albums[message.id]
+                                                          ?.any(
+                                                            (m) =>
+                                                                m.id ==
+                                                                _composerTargetId,
+                                                          ) ??
+                                                      false),
                                               startsGroup: startsGroup,
                                               onReply: () =>
                                                   widget.onReply(message),
@@ -1057,33 +1110,16 @@ class _ConversationState extends State<_Conversation> {
                             top: 0,
                             child: LinearProgressIndicator(minHeight: 2),
                           ),
-                        if (backend.canLoadMoreFuture)
-                          Positioned(
-                            right: 16,
-                            bottom: 58,
-                            child: FilledButton.tonalIcon(
-                              key: const Key('load-newer-messages'),
-                              onPressed: backend.historyLoading
-                                  ? null
-                                  : _loadNewerAnchored,
-                              icon: backend.historyLoading
-                                  ? const SizedBox.square(
-                                      dimension: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const ThemeIcon(Icons.update, size: 17),
-                              label: const Text('Load newer messages'),
-                            ),
-                          ),
                         if (!backend.atTimelinePresent ||
                             _scrolledAwayFromPresent)
                           Positioned(
                             right: 16,
                             bottom: 12,
                             child: FilledButton.tonalIcon(
-                              onPressed: _returnToPresent,
+                              key: const ValueKey('jump-to-present'),
+                              onPressed: _presentNavigation == null
+                                  ? _returnToPresent
+                                  : null,
                               icon: const ThemeIcon(
                                 Icons.vertical_align_bottom,
                                 size: 17,
@@ -1110,6 +1146,7 @@ class _ConversationState extends State<_Conversation> {
                     _ComposerContext(
                       label: 'Replying to ${message.sender}',
                       body: message.body,
+                      onTap: () => _jumpToEvent(message.id),
                       onCancel: widget.onCancelComposerAction,
                     )
                   else if (widget.editingMessage case final message?)
@@ -1124,56 +1161,60 @@ class _ConversationState extends State<_Conversation> {
                       selectedIndex: widget.mentionSelectionIndex,
                       onSelected: widget.onMentionSelected,
                     ),
-                  VoiceMessageComposer(
-                    key: ValueKey('voice-composer-${room.id}'),
-                    backend: backend,
-                    roomId: room.id,
-                    replyToMessageId: widget.replyingTo?.id,
-                    onSent: widget.onCancelComposerAction,
-                    builder: (startRecording) => _MessageComposer(
-                      onEscape: widget.editingMessage == null
-                          ? null
-                          : () {
-                              dismissTemporaryUi();
-                              widget.onCancelComposerAction();
-                            },
-                      key: widget.composerKey,
+                  if (!backend.canSendMessagesToRoom(room.id))
+                    const ReadOnlyConversationNotice()
+                  else
+                    VoiceMessageComposer(
+                      key: ValueKey('voice-composer-${room.id}'),
                       backend: backend,
-                      controller: widget.controller,
-                      focusNode: widget.composerFocus,
-                      roomName: room.name,
-                      sending: widget.sending,
+                      roomId: room.id,
                       replyToMessageId: widget.replyingTo?.id,
-                      // The editor remains live while this only gates attachment
-                      // and submit controls for the in-flight request.
-                      enabled: true,
-                      sendWithCtrlEnter: backend.preferences.sendWithCtrlEnter,
-                      onSend: widget.onSend,
-                      onRecord: widget.editingMessage == null
-                          ? startRecording
-                          : null,
-                      onSchedule: widget.onSchedule,
-                      onPoll: widget.onPoll,
-                      onSticker: widget.onSticker,
-                      onAttach: widget.onAttach,
-                      onGif: widget.onGif,
-                      onPasteImage: widget.onPasteImage,
-                      pendingAttachments: widget.pendingAttachments,
-                      onRemoveAttachment: widget.onRemoveAttachment,
-                      onEditAttachment: widget.onEditAttachment,
-                      onToggleAttachmentSpoiler:
-                          widget.onToggleAttachmentSpoiler,
-                      mentionSuggestions: widget.mentionSuggestions,
-                      mentionSelectionIndex: widget.mentionSelectionIndex,
-                      onMentionSelected: widget.onMentionSelected,
-                      onMentionSelectionChanged:
-                          widget.onMentionSelectionChanged,
-                      maxHeight: max(
-                        _bottomPanelHeightFor(context),
-                        (MediaQuery.sizeOf(context).height - 56) / 3,
+                      onSent: widget.onCancelComposerAction,
+                      builder: (startRecording) => _MessageComposer(
+                        onEscape: widget.editingMessage == null
+                            ? null
+                            : () {
+                                dismissTemporaryUi();
+                                widget.onCancelComposerAction();
+                              },
+                        key: widget.composerKey,
+                        backend: backend,
+                        controller: widget.controller,
+                        focusNode: widget.composerFocus,
+                        roomName: room.name,
+                        sending: widget.sending,
+                        replyToMessageId: widget.replyingTo?.id,
+                        // The editor remains live while this only gates attachment
+                        // and submit controls for the in-flight request.
+                        enabled: true,
+                        sendWithCtrlEnter:
+                            backend.preferences.sendWithCtrlEnter,
+                        onSend: widget.onSend,
+                        onRecord: widget.editingMessage == null
+                            ? startRecording
+                            : null,
+                        onSchedule: widget.onSchedule,
+                        onPoll: widget.onPoll,
+                        onSticker: widget.onSticker,
+                        onAttach: widget.onAttach,
+                        onGif: widget.onGif,
+                        onPasteImage: widget.onPasteImage,
+                        pendingAttachments: widget.pendingAttachments,
+                        onRemoveAttachment: widget.onRemoveAttachment,
+                        onEditAttachment: widget.onEditAttachment,
+                        onToggleAttachmentSpoiler:
+                            widget.onToggleAttachmentSpoiler,
+                        mentionSuggestions: widget.mentionSuggestions,
+                        mentionSelectionIndex: widget.mentionSelectionIndex,
+                        onMentionSelected: widget.onMentionSelected,
+                        onMentionSelectionChanged:
+                            widget.onMentionSelectionChanged,
+                        maxHeight: max(
+                          _bottomPanelHeightFor(context),
+                          (MediaQuery.sizeOf(context).height - 56) / 3,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

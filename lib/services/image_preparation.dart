@@ -4,6 +4,7 @@ import '../models/chat_models.dart';
 import '../models/media_compression.dart';
 import 'encoded_image_dimensions.dart';
 import 'image_animation.dart';
+import 'raw_image.dart';
 
 class _ImagePreparationJob {
   _ImagePreparationJob(this.name);
@@ -46,6 +47,7 @@ Future<AttachmentDraft> prepareImage(
   ImageCompressionPreset preset,
 ) async {
   if (!draft.mimeType.startsWith('image/') ||
+      isRawImageFile(draft.name, draft.mimeType) ||
       preset == ImageCompressionPreset.original ||
       draft.imagePrepared ||
       hasAnimatedImageHeader(draft.bytes)) {

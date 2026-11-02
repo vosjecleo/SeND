@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/chat_models.dart';
+import '../services/raw_image.dart';
 
 /// Local media stays visibly pending; it is not playable or marked delivered.
 class QueuedAttachmentPreview extends StatelessWidget {
@@ -7,7 +8,9 @@ class QueuedAttachmentPreview extends StatelessWidget {
   final AttachmentDraft draft;
   @override
   Widget build(BuildContext context) {
-    final photo = draft.mimeType.startsWith('image/');
+    final photo =
+        draft.mimeType.startsWith('image/') &&
+        !isRawImageFile(draft.name, draft.mimeType);
     final bytes = photo ? draft.bytes : draft.videoThumbnail;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420, maxHeight: 260),
