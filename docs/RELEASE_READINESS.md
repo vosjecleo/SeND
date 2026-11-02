@@ -91,6 +91,25 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
+## Recorded release: 0.9.42+136
+
+Published to Latest on 2026-11-02 from `c3d73f5`, tag `v0.9.42-b136`. Cleo tested
+the Linux and Android previews. Final Present navigation, edit highlighting and
+link-colour changes passed focused regression checks before publication.
+
+Shared CI passed 1,045 native tests with four existing skips, clean formatting
+and static analysis, 71 server tests, 12 packaging tests, 17 Linux checks and
+22 web-worker/bridge tests. Windows, Linux, Android and Web/PWA workflows passed,
+including the clean AppImage launch, browser checks and compiled Android push
+tests. Flatpak build and publication passed too.
+
+The publisher verified signed checksums for all 12 core artifacts and both
+Flatpak bundles. The live PWA reports build 136; its same-origin metadata and
+signature match the download mirror byte-for-byte. The manifest expires on
+2027-01-31. Stable's version fields and download lists are unchanged. No database
+migration was needed, and the final CI packages did not replace the installed
+inspection previews. See the [changelog](../CHANGELOG.md) for the fixes.
+
 ## Recorded release: 0.9.42+135
 
 Published to Latest on 2026-10-31 from `c02c434`, tag `v0.9.42-b135`. Stable is
@@ -118,7 +137,7 @@ This was the first signed mirror publication. The legacy build 134 metadata
 was read over authenticated SSH, compared byte-for-byte with HTTPS, and its
 download hashes checked against the published build 134 checksum lists before
 the documented one-time bootstrap. Future publication requires signed metadata.
-The current manifest expires on 2027-01-29; renewal instructions are in the
+Its manifest was issued with a 2027-01-29 expiry; renewal instructions are in the
 [signing guide](RELEASE_SIGNING.md). The release tool did not replace the local
 inspection preview with the final CI package.
 

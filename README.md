@@ -3,7 +3,7 @@
 An open-source Matrix messenger with familiar servers, channels, calls and profiles.
 Linux, Windows, Android, and the web, including iPhone/iPad as an installed PWA.
 
-**Latest: version 0.9.42 build 135.** Stable is unchanged.
+**Latest: version 0.9.42 build 136.** Stable is unchanged.
 
 [Download SeND](https://deltie.net/SeND/) · [Open the web app](https://chat.deltie.net) ·
 [Installation](INSTALL.md) · [Changelog](CHANGELOG.md) · [Documentation](docs/README.md)
@@ -30,7 +30,7 @@ and the desktop layout on larger screens. On iPhone/iPad, open
 No App Store or TestFlight installation is needed.
 
 More pictures are in the [screenshot gallery](docs/screenshots.md). These supplied
-captures include earlier interface revisions; they are not all from build 135.
+captures include earlier interface revisions; they are not all from build 136.
 
 ## What it does
 
@@ -81,6 +81,8 @@ See the [server setup guide](server/INSTALL.md).
 Crop, rotate and mark up images. Trim, crop, rotate or mute video, then choose
 upload quality and whether to hide it behind a spoiler. The 64 MiB attachment
 batch limit is checked **after compression**, when you send.
+
+Camera RAW images are sent unchanged as files and cannot be edited here.
 
 Browser video editing and compression use WebCodecs where supported. Available
 codecs and export limits vary by browser.
@@ -171,7 +173,7 @@ less frequent use. Expect occasional bugs. No slow memory leaks have been
 reported over many hundreds of cumulative usage hours. Cleo's populated account
 idles around 450 MB; usage varies with platform, account and open media.
 
-0.9.42 build 135 is published to **Latest** only. Stable promotion waits for further testing.
+0.9.42 build 136 is published to **Latest** only. Stable promotion waits for further testing.
 Work toward 1.0 continues on performance, accessibility,
 interoperability and reliability. See the [1.0 readiness checklist](docs/RELEASE_READINESS.md).
 
@@ -201,5 +203,5 @@ See [CREDITS.md](CREDITS.md), [LICENSE](LICENSE) and
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). SeND is licensed under
 **AGPL-3.0-or-later**. Screenshot artwork belongs to its respective creators.
 
-**Documentation baseline: 0.9.42+135.** Technical guides and older engineering
+**Documentation baseline: 0.9.42+136.** Technical guides and older engineering
 records are in the [documentation index](docs/README.md).
