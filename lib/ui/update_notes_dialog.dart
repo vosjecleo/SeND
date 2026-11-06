@@ -21,13 +21,9 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
           ),
           child: const Text(
             'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
-            '• Forward messages and whole photo galleries\n\n'
-            '• GIF favourites, more categories and infinite scrolling\n\n'
-            '• Faster avatars and profile loading\n\n'
-            '• Clearer settings and server controls\n\n'
-            '• Mobile keyboard and notification fixes\n\n'
-            '• Mobile online indicators, with a Privacy switch\n\n'
-            '• Security fixes for encryption, media and push notifications',
+            '• Smaller round status indicators with wider outlines\n\n'
+            '• Offline ring kept; mobile phone indicator unchanged\n\n'
+            '• Reply avatars now appear before the name and quoted text',
           ),
         ),
       ),

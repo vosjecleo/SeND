@@ -21,20 +21,11 @@ class ReplyQuoteText extends StatelessWidget {
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(
-            text: reply.sender,
-            style: TextStyle(
-              color: reply.senderColor == null
-                  ? null
-                  : Color(reply.senderColor!),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
           if (reply.senderId != null)
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.only(right: 4),
                 child: ThemeAvatar(
                   key: const ValueKey('reply-mini-avatar'),
                   radius: 7,
@@ -50,9 +41,16 @@ class ReplyQuoteText extends StatelessWidget {
                       : null,
                 ),
               ),
-            )
-          else
-            const TextSpan(text: '  '),
+            ),
+          TextSpan(
+            text: '${reply.sender}  ',
+            style: TextStyle(
+              color: reply.senderColor == null
+                  ? null
+                  : Color(reply.senderColor!),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           TextSpan(
             text: reply.body.replaceAll('\n', ' '),
             style: TextStyle(color: muted),

@@ -289,6 +289,19 @@ void main() {
           containsAll([const Color(0xff70737d), const Color(0xff303238)]),
         );
       }
+      if (!badge.phone) {
+        final face = tester.getRect(
+          find
+              .descendant(
+                of: find.byType(PresenceBadge),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+        expect(face.width, closeTo(badgeBounds.width * .9, .001));
+        expect(face.height, closeTo(badgeBounds.height * .9, .001));
+        expect(face.center, badgeBounds.center);
+      }
       final clips = tester.widgetList<ClipPath>(find.byType(ClipPath));
       expect(
         clips.any(

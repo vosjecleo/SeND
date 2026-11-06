@@ -3,6 +3,17 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 138 (2026-11-06)
+
+- Shrink circular status indicators slightly without changing their avatar
+  cutouts, leaving a wider outline. Retain the offline ring design and leave
+  the approved mobile phone indicator unchanged.
+- Place reply-preview avatars before the quoted sender's name and message on
+  desktop and mobile. Keep their size, static rendering and reply-row height.
+
+UI hotfix, Latest only. Stable, accounts, encryption sessions and server services
+are unchanged.
+
 ## SeND 0.9.42 build 137 (2026-11-06)
 
 - Forward text, files and whole photo galleries to another conversation.

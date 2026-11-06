@@ -81,30 +81,34 @@ class PresenceBadge extends StatelessWidget {
       dimension: size,
       child: phone
           ? const CustomPaint(painter: _PhonePresencePainter())
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: switch (presence) {
-                  UserPresence.online => const Color(0xff23c483),
-                  UserPresence.away => const Color(0xffe3a53a),
-                  UserPresence.doNotDisturb => const Color(0xffe5484d),
-                  UserPresence.offline => const Color(0xff70737d),
-                },
-              ),
-              child: presence == UserPresence.offline
-                  ? const Center(
-                      child: FractionallySizedBox(
-                        widthFactor: .58,
-                        heightFactor: .58,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xff303238),
+          : Padding(
+              // Leave the badge footprint/cutout unchanged; inset only the face.
+              padding: EdgeInsets.all(size * .05),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: switch (presence) {
+                    UserPresence.online => const Color(0xff23c483),
+                    UserPresence.away => const Color(0xffe3a53a),
+                    UserPresence.doNotDisturb => const Color(0xffe5484d),
+                    UserPresence.offline => const Color(0xff70737d),
+                  },
+                ),
+                child: presence == UserPresence.offline
+                    ? const Center(
+                        child: FractionallySizedBox(
+                          widthFactor: .58,
+                          heightFactor: .58,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xff303238),
+                            ),
                           ),
                         ),
-                      ),
-                    )
-                  : null,
+                      )
+                    : null,
+              ),
             ),
     ),
   );
