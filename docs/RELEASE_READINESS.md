@@ -91,6 +91,32 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
+## Recorded release: 0.9.42+137
+
+Published to Latest on 2026-11-06 from `f2abdeb`, tag `v0.9.42-b137`. Cleo
+reviewed Linux/Android previews and approved the status-indicator renders.
+The final CI packages did not replace the installed inspection previews.
+
+Local preflight passed 1,245 native tests with four existing skips, 75 server
+tests and 17 Linux packaging tests, with clean formatting and static analysis.
+The first full run caught a reply-link confirmation regression and two mobile
+layout fixtures that tried to edit a hidden composer. The confirmation path was
+restored, the fixtures now open the chat first, and the full rerun passed without
+weakening their assertions or disabling the hidden-panel focus guard.
+
+Shared Validation, Windows, Linux, Android and Web/PWA CI passed for the tagged
+commit. Release publication and Flatpak build/publication passed too. Signed
+checksums verified all 12 core artifacts and the Flatpak binary/source pair;
+the core mirror files were independently checked on Deltie after deployment.
+The live PWA reports build 137. Its final same-origin metadata and signature
+match the mirror byte-for-byte, with a 2027-02-04 expiry. Stable's version fields
+and download lists were compared before/after and are unchanged.
+
+The matching push-worker hardening update is staged for the operator. Release
+publication did not install it or restart that service; it still needs the
+privileged installation step. Physical-device IME/background-delivery checks
+and long-session GPU/avatar investigations remain separate from synthetic tests.
+
 ## Recorded release: 0.9.42+136
 
 Published to Latest on 2026-11-02 from `c3d73f5`, tag `v0.9.42-b136`. Cleo tested
