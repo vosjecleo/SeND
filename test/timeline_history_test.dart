@@ -1,11 +1,172 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_backend.dart';
 
 void main() {
+  testWidgets(
+    'a wheel attempt during pagination cooldown retries at the older edge',
+    (tester) async {
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..moreHistory = true
+        ..roomList = const [
+          RoomSummary(
+            id: 'room',
+            name: 'Cooldown history',
+            lastMessage: '',
+            unreadCount: 0,
+            usesChannelIcon: true,
+          ),
+        ]
+        ..messageList = [
+          for (var i = 0; i < 50; i++)
+            ChatMessage(
+              id: 'event-$i',
+              sender: 'Alice',
+              body: 'Message $i',
+              timestamp: DateTime(2026).subtract(Duration(minutes: i)),
+              pending: false,
+            ),
+        ];
+      backend.historyLoader = () async {
+        backend.messageList = [
+          ...backend.messageList,
+          for (var i = 0; i < 20; i++)
+            ChatMessage(
+              id: 'older-${backend.historyRequests}-$i',
+              sender: 'Bob',
+              body: 'Older page ${backend.historyRequests} item $i',
+              timestamp: DateTime(2025).subtract(Duration(minutes: i)),
+              pending: false,
+            ),
+        ];
+        if (backend.historyRequests == 2) backend.moreHistory = false;
+        backend.notifyListeners();
+      };
+      await tester.pumpWidget(DeltiecordApp(backend: backend));
+      await tester.tap(find.text('Cooldown history'));
+      await tester.pumpAndSettle();
+      final timeline = find.byKey(const Key('message-timeline'));
+      final position = tester
+          .state<ScrollableState>(
+            find
+                .descendant(of: timeline, matching: find.byType(Scrollable))
+                .first,
+          )
+          .position;
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(timeline),
+          scrollDelta: const Offset(0, -100),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(backend.historyRequests, 1);
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(timeline),
+          scrollDelta: const Offset(0, -100),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump();
+      expect(backend.historyRequests, 2);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  for (final trackpad in [false, true]) {
+    testWidgets(
+      'desktop edge scroll loads older history even without offset movement, trackpad=$trackpad',
+      (tester) async {
+        final messages = [
+          for (var i = 0; i < 70; i++)
+            ChatMessage(
+              id: 'event-$i',
+              sender: 'Alice',
+              body: 'Message $i',
+              timestamp: DateTime(2026).subtract(Duration(minutes: i)),
+              pending: false,
+            ),
+        ];
+        final backend = FakeBackend()
+          ..currentStatus = SessionStatus.signedIn
+          ..moreHistory = true
+          ..roomList = const [
+            RoomSummary(
+              id: 'room',
+              name: 'Wheel history',
+              lastMessage: '',
+              unreadCount: 0,
+              usesChannelIcon: true,
+            ),
+          ]
+          ..messageList = messages;
+        backend.historyLoader = () async {
+          backend.moreHistory = false;
+          backend.notifyListeners();
+        };
+        await tester.pumpWidget(DeltiecordApp(backend: backend));
+        await tester.tap(find.text('Wheel history'));
+        await tester.pumpAndSettle();
+        final timeline = find.byKey(const Key('message-timeline'));
+        final position = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: timeline, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        expect(
+          backend.historyRequests,
+          0,
+        ); // Programmatic layout isn't user intent.
+        final center = tester.getCenter(timeline);
+        if (trackpad) {
+          await tester.sendEventToBinding(
+            PointerPanZoomStartEvent(pointer: 7, position: center),
+          );
+          await tester.sendEventToBinding(
+            PointerPanZoomUpdateEvent(
+              pointer: 7,
+              position: center,
+              pan: const Offset(0, 40),
+              panDelta: const Offset(0, 40),
+            ),
+          );
+          await tester.sendEventToBinding(
+            PointerPanZoomEndEvent(pointer: 7, position: center),
+          );
+        } else {
+          await tester.sendEventToBinding(
+            PointerScrollEvent(
+              position: center,
+              scrollDelta: const Offset(0, -100),
+            ),
+          );
+        }
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(backend.historyRequests, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   testWidgets('loads older history from the timeline control', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn

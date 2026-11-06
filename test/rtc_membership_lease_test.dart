@@ -32,8 +32,107 @@ class _Client extends RtcMatrixClient {
       hydrationGate ?? super.hydrateRtcMembers(room);
 }
 
+class _AllowedDevice extends Fake implements DeviceKeys {
+  bool allowed = true;
+  @override
+  bool get encryptToDevice => allowed;
+}
+
+class _ResendClient extends _Client {
+  _ResendClient(
+    super.clientName, {
+    required super.database,
+    required super.httpClient,
+  });
+  final sentKeys = <Map<String, dynamic>>[];
+  @override
+  Future<void> updateUserDeviceKeys({Set<String>? additionalUsers}) async {}
+  @override
+  Future<void> sendToDeviceEncrypted(
+    List<DeviceKeys> devices,
+    String type,
+    Map<String, dynamic> message, {
+    String? messageId,
+    bool onlyVerified = false,
+  }) async {
+    expect(devices, hasLength(1));
+    expect(devices.single.encryptToDevice, true);
+    sentKeys.add(message);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'lost call key recovers without a membership change and never bypasses trust',
+    () async {
+      sqfliteFfiInit();
+      final db = await databaseFactoryFfi.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      final database = await MatrixSdkDatabase.init(
+        'rtc-resend',
+        database: db,
+        sqfliteFactory: databaseFactoryFfi,
+      );
+      final client = _ResendClient(
+        'rtc-resend',
+        database: database,
+        httpClient: MockClient(
+          (request) async =>
+              http.Response('{"event_id":"event","delay_id":"leave"}', 200),
+        ),
+      )..homeserver = Uri.parse('https://matrix.example.org');
+      addTearDown(client.dispose);
+      final room = Room(
+        id: '!call:example.org',
+        client: client,
+        membership: Membership.join,
+      );
+      final allowed = _AllowedDevice();
+      client.userDeviceKeys['@peer:example.org'] = DeviceKeysList(
+        '@peer:example.org',
+        client,
+      )..deviceKeys['PEER'] = allowed;
+      final member = RtcMember(
+        userId: '@peer:example.org',
+        deviceId: 'PEER',
+        memberId: 'peer-member',
+        createdAt: DateTime(2026),
+        expiresAt: DateTime(2030),
+        transports: const [],
+      );
+      client.hydrationGate = Future.value([member]);
+      var now = DateTime.utc(2026, 11, 5);
+      final errors = <Object>[];
+      final session = RtcMembershipSession(
+        room: room,
+        transport: RtcTransport(
+          serviceUrl: Uri.parse('https://rtc.example.org'),
+        ),
+        clock: () => now,
+        heartbeatTick: const Duration(days: 1),
+        installKey: (_, _, _) async {},
+        onMembersChanged: (_) {},
+        onError: errors.add,
+        pauseMedia: (_) async {},
+      );
+      addTearDown(session.close);
+      await session.start();
+      final first = client.sentKeys.single['media_key'];
+      now = now.add(const Duration(seconds: 21));
+      await session.refresh();
+      expect(client.sentKeys, hasLength(2));
+      expect(client.sentKeys.last['media_key'], first);
+      allowed.allowed = false;
+      now = now.add(const Duration(seconds: 21));
+      await session.refresh();
+      expect(client.sentKeys, hasLength(2));
+      expect(session.hasUnverifiedDevices, true);
+      expect(errors, isEmpty);
+    },
+  );
   for (final cancelsOnStateWrite in [false, true]) {
     test(
       'lease renewal preserves epoch (server cancels old jobs: $cancelsOnStateWrite)',

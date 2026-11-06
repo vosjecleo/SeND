@@ -151,11 +151,13 @@ def _giphy_request(query=None):
         return json.loads(body)
 
 
-def _klipy_request(query=None, slug=None):
+def _klipy_request(query=None, slug=None, page=1):
     # Never log the upstream URL: KLIPY places the credential in its path.
     key = _read_secret(KLIPY_KEY_FILE)
     endpoint = "items" if slug is not None else "trending" if query is None else "search"
-    parameters = {"per_page": 24, "page": 1, "content_filter": "high",
+    if not isinstance(page, int) or isinstance(page, bool) or not 1 <= page <= 10000:
+        raise ValueError('Invalid GIF page')
+    parameters = {"per_page": 24, "page": page, "content_filter": "high",
                   "format_filter": "gif", "locale": "en"}
     if query is not None:
         parameters["q"] = query
@@ -643,6 +645,13 @@ class Handler(BaseHTTPRequestHandler):
         query = parameters.get("q", [""])[0].strip()
         slug = parameters.get('slug', [''])[0]
         klipy = parsed.path.endswith('/klipy/search')
+        try:
+            page = int(parameters.get('page', ['1'])[0])
+            if not 1 <= page <= 10000:
+                raise ValueError('Invalid page')
+        except ValueError:
+            self._json({"error": "invalid page"}, 400)
+            return
         if (not trending and not query and not (klipy and slug)) or len(query) > 100 or len(slug) > 200:
             self._json({"error": "invalid query"}, 400)
             return
@@ -650,7 +659,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "GIF search busy"}, 503)
             return
         try:
-            self._json(_klipy_request(None if trending or slug else query, slug or None)
+            self._json(_klipy_request(None if trending or slug else query, slug or None, page)
                        if klipy else _giphy_request(None if trending else query))
         except Exception:
             # Upstream details can contain request material; keep them server-side.

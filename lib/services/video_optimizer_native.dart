@@ -304,6 +304,7 @@ Future<AttachmentDraft> optimizeVideo(
           ? (encodedDuration * 1000).round()
           : draft.durationMilliseconds,
       gifSource: draft.gifSource,
+      gallery: draft.gallery,
       videoWidth: size?.$1 ?? draft.videoWidth,
       videoHeight: size?.$2 ?? draft.videoHeight,
       videoThumbnail: await thumbnail.exists() && await thumbnail.length() > 0

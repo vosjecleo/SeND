@@ -5,6 +5,9 @@ enum ActivityKind { game, music, application }
 
 const activityProfileField = 'net.deltiecord.activity';
 const activityDevicePrefix = 'net.deltiecord.activity.device.';
+const mobilePresencePrefix = 'net.deltiecord.mobile.device.';
+String mobilePresenceField(String deviceId) =>
+    '$mobilePresencePrefix${sha256.convert(utf8.encode(deviceId))}';
 const lastFmHistoryPrefix = 'net.deltiecord.lastfm_recent.device.';
 // Keep the existing device field namespace for upgrades. Its track URL now
 // identifies Last.fm or Libre.fm; no credentials are included in these records.
@@ -17,7 +20,13 @@ String activityDeviceField(String deviceId) =>
 /// Native music wins over cloud now-playing; completed scrobbles never become
 /// a live activity. Selection is deterministic on every receiving client.
 class UserActivities {
-  const UserActivities({this.program, this.music, this.recent});
+  const UserActivities({
+    this.program,
+    this.music,
+    this.recent,
+    this.mobileOnline = false,
+  });
+  final bool mobileOnline;
   final UserActivity? program, music;
   final LastFmTrack? recent;
   UserActivity? get primary => program ?? music;
@@ -35,8 +44,13 @@ class UserActivities {
     });
     UserActivity? program, music;
     LastFmTrack? recent;
+    var mobile = false;
     for (final entry in entries.take(64)) {
       final record = entry.value as Map;
+      if (entry.key.startsWith(mobilePresencePrefix) &&
+          record['mobile'] == true) {
+        mobile = true;
+      }
       final slots = record['slots'];
       final legacy = UserActivity.fromJson(record);
       final p = slots is Map
@@ -76,7 +90,12 @@ class UserActivities {
         recent = track;
       }
     }
-    return UserActivities(program: program, music: music, recent: recent);
+    return UserActivities(
+      program: program,
+      music: music,
+      recent: recent,
+      mobileOnline: mobile,
+    );
   }
 }
 

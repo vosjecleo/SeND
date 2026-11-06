@@ -414,6 +414,8 @@ extension _MatrixSession on MatrixBackend {
       _historySearchOffline = false;
       _historySearchGeneration++;
       _discoveredSpaceRooms.clear();
+      _spaceFollow?.dispose();
+      _spaceFollow = null;
       _reviewedSpaceRoles.clear();
       _roleProfileSignature = null;
       _offlineSendRooms.clear();
@@ -935,10 +937,17 @@ extension _MatrixSession on MatrixBackend {
         if (_lastNotificationEventIds[room.id] == key) continue;
         _lastNotificationEventIds[room.id] = key;
         if (activeDesktopOwnsExternalNotifications ||
-            room.pushRuleState == PushRuleState.dontNotify) {
+            room.pushRuleState == PushRuleState.dontNotify ||
+            (_spaceFollow?.roomMuted(room.id) ?? false)) {
           continue;
         }
         final title = 'Invitation to ${room.getLocalizedDisplayname()}';
+        final invitationAvatar = await loadInvitationAvatar(
+          _matrix,
+          room,
+          avatarPool: _avatarMediaPool,
+        );
+        if (!lease.isCurrent) return;
         final body = senderId == null
             ? 'You have a room invitation'
             : 'From $senderId';
@@ -948,6 +957,7 @@ extension _MatrixSession on MatrixBackend {
               roomId: room.id,
               title: title,
               body: body,
+              avatar: invitationAvatar,
               onTap: () {
                 InAppNotificationCenter.dismiss();
                 unawaited(
@@ -963,6 +973,7 @@ extension _MatrixSession on MatrixBackend {
               body: body,
               roomId: room.id,
               eventId: '',
+              senderAvatar: invitationAvatar,
               sound: _preferences.notificationSound,
               vibrate: _preferences.notificationVibration,
               alertCadence: _preferences.notificationAlertCadence,
@@ -988,6 +999,7 @@ extension _MatrixSession on MatrixBackend {
                   _visibleDiscussionFor(event))) ||
           event.senderId == _matrix.userID ||
           room.pushRuleState == PushRuleState.dontNotify ||
+          (_spaceFollow?.roomMuted(room.id) ?? false) ||
           (!invited &&
               room.pushRuleState == PushRuleState.mentionsOnly &&
               room.highlightCount == 0)) {
@@ -1007,13 +1019,7 @@ extension _MatrixSession on MatrixBackend {
           ? 'Invited you to ${room.getLocalizedDisplayname()}'
           : !_notificationPreviewsEnabled
           ? 'New message'
-          : displayEvent.type == EventTypes.Message
-          ? displayEvent.calcUnlocalizedBody(
-              hideReply: true,
-              hideEdit: true,
-              plaintextBody: true,
-            )
-          : 'New room activity';
+          : notificationEventBody(displayEvent);
       final notificationAvatar = await _notificationAvatarFor(room, event);
       if (!lease.isCurrent) return;
       final notificationImage = await _notificationImageFor(displayEvent);
@@ -1089,9 +1095,7 @@ extension _MatrixSession on MatrixBackend {
           sound: !desktop && _preferences.notificationSound,
           vibrate: _preferences.notificationVibration,
           alertCadence: _preferences.notificationAlertCadence,
-          unreadCount: room.isDirectChat
-              ? room.notificationCount
-              : room.highlightCount,
+          unreadCount: notificationUnreadCount(room),
         );
         if (!lease.isCurrent) return;
         _notificationError = null;
@@ -1162,8 +1166,10 @@ extension _MatrixSession on MatrixBackend {
       return null;
     }
     try {
-      final file = await event.downloadAndDecryptAttachment(
-        getThumbnail: useThumbnail,
+      final file = await BoundedMatrixMedia.attachment(
+        event,
+        thumbnail: useThumbnail,
+        maximumBytes: 3 * 1024 * 1024,
       );
       if (file.bytes.length > 3 * 1024 * 1024) return null;
       return (file.bytes, file.mimeType);
@@ -1173,8 +1179,9 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _openNotificationTarget(NotificationTarget target) async {
-    if (!_matrix.isLogged()) return;
-    final room = _matrix.getRoomById(target.roomId);
+    final client = _matrix;
+    if (!client.isLogged()) return;
+    final room = client.getRoomById(target.roomId);
     if (room?.membership == Membership.invite) {
       await _notifications.clearRoom(target.roomId);
       _inboxRequestRevision++;
@@ -1183,7 +1190,40 @@ extension _MatrixSession on MatrixBackend {
     }
     if (room == null || room.membership != Membership.join) return;
     try {
+      setArchiveOpen(false);
+      if (room.isSpace) {
+        _selectSpace(room.id);
+        return;
+      }
+      final identity = notificationAvatarRoom(room);
+      final parent =
+          _spaceForRoom(room) ?? (identity?.isSpace == true ? identity : null);
+      final contextChanged = _selectedSpaceId != parent?.id;
+      // _selectRoom owns asynchronous timeline disposal. Do not also call
+      // _selectSpace here and race two close/open operations.
+      _selectedSpaceId = parent?.id;
       await _selectRoom(target.roomId);
+      if (_selectedRoomId != target.roomId || !identical(client, _client)) {
+        return;
+      }
+      try {
+        await room.postLoad();
+      } catch (_) {
+        /* Cached parent links may still be sufficient. */
+      }
+      if (_selectedRoomId != target.roomId || !identical(client, _client)) {
+        return;
+      }
+      final loadedIdentity = notificationAvatarRoom(room);
+      final loadedParent =
+          _spaceForRoom(room) ??
+          (loadedIdentity?.isSpace == true ? loadedIdentity : null);
+      final parentHydrated = _selectedSpaceId != loadedParent?.id;
+      _selectedSpaceId = loadedParent?.id;
+      if (contextChanged || parentHydrated) {
+        unawaited(_refreshStickerPacks());
+        _notifyBackendListeners();
+      }
       if (target.eventId.isEmpty) return;
       final event = await room.getEventById(target.eventId);
       final rootId = event?.relationshipType == RelationshipTypes.thread
@@ -1320,6 +1360,8 @@ extension _MatrixSession on MatrixBackend {
       sendTypingNotifications:
           content.tryGet<bool>('send_typing_notifications') ?? true,
       sharePresence: content.tryGet<bool>('share_presence') ?? true,
+      shareMobilePresence:
+          content.tryGet<bool>('share_mobile_presence') ?? true,
       desktopIdleMinutes: (content.tryGet<int>('desktop_idle_minutes') ?? 5)
           .clamp(1, 120),
       directLinkPreviewMode:
@@ -1423,6 +1465,7 @@ extension _MatrixSession on MatrixBackend {
     _deviceAppearance = appearance;
     _devicePreferences = device;
     _devicePreferencesLoaded = true;
+    unawaited(_mobilePresence?.refresh());
     _devicePreferencesLoadFailed = failed;
     if (failed) {
       _error =
@@ -1517,6 +1560,7 @@ extension _MatrixSession on MatrixBackend {
     final receiptPrivacyChanged =
         preferences.sendReadReceipts != _preferences.sendReadReceipts;
     _preferences = preferences;
+    unawaited(_mobilePresence?.refresh());
     if (categoryChoiceChanged && preferences.shareUploadCategories) {
       _labelledEvents.clear();
       if (_timeline case final timeline?) {
@@ -1612,6 +1656,7 @@ extension _MatrixSession on MatrixBackend {
     'send_read_receipts': preferences.sendReadReceipts,
     'send_typing_notifications': preferences.sendTypingNotifications,
     'share_presence': preferences.sharePresence,
+    'share_mobile_presence': preferences.shareMobilePresence,
     'desktop_idle_minutes': preferences.desktopIdleMinutes,
     'fetch_direct_link_previews': preferences.fetchDirectLinkPreviews,
     'direct_link_preview_mode': preferences.directLinkPreviewMode.name,

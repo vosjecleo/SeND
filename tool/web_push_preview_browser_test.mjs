@@ -7,8 +7,12 @@ import {execFileSync} from 'node:child_process';
 const {default: puppeteer} = await import(process.env.PUPPETEER_MODULE || 'puppeteer-core');
 const fixture = JSON.parse(execFileSync('cargo', ['+nightly-2026-09-23', 'run', '--quiet', '--locked',
   '--manifest-path', 'tool/push-crypto/Cargo.toml', '--example', 'fixture'], {encoding: 'utf8'}));
+fixture.sticker = JSON.parse(execFileSync('cargo', ['+nightly-2026-09-23', 'run', '--quiet', '--locked',
+  '--manifest-path', 'tool/push-crypto/Cargo.toml', '--example', 'fixture', '--', '--sticker'], {encoding: 'utf8'}));
 const event = {room_id: '!room:test', event_id: '$test', sender: '@friend:test', type: 'm.room.encrypted',
   content: {algorithm: 'm.megolm.v1.aes-sha2', session_id: fixture.id, sender_key: 'sender-key', ciphertext: fixture.ciphertext}};
+const stickerEvent = {...event, event_id: '$sticker', content: {...event.content,
+  session_id: fixture.sticker.id, ciphertext: fixture.sticker.ciphertext}};
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === '/') {
@@ -20,7 +24,8 @@ const server = http.createServer(async (req, res) => {
       res.end(`importScripts('/push_preview_store.js', '/push-crypto/send_push_crypto.js', '/push_preview.js');
         const originalFetch = fetch;
         self.fetch = (url, options) => String(url).startsWith('https://matrix.example/')
-          ? Promise.resolve(new Response(JSON.stringify(${JSON.stringify(event)}))) : originalFetch(url, options);
+          ? Promise.resolve(new Response(JSON.stringify(String(url).includes('sticker')
+            ? ${JSON.stringify(stickerEvent)} : ${JSON.stringify(event)}))) : originalFetch(url, options);
         self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
         self.addEventListener('message', e => e.waitUntil((async () => {
           const result = await sendPushPreview(e.data);
@@ -55,20 +60,21 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const result = await page.evaluate(async fixture => {
     const state = {owner: 'test-device', user: '@me:test', homeserver: 'https://matrix.example', token: 'fake-token',
-      expires: Date.now() + 60000, rooms: ['!room:test'], sessions: [{room: '!room:test', id: fixture.id,
-        sender: '@friend:test', senderKey: 'sender-key', key: fixture.key}]};
+      expires: Date.now() + 60000, rooms: ['!room:test'], sessions: [fixture, fixture.sticker].map(item => ({room: '!room:test', id: item.id,
+        sender: '@friend:test', senderKey: 'sender-key', key: item.key}))};
     await sendPushPreviewStore.write(state);
     const stored = await sendPushPreviewStore.read();
     if (stored.token !== 'fake-token') throw Error('Encrypted storage roundtrip failed');
     const reg = await navigator.serviceWorker.register('/test-sw.js');
     await navigator.serviceWorker.ready;
-    const ask = () => new Promise((resolve, reject) => {
+    const ask = (event = '$test') => new Promise((resolve, reject) => {
       const channel = new MessageChannel();
       const timer = setTimeout(() => reject(Error('Worker timed out')), 10000);
       channel.port1.onmessage = e => {clearTimeout(timer); resolve(e.data);};
-      reg.active.postMessage({room_id: '!room:test', event_id: '$test'}, [channel.port2]);
+      reg.active.postMessage({room_id: '!room:test', event_id: event}, [channel.port2]);
     });
     const preview = await ask();
+    const sticker = await ask('$sticker');
     const duplicate = await ask();
     await sendPushPreviewStore.write(null);
     const afterLogout = await ask();
@@ -76,10 +82,11 @@ try {
     await sendPushPreviewStore.write({...state, expires: Date.now() - 1});
     const expired = await ask();
     await sendPushPreviewStore.write(null);
-    return {preview, duplicate, afterLogout, active, expired};
+    return {preview, sticker, duplicate, afterLogout, active, expired};
   }, fixture);
   assert.equal(result.preview?.body, 'Hello from encrypted push');
   assert.equal(result.preview?.title, '@friend:test');
+  assert.equal(result.sticker?.body, 'Sticker');
   assert.equal(result.duplicate, null);
   assert.equal(result.afterLogout, null);
   assert.equal(result.expired, null);

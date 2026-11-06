@@ -99,10 +99,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
         _senderAvatarBytes[event.senderId] = bytes;
         continue;
       }
-      final pooled = _avatarMediaPool.peek(
-        avatar,
-        AvatarMediaPool.rowDimension,
-      );
+      final pooled =
+          _avatarMediaPool.peek(avatar, AvatarMediaPool.profileDimension) ??
+          _avatarMediaPool.peek(avatar, AvatarMediaPool.rowDimension);
       if (pooled != null) {
         _senderAvatarBytes[event.senderId] = pooled;
         continue;
@@ -138,35 +137,90 @@ extension _MatrixTimelineSupport on MatrixBackend {
     final lease = _sessionScope.capture();
     final client = timeline.room.client;
     bool current() => lease.isCurrent && identical(client, _client);
-    for (final event in timeline.events) {
+    final loaded = <String, Event>{
+      for (final range in _timelineSegments.ranges)
+        if (range.timeline.room.id == timeline.room.id)
+          for (final event in range.events) event.eventId: event,
+      for (final event in _timelineWindowEvents(timeline)) event.eventId: event,
+    };
+    final replies = _timelineWindowEvents(timeline)
+        .where(
+          (event) =>
+              {
+                EventTypes.Message,
+                EventTypes.Sticker,
+                PollEventContent.startType,
+              }.contains(event.type) &&
+              event.inReplyToEventId() != null,
+        )
+        .toList();
+    final lookups = <String, Future<Event?>>{};
+    Future<void> hydrate(Event event) async {
       if (!current()) return;
-      if (event.type != EventTypes.Message ||
-          event.inReplyToEventId() == null ||
-          _replyPreviews.containsKey(event.eventId)) {
-        continue;
+      final targetId = event.inReplyToEventId()!;
+      var repliedTo = loaded[targetId];
+      if (repliedTo == null && _replyPreviews.containsKey(event.eventId)) {
+        return;
       }
-      var repliedTo = await event.getReplyEvent(timeline);
-      if (!current()) return;
-      if (repliedTo == null) continue;
-      if (repliedTo.type == EventTypes.Encrypted && client.encryption != null) {
-        repliedTo = await client.encryption!.decryptRoomEvent(repliedTo);
+      try {
+        repliedTo ??= await lookups.putIfAbsent(
+          targetId,
+          () => event.getReplyEvent(timeline),
+        );
+        if (!current()) return;
+        if (repliedTo == null) return;
+        if (repliedTo.type == EventTypes.Encrypted &&
+            client.encryption != null) {
+          repliedTo = await client.encryption!.decryptRoomEvent(repliedTo);
+        }
+        if (!current()) return;
+        if (!{
+          EventTypes.Message,
+          EventTypes.Sticker,
+          PollEventContent.startType,
+        }.contains(repliedTo.type)) {
+          return;
+        }
+        // Keep the original event ID as the navigation target, but render its
+        // latest replacement so reply previews cannot preserve a stale body.
+        final originalEventId = repliedTo.eventId;
+        final displayEvent = repliedTo.getDisplayEvent(timeline);
+        final preview = ReplyPreview(
+          eventId: originalEventId,
+          senderId: displayEvent.senderId,
+          sender: displayEvent.senderFromMemoryOrFallback.calcDisplayname(),
+          body: displayEvent.calcUnlocalizedBody(
+            hideReply: true,
+            hideEdit: true,
+            plaintextBody: true,
+          ),
+        );
+        final old = _replyPreviews[event.eventId];
+        if (old?.eventId != preview.eventId ||
+            old?.senderId != preview.senderId ||
+            old?.body != preview.body ||
+            old?.sender != preview.sender) {
+          _replyPreviews[event.eventId] = preview;
+          _notifyBackendListeners();
+          for (final session in _threadSessions) {
+            if (identical(session._timeline, timeline)) {
+              session._replyPreviewChanged();
+            }
+          }
+        }
+      } catch (_) {
+        /* Keep this relation visible; retry on the next hydration. */
       }
+    }
+
+    // Cached originals should not sit behind an unrelated network lookup.
+    final ordered = [
+      ...replies.where((e) => loaded.containsKey(e.inReplyToEventId())),
+      ...replies.where((e) => !loaded.containsKey(e.inReplyToEventId())),
+    ];
+    for (var start = 0; start < ordered.length; start += 4) {
       if (!current()) return;
-      if (repliedTo.type != EventTypes.Message) continue;
-      // Keep the original event ID as the navigation target, but render its
-      // latest replacement so reply previews cannot preserve a stale body.
-      final originalEventId = repliedTo.eventId;
-      final displayEvent = repliedTo.getDisplayEvent(timeline);
-      _replyPreviews[event.eventId] = ReplyPreview(
-        eventId: originalEventId,
-        senderId: displayEvent.senderId,
-        sender: displayEvent.senderFromMemoryOrFallback.calcDisplayname(),
-        body: displayEvent.calcUnlocalizedBody(
-          hideReply: true,
-          hideEdit: true,
-          plaintextBody: true,
-        ),
-      );
+      await Future.wait(ordered.skip(start).take(4).map(hydrate));
     }
   }
 
@@ -235,9 +289,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
   }
 
   Future<void> _hydrateTimelineMetadata(Timeline timeline) async {
-    final retainedEventIds = timeline.events
-        .map((event) => event.eventId)
-        .toSet();
+    final retainedEventIds = _timelineWindowEvents(
+      timeline,
+    ).map((event) => event.eventId).toSet();
     retainedEventIds.addAll(_forumRoots.keys);
     for (final session in _threadSessions) {
       retainedEventIds.addAll(
@@ -245,8 +299,13 @@ extension _MatrixTimelineSupport on MatrixBackend {
             const <String>[],
       );
     }
+    final replyEventIds = {
+      ...retainedEventIds,
+      for (final range in _timelineSegments.ranges)
+        for (final event in range.events) event.eventId,
+    };
     _replyPreviews.removeWhere(
-      (eventId, _) => !retainedEventIds.contains(eventId),
+      (eventId, _) => !replyEventIds.contains(eventId),
     );
     _linkPreviews.removeWhere(
       (eventId, _) => !retainedEventIds.contains(eventId),
@@ -298,9 +357,8 @@ extension _MatrixTimelineSupport on MatrixBackend {
     if (keyManager == null) {
       throw StateError('End-to-end encryption is not ready.');
     }
-    // Sessions created under the earlier verified-only policy remember the
-    // excluded devices. Rotate once so all current non-blocked devices receive
-    // the new Megolm session before ciphertext is sent.
+    // Previously permissive sessions may already be known to unsigned devices.
+    // Rotate before sending; keep historical inbound keys and backups intact.
     await keyManager.loadOutboundGroupSession(room.id);
     await keyManager.clearOrUseOutboundGroupSession(room.id, wipe: true);
     _outboundSessionsReset.add(room.id);

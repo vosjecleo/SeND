@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../models/space_administration.dart';
 
 Future<void> showChannelCategoryMenu(
   BuildContext context,
   ChatBackend backend,
   ChannelCategorySummary category, {
   Offset? position,
+  String? spaceId,
 }) async {
-  final space = backend.selectedSpaceId;
+  final space = spaceId ?? backend.selectedSpaceId;
   bool allowed() =>
       space != null &&
-      backend.selectedSpaceId == space &&
+      (spaceId != null || backend.selectedSpaceId == space) &&
       backend.canManageSpaceChannelLayout(space) &&
-      backend.selectedSpaceCategories.any((c) => c.id == category.id);
+      backend.categoriesInSpace(space).any((c) => c.id == category.id);
   if (!allowed()) return;
-  final index = backend.selectedSpaceCategories.indexWhere(
-    (c) => c.id == category.id,
-  );
+  final index = backend
+      .categoriesInSpace(space!)
+      .indexWhere((c) => c.id == category.id);
   final actions = <(String, String, IconData)>[
     ('edit', 'Edit category', Icons.edit_outlined),
     ('up', 'Move up', Icons.arrow_upward),
@@ -26,7 +28,7 @@ Future<void> showChannelCategoryMenu(
   ];
   bool enabled(String action) => switch (action) {
     'up' => index > 0,
-    'down' => index >= 0 && index < backend.selectedSpaceCategories.length - 1,
+    'down' => index >= 0 && index < backend.categoriesInSpace(space).length - 1,
     _ => true,
   };
   final action = position == null
@@ -109,7 +111,12 @@ Future<void> showChannelCategoryMenu(
           ),
         );
         if (name != null && allowed()) {
-          await backend.renameChannelCategory(category.id, name);
+          await backend.editSpaceCategory(
+            space,
+            SpaceCategoryAction.rename,
+            categoryId: category.id,
+            name: name,
+          );
         }
       case 'delete':
         final confirmed = await showDialog<bool>(
@@ -132,15 +139,29 @@ Future<void> showChannelCategoryMenu(
           ),
         );
         if (confirmed == true && allowed()) {
-          await backend.deleteChannelCategory(category.id);
+          await backend.editSpaceCategory(
+            space,
+            SpaceCategoryAction.delete,
+            categoryId: category.id,
+          );
         }
       case 'up':
         if (allowed()) {
-          await backend.reorderChannelCategory(category.id, index - 1);
+          await backend.editSpaceCategory(
+            space,
+            SpaceCategoryAction.move,
+            categoryId: category.id,
+            index: index - 1,
+          );
         }
       case 'down':
         if (allowed()) {
-          await backend.reorderChannelCategory(category.id, index + 1);
+          await backend.editSpaceCategory(
+            space,
+            SpaceCategoryAction.move,
+            categoryId: category.id,
+            index: index + 1,
+          );
         }
     }
   } catch (_) {

@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:matrix/matrix.dart';
+// SDK 10 does not export its initialization error type publicly.
+// ignore: implementation_imports
+import 'package:matrix/src/utils/client_init_exception.dart';
 import 'rtc_protocol.dart';
 
 class RtcStickyEvent {
@@ -19,11 +22,78 @@ class RtcMatrixClient extends Client {
     required super.database,
     super.customVideoThumbnailGenerator,
     super.importantStateEvents,
-    super.shareKeysWith,
     super.httpClient,
     super.logLevel,
-  });
+    // Keep the same policy in foreground, headless and browser clients. RTC
+    // explicitly applies encryptToDevice when sending its separate media keys.
+  }) : super(shareKeysWith: ShareKeysWith.crossVerifiedIfEnabled);
   final _sticky = <String, Map<String, RtcStickyEvent>>{};
+  bool _initializingSession = false;
+  bool _preserveFailedInitialization = false;
+
+  @override
+  Future<void> init({
+    String? newToken,
+    DateTime? newTokenExpiresAt,
+    String? newRefreshToken,
+    Uri? newHomeserver,
+    String? newUserID,
+    String? newDeviceName,
+    String? newDeviceID,
+    String? newOlmAccount,
+    String? newOidcClientId,
+    bool waitForFirstSync = true,
+    bool waitUntilLoadCompletedLoaded = true,
+    void Function()? onMigration,
+    void Function(InitState)? onInitStateChanged,
+  }) async {
+    if (_initializingSession) throw StateError('Session is already opening.');
+    _initializingSession = true;
+    try {
+      await super.init(
+        newToken: newToken,
+        newTokenExpiresAt: newTokenExpiresAt,
+        newRefreshToken: newRefreshToken,
+        newHomeserver: newHomeserver,
+        newUserID: newUserID,
+        newDeviceName: newDeviceName,
+        newDeviceID: newDeviceID,
+        newOlmAccount: newOlmAccount,
+        newOidcClientId: newOidcClientId,
+        waitForFirstSync: waitForFirstSync,
+        waitUntilLoadCompletedLoaded: waitUntilLoadCompletedLoaded,
+        // ignore: deprecated_member_use
+        onMigration: onMigration,
+        onInitStateChanged: (state) {
+          // Only suppress the SDK's error-cleanup clear, not authentication
+          // rejection handled by its sync/refresh loop during startup.
+          if (state == InitState.error) _preserveFailedInitialization = true;
+          onInitStateChanged?.call(state);
+        },
+      );
+    } on ClientInitException catch (error) {
+      // A local read/init failure is not a logout. Keep persisted tokens and
+      // crypto state for retry. A server-revoked token must still sign out.
+      final cause = error.originalException;
+      if (cause is MatrixException && cause.errcode == 'M_UNKNOWN_TOKEN') {
+        await super.clear();
+      }
+      rethrow;
+    } finally {
+      _initializingSession = false;
+      _preserveFailedInitialization = false;
+    }
+  }
+
+  @override
+  Future<void> clear() async {
+    if (_preserveFailedInitialization) {
+      await abortSync();
+      return;
+    }
+    await super.clear();
+  }
+
   final _resolved = <String, Map<String, (Event, DateTime)>>{};
   final _decoded = <String, Event>{};
   final _state = <String, Map<String, Map<String, Object?>>>{};

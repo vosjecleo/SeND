@@ -1,15 +1,18 @@
 import 'dart:async';
+import 'space_follow_controller.dart';
 import '../models/rtc_connectivity.dart';
 import '../services/rtc_audio_controls.dart';
 import '../services/attachment_text.dart';
 import '../services/attachment_admission.dart';
 import '../services/queued_message.dart';
+import '../services/gif_identity.dart';
 import '../services/dm_call_history.dart';
 import '../services/encoded_image_dimensions.dart';
 import '../services/video_preparation.dart';
 import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
 import '../services/activity_controller.dart';
+import '../services/mobile_presence_publisher.dart';
 import '../services/pack_reorganization.dart';
 import '../services/socks_proxy.dart';
 import '../services/personal_data.dart';
@@ -74,8 +77,13 @@ import '../services/android_push_bridge.dart';
 import '../services/font_preferences.dart';
 import '../services/message_search.dart';
 import '../services/message_links.dart';
+import '../services/message_forwarding.dart';
+import '../services/media_gallery.dart';
+import '../models/saved_gif_reference.dart';
 import '../services/link_preview_policy.dart';
 import '../services/link_preview_service.dart';
+import 'bounded_media.dart';
+import '../services/notification_content.dart';
 import '../services/web_preview_proxy.dart';
 import '../services/message_order.dart';
 import '../services/profile_refresh_policy.dart';
@@ -138,6 +146,12 @@ double _readPlatformFontScale(Map<String, dynamic>? content) {
 /// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
   ActivityController? _activities;
+  MobilePresencePublisher? _mobilePresence;
+  @override
+  bool mobileOnlineFor(String userId) =>
+      userId == _client?.userID && _isMobilePlatform
+      ? (_mobilePresence?.active ?? false)
+      : (_activities?.activitiesFor(userId).mobileOnline ?? false);
   @override
   ActivitySettings get activitySettings =>
       _activities?.settings ?? const ActivitySettings();
@@ -230,6 +244,7 @@ class MatrixBackend extends ChatBackend {
               for (final entry in fields.entries)
                 if (entry.key == activityProfileField ||
                     entry.key.startsWith(activityDevicePrefix) ||
+                    entry.key.startsWith(mobilePresencePrefix) ||
                     entry.key.startsWith(lastFmHistoryPrefix))
                   entry.key: entry.value,
             },
@@ -279,9 +294,50 @@ class MatrixBackend extends ChatBackend {
     _activities = controller;
     controller.addListener(_notifyBackendListeners);
     unawaited(controller.start());
+    if (_isMobilePlatform) {
+      final field = mobilePresenceField(client.deviceID!);
+      final publisher = MobilePresencePublisher(
+        enabled: () =>
+            identical(client, _client) &&
+            _settingsHydrated &&
+            _devicePreferencesLoaded &&
+            _ownProfileHydrated &&
+            _applicationForeground &&
+            _preferences.sharePresence &&
+            _preferences.shareMobilePresence &&
+            _presenceMode == PresenceMode.online &&
+            _effectiveClientPresence == PresenceType.online,
+        write: (record) async {
+          try {
+            if (record == null) {
+              await client.deleteProfileField(ownId, field);
+            } else {
+              await client.setProfileField(ownId, field, {field: record});
+            }
+          } on MatrixException catch (error) {
+            if (record == null && error.errcode == 'M_NOT_FOUND') return;
+            throw ActivityServiceError(
+              error.errcode,
+              retryAfter: error.retryAfterMs == null
+                  ? null
+                  : Duration(milliseconds: error.retryAfterMs!),
+            );
+          }
+        },
+      );
+      _mobilePresence = publisher;
+      publisher.addListener(_notifyBackendListeners);
+      publisher.start();
+    }
   }
 
   Future<void> _stopActivities({bool clear = false}) async {
+    final publisher = _mobilePresence;
+    _mobilePresence = null;
+    if (publisher != null) {
+      publisher.removeListener(_notifyBackendListeners);
+      await publisher.close(clear: clear);
+    }
     final controller = _activities;
     _activities = null;
     if (controller == null) return;
@@ -1179,6 +1235,8 @@ class MatrixBackend extends ChatBackend {
   PresenceMode _presenceMode = PresenceMode.online;
   List<StickerPackSummary> _stickerPacks = const [];
   String? _stickerPackSourceSignature;
+  Future<void>? _stickerPackRefreshPending;
+  bool _stickerPackRefreshRequested = false;
   bool _retryingOfflineSends = false;
   bool _notificationsPrimed = false;
   bool _notificationPreviewsEnabled = true;
@@ -1288,7 +1346,9 @@ class MatrixBackend extends ChatBackend {
             name: room.getLocalizedDisplayname(),
             avatarBytes: _avatarBytes[room.id],
             topic: room.topic,
-            muted: room.pushRuleState == PushRuleState.dontNotify,
+            muted:
+                _spaceFollow?.muted(room.id) ??
+                room.pushRuleState == PushRuleState.dontNotify,
           ),
         )
         .toList(growable: false);
@@ -1594,6 +1654,136 @@ class MatrixBackend extends ChatBackend {
       const [];
 
   PersonalData? _personal;
+  SpaceFollowController? _spaceFollow;
+  @override
+  Future<Map<String, String>> getSpaceMembers(String spaceId) async {
+    final room = _matrix.getRoomById(spaceId);
+    if (room == null) throw StateError('Server is unavailable');
+    return {
+      for (final member in await room.requestParticipants())
+        member.id: member.calcDisplayname(),
+    };
+  }
+
+  @override
+  Future<void> editSpaceCategory(
+    String spaceId,
+    SpaceCategoryAction action, {
+    String? categoryId,
+    String? name,
+    int? index,
+  }) async {
+    switch (action) {
+      case SpaceCategoryAction.create:
+        await _createChannelCategory(name!, targetSpaceId: spaceId);
+      case SpaceCategoryAction.rename:
+        await _renameChannelCategory(
+          categoryId!,
+          name!,
+          targetSpaceId: spaceId,
+        );
+      case SpaceCategoryAction.delete:
+        await _deleteChannelCategory(categoryId!, targetSpaceId: spaceId);
+      case SpaceCategoryAction.move:
+        await _reorderChannelCategory(
+          categoryId!,
+          index!,
+          targetSpaceId: spaceId,
+        );
+    }
+  }
+
+  @override
+  Future<void> moveRoomWithinSpace(
+    String spaceId,
+    String roomId, {
+    String? categoryId,
+    String? beforeRoomId,
+  }) => _moveRoomInSpace(
+    roomId,
+    categoryId: categoryId,
+    beforeRoomId: beforeRoomId,
+    targetSpaceId: spaceId,
+  );
+  SpaceFollowController get _spaceFollowing => _spaceFollow ??=
+      SpaceFollowController(client: _matrix, changed: _notifyBackendListeners);
+  @override
+  bool autoJoinSpaceChannels(String spaceId) =>
+      _spaceFollowing.autoJoin(spaceId);
+  @override
+  Future<void> setAutoJoinSpaceChannels(String spaceId, bool enabled) =>
+      _spaceFollowing.setAutoJoin(spaceId, enabled);
+  @override
+  Future<SpaceJoinResult> joinAvailableSpaceChannels(String spaceId) =>
+      _spaceFollowing.joinAvailable(spaceId, force: true);
+  @override
+  Future<void> refreshSpaceRooms(String spaceId) =>
+      _discoverSpaceRooms(spaceId);
+  @override
+  Future<void> removeRoomFromSpace(String spaceId, String roomId) async {
+    final space = _matrix.getRoomById(spaceId);
+    if (space == null ||
+        !space.isSpace ||
+        !space.canChangeStateEvent(EventTypes.SpaceChild)) {
+      throw StateError('You cannot remove channels from this server.');
+    }
+    final eventId = await _matrix.setRoomStateWithKey(
+      spaceId,
+      EventTypes.SpaceChild,
+      roomId,
+      {},
+    );
+    space.setState(
+      Event.fromJson({
+        'type': EventTypes.SpaceChild,
+        'state_key': roomId,
+        'event_id': eventId,
+        'sender': _matrix.userID,
+        'origin_server_ts': DateTime.now().millisecondsSinceEpoch,
+        'content': <String, Object?>{},
+      }, space),
+    );
+    if (_discoveredSpaceRooms[spaceId] case final rooms?) {
+      _discoveredSpaceRooms[spaceId] = rooms
+          .where((room) => room.id != roomId)
+          .toList();
+    }
+    if (_spaceRoomOrderOverrides[spaceId] case final ids?) {
+      _spaceRoomOrderOverrides[spaceId] = ids
+          .where((id) => id != roomId)
+          .toList();
+    }
+    final room = _matrix.getRoomById(roomId);
+    if (room?.canChangeStateEvent(EventTypes.SpaceParent) == true) {
+      try {
+        await _matrix.setRoomStateWithKey(
+          roomId,
+          EventTypes.SpaceParent,
+          spaceId,
+          {},
+        );
+      } catch (_) {
+        /* The authoritative server child link has already been removed. */
+      }
+    }
+    _notifyBackendListeners();
+  }
+
+  @override
+  List<RoomSummary> roomsInSpace(String spaceId) {
+    final joined = _roomsForSpace(spaceId).map(_roomSummary).toList();
+    final ids = joined.map((room) => room.id).toSet();
+    return [
+      ...joined,
+      ...?_discoveredSpaceRooms[spaceId]?.where(
+        (room) => !ids.contains(room.id),
+      ),
+    ];
+  }
+
+  @override
+  List<ChannelCategorySummary> categoriesInSpace(String spaceId) =>
+      _channelCategoriesFor(spaceId);
   Future<void>? _openingPersonal;
   @override
   PersonalData? get personalData => _personal;
@@ -1625,7 +1815,7 @@ class MatrixBackend extends ChatBackend {
       }
       _personal = personal;
       FavouriteReactionsStore.instance.bind(personal);
-      GifService.bind(personal);
+      GifService.bind(personal, resolveSaved: loadSavedGifPreview);
       personal.addListener(_notifyBackendListeners);
       _notifyBackendListeners();
     } catch (_) {
@@ -1759,6 +1949,7 @@ class MatrixBackend extends ChatBackend {
     }
     final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    unawaited(_mobilePresence?.refresh());
     if (foreground) unawaited(_tickHistoryGaps());
     if (!foreground && (kIsWeb || Platform.isAndroid || Platform.isIOS)) {
       _historyDownload?.pause(
@@ -1784,6 +1975,9 @@ class MatrixBackend extends ChatBackend {
   @override
   void refreshApplicationState() {
     _dismissVisibleRoomNotification();
+    if (_client?.isLogged() == true) {
+      unawaited(_refreshStickerPacks());
+    }
     // Account-data settings are applied by the authoritative /sync listener.
     // Re-reading the SDK cache on resume can resurrect the value from before
     // a recent write and make theme changes appear stuck until restart.
@@ -2202,7 +2396,49 @@ class MatrixBackend extends ChatBackend {
     required String name,
     String topic = '',
     bool encrypted = true,
-  }) => _createSpace(name: name, topic: topic, encrypted: encrypted);
+    String channelAccess = 'invite',
+  }) => _createSpace(
+    name: name,
+    topic: topic,
+    encrypted: encrypted,
+    channelAccess: channelAccess,
+  );
+  @override
+  Future<void> createRoomInSpace(
+    String spaceId, {
+    required String name,
+    required RoomPresentation presentation,
+    String topic = '',
+    bool encrypted = true,
+  }) => _createRoom(
+    name: name,
+    presentation: presentation,
+    topic: topic,
+    encrypted: encrypted,
+    spaceId: spaceId,
+    openAfterCreation: false,
+  );
+  @override
+  bool channelEncryptionForSpace(String spaceId) =>
+      _matrix
+          .getRoomById(spaceId)
+          ?.getState('net.send.channel_encryption')
+          ?.content['enabled'] !=
+      false;
+  @override
+  Future<void> setChannelEncryptionForSpace(
+    String spaceId,
+    bool enabled,
+  ) async {
+    await _matrix.setRoomStateWithKey(
+      spaceId,
+      'net.send.channel_encryption',
+      '',
+      {'enabled': enabled},
+    );
+    _notifyBackendListeners();
+  }
+
   @override
   bool get defaultChannelEncryption =>
       _matrix
@@ -2243,6 +2479,12 @@ class MatrixBackend extends ChatBackend {
   @override
   bool canManageSpaceChannelLayout(String spaceId) =>
       _canManageSpaceChannelLayout(spaceId);
+  @override
+  bool canCreateSpaceRoom(String spaceId) =>
+      _matrix
+          .getRoomById(spaceId)
+          ?.canChangeStateEvent(EventTypes.SpaceChild) ==
+      true;
 
   @override
   bool canSetSpaceChannelLayoutPowerLevel(String spaceId) =>
@@ -2357,10 +2599,7 @@ class MatrixBackend extends ChatBackend {
               (banner ? member['banner_url'] : null);
     final overrideUri = override is String ? Uri.tryParse(override) : null;
     if (overrideUri?.isScheme('mxc') == true) {
-      return (await _matrix.getContent(
-        overrideUri!.host,
-        overrideUri.pathSegments.join('/'),
-      )).data;
+      return BoundedMatrixMedia.image(_matrix, overrideUri!);
     }
     final profile = await _matrix.getUserProfile(userId);
     final uri = banner
@@ -2369,10 +2608,7 @@ class MatrixBackend extends ChatBackend {
           )
         : profile.avatarUrl;
     if (uri == null || !uri.isScheme('mxc')) return null;
-    return (await _matrix.getContent(
-      uri.host,
-      uri.pathSegments.join('/'),
-    )).data;
+    return BoundedMatrixMedia.image(_matrix, uri);
   }
 
   @override
@@ -2418,6 +2654,49 @@ class MatrixBackend extends ChatBackend {
 
   @override
   Future<void> startDirectChat(String userId) => _startDirectChat(userId);
+  @override
+  Future<void> startDirectChatWithEncryption(
+    String userId, {
+    required bool encrypted,
+  }) => _startDirectChat(userId, encrypted: encrypted);
+  @override
+  SavedGifReference? uploadedGifForSource(Uri source) {
+    final saved = SavedGifReference.fromJson(
+      _personal?.get('gif.upload:$source'),
+    );
+    if (saved != null) return saved;
+    for (final event in [
+      ...?_timeline?.events,
+      ..._attachmentEvents.values,
+      for (final room in _matrix.rooms)
+        if (room.lastEvent != null) room.lastEvent!,
+    ]) {
+      if (!event.redacted &&
+          event.content['net.deltiecord.gif_source'] == source.toString()) {
+        return SavedGifReference(roomId: event.room.id, eventId: event.eventId);
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<Uint8List?> loadForwardingAvatar(String roomId) async {
+    final lease = _sessionScope.capture();
+    final client = _matrix;
+    final room = client.getRoomById(roomId);
+    if (room == null) return null;
+    final target = _spaceForRoom(room) ?? room;
+    final cached = _avatarBytes[target.id];
+    if (cached != null) return cached;
+    var uri = target.avatar;
+    final peer = target.id == room.id ? _roomSummary(room).directUserId : null;
+    if (uri == null && peer != null) {
+      uri = (await client.getUserProfile(peer)).avatarUrl;
+    }
+    if (!lease.isCurrent || !identical(client, _client)) return null;
+    final bytes = await _avatarMedia(uri, AvatarMediaPool.rowDimension);
+    return lease.isCurrent && identical(client, _client) ? bytes : null;
+  }
 
   @override
   Future<void> setUserBlocked(String userId, bool blocked) =>
@@ -2463,6 +2742,45 @@ class MatrixBackend extends ChatBackend {
         !room.isSpace &&
         room.canSendEvent(EventTypes.Message);
   }
+
+  @override
+  List<RoomSummary> get forwardingRooms =>
+      _client?.rooms
+          .where((room) => canSendMessagesToRoom(room.id))
+          .map(_roomSummary)
+          .toList(growable: false) ??
+      const [];
+
+  @override
+  Future<void> forwardMessages({
+    required String sourceRoomId,
+    required List<String> eventIds,
+    required String destinationRoomId,
+    bool allowUnencrypted = false,
+  }) => _forwardMessages(
+    sourceRoomId: sourceRoomId,
+    eventIds: eventIds,
+    destinationRoomId: destinationRoomId,
+    allowUnencrypted: allowUnencrypted,
+  );
+
+  @override
+  Future<Uint8List> loadSavedGifPreview(SavedGifReference reference) =>
+      _loadSavedGifPreview(reference);
+  @override
+  Future<void> sendSavedGif(
+    SavedGifReference reference, {
+    required String roomId,
+    String? replyToMessageId,
+    bool allowUnencrypted = false,
+  }) => _forwardMessages(
+    sourceRoomId: reference.roomId,
+    eventIds: [reference.eventId],
+    destinationRoomId: roomId,
+    allowUnencrypted: allowUnencrypted,
+    mediaOnly: true,
+    replyToMessageId: replyToMessageId,
+  );
 
   @override
   Future<void> sendMessage(
@@ -2670,6 +2988,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _spaceFollow?.dispose();
     _timelineSegments.dispose();
     _sessionScope.dispose();
     _threadHistory?.dispose();

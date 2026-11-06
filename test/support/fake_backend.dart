@@ -304,6 +304,7 @@ class FakeBackend extends ChatBackend {
     required String name,
     String topic = '',
     bool encrypted = true,
+    String channelAccess = 'invite',
   }) async {}
   @override
   Future<void> renameRoom(String roomId, String name) async {}

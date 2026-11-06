@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../models/chat_models.dart';
+import 'forward_message_dialog.dart';
 
 enum MessageAction {
   reply,
   react,
+  forward,
   copy,
   unread,
   pin,
@@ -33,6 +35,7 @@ List<MessageAction?> messageActionOrder(
   return [
     MessageAction.reply,
     if (canReact) MessageAction.react,
+    if (canForwardMessage(message)) MessageAction.forward,
     null,
     MessageAction.copy,
     MessageAction.unread,
@@ -49,6 +52,7 @@ String messageActionLabel(MessageAction action, ChatMessage message) =>
     switch (action) {
       MessageAction.reply => 'Reply',
       MessageAction.react => 'React',
+      MessageAction.forward => 'Forward',
       MessageAction.copy => 'Copy',
       MessageAction.unread => 'Mark unread',
       MessageAction.pin => message.pinned ? 'Unpin' : 'Pin',
@@ -65,6 +69,7 @@ String messageActionLabel(MessageAction action, ChatMessage message) =>
 IconData messageActionIcon(MessageAction action) => switch (action) {
   MessageAction.reply => Icons.reply,
   MessageAction.react => Icons.add_reaction_outlined,
+  MessageAction.forward => Icons.forward_outlined,
   MessageAction.copy => Icons.copy_outlined,
   MessageAction.unread => Icons.mark_chat_unread_outlined,
   MessageAction.pin => Icons.push_pin_outlined,
@@ -83,56 +88,69 @@ class MessageActionList extends StatelessWidget {
     required this.actions,
     required this.onAction,
     this.onThread,
+    this.comfortable = false,
     super.key,
   });
   final ChatMessage message;
   final List<MessageAction?> actions;
   final ValueChanged<MessageAction> onAction;
   final VoidCallback? onThread;
+  final bool comfortable;
   @override
   Widget build(BuildContext context) => Material(
     type: MaterialType.transparency,
-    child: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final action in [
-            for (final item in actions) ...[
-              item,
-              if (onThread != null &&
-                  (item == MessageAction.react ||
-                      (item == MessageAction.reply &&
-                          !actions.contains(MessageAction.react))))
-                MessageAction.thread,
-            ],
-          ])
-            if (action == null)
-              const SizedBox(height: 12)
-            else
-              ListTile(
-                key: ValueKey('message-action-${action.name}'),
-                dense: true,
-                minTileHeight: 38,
-                leading: Icon(
-                  messageActionIcon(action),
-                  size: 19,
-                  color: action == MessageAction.delete
-                      ? Theme.of(context).colorScheme.error
-                      : null,
-                ),
-                title: Text(
-                  messageActionLabel(action, message),
-                  style: TextStyle(
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: comfortable
+            ? MediaQuery.sizeOf(context).height * .8
+            : double.infinity,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final action in [
+              for (final item in actions) ...[
+                item,
+                if (onThread != null &&
+                    (item == MessageAction.forward ||
+                        (item == MessageAction.react &&
+                            !actions.contains(MessageAction.forward)) ||
+                        (item == MessageAction.reply &&
+                            !actions.contains(MessageAction.react) &&
+                            !actions.contains(MessageAction.forward))))
+                  MessageAction.thread,
+              ],
+            ])
+              if (action == null)
+                const SizedBox(height: 12)
+              else
+                ListTile(
+                  key: ValueKey('message-action-${action.name}'),
+                  dense: !comfortable,
+                  minTileHeight: comfortable ? 52 : 38,
+                  leading: Icon(
+                    messageActionIcon(action),
+                    size: comfortable ? 24 : 19,
                     color: action == MessageAction.delete
                         ? Theme.of(context).colorScheme.error
                         : null,
                   ),
+                  title: Text(
+                    messageActionLabel(action, message),
+                    style: TextStyle(
+                      fontSize: comfortable ? 16 : null,
+                      color: action == MessageAction.delete
+                          ? Theme.of(context).colorScheme.error
+                          : null,
+                    ),
+                  ),
+                  onTap: action == MessageAction.thread
+                      ? onThread
+                      : () => onAction(action),
                 ),
-                onTap: action == MessageAction.thread
-                    ? onThread
-                    : () => onAction(action),
-              ),
-        ],
+          ],
+        ),
       ),
     ),
   );
@@ -140,9 +158,15 @@ class MessageActionList extends StatelessWidget {
 
 /// Observe taps without competing with selection, links or swipe gestures.
 class TripleTapEdit extends StatefulWidget {
-  const TripleTapEdit({required this.child, this.onEdit, super.key});
+  const TripleTapEdit({
+    required this.child,
+    this.onEdit,
+    this.onReply,
+    super.key,
+  });
   final Widget child;
   final VoidCallback? onEdit;
+  final VoidCallback? onReply;
   @override
   State<TripleTapEdit> createState() => _TripleTapEditState();
 }
@@ -169,7 +193,9 @@ class _TripleTapEditState extends State<TripleTapEdit> {
       _count = 0;
     },
     onPointerUp: (event) {
-      if (widget.onEdit == null || _down == null || _moved) {
+      if ((widget.onEdit ?? widget.onReply) == null ||
+          _down == null ||
+          _moved) {
         _count = 0;
         return;
       }
@@ -184,7 +210,7 @@ class _TripleTapEditState extends State<TripleTapEdit> {
       _down = null;
       if (_count == 3) {
         _count = 0;
-        widget.onEdit!();
+        (widget.onEdit ?? widget.onReply)?.call();
       }
     },
     child: widget.child,

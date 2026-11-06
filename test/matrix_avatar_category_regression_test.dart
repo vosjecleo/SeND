@@ -5,8 +5,22 @@ import 'dart:typed_data';
 import 'package:deltiecord/matrix/matrix_backend.dart';
 import 'package:deltiecord/services/avatar_media_pool.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:matrix/matrix.dart';
 import 'package:matrix/matrix_api_lite/generated/fixed_model.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:image/image.dart' as image;
+
+Uint8List _png(int red) => image.encodePng(
+  image.Image(width: 1, height: 1)..setPixelRgb(0, 0, red, 0, 0),
+);
+
+Future<void> _waitForMedia(bool Function() ready) async {
+  for (var i = 0; i < 100 && !ready(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
 
 class _Database implements MatrixSdkDatabase {
   @override
@@ -16,7 +30,25 @@ class _Database implements MatrixSdkDatabase {
 }
 
 class _Client extends Client {
-  _Client() : super('avatar-test', database: _Database());
+  _Client() : super('avatar-test', database: _Database()) {
+    homeserver = Uri.parse('https://matrix.test');
+  }
+  @override
+  Future<bool> authenticatedMediaSupported() async => true;
+  @override
+  http.Client get httpClient => _mediaTransport;
+  late final _mediaTransport = MockClient.streaming((request, _) async {
+    mediaRequests.add(request.url);
+    final response = await (request.url.path.contains('/thumbnail/')
+        ? preview.future
+        : original.future);
+    return http.StreamedResponse(
+      Stream.value(response.data),
+      200,
+      contentLength: response.data.length,
+    );
+  });
+  final mediaRequests = <Uri>[];
   @override
   String get userID => '@me:test';
   final original = Completer<FileResponse>();
@@ -89,26 +121,6 @@ class _Client extends Client {
   Future<Capabilities> getCapabilities() async =>
       throw StateError('No capabilities');
   @override
-  Future<FileResponse> getContentThumbnail(
-    String serverName,
-    String mediaId,
-    int width,
-    int height, {
-    Method? method,
-    bool? allowRemote,
-    int? timeoutMs,
-    bool? allowRedirect,
-    bool? animated,
-  }) => preview.future;
-  @override
-  Future<FileResponse> getContent(
-    String serverName,
-    String mediaId, {
-    bool? allowRemote,
-    int? timeoutMs,
-    bool? allowRedirect,
-  }) => original.future;
-  @override
   Future<String> setRoomStateWithKey(
     String roomId,
     String eventType,
@@ -141,9 +153,9 @@ void main() {
       for (var i = 0; i < 140; i++) {
         await backend.getUserProfile('@peer$i:test');
       }
-      client.preview.complete(FileResponse(data: Uint8List.fromList([1, 2])));
-      client.original.complete(FileResponse(data: Uint8List.fromList([3, 4])));
-      await Future<void>.delayed(const Duration(milliseconds: 30));
+      client.preview.complete(FileResponse(data: _png(1)));
+      client.original.complete(FileResponse(data: _png(2)));
+      await _waitForMedia(() => backend.profileAvatarBytes != null);
       expect(backend.profileAvatarBytes, isNotNull);
       await backend.refreshProfile();
       expect(backend.profileAvatarBytes, isNotNull);
@@ -384,9 +396,24 @@ void main() {
     // selection and member state remain available, as during initial loading.
     await backend.selectRoom(room.id);
     expect(backend.selectedRoomMembers.single.avatarBytes, isNull);
-    client.original.complete(FileResponse(data: Uint8List.fromList([5, 6])));
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(backend.selectedRoomMembers.single.avatarBytes, [5, 6]);
+    client.preview.complete(FileResponse(data: _png(1)));
+    await _waitForMedia(
+      () => backend.selectedRoomMembers.single.avatarBytes != null,
+    );
+    expect(backend.selectedRoomMembers.single.avatarBytes, _png(1));
+    expect(
+      client.mediaRequests
+          .where((uri) => uri.path.contains('/thumbnail/'))
+          .first
+          .queryParameters['width'],
+      '128',
+    );
+    expect(client.original.isCompleted, false);
+    client.original.complete(FileResponse(data: _png(3)));
+    await _waitForMedia(
+      () => listEquals(backend.selectedRoomMembers.single.avatarBytes, _png(3)),
+    );
+    expect(backend.selectedRoomMembers.single.avatarBytes, _png(3));
     backend.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 20));
     await directory.delete(recursive: true);
@@ -404,12 +431,14 @@ void main() {
       );
       await backend.getUserProfile(client.userID);
       expect(backend.profileAvatarBytes, isNull);
-      client.preview.complete(FileResponse(data: Uint8List.fromList([1, 2])));
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-      expect(backend.profileAvatarBytes, [1, 2]);
-      client.original.complete(FileResponse(data: Uint8List.fromList([3, 4])));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      expect(backend.profileAvatarBytes, [3, 4]);
+      client.preview.complete(FileResponse(data: _png(1)));
+      await _waitForMedia(() => backend.profileAvatarBytes != null);
+      expect(backend.profileAvatarBytes, _png(1));
+      client.original.complete(FileResponse(data: _png(2)));
+      await _waitForMedia(
+        () => listEquals(backend.profileAvatarBytes, _png(2)),
+      );
+      expect(backend.profileAvatarBytes, _png(2));
       backend.dispose();
       await directory.delete(recursive: true);
     },

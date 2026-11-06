@@ -251,7 +251,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     final image = find.byType(Image).first;
-    expect(tester.getSize(image), const Size(214, 280));
+    final frame = tester.getSize(
+      find
+          .descendant(
+            of: find.byType(MediaAlbumGrid),
+            matching: find.byType(ClipRRect),
+          )
+          .first,
+    );
+    expect(tester.getSize(image), Size((frame.width - 2) / 2, frame.height));
     expect(tester.widget<Image>(image).fit, BoxFit.cover);
     await tester.tap(image);
     expect(opened, isTrue);

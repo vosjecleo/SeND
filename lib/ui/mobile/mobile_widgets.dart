@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../avatar_presence.dart';
 
 import '../../models/chat_models.dart';
 import '../lifecycle_memory_image.dart';
@@ -54,6 +55,7 @@ class MobileRoomAvatar extends StatelessWidget {
           bytes: room.avatarBytes,
           fallback: room.name,
           presence: showPresence && room.isDirect ? room.presence : null,
+          userId: room.directUserId,
           size: size,
           autoplay: autoplay,
         );
@@ -64,6 +66,7 @@ class MobileAvatar extends StatelessWidget {
     required this.bytes,
     required this.fallback,
     this.presence,
+    this.userId,
     this.size = 44,
     this.borderColor,
     this.speaking = false,
@@ -75,6 +78,7 @@ class MobileAvatar extends StatelessWidget {
   final Uint8List? bytes;
   final String fallback;
   final UserPresence? presence;
+  final String? userId;
   final double size;
   final Color? borderColor;
   final bool speaking;
@@ -82,93 +86,101 @@ class MobileAvatar extends StatelessWidget {
   final bool autoplay;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: size,
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          child: Container(
-            padding: EdgeInsets.all(borderColor == null ? 0 : 2),
-            decoration: BoxDecoration(
-              shape: square ? BoxShape.rectangle : BoxShape.circle,
-              borderRadius: square ? BorderRadius.circular(11) : null,
-              border: borderColor == null
+  Widget build(BuildContext context) {
+    final phone = showsMobilePresence(
+      context,
+      userId,
+      presence ?? UserPresence.offline,
+    );
+    final badgeDimension = presenceBadgeSize(size * .27, phone: phone);
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: ClipPath(
+              clipper: presence == null
                   ? null
-                  : Border.all(color: borderColor!, width: 2),
-            ),
-            child: Container(
-              padding: EdgeInsets.all(speaking ? 2 : 0),
-              decoration: BoxDecoration(
-                shape: square ? BoxShape.rectangle : BoxShape.circle,
-                borderRadius: square ? BorderRadius.circular(9) : null,
-                border: speaking
-                    ? Border.all(color: const Color(0xff23c483), width: 2)
-                    : null,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(square ? 9 : size / 2),
-                clipBehavior: Clip.antiAlias,
-                child: bytes == null
-                    ? ColoredBox(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        child: Center(
-                          child: Text(
-                            fallback.isEmpty ? '?' : fallback[0].toUpperCase(),
-                            style: TextStyle(
-                              fontSize: size * 0.38,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSecondaryContainer,
+                  : AvatarPresenceCutout(
+                      phone: phone,
+                      badgeSize: badgeDimension,
+                    ),
+              child: Container(
+                padding: EdgeInsets.all(borderColor == null ? 0 : 2),
+                decoration: BoxDecoration(
+                  shape: square ? BoxShape.rectangle : BoxShape.circle,
+                  borderRadius: square ? BorderRadius.circular(11) : null,
+                  border: borderColor == null
+                      ? null
+                      : Border.all(color: borderColor!, width: 2),
+                ),
+                child: Container(
+                  padding: EdgeInsets.all(speaking ? 2 : 0),
+                  decoration: BoxDecoration(
+                    shape: square ? BoxShape.rectangle : BoxShape.circle,
+                    borderRadius: square ? BorderRadius.circular(9) : null,
+                    border: speaking
+                        ? Border.all(color: const Color(0xff23c483), width: 2)
+                        : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(square ? 9 : size / 2),
+                    clipBehavior: Clip.antiAlias,
+                    child: bytes == null
+                        ? ColoredBox(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.secondaryContainer,
+                            child: Center(
+                              child: Text(
+                                fallback.isEmpty
+                                    ? '?'
+                                    : fallback[0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: size * 0.38,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSecondaryContainer,
+                                ),
+                              ),
                             ),
+                          )
+                        : hasAnimatedImageHeader(bytes!)
+                        ? LifecycleMemoryImage(
+                            bytes: bytes!,
+                            animated: true,
+                            decodeWidth: 256,
+                            autoplay:
+                                autoplay &&
+                                !MediaQuery.disableAnimationsOf(context),
+                            fit: BoxFit.cover,
+                          )
+                        : Image.memory(
+                            bytes!,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
                           ),
-                        ),
-                      )
-                    : hasAnimatedImageHeader(bytes!)
-                    ? LifecycleMemoryImage(
-                        bytes: bytes!,
-                        animated: true,
-                        decodeWidth: 256,
-                        autoplay:
-                            autoplay &&
-                            !MediaQuery.disableAnimationsOf(context),
-                        fit: BoxFit.cover,
-                      )
-                    : Image.memory(
-                        bytes!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                      ),
-              ),
-            ),
-          ),
-        ),
-        if (presence case final presence?)
-          Positioned(
-            right: -1,
-            bottom: -1,
-            child: Container(
-              key: ValueKey('avatar-presence-${presence.name}'),
-              width: size * 0.27,
-              height: size * 0.27,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: switch (presence) {
-                  UserPresence.online => const Color(0xff23c483),
-                  UserPresence.away => const Color(0xffe3a53a),
-                  UserPresence.doNotDisturb => const Color(0xffe5484d),
-                  UserPresence.offline => const Color(0xff70737d),
-                },
-                border: Border.all(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  width: 2,
+                  ),
                 ),
               ),
             ),
           ),
-      ],
-    ),
-  );
+          if (presence case final presence?)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: PresenceBadge(
+                key: ValueKey('avatar-presence-${presence.name}'),
+                presence: presence,
+                phone: phone,
+                size: badgeDimension,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 String mobilePresenceLabel(UserPresence presence) => switch (presence) {

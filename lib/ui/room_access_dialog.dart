@@ -101,6 +101,17 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
           eventVisibility: _events,
         );
       }
+      if (_directory != data.discoverable) {
+        final saved = await widget.backend.getRoomAccessSettings(widget.roomId);
+        if (!mounted) return;
+        if (saved.discoverable != _directory) {
+          setState(
+            () => _error =
+                'The server did not keep the directory setting. Check your permissions and try again.',
+          );
+          return;
+        }
+      }
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -115,49 +126,136 @@ class _RoomAccessDialogState extends State<_RoomAccessDialog> {
   }
 
   Future<void> _applyChildren() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Replace access rules for existing channels?'),
-        content: Text(
-          'Apply "$_default" to all ${widget.children.length} channels, including private ones? This won\'t join members or change history access.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Apply to all'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) return;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final failed = <String>[];
-    for (final room in widget.children) {
-      try {
-        await widget.backend.setRoomAccess(
-          room.id,
-          _default,
-          spaceId: widget.roomId,
+    final access = <String, RoomAccessSettings>{};
+    try {
+      for (var i = 0; i < widget.children.length; i += 4) {
+        await Future.wait(
+          widget.children.skip(i).take(4).map((room) async {
+            try {
+              access[room.id] = await widget.backend.getRoomAccessSettings(
+                room.id,
+              );
+            } catch (_) {
+              /* Unavailable channels cannot be selected. */
+            }
+          }),
         );
-      } catch (_) {
-        failed.add(room.name);
+        if (!mounted) return;
       }
-    }
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _error = failed.isEmpty
-            ? 'Access updated for all listed channels.'
-            : 'Failed: ${failed.join(', ')}. Other channels were updated.';
-      });
+      final selected = <String>{
+        for (final room in widget.children)
+          if (access[room.id]?.canEditAccess == true &&
+              access[room.id]?.joinRule != 'invite')
+            room.id,
+      };
+      final label = switch (_default) {
+        'restricted' => 'Members of this server',
+        'public' => 'Anyone',
+        _ => 'Invite only',
+      };
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(
+          builder: (dialog, update) {
+            final privateCount = selected
+                .where((id) => access[id]?.joinRule == 'invite')
+                .length;
+            return AlertDialog(
+              title: const Text('Update channel access?'),
+              scrollable: true,
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Set selected channels to "$label"? This will not join members or change history access.',
+                    ),
+                    const SizedBox(height: 12),
+                    for (final room in widget.children)
+                      CheckboxListTile(
+                        dense: true,
+                        title: Text(room.name),
+                        subtitle: access[room.id]?.joinRule == 'invite'
+                            ? const Text('Invite only')
+                            : null,
+                        secondary: access[room.id]?.joinRule == 'invite'
+                            ? const Icon(Icons.lock_outline)
+                            : null,
+                        value: selected.contains(room.id),
+                        onChanged: access[room.id]?.canEditAccess != true
+                            ? null
+                            : (value) => update(() {
+                                if (value == true) {
+                                  selected.add(room.id);
+                                } else {
+                                  selected.remove(room.id);
+                                }
+                              }),
+                      ),
+                    if (privateCount > 0)
+                      Text(
+                        'This changes access to $privateCount invite-only ${privateCount == 1 ? 'channel' : 'channels'}.',
+                        style: TextStyle(
+                          color: Theme.of(dialog).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialog, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () => Navigator.pop(dialog, true),
+                  child: Text(
+                    'Apply to ${selected.length} ${selected.length == 1 ? 'channel' : 'channels'}',
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      final failed = <String>[];
+      for (final room in widget.children.where(
+        (room) => selected.contains(room.id),
+      )) {
+        try {
+          await widget.backend.setRoomAccess(
+            room.id,
+            _default,
+            spaceId: widget.roomId,
+          );
+        } catch (_) {
+          failed.add(room.name);
+        }
+        if (!mounted) return;
+      }
+      setState(
+        () => _error = failed.isEmpty
+            ? 'Access updated for ${selected.length} channels.'
+            : 'Updated ${selected.length - failed.length} channels. Could not update: ${failed.join(', ')}.',
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not load channel access. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

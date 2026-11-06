@@ -154,8 +154,11 @@ extension _MatrixRoomOperations on MatrixBackend {
     _notifyBackendListeners();
   }
 
-  Future<void> _createChannelCategory(String name) async {
-    final spaceId = _selectedSpaceId;
+  Future<void> _createChannelCategory(
+    String name, {
+    String? targetSpaceId,
+  }) async {
+    final spaceId = targetSpaceId ?? _selectedSpaceId;
     if (spaceId == null || name.trim().isEmpty) return;
     final layout = _spaceChannelLayout(spaceId);
     final categories = List<Map<String, dynamic>>.from(
@@ -173,8 +176,12 @@ extension _MatrixRoomOperations on MatrixBackend {
     });
   }
 
-  Future<void> _renameChannelCategory(String categoryId, String name) async {
-    final spaceId = _selectedSpaceId;
+  Future<void> _renameChannelCategory(
+    String categoryId,
+    String name, {
+    String? targetSpaceId,
+  }) async {
+    final spaceId = targetSpaceId ?? _selectedSpaceId;
     if (spaceId == null || name.trim().isEmpty) return;
     final layout = _spaceChannelLayout(spaceId);
     final categories = (layout.tryGetList('categories') ?? const [])
@@ -190,8 +197,11 @@ extension _MatrixRoomOperations on MatrixBackend {
     });
   }
 
-  Future<void> _deleteChannelCategory(String categoryId) async {
-    final spaceId = _selectedSpaceId;
+  Future<void> _deleteChannelCategory(
+    String categoryId, {
+    String? targetSpaceId,
+  }) async {
+    final spaceId = targetSpaceId ?? _selectedSpaceId;
     if (spaceId == null) return;
     final layout = _spaceChannelLayout(spaceId);
     final categories = (layout.tryGetList('categories') ?? const [])
@@ -207,8 +217,12 @@ extension _MatrixRoomOperations on MatrixBackend {
     });
   }
 
-  Future<void> _reorderChannelCategory(String categoryId, int newIndex) async {
-    final spaceId = _selectedSpaceId;
+  Future<void> _reorderChannelCategory(
+    String categoryId,
+    int newIndex, {
+    String? targetSpaceId,
+  }) async {
+    final spaceId = targetSpaceId ?? _selectedSpaceId;
     if (spaceId == null) return;
     final layout = _spaceChannelLayout(spaceId);
     final categories = List<dynamic>.from(
@@ -254,8 +268,9 @@ extension _MatrixRoomOperations on MatrixBackend {
     String roomId, {
     String? categoryId,
     String? beforeRoomId,
+    String? targetSpaceId,
   }) async {
-    final spaceId = _selectedSpaceId;
+    final spaceId = targetSpaceId ?? _selectedSpaceId;
     final space = spaceId == null ? null : _matrix.getRoomById(spaceId);
     if (spaceId == null || space == null) return;
     await _ensureSpaceChannelLayoutPermission(spaceId);
@@ -423,6 +438,7 @@ extension _MatrixRoomOperations on MatrixBackend {
   Future<void> _joinPublicSpace(String roomId) async {
     try {
       final joinedRoomId = await _matrix.joinRoom(roomId);
+      _spaceFollowing.spaceJoined(joinedRoomId);
       _selectSpace(joinedRoomId);
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -470,13 +486,25 @@ extension _MatrixRoomOperations on MatrixBackend {
     _notifyBackendListeners();
     unawaited(_refreshStickerPacks());
     try {
-      if (_matrix.getRoomById(roomId)?.membership != Membership.join) {
-        await _matrix.joinRoom(roomId);
-        await _matrix.waitForRoomInSync(roomId, join: true);
+      final newlyJoined =
+          _matrix.getRoomById(roomId)?.membership != Membership.join;
+      if (newlyJoined) {
+        await _spaceFollowing.joinChannel(roomId);
       }
       if (!_isCurrentSelection(roomId, generation)) return;
       final room = _matrix.getRoomById(roomId);
       if (room == null) throw StateError('That room is no longer available.');
+      if (newlyJoined) {
+        final parent = _spaceForRoom(room);
+        if (parent != null) {
+          try {
+            await _spaceFollowing.channelJoined(parent.id, roomId);
+          } catch (_) {
+            _error =
+                'Joined the channel, but could not apply its notification settings.';
+          }
+        }
+      }
       // Publish locally available events before restoring only the sessions
       // needed by this window. Never import a whole room's backup on entry.
       stageTimer.reset();
@@ -663,7 +691,13 @@ extension _MatrixRoomOperations on MatrixBackend {
     required RoomPresentation presentation,
     required String topic,
     required bool encrypted,
+    String? spaceId,
+    bool openAfterCreation = true,
   }) async {
+    final targetSpaceId = spaceId ?? _selectedSpaceId;
+    if (targetSpaceId != null && !canCreateSpaceRoom(targetSpaceId)) {
+      throw StateError('You cannot create channels in this server.');
+    }
     _error = null;
     try {
       final roomId = await _matrix.createRoom(
@@ -686,7 +720,7 @@ extension _MatrixRoomOperations on MatrixBackend {
           },
         },
         initialState: [
-          if (_selectedSpaceId case final spaceId?)
+          if (targetSpaceId case final spaceId?)
             StateEvent(
               type: EventTypes.RoomJoinRules,
               stateKey: '',
@@ -700,16 +734,17 @@ extension _MatrixRoomOperations on MatrixBackend {
             ),
         ],
       );
-      await _matrix.waitForRoomInSync(roomId, join: true);
+      await _spaceFollowing.waitForJoinedRoom(roomId);
       final room = _matrix.getRoomById(roomId);
       if (room == null) {
         throw StateError('The new room did not arrive in sync.');
       }
-      if (_selectedSpaceId case final spaceId?) {
+      if (targetSpaceId case final spaceId?) {
         await _matrix.getRoomById(spaceId)?.setSpaceChild(roomId);
       }
       await setRoomPresentation(roomId, presentation);
-      await selectRoom(roomId);
+      if (openAfterCreation) await selectRoom(roomId);
+      if (targetSpaceId != null) await _discoverSpaceRooms(targetSpaceId);
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();
@@ -720,20 +755,32 @@ extension _MatrixRoomOperations on MatrixBackend {
     required String name,
     required String topic,
     bool encrypted = true,
+    String channelAccess = 'invite',
   }) async {
+    if (!{'invite', 'restricted', 'public'}.contains(channelAccess)) {
+      throw ArgumentError('Invalid channel access');
+    }
     try {
-      final roomId = await _matrix.createSpace(
+      final roomId = await _matrix.createRoom(
         name: name.trim(),
         topic: topic.trim().isEmpty ? null : topic.trim(),
         visibility: Visibility.private,
-        waitForSync: true,
+        creationContent: {'type': 'm.space'},
+        powerLevelContentOverride: {'events_default': 100},
+        initialState: [
+          StateEvent(
+            type: 'net.send.channel_encryption',
+            stateKey: '',
+            content: {'enabled': encrypted},
+          ),
+          StateEvent(
+            type: spacePolicyEventType,
+            stateKey: '',
+            content: {'version': 1, 'default_channel_access': channelAccess},
+          ),
+        ],
       );
-      await _matrix.setRoomStateWithKey(
-        roomId,
-        'net.send.channel_encryption',
-        '',
-        {'enabled': encrypted},
-      );
+      await _spaceFollowing.waitForJoinedRoom(roomId);
       _selectSpace(roomId);
       unawaited(_refreshRoomMetadata());
     } catch (exception) {
@@ -816,6 +863,9 @@ extension _MatrixRoomOperations on MatrixBackend {
       }
 
       await collect(room);
+      await _spaceFollowing.prepareToLeave(
+        toLeave.map((target) => target.id).toSet(),
+      );
       for (final target in toLeave) {
         if (_voice?.activeRoomId == target.id) await _leaveVoiceRoom();
         // Stop on failure. The parent remains joined so the user can retry.
@@ -866,6 +916,11 @@ extension _MatrixRoomOperations on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) return;
     try {
+      if (room.isSpace) {
+        await _spaceFollowing.setMuted(roomId, muted);
+        _notifyBackendListeners();
+        return;
+      }
       await room.setPushRuleState(
         muted ? PushRuleState.dontNotify : PushRuleState.notify,
       );
@@ -873,6 +928,7 @@ extension _MatrixRoomOperations on MatrixBackend {
     } catch (exception) {
       _error = _friendlyError(exception);
       _notifyBackendListeners();
+      rethrow;
     }
   }
 

@@ -13,6 +13,42 @@ import 'package:deltiecord/ui/deltiecord_theme.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'phone status is read independently of game/music sharing and drops offline',
+    () async {
+      var online = true;
+      final viewer = ActivityController(
+        userId: '@viewer:test',
+        deviceId: 'viewer',
+        source: Source(),
+        canShare: () => false,
+        canView: (_) => online,
+        read: (_) async => {
+          'devices': {
+            mobilePresenceField('phone'): {
+              'version': 1,
+              'mobile': true,
+              'expires_at': DateTime.now()
+                  .add(const Duration(minutes: 2))
+                  .millisecondsSinceEpoch,
+            },
+          },
+        },
+        write: (_) async => fail('Viewing must not publish'),
+        upload: (_) async => throw StateError('No upload'),
+        pollInterval: const Duration(days: 1),
+      );
+      addTearDown(viewer.close);
+      await viewer.start();
+      viewer.activitiesFor('@phone:test');
+      await viewer.update(viewer.settings);
+      expect(viewer.activitiesFor('@phone:test').mobileOnline, isTrue);
+      expect(viewer.activitiesFor('@phone:test').live, isEmpty);
+      online = false;
+      viewer.visibilityChanged(refresh: false);
+      expect(viewer.activitiesFor('@phone:test').mobileOnline, isFalse);
+    },
+  );
 
   test(
     'different-account viewer fetches all slots without sharing or Last.fm login',

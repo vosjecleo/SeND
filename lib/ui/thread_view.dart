@@ -63,6 +63,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   final _scroll = ScrollController();
   final _viewportKey = GlobalKey();
   final _rowKeys = <String, GlobalKey>{};
+  final _galleryRowKeys = GalleryRowKeys();
   GlobalKey _rowKeyFor(ChatMessage message) {
     final key = _rowKeys.putIfAbsent(message.timelineKey, GlobalKey.new);
     _rowKeys[message.id] = key;
@@ -508,9 +509,14 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   Future<void> _messageActions(ChatMessage message) async {
     final action = await showModalBottomSheet<MessageAction>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: MessageActionList(
+          comfortable:
+              Platform.isAndroid ||
+              Platform.isIOS ||
+              MediaQuery.sizeOf(context).width < 700,
           message: message,
           actions: messageActionOrder(
             message,
@@ -534,6 +540,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
         _focus.requestFocus();
       case MessageAction.react:
         await _react(message);
+      case MessageAction.forward:
+        final albums = MediaAlbumIndex.fromNewestFirst(
+          _session?.messages ?? [],
+        );
+        await showForwardMessageDialog(
+          context,
+          widget.backend,
+          albums.albums[message.id] ?? [message],
+          sourceRoomId: widget.roomId,
+        );
       case MessageAction.edit:
         setState(() {
           _editing = message;
@@ -543,25 +559,14 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
         _focus.requestFocus();
       case MessageAction.delete:
         if (!message.own) return;
-        final yes = await showDialog<bool>(
-          context: context,
-          builder: (dialog) => AlertDialog(
-            title: const Text('Delete message?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialog, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialog, true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+        final deletionAlbums = MediaAlbumIndex.fromNewestFirst(
+          _session?.messages ?? [],
         );
-        if (yes == true) {
-          await _run(() => widget.backend.redactMessage(message.id));
-        }
+        await deleteMessageGroup(
+          context,
+          widget.backend,
+          deletionAlbums.albums[message.id] ?? [message],
+        );
       case MessageAction.copy:
         await Clipboard.setData(ClipboardData(text: message.body));
       case MessageAction.unread:
@@ -604,12 +609,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
     _scheduleRead();
     final session = _session;
     final messages = session?.messages ?? const <ChatMessage>[];
+    final albums = MediaAlbumIndex.fromNewestFirst(
+      messages,
+      roomId: widget.roomId,
+    );
+    _galleryRowKeys.bind(albums, _rowKeys);
     final positions = {
       for (final (index, message) in messages.indexed)
-        ValueKey('thread-message-${message.timelineKey}'): index,
+        ValueKey('thread-message-${albums.rowIdentity(message)}'): index,
     };
     final receipts = receiptFrontiers(messages);
-    final albums = MediaAlbumIndex.fromNewestFirst(messages);
     return Material(
       color: context.deltiecord.panel,
       child: Column(
@@ -682,11 +691,13 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                           }
                           final message = messages[index];
                           if (albums.hiddenMessageIds.contains(message.id)) {
-                            return const SizedBox.shrink();
+                            return SizedBox.shrink(
+                              key: ValueKey(
+                                'thread-message-${albums.rowIdentity(message)}',
+                              ),
+                            );
                           }
-                          final older = index + 1 < messages.length
-                              ? messages[index + 1]
-                              : null;
+                          final older = albums.olderVisibleMessage(message.id);
                           final newDay =
                               older == null ||
                               !DateUtils.isSameDay(
@@ -705,7 +716,7 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
                               message.reply != null;
                           return GestureDetector(
                             key: ValueKey(
-                              'thread-message-${message.timelineKey}',
+                              'thread-message-${albums.rowIdentity(message)}',
                             ),
                             onLongPress: () => _messageActions(message),
                             child: KeyedSubtree(

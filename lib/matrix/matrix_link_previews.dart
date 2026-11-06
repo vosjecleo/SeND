@@ -335,14 +335,13 @@ extension _MatrixLinkPreviews on MatrixBackend {
 
   Future<Uint8List?> _previewImageBytes(Uri uri) async {
     if (!uri.isScheme('mxc')) return null;
-    final thumbnail = await _matrix.getContentThumbnail(
-      uri.host,
-      uri.pathSegments.join('/'),
-      640,
-      360,
-      method: Method.scale,
-      animated: true,
+    return BoundedMatrixMedia.image(
+      _matrix,
+      uri,
+      width: 640,
+      height: 360,
+      crop: false,
+      maximumBytes: 5 * 1024 * 1024,
     );
-    return thumbnail.data.length <= 5 * 1024 * 1024 ? thumbnail.data : null;
   }
 }

@@ -6,10 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:matrix/matrix.dart';
 
 import '../matrix/matrix_client_factory.dart';
+import '../matrix/bounded_media.dart';
 import '../matrix/matrix_push_reconciliation.dart';
 import 'avatar_media_pool.dart';
 import 'notification_avatar.dart';
 import 'chat_notifications.dart';
+import 'notification_content.dart';
 
 typedef AndroidPushResolver =
     Future<Map<String, Object?>?> Function(String roomId, String eventId);
@@ -157,12 +159,20 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
   // room unread counters. Trust membership from authenticated sync, never the
   // unauthenticated push payload, to decide whether an invitation is pending.
   if (room.membership == Membership.invite) {
-    return invitationNotification(
-      roomId: room.id,
-      eventId: eventId,
-      roomName: room.getLocalizedDisplayname().take(160),
-      settings: settings,
+    final avatar = await loadInvitationAvatar(
+      client,
+      room,
+      avatarPool: avatarPool,
     );
+    return {
+      ...invitationNotification(
+        roomId: room.id,
+        eventId: eventId,
+        roomName: room.getLocalizedDisplayname().take(160),
+        settings: settings,
+      ),
+      'senderAvatar': ?avatar,
+    };
   }
   Event? event;
   try {
@@ -182,9 +192,7 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
   // A notification can be opened or read while this background resolver is
   // still syncing/decrypting. Matrix remains the source of truth: do not let
   // late work resurrect an alert for activity which is no longer unread.
-  final relevantUnreadCount = room.isDirectChat
-      ? room.notificationCount
-      : room.highlightCount;
+  final relevantUnreadCount = notificationUnreadCount(room);
   if (relevantUnreadCount <= 0) {
     return const {'resolutionStatus': 'suppressed_already_read'};
   }
@@ -193,13 +201,7 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
   final sender = displayEvent.senderFromMemoryOrFallback;
   final senderName = sender.calcDisplayname();
   final decrypted = displayEvent.type != EventTypes.Encrypted;
-  final calculatedBody = displayEvent.type == EventTypes.Message
-      ? displayEvent.calcUnlocalizedBody(
-          hideReply: true,
-          hideEdit: true,
-          plaintextBody: true,
-        )
-      : 'New room activity';
+  final calculatedBody = notificationEventBody(displayEvent);
   final body = previewsEnabled && decrypted && calculatedBody.trim().isNotEmpty
       ? calculatedBody.trim()
       : 'New message';
@@ -214,15 +216,13 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
         avatarUri,
         AvatarMediaPool.rowDimension,
         () async {
-          final response = await client.getContentThumbnail(
-            avatarUri.host,
-            avatarUri.pathSegments.join('/'),
-            AvatarMediaPool.rowDimension,
-            AvatarMediaPool.rowDimension,
-            method: Method.crop,
+          return BoundedMatrixMedia.image(
+            client,
+            avatarUri,
+            width: AvatarMediaPool.rowDimension,
+            height: AvatarMediaPool.rowDimension,
             animated: false,
           );
-          return response.data;
         },
       );
     } catch (_) {
@@ -242,8 +242,10 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
         : displayEvent.infoMap.tryGet<int>('size');
     if (candidateSize == null || candidateSize <= 3 * 1024 * 1024) {
       try {
-        final file = await displayEvent.downloadAndDecryptAttachment(
-          getThumbnail: useThumbnail,
+        final file = await BoundedMatrixMedia.attachment(
+          displayEvent,
+          thumbnail: useThumbnail,
+          maximumBytes: 3 * 1024 * 1024,
         );
         if (file.bytes.length <= 3 * 1024 * 1024) {
           image = file.bytes;
@@ -275,6 +277,44 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
         'fiveMinuteCooldown',
     'unreadCount': relevantUnreadCount,
   };
+}
+
+int notificationUnreadCount(Room room) => switch (room.pushRuleState) {
+  PushRuleState.dontNotify => 0,
+  PushRuleState.mentionsOnly => room.highlightCount,
+  PushRuleState.notify => room.notificationCount,
+};
+
+Future<Uint8List?> loadInvitationAvatar(
+  Client client,
+  Room room, {
+  AvatarMediaPool? avatarPool,
+}) async {
+  try {
+    final own = client.userID;
+    final inviter = own == null
+        ? null
+        : room.getState(EventTypes.RoomMember, own)?.senderId;
+    if (inviter == null) return null;
+    final profile = await client
+        .getUserProfile(inviter)
+        .timeout(const Duration(seconds: 5));
+    final uri = profile.avatarUrl;
+    if (uri == null || !uri.isScheme('mxc')) return null;
+    return await (avatarPool ?? AvatarMediaPool()).load(
+      uri,
+      AvatarMediaPool.rowDimension,
+      () => BoundedMatrixMedia.image(
+        client,
+        uri,
+        width: AvatarMediaPool.rowDimension,
+        height: AvatarMediaPool.rowDimension,
+        animated: false,
+      ),
+    );
+  } catch (_) {
+    return null;
+  }
 }
 
 Map<String, Object?> invitationNotification({
@@ -335,8 +375,11 @@ final class HeadlessAndroidPushResolver {
     : _createClient = createClient ?? createMatrixClient;
   final Future<Client> Function() _createClient;
   Client? _client;
+  Future<Client?>? _opening;
+  int _generation = 0;
   final AvatarMediaPool _avatarPool = AvatarMediaPool();
   Future<void> close() async {
+    _generation++;
     final client = _client;
     _client = null;
     await client?.dispose();
@@ -403,9 +446,14 @@ final class HeadlessAndroidPushResolver {
   }
 
   Future<Client?> _readyClient() async {
-    var client = _client;
-    if (client != null) return client;
-    client = await _createClient();
+    if (_client case final client?) return client;
+    return _opening ??= _openClient(
+      _generation,
+    ).whenComplete(() => _opening = null);
+  }
+
+  Future<Client?> _openClient(int generation) async {
+    final client = await _createClient();
     // Headless notification work must never advertise user activity.
     client.syncPresence = PresenceType.offline;
     client.backgroundSync = false;
@@ -415,7 +463,7 @@ final class HeadlessAndroidPushResolver {
       await client.dispose();
       rethrow;
     }
-    if (!client.isLogged()) {
+    if (!client.isLogged() || generation != _generation) {
       await client.dispose();
       return null;
     }

@@ -1,6 +1,8 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/archive_navigation.dart';
+import 'package:deltiecord/ui/json_theme.dart';
+import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +97,7 @@ void main() {
           await tester.pumpAndSettle();
         }
         expect(find.text('Regular friend'), findsOneWidget);
+        final homeHeader = tester.getRect(find.text('Home').first);
         backend.setArchiveOpen(true);
         await tester.pumpAndSettle();
         expect(find.text('Archive'), findsOneWidget);
@@ -102,10 +105,86 @@ void main() {
         expect(find.text('Regular friend'), findsNothing);
         expect(find.byType(AppBar), findsNothing);
         expect(find.byTooltip('Settings'), findsWidgets);
-        await tester.tap(find.byTooltip('Back to Home'));
+        expect(find.byTooltip('Back to Home'), findsNothing);
+        expect(tester.getRect(find.text('Archive')), homeHeader);
+        final homeEntry = find.byKey(const ValueKey('home-archive-entry'));
+        void expectAligned(
+          String label,
+          String roomId,
+          String roomName,
+          IconData icon,
+        ) {
+          final entry = find.byKey(const ValueKey('home-archive-entry'));
+          final room = find.byKey(ValueKey(roomId));
+          final avatar = find.descendant(
+            of: room,
+            matching: find.byType(mobile ? MobileRoomAvatar : ThemeAvatar),
+          );
+          expect(
+            tester
+                .getCenter(
+                  find.descendant(of: entry, matching: find.byIcon(icon)),
+                )
+                .dx,
+            closeTo(tester.getCenter(avatar).dx, .1),
+          );
+          expect(
+            tester
+                .getTopLeft(
+                  find.descendant(of: entry, matching: find.text(label)),
+                )
+                .dx,
+            closeTo(tester.getTopLeft(find.text(roomName)).dx, .1),
+          );
+        }
+
+        expectAligned(
+          'Home',
+          'archived',
+          'Archived friend',
+          Icons.unarchive_outlined,
+        );
+        expect(tester.getSize(homeEntry).height, 36);
+        expect(
+          find.descendant(of: homeEntry, matching: find.text('Home')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: homeEntry,
+            matching: find.byIcon(Icons.unarchive_outlined),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester.getBottomLeft(homeEntry).dy,
+          lessThanOrEqualTo(tester.getTopLeft(find.text('Archived friend')).dy),
+        );
+        await tester.tap(homeEntry);
         await tester.pumpAndSettle();
         expect(find.text('Regular friend'), findsOneWidget);
         expect(find.text('Archived friend'), findsNothing);
+        if (mobile) {
+          final list = find.descendant(
+            of: find.byType(ArchivePullList),
+            matching: find.byType(ListView),
+          );
+          final gesture = await tester.startGesture(
+            tester.getTopLeft(list) + const Offset(250, 90),
+          );
+          for (var i = 0; i < 35; i++) {
+            await gesture.moveBy(const Offset(0, 10));
+            await tester.pump(const Duration(milliseconds: 16));
+          }
+          await gesture.up();
+          await tester.pumpAndSettle();
+        }
+        expectAligned(
+          'Archive',
+          'regular',
+          'Regular friend',
+          Icons.archive_outlined,
+        );
       },
     );
   }

@@ -486,14 +486,8 @@ class _MessageComposerState extends State<_MessageComposer> {
                             switch (action) {
                               case 'file':
                                 widget.onAttach();
-                              case 'emoji':
-                                showEmojiPicker();
-                              case 'gif':
-                                widget.onGif();
                               case 'poll':
                                 widget.onPoll();
-                              case 'sticker':
-                                widget.onSticker();
                             }
                           },
                           itemBuilder: (context) => const [
@@ -508,39 +502,11 @@ class _MessageComposerState extends State<_MessageComposer> {
                               ),
                             ),
                             PopupMenuItem(
-                              value: 'emoji',
-                              child: ListTile(
-                                dense: true,
-                                leading: ThemeIcon(
-                                  Icons.emoji_emotions_outlined,
-                                ),
-                                title: Text('Emoji'),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'gif',
-                              child: ListTile(
-                                dense: true,
-                                leading: ThemeIcon(Icons.gif_box_outlined),
-                                title: Text('Sticker / GIF'),
-                              ),
-                            ),
-                            PopupMenuItem(
                               value: 'poll',
                               child: ListTile(
                                 dense: true,
                                 leading: ThemeIcon(Icons.poll_outlined),
                                 title: Text('Poll'),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'sticker',
-                              child: ListTile(
-                                dense: true,
-                                leading: ThemeIcon(
-                                  Icons.emoji_emotions_outlined,
-                                ),
-                                title: Text('Sticker pack'),
                               ),
                             ),
                           ],
@@ -699,7 +665,7 @@ class _MessageComposerState extends State<_MessageComposer> {
                                             return KeyEventResult.handled;
                                           }
                                           if (event.logicalKey ==
-                                                  LogicalKeyboardKey.enter &&
+                                                  LogicalKeyboardKey.tab &&
                                               !HardwareKeyboard
                                                   .instance
                                                   .isShiftPressed) {

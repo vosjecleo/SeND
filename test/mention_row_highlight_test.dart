@@ -37,6 +37,7 @@ void main() {
             timestamp: DateTime(2026, 10, 31, 12, 1),
             pending: false,
             hasVisualMention: true,
+            pingedCurrentUser: true,
           ),
           ChatMessage(
             id: 'plain',
@@ -94,6 +95,7 @@ void main() {
                 pending: false,
                 own: true,
                 hasVisualMention: true,
+                pingedCurrentUser: true,
               ),
             ];
           if (mobile) {

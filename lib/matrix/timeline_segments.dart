@@ -8,7 +8,7 @@ import 'package:matrix/src/models/timeline_chunk.dart';
 /// A contiguous range, never a timestamp-sorted union of unrelated windows.
 class MatrixTimelineSegment {
   MatrixTimelineSegment(this.id, this.timeline, {required this.live})
-    : events = List.of(timeline.events);
+    : events = _reconcileLocalEchoes(timeline.events);
   final String id;
   Timeline timeline;
   List<Event> events;
@@ -82,31 +82,36 @@ class MatrixTimelineSegments {
   /// Unknown synced rows wait for the sync batch to establish continuity.
   /// Existing rows, decryptions and local echoes can update immediately.
   void refreshKnown(MatrixTimelineSegment segment) {
-    final raw = {for (final e in segment.timeline.events) e.eventId: e};
+    final canonical = _reconcileLocalEchoes(segment.timeline.events);
+    final raw = {for (final e in canonical) e.eventId: e};
     final transactions = {
-      for (final e in segment.timeline.events)
-        if (e.transactionId != null) e.transactionId!: e,
+      for (final e in canonical)
+        if (e.transactionId != null)
+          (e.roomId, e.senderId, e.transactionId!): e,
     };
     final refreshed = <Event>[];
     for (final event in segment.events) {
       final replacement =
           raw[event.eventId] ??
-          transactions[event.transactionId ?? event.eventId];
-      if (event.redacted && replacement?.redacted != true) {
-        refreshed.add(event);
-      } else if (replacement != null) {
-        refreshed.add(replacement);
-      } else if (event.status.isSynced) {
+          transactions[(
+            event.roomId,
+            event.senderId,
+            event.transactionId ?? event.eventId,
+          )];
+      if (replacement != null) {
+        refreshed.add(_preferredEcho(event, replacement));
+      } else if (event.redacted || event.status.isSynced) {
         refreshed.add(event);
       }
     }
-    segment.events = refreshed;
     if (segment.live) {
-      final ids = segment.events.map((e) => e.eventId).toSet();
-      final local = segment.timeline.events.where(
+      final ids = refreshed.map((e) => e.eventId).toSet();
+      final local = canonical.where(
         (e) => !e.status.isSynced && !ids.contains(e.eventId),
       );
-      segment.events = [...local, ...segment.events];
+      segment.events = _reconcileLocalEchoes([...local, ...refreshed]);
+    } else {
+      segment.events = _reconcileLocalEchoes(refreshed);
     }
   }
 
@@ -119,8 +124,7 @@ class MatrixTimelineSegments {
     final combined = direction == Direction.b
         ? [...segment.events, ...page]
         : [...page, ...segment.events];
-    final seen = <String>{};
-    segment.events = combined.where((e) => seen.add(e.eventId)).toList();
+    segment.events = _reconcileLocalEchoes(combined);
     segment.timeline.events
       ..clear()
       ..addAll(segment.events);
@@ -317,6 +321,7 @@ class MatrixTimelineSegments {
     required bool isLive,
   }) {
     final old = segment.timeline;
+    events = _reconcileLocalEchoes(events);
     old.cancelSubscriptions();
     final replacement = _make(old.room, events, older, newer, isLive);
     _copyAggregates(old, replacement);
@@ -506,10 +511,13 @@ List<Event>? mergeOverlappingEvents(List<Event> first, List<Event> second) {
   if (!second.any((e) => e.status.isSynced && firstIds.contains(e.eventId))) {
     return null;
   }
-  final events = <String, Event>{
-    for (final e in second) e.eventId: e,
-    for (final e in first) e.eventId: e,
-  };
+  final events = <String, Event>{};
+  for (final event in [...second, ...first]) {
+    final previous = events[event.eventId];
+    events[event.eventId] = previous == null
+        ? event
+        : _preferredEcho(previous, event);
+  }
   final priority = <String, int>{};
   for (final e in [...first, ...second]) {
     priority.putIfAbsent(e.eventId, () => priority.length);
@@ -540,5 +548,60 @@ List<Event>? mergeOverlappingEvents(List<Event> first, List<Event> second) {
       if (incoming[next] == 0) ready.add(next);
     }
   }
-  return result.length == events.length ? result : null;
+  return result.length == events.length ? _reconcileLocalEchoes(result) : null;
+}
+
+/// Acknowledgements replace only their own local echoes, never distinct server
+/// events. Keep the acknowledged row's server position, not the echo's position.
+/// This runs after overlap checks: a transaction ID cannot prove continuity
+/// between otherwise disconnected server ranges.
+List<Event> _reconcileLocalEchoes(Iterable<Event> events) {
+  final byId = <String, Event>{};
+  for (final event in events) {
+    final previous = byId[event.eventId];
+    byId[event.eventId] = previous == null
+        ? event
+        : _preferredEcho(previous, event);
+  }
+  final acknowledged = {
+    for (final event in byId.values)
+      if (event.status.isSent && event.transactionId != null)
+        (event.roomId, event.senderId, event.transactionId!),
+  };
+  final localPositions = <(String?, String, String), int>{};
+  final result = <Event>[];
+  for (final event in byId.values) {
+    if (!event.status.isSent) {
+      final identity = (
+        event.roomId,
+        event.senderId,
+        event.transactionId ?? event.eventId,
+      );
+      if (acknowledged.contains(identity)) continue;
+      final position = localPositions[identity];
+      if (position != null) {
+        result[position] = _preferredEcho(result[position], event);
+        continue;
+      }
+      localPositions[identity] = result.length;
+    }
+    result.add(event);
+  }
+  return result;
+}
+
+Event _preferredEcho(Event previous, Event replacement) {
+  if (previous.redacted) return previous;
+  if (replacement.redacted) return replacement;
+  if (previous.status.isSynced != replacement.status.isSynced) {
+    return previous.status.isSynced ? previous : replacement;
+  }
+  if (previous.status.isSent != replacement.status.isSent) {
+    return previous.status.isSent ? previous : replacement;
+  }
+  if (previous.type != EventTypes.Encrypted &&
+      replacement.type == EventTypes.Encrypted) {
+    return previous;
+  }
+  return replacement;
 }

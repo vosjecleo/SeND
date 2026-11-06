@@ -150,10 +150,16 @@ class _MobileChatShellState extends State<MobileChatShell>
     final roomChanged = roomId != _lastRoomId;
     final spaceChanged = spaceId != _lastSpaceId;
     if (!roomChanged && !spaceChanged) return;
+    _dismissNavigationKeyboard();
     _lastRoomId = roomId;
     _lastSpaceId = spaceId;
     setState(() {
-      if (roomChanged && roomId != null) {
+      if (roomId == null) {
+        _navigationVisible = true;
+        _navigationDragProgress = null;
+        _detailsVisible = false;
+      }
+      if ((roomChanged || spaceChanged) && roomId != null) {
         _navigationVisible = false;
         _detailsVisible = false;
         _voiceChatVisible = false;
@@ -240,6 +246,7 @@ class _MobileChatShellState extends State<MobileChatShell>
     if (!mounted) return;
     final focus = FocusManager.instance.primaryFocus;
     if (focus?.hasFocus != true ||
+        focus?.canRequestFocus != true ||
         focus?.context?.findAncestorStateOfType<EditableTextState>() == null) {
       // The browser/OS can park focus before its background event reaches this
       // observer. Keep the last editor then; explicit foreground focus changes
@@ -302,21 +309,22 @@ class _MobileChatShellState extends State<MobileChatShell>
     _restoreOnResume = false;
     final focus = _keyboardToRestore;
     _keyboardToRestore = null;
-    if (focus?.context == null) return;
-    if (geometry.visible == true && focus!.hasFocus) return;
+    if (focus?.context == null || !focus!.canRequestFocus) return;
+    if (geometry.visible == true && focus.hasFocus) return;
     final generation = _keyboardGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           generation != _keyboardGeneration ||
           !_keyboardIsForeground ||
           !_windowFocused ||
-          focus?.context == null) {
+          focus.context == null ||
+          !focus.canRequestFocus) {
         return;
       }
       if (geometry.visible == true) {
-        focus!.requestFocus();
+        focus.requestFocus();
       } else {
-        focus!.context!
+        focus.context!
             .findAncestorStateOfType<EditableTextState>()
             ?.requestKeyboard();
       }
@@ -364,6 +372,7 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   Future<void> _openRoom(RoomSummary room) async {
+    _dismissNavigationKeyboard();
     final generation = ++_roomOpenGeneration;
     await backend.selectRoom(room.id);
     if (generation != _roomOpenGeneration) return;
@@ -377,6 +386,36 @@ class _MobileChatShellState extends State<MobileChatShell>
   }
 
   void _showSettings() => showDeltiecordSettings(context, backend);
+
+  void _dismissNavigationKeyboard() {
+    _keyboardGeneration++;
+    _restoreOnResume = false;
+    _keyboardToRestore = null;
+    _focusedWithKeyboard = null;
+    _transientKeyboard = null;
+    _languageEditor = null;
+    _languageRecoveryUntil = null;
+    _languageRecovery?.cancel();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _openNavigation() {
+    _dismissNavigationKeyboard();
+    setState(() => _navigationVisible = true);
+  }
+
+  void _openDetails({bool voiceChat = false}) {
+    _dismissNavigationKeyboard();
+    setState(() {
+      _detailsVisible = true;
+      _voiceChatVisible = voiceChat;
+    });
+  }
+
+  void _closeDetails() {
+    _dismissNavigationKeyboard();
+    setState(() => _detailsVisible = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -394,9 +433,9 @@ class _MobileChatShellState extends State<MobileChatShell>
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_detailsVisible) {
-          setState(() => _detailsVisible = false);
+          _closeDetails();
         } else if (!_navigationVisible) {
-          setState(() => _navigationVisible = true);
+          _openNavigation();
         }
       },
       child: Scaffold(
@@ -450,7 +489,7 @@ class _MobileChatShellState extends State<MobileChatShell>
             }
             final startingDrag = _navigationDragProgress == null;
             if (startingDrag) {
-              FocusManager.instance.primaryFocus?.unfocus();
+              _dismissNavigationKeyboard();
               _timelineGestureReset?.cancel();
             }
             final width = MediaQuery.sizeOf(context).width;
@@ -492,13 +531,14 @@ class _MobileChatShellState extends State<MobileChatShell>
               return;
             }
             if (_detailsVisible && delta.dx > 0) {
-              setState(() => _detailsVisible = false);
+              _closeDetails();
             }
           },
           child: Stack(
             children: [
               Positioned.fill(
                 child: _NavigationSlide(
+                  focusEnabled: _navigationProgress <= .001 && !_detailsVisible,
                   motion: _navigationMotion,
                   visible: _navigationVisible,
                   closedX: 0,
@@ -510,24 +550,16 @@ class _MobileChatShellState extends State<MobileChatShell>
                       ? MobileVoiceView(
                           backend: backend,
                           room: room,
-                          onOpenNavigation: () =>
-                              setState(() => _navigationVisible = true),
-                          onOpenDetails: () => setState(() {
-                            _voiceChatVisible = false;
-                            _detailsVisible = true;
-                          }),
-                          onOpenChat: () => setState(() {
-                            _voiceChatVisible = true;
-                            _detailsVisible = true;
-                          }),
+                          onOpenNavigation: _openNavigation,
+                          onOpenDetails: _openDetails,
+                          onOpenChat: () => _openDetails(voiceChat: true),
                         )
                       : room.presentation == RoomPresentation.forum
                       ? SafeArea(
                           child: ForumView(
                             backend: backend,
                             room: room,
-                            onOpenNavigation: () =>
-                                setState(() => _navigationVisible = true),
+                            onOpenNavigation: _openNavigation,
                           ),
                         )
                       : CallAndChatLayout(
@@ -536,20 +568,16 @@ class _MobileChatShellState extends State<MobileChatShell>
                                   compact: true,
                                   backend: backend,
                                   room: room,
-                                  onOpenNavigation: () =>
-                                      setState(() => _navigationVisible = true),
-                                  onOpenDetails: () =>
-                                      setState(() => _detailsVisible = true),
+                                  onOpenNavigation: _openNavigation,
+                                  onOpenDetails: _openDetails,
                                 )
                               : null,
                           chat: MobileTimelineView(
                             key: ValueKey('mobile-room-${room.id}'),
                             backend: backend,
                             room: room,
-                            onOpenNavigation: () =>
-                                setState(() => _navigationVisible = true),
-                            onOpenDetails: () =>
-                                setState(() => _detailsVisible = true),
+                            onOpenNavigation: _openNavigation,
+                            onOpenDetails: _openDetails,
                             onOpenSettings: _showSettings,
                             navigationGestureActive:
                                 _navigationDragProgress != null ||
@@ -578,9 +606,10 @@ class _MobileChatShellState extends State<MobileChatShell>
               ),
               Positioned.fill(
                 child: _NavigationSlide(
+                  focusEnabled: _navigationProgress >= .999 && !_detailsVisible,
                   motion: _navigationMotion,
                   visible: _navigationVisible,
-                  closedX: -1,
+                  closedX: room == null ? 0 : -1,
                   openX: 0,
                   duration: _duration,
                   child: IgnorePointer(
@@ -617,39 +646,40 @@ class _MobileChatShellState extends State<MobileChatShell>
                     curve: Curves.easeOutCubic,
                     child: IgnorePointer(
                       ignoring: !_detailsVisible,
-                      child: Material(
-                        elevation: 14,
-                        child: _voiceChatVisible
-                            ? MobileTimelineView(
-                                key: ValueKey('voice-chat-${room.id}'),
-                                backend: backend,
-                                room: room,
-                                onOpenNavigation: () =>
-                                    setState(() => _detailsVisible = false),
-                                onOpenDetails: () =>
-                                    setState(() => _voiceChatVisible = false),
-                                onOpenSettings: _showSettings,
-                                navigationGestureActive: false,
-                                initialDraft: _drafts[room.id]?.text ?? '',
-                                initialCustomEmojis:
-                                    _drafts[room.id]?.emojis ?? const [],
-                                onDraftChanged: (draft) {
-                                  _drafts[room.id] = draft;
-                                  _draftStore.write(
-                                    room.id,
-                                    customEmojiDraftDelta(
-                                      draft.text,
-                                      draft.emojis,
-                                    ),
-                                  );
-                                },
-                              )
-                            : MobileDetailsPanel(
-                                backend: backend,
-                                room: room,
-                                onDismiss: () =>
-                                    setState(() => _detailsVisible = false),
-                              ),
+                      child: ExcludeFocus(
+                        excluding:
+                            !_detailsVisible || _navigationProgress > .001,
+                        child: Material(
+                          elevation: 14,
+                          child: _voiceChatVisible
+                              ? MobileTimelineView(
+                                  key: ValueKey('voice-chat-${room.id}'),
+                                  backend: backend,
+                                  room: room,
+                                  onOpenNavigation: _closeDetails,
+                                  onOpenDetails: _openDetails,
+                                  onOpenSettings: _showSettings,
+                                  navigationGestureActive: false,
+                                  initialDraft: _drafts[room.id]?.text ?? '',
+                                  initialCustomEmojis:
+                                      _drafts[room.id]?.emojis ?? const [],
+                                  onDraftChanged: (draft) {
+                                    _drafts[room.id] = draft;
+                                    _draftStore.write(
+                                      room.id,
+                                      customEmojiDraftDelta(
+                                        draft.text,
+                                        draft.emojis,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : MobileDetailsPanel(
+                                  backend: backend,
+                                  room: room,
+                                  onDismiss: _closeDetails,
+                                ),
+                        ),
                       ),
                     ),
                   ),
@@ -712,8 +742,9 @@ class _MobileChatShellState extends State<MobileChatShell>
       ? Duration.zero
       : const Duration(milliseconds: 220);
 
-  double get _navigationProgress =>
-      _navigationDragProgress ?? (_navigationVisible ? 1 : 0);
+  double get _navigationProgress => backend.selectedRoom == null
+      ? 1
+      : _navigationDragProgress ?? (_navigationVisible ? 1 : 0);
 
   void _reportConversationVisibility(bool visible) {
     visible = visible && ModalRoute.of(context)?.isCurrent != false;
@@ -735,17 +766,19 @@ class _NavigationSlide extends StatelessWidget {
     required this.openX,
     required this.duration,
     required this.child,
+    this.focusEnabled = true,
   });
   final ValueListenable<double?> motion;
   final bool visible;
   final double closedX, openX;
   final Duration duration;
   final Widget child;
+  final bool focusEnabled;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<double?>(
     valueListenable: motion,
-    child: child,
+    child: ExcludeFocus(excluding: !focusEnabled, child: child),
     builder: (context, drag, child) {
       final progress = drag ?? (visible ? 1.0 : 0.0);
       return AnimatedSlide(

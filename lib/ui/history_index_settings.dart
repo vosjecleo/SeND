@@ -48,8 +48,13 @@ Future<void> showHistoryIndexPrompt(
 }
 
 class HistoryIndexSettings extends StatefulWidget {
-  const HistoryIndexSettings({required this.backend, super.key});
+  const HistoryIndexSettings({
+    required this.backend,
+    this.compact = false,
+    super.key,
+  });
   final ChatBackend backend;
+  final bool compact;
   @override
   State<HistoryIndexSettings> createState() => _HistoryIndexSettingsState();
 }
@@ -183,6 +188,34 @@ class _HistoryIndexSettingsState extends State<HistoryIndexSettings> {
   @override
   Widget build(BuildContext context) {
     final index = _index;
+    if (widget.compact) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Keep a local text search index'),
+            subtitle: const Text('Attachments will not be downloaded.'),
+            value: index?.enabled ?? false,
+            onChanged: _busy || index == null
+                ? null
+                : (value) => _change(value),
+          ),
+          if (index != null && !index.encryptedAtRest)
+            const Text(
+              'Message text will be stored unencrypted on this device.',
+            ),
+          if (_busy) const LinearProgressIndicator(),
+          if (_error != null) ...[
+            Text(_error!),
+            TextButton(
+              onPressed: _busy ? null : _load,
+              child: const Text('Retry'),
+            ),
+          ],
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

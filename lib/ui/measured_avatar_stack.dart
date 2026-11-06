@@ -24,14 +24,21 @@ class MeasuredAvatarStack extends MultiChildRenderObjectWidget {
     required this.senderKey,
     required this.bodyKey,
     required this.enabled,
+    required this.maxBodyHeight,
     required super.children,
     super.key,
   });
   final GlobalKey senderKey, bodyKey;
   final bool enabled;
+  final double maxBodyHeight;
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _AvatarStack(senderKey, bodyKey, enabled, Directionality.of(context));
+  RenderObject createRenderObject(BuildContext context) => _AvatarStack(
+    senderKey,
+    bodyKey,
+    enabled,
+    maxBodyHeight,
+    Directionality.of(context),
+  );
   @override
   void updateRenderObject(BuildContext context, RenderObject renderObject) {
     final stack = renderObject as _AvatarStack;
@@ -39,6 +46,7 @@ class MeasuredAvatarStack extends MultiChildRenderObjectWidget {
       ..senderKey = senderKey
       ..bodyKey = bodyKey
       ..enabled = enabled
+      ..maxBodyHeight = maxBodyHeight
       ..textDirection = Directionality.of(context)
       ..markNeedsLayout();
   }
@@ -49,12 +57,16 @@ class _AvatarStack extends RenderStack {
     this.senderKey,
     this.bodyKey,
     this.enabled,
+    this.maxBodyHeight,
     TextDirection direction,
   ) : super(textDirection: direction, clipBehavior: Clip.none);
   GlobalKey senderKey, bodyKey;
   bool enabled;
+  double maxBodyHeight;
 
   bool _singleLine(_AvatarMeasureBox body) {
+    // A jumbo emoji is one text run, but not an ordinary text-height line.
+    if (body.measuredSize.height > maxBodyHeight) return false;
     RenderBox? text;
     void visit(RenderObject object) {
       if (text != null) return;

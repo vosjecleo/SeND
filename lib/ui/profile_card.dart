@@ -9,6 +9,7 @@ import 'activity_widgets.dart';
 import 'lifecycle_memory_image.dart';
 import 'profile_media_viewer.dart';
 import 'profile_watch.dart';
+import 'avatar_presence.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -377,6 +378,20 @@ class _ProfileHeader extends StatelessWidget {
         final bannerHeight = constraints.maxWidth / 3;
         final avatarSize = (constraints.maxWidth * .26).clamp(64.0, 124.0);
         final presenceSize = (avatarSize * .18).clamp(14.0, 20.0);
+        final presenceInset =
+            (avatarSize / 2 -
+                    avatarSize * .3535533906 -
+                    presenceBadgeSize(
+                          presenceSize,
+                          phone: showsMobilePresence(
+                            context,
+                            profile.userId,
+                            profile.presence,
+                          ),
+                        ) /
+                        2)
+                .clamp(0.0, avatarSize)
+                .toDouble();
         return SizedBox(
           height: bannerHeight + 60,
           child: Stack(
@@ -419,88 +434,78 @@ class _ProfileHeader extends StatelessWidget {
                 bottom: 0,
                 child: _viewable(
                   context,
-                  Container(
-                    width: avatarSize,
-                    height: avatarSize,
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      shape:
-                          Theme.of(
-                                context,
-                              ).extension<ThemeChrome>()?.glassAvatars ==
-                              true
-                          ? BoxShape.rectangle
-                          : BoxShape.circle,
-                      borderRadius:
-                          Theme.of(
-                                context,
-                              ).extension<ThemeChrome>()?.glassAvatars ==
-                              true
-                          ? BorderRadius.circular(10)
-                          : null,
-                      color: palette.surface,
-                    ),
-                    child: ThemeAvatarClip(
-                      clipBehavior: Clip.antiAlias,
-                      child: ColoredBox(
-                        color: palette.elevated,
-                        child:
-                            avatarPreview ??
-                            (profile.avatarBytes == null
-                                ? Center(
-                                    child: Text(
-                                      profile.displayName.characters.firstOrNull
-                                              ?.toUpperCase() ??
-                                          '?',
-                                      style: const TextStyle(
-                                        fontSize: 42,
-                                        fontWeight: FontWeight.w700,
+                  AvatarPresence(
+                    presence: profile.presence,
+                    userId: profile.userId,
+                    badgeSize: presenceSize,
+                    right: presenceInset,
+                    bottom: presenceInset,
+                    child: Container(
+                      width: avatarSize,
+                      height: avatarSize,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape:
+                            Theme.of(
+                                  context,
+                                ).extension<ThemeChrome>()?.glassAvatars ==
+                                true
+                            ? BoxShape.rectangle
+                            : BoxShape.circle,
+                        borderRadius:
+                            Theme.of(
+                                  context,
+                                ).extension<ThemeChrome>()?.glassAvatars ==
+                                true
+                            ? BorderRadius.circular(10)
+                            : null,
+                        color: palette.surface,
+                      ),
+                      child: ThemeAvatarClip(
+                        clipBehavior: Clip.antiAlias,
+                        child: ColoredBox(
+                          color: palette.elevated,
+                          child:
+                              avatarPreview ??
+                              (profile.avatarBytes == null
+                                  ? Center(
+                                      child: Text(
+                                        profile
+                                                .displayName
+                                                .characters
+                                                .firstOrNull
+                                                ?.toUpperCase() ??
+                                            '?',
+                                        style: const TextStyle(
+                                          fontSize: 42,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                  )
-                                : hasAnimatedImageHeader(profile.avatarBytes!)
-                                ? LifecycleMemoryImage(
-                                    bytes: profile.avatarBytes!,
-                                    animated: true,
-                                    decodeWidth: 512,
-                                    autoplay: !MediaQuery.disableAnimationsOf(
-                                      context,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  )
-                                : Image.memory(
-                                    profile.avatarBytes!,
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 256,
-                                    cacheHeight: 256,
-                                    gaplessPlayback: true,
-                                    filterQuality: FilterQuality.high,
-                                  )),
+                                    )
+                                  : hasAnimatedImageHeader(profile.avatarBytes!)
+                                  ? LifecycleMemoryImage(
+                                      bytes: profile.avatarBytes!,
+                                      animated: true,
+                                      decodeWidth: 512,
+                                      autoplay: !MediaQuery.disableAnimationsOf(
+                                        context,
+                                      ),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.memory(
+                                      profile.avatarBytes!,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 256,
+                                      cacheHeight: 256,
+                                      gaplessPlayback: true,
+                                      filterQuality: FilterQuality.high,
+                                    )),
+                        ),
                       ),
                     ),
                   ),
                   profile.avatarBytes,
                   false,
-                ),
-              ),
-              Positioned(
-                left:
-                    16 +
-                    avatarSize / 2 +
-                    avatarSize * .3535533906 -
-                    presenceSize / 2,
-                bottom:
-                    avatarSize / 2 -
-                    avatarSize * .3535533906 -
-                    presenceSize / 2,
-                child: Container(
-                  width: presenceSize,
-                  height: presenceSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _profilePresenceColour(profile.presence),
-                    border: Border.all(color: palette.surface, width: 2.5),
-                  ),
                 ),
               ),
               Positioned(
@@ -531,12 +536,18 @@ class _ProfileHeader extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _profilePresenceColour(
+                              PresenceBadge(
+                                presence: profile.presence,
+                                phone: showsMobilePresence(
+                                  context,
+                                  profile.userId,
+                                  profile.presence,
+                                ),
+                                size: presenceBadgeSize(
+                                  9,
+                                  phone: showsMobilePresence(
+                                    context,
+                                    profile.userId,
                                     profile.presence,
                                   ),
                                 ),
@@ -580,13 +591,6 @@ class _ProfileHeader extends StatelessWidget {
     );
   }
 }
-
-Color _profilePresenceColour(UserPresence presence) => switch (presence) {
-  UserPresence.online => const Color(0xff23d887),
-  UserPresence.away => const Color(0xffffc857),
-  UserPresence.doNotDisturb => const Color(0xffe5484d),
-  UserPresence.offline => const Color(0xff747680),
-};
 
 String _profilePresenceLabel(UserPresence presence) => switch (presence) {
   UserPresence.online => 'Online',

@@ -92,6 +92,27 @@ static gboolean window_state_cb(GtkWidget*, GdkEventWindowState* event,
 static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
                              gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
+  if (strcmp(fl_method_call_get_name(call), "setTitle") == 0) {
+    FlValue* value = fl_method_call_get_args(call);
+    if (value == nullptr || fl_value_get_type(value) != FL_VALUE_TYPE_STRING) {
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+          fl_method_error_response_new("invalid_title", "Expected a window title", nullptr));
+      fl_method_call_respond(call, response, nullptr);
+      return;
+    }
+    if (self->window != nullptr) {
+      const gchar* title = fl_value_get_string(value);
+      gtk_window_set_title(self->window, title);
+      GtkWidget* titlebar = gtk_window_get_titlebar(self->window);
+      if (titlebar != nullptr && GTK_IS_HEADER_BAR(titlebar)) {
+        gtk_header_bar_set_title(GTK_HEADER_BAR(titlebar), title);
+      }
+    }
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(nullptr));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
   if (strcmp(fl_method_call_get_name(call), "idleMilliseconds") == 0) {
     const gint64 idle = desktop_idle_milliseconds();
     g_autoptr(FlValue) value = idle >= 0 ? fl_value_new_int(idle) : fl_value_new_null();
@@ -137,6 +158,8 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
   self->window = window;
+  // A header-bar label is not the toplevel title used by Wayland panels.
+  gtk_window_set_title(window, "SeND");
   load_window_state(self);
 
   // Use a header bar when running in GNOME as this is the common style used

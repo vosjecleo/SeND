@@ -18,6 +18,56 @@ const _room = RoomSummary(
 );
 
 void main() {
+  for (final mobile in [false, true]) {
+    testWidgets(
+      'mention arrows and Tab match emoji completion, mobile=$mobile',
+      (tester) async {
+        final backend = FakeBackend()
+          ..currentStatus = SessionStatus.signedIn
+          ..currentRoom = _room
+          ..roomList = const [_room]
+          ..mentionList = const [
+            MentionSuggestion(matrixId: '@alice:test', displayName: 'Alice'),
+            MentionSuggestion(matrixId: '@amy:test', displayName: 'Amy'),
+          ];
+        if (mobile) {
+          await pumpMobile(tester, backend);
+          await tester.tap(find.text(_room.name).hitTestable().first);
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.byKey(const ValueKey('mobile-composer-field')),
+            '@a',
+          );
+        } else {
+          await tester.pumpWidget(DeltiecordApp(backend: backend));
+          await tester.pumpAndSettle();
+          await enterComposer(tester, '@a');
+          await tester.tap(find.byType(PlainMessageEditor));
+        }
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+        final text = mobile
+            ? tester
+                  .widget<TextField>(
+                    find.byKey(const ValueKey('mobile-composer-field')),
+                  )
+                  .controller!
+                  .text
+            : tester
+                  .widget<PlainMessageEditor>(find.byType(PlainMessageEditor))
+                  .controller
+                  .document
+                  .toPlainText();
+        expect(text.trim(), '@amy:test');
+        expect(backend.sentMessages, isEmpty);
+        await tester.pumpWidget(const SizedBox());
+        backend.dispose();
+      },
+    );
+  }
   for (final tripleTap in [false, true]) {
     testWidgets('editing leaves the caret at the end, tripleTap=$tripleTap', (
       tester,
@@ -97,6 +147,8 @@ void main() {
           ];
         if (mobile) {
           await pumpMobile(tester, backend);
+          await tester.tap(find.text(_room.name).hitTestable().first);
+          await tester.pumpAndSettle();
           await tester.enterText(
             find.byKey(const ValueKey('mobile-composer-field')),
             ':qq',

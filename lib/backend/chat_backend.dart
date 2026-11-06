@@ -16,6 +16,8 @@ import '../services/message_links.dart';
 import '../services/room_send_queue.dart';
 import '../services/attachment_admission.dart' as admission;
 import '../services/queued_message.dart';
+import '../services/media_gallery.dart';
+import '../models/saved_gif_reference.dart';
 
 /// Matrix-independent application boundary consumed by Flutter widgets.
 ///
@@ -224,6 +226,7 @@ abstract class ChatBackend extends ChangeNotifier {
         'Wait for some attachments to finish sending before adding more.',
       );
     }
+    attachments = assignMediaGallery(attachments);
     final items = List.generate(attachments.isEmpty ? 1 : attachments.length, (
       index,
     ) {
@@ -243,6 +246,7 @@ abstract class ChatBackend extends ChangeNotifier {
                 body: reply.body,
                 senderId: reply.senderId,
                 senderColor: reply.senderColor,
+                avatarBytes: reply.avatarBytes,
               )
             : null,
         draft: attachments.isEmpty ? null : attachments[index],
@@ -265,7 +269,9 @@ abstract class ChatBackend extends ChangeNotifier {
             },
           );
           for (var index = 0; index < prepared.length; index++) {
-            items[index].draft = prepared[index];
+            items[index].draft = prepared[index].copyWith(
+              gallery: attachments[index].gallery,
+            );
           }
         }
         for (final item in items) {
@@ -440,6 +446,7 @@ abstract class ChatBackend extends ChangeNotifier {
     required bool Function() isVisible,
   }) => () {};
   List<UserActivity> activitiesFor(String userId) => [?activityFor(userId)];
+  bool mobileOnlineFor(String userId) => false;
   LastFmTrack? lastFmRecentFor(String userId) => null;
   VoidCallback watchListeningHistory(String userId) => () {};
   Future<Uint8List?> loadActivityIcon(Uri uri) async => null;
@@ -647,7 +654,74 @@ abstract class ChatBackend extends ChangeNotifier {
     required String name,
     String topic,
     bool encrypted = true,
+    String channelAccess = 'invite',
   });
+  List<RoomSummary> roomsInSpace(String spaceId) =>
+      selectedSpaceId == spaceId ? rooms : const [];
+  bool canCreateSpaceRoom(String spaceId) =>
+      canManageSpaceChannelLayout(spaceId);
+  List<ChannelCategorySummary> categoriesInSpace(String spaceId) =>
+      selectedSpaceId == spaceId ? selectedSpaceCategories : const [];
+  Future<void> refreshSpaceRooms(String spaceId) async {}
+  Future<void> removeRoomFromSpace(String spaceId, String roomId) async =>
+      throw UnsupportedError('Channel removal is unavailable');
+  bool autoJoinSpaceChannels(String spaceId) => true;
+  Future<void> setAutoJoinSpaceChannels(String spaceId, bool enabled) async {}
+  Future<SpaceJoinResult> joinAvailableSpaceChannels(String spaceId) async =>
+      const SpaceJoinResult();
+  bool channelEncryptionForSpace(String spaceId) => defaultChannelEncryption;
+  Future<Map<String, String>> getSpaceMembers(String spaceId) async => {
+    for (final member in selectedRoomMembers) member.userId: member.displayName,
+  };
+  Future<void> editSpaceCategory(
+    String spaceId,
+    SpaceCategoryAction action, {
+    String? categoryId,
+    String? name,
+    int? index,
+  }) async {
+    if (selectedSpaceId != spaceId) {
+      throw StateError('Category settings are unavailable');
+    }
+    switch (action) {
+      case SpaceCategoryAction.create:
+        await createChannelCategory(name!);
+      case SpaceCategoryAction.rename:
+        await renameChannelCategory(categoryId!, name!);
+      case SpaceCategoryAction.delete:
+        await deleteChannelCategory(categoryId!);
+      case SpaceCategoryAction.move:
+        await reorderChannelCategory(categoryId!, index!);
+    }
+  }
+
+  Future<void> moveRoomWithinSpace(
+    String spaceId,
+    String roomId, {
+    String? categoryId,
+    String? beforeRoomId,
+  }) async {
+    if (selectedSpaceId != spaceId) {
+      throw StateError('Channel settings are unavailable');
+    }
+    await moveRoomInSpace(
+      roomId,
+      categoryId: categoryId,
+      beforeRoomId: beforeRoomId,
+    );
+  }
+
+  Future<void> setChannelEncryptionForSpace(
+    String spaceId,
+    bool enabled,
+  ) async => throw UnsupportedError('Channel defaults are unavailable');
+  Future<void> createRoomInSpace(
+    String spaceId, {
+    required String name,
+    required RoomPresentation presentation,
+    String topic = '',
+    bool encrypted = true,
+  }) async => throw UnsupportedError('Channel creation is unavailable');
   bool get defaultChannelEncryption => true;
   Future<void> createChannelCategory(String name);
   Future<void> renameChannelCategory(String categoryId, String name);
@@ -779,6 +853,22 @@ abstract class ChatBackend extends ChangeNotifier {
     bool removeBackground = false,
   }) async {}
   Future<void> startDirectChat(String userId);
+  Future<void> startDirectChatWithEncryption(
+    String userId, {
+    required bool encrypted,
+  }) {
+    if (!encrypted) {
+      throw UnsupportedError('Unencrypted chat creation is unavailable');
+    }
+    return startDirectChat(userId);
+  }
+
+  SavedGifReference? uploadedGifForSource(Uri source) => null;
+  Future<Uint8List?> loadForwardingAvatar(String roomId) async =>
+      forwardingRooms
+          .where((room) => room.id == roomId)
+          .firstOrNull
+          ?.avatarBytes;
   Future<List<SpaceDirectoryEntry>> searchPublicSpaces(String query);
   Future<void> joinPublicSpace(String roomId);
   Future<void> setUserBlocked(String userId, bool blocked);
@@ -853,6 +943,24 @@ abstract class ChatBackend extends ChangeNotifier {
   Future<void> jumpToPresent();
   Future<void> jumpToEvent(String eventId);
   bool canSendMessagesToRoom(String roomId) => true;
+
+  List<RoomSummary> get forwardingRooms => [...rooms, ...archivedRooms];
+
+  Future<void> forwardMessages({
+    required String sourceRoomId,
+    required List<String> eventIds,
+    required String destinationRoomId,
+    bool allowUnencrypted = false,
+  }) async => throw UnsupportedError('Forwarding is unavailable');
+
+  Future<Uint8List> loadSavedGifPreview(SavedGifReference reference) async =>
+      throw UnsupportedError('This GIF is unavailable.');
+  Future<void> sendSavedGif(
+    SavedGifReference reference, {
+    required String roomId,
+    String? replyToMessageId,
+    bool allowUnencrypted = false,
+  }) async => throw UnsupportedError('This GIF is unavailable.');
 
   Future<void> sendMessage(
     String text, {

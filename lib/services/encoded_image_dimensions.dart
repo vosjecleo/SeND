@@ -10,6 +10,7 @@ import 'package:image/image.dart' as image;
 Future<({int width, int height})?> readEncodedImageDimensions(
   Uint8List bytes, {
   int maximumPixels = 40000000,
+  int? maximumFramePixels,
 }) async {
   // Encoded ImageDescriptor.width/height throw UnsupportedError on web.
   // Read headers there, without decoding a full-resolution pixel buffer.
@@ -27,7 +28,9 @@ Future<({int width, int height})?> readEncodedImageDimensions(
       if (info == null ||
           info.width <= 0 ||
           info.height <= 0 ||
-          info.width * info.height > maximumPixels) {
+          info.width * info.height > maximumPixels ||
+          (maximumFramePixels != null &&
+              info.width * info.height * info.numFrames > maximumFramePixels)) {
         return null;
       }
       return (width: info.width, height: info.height);
@@ -44,6 +47,17 @@ Future<({int width, int height})?> readEncodedImageDimensions(
     final height = descriptor.height;
     if (width <= 0 || height <= 0 || width * height > maximumPixels) {
       return null;
+    }
+    if (maximumFramePixels != null) {
+      final codec = await descriptor.instantiateCodec(
+        targetWidth: 1,
+        targetHeight: 1,
+      );
+      try {
+        if (width * height * codec.frameCount > maximumFramePixels) return null;
+      } finally {
+        codec.dispose();
+      }
     }
     return (width: width, height: height);
   } catch (_) {

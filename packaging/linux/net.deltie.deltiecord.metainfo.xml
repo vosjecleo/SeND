@@ -20,6 +20,9 @@
     <binary>deltiecord</binary>
   </provides>
   <releases>
+    <release version="0.9.42+137" date="2026-11-06" type="development">
+      <description><p>Message and gallery forwarding, GIF favourites, clearer server settings, mobile keyboard fixes, faster avatars and security fixes.</p></description>
+    </release>
     <release version="0.9.39+128" date="2026-10-11" type="development">
       <description><p>Size status bubbles to their text, classify Simple Sight as an application, organise tests and archive historical documentation.</p></description>
     </release>

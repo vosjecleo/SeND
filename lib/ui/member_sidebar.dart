@@ -256,42 +256,24 @@ class _MemberSidebarTile extends StatelessWidget {
         minVerticalPadding: 3,
         horizontalTitleGap: 10,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        leading: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: context.deltiecord.elevated,
-              backgroundImage: member.avatarBytes == null
-                  ? null
-                  : MemoryImage(member.avatarBytes!),
-              child: member.avatarBytes == null
-                  ? Text(
-                      member.displayName.trim().isEmpty
-                          ? '?'
-                          : member.displayName.characters.first.toUpperCase(),
-                    )
-                  : null,
-            ),
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: switch (member.presence) {
-                    UserPresence.online => const Color(0xff43b581),
-                    UserPresence.away => const Color(0xffffc857),
-                    UserPresence.doNotDisturb => const Color(0xffe5484d),
-                    UserPresence.offline => const Color(0xff747680),
-                  },
-                  border: Border.all(color: context.deltiecord.panel, width: 2),
-                ),
-              ),
-            ),
-          ],
+        leading: AvatarPresence(
+          presence: member.presence,
+          userId: member.userId,
+          badgeSize: 10,
+          child: CircleAvatar(
+            radius: 16,
+            backgroundColor: context.deltiecord.elevated,
+            backgroundImage: member.avatarBytes == null
+                ? null
+                : MemoryImage(member.avatarBytes!),
+            child: member.avatarBytes == null
+                ? Text(
+                    member.displayName.trim().isEmpty
+                        ? '?'
+                        : member.displayName.characters.first.toUpperCase(),
+                  )
+                : null,
+          ),
         ),
         title: Row(
           children: [

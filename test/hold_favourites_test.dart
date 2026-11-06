@@ -95,7 +95,7 @@ void main() {
       await tester.pump();
       expect(service.toggles, 1);
       expect(find.text('GIF added to favourites.'), findsOneWidget);
-      expect(find.byType(IconButton), findsNothing);
+      expect(find.byTooltip('Remove favourite GIF'), findsOneWidget);
       await tester.longPress(target);
       await tester.pump();
       expect(service.toggles, 2);

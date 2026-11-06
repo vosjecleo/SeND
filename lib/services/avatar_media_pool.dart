@@ -43,10 +43,13 @@ final class AvatarMediaPool {
   final int maximumEntryBytes;
   final LinkedHashMap<String, _AvatarMediaEntry> _memory = LinkedHashMap();
   final Map<String, Future<Uint8List?>> _requests = {};
+  final Map<String, Future<Uint8List?>> _originalRequests = {};
+  Future<void> _originalTail = Future.value();
   final Set<Future<void>> _writes = {};
   Future<Directory?>? _directoryRequest;
   int _memoryBytes = 0;
   int _generation = 0;
+  int get generation => _generation;
 
   Uint8List? peek(Uri uri, int minimumDimension) {
     final candidates =
@@ -70,6 +73,36 @@ final class AvatarMediaPool {
       return;
     }
     _remember(_key(uri, dimension), bytes, dimension);
+  }
+
+  /// Keep background originals from taking all media slots before rows have
+  /// their thumbnails. A caller still owns publication and session checks.
+  Future<Uint8List?> queueOriginal(
+    Uri uri,
+    int dimension,
+    AvatarMediaLoader loader,
+  ) {
+    final cached = peek(uri, dimension);
+    if (cached != null) return Future.value(cached);
+    final key = _key(uri, dimension);
+    final pending = _originalRequests[key];
+    if (pending != null) return pending;
+    final generation = _generation;
+    final request = _originalTail.then<Uint8List?>((_) async {
+      if (generation != _generation) return null;
+      final bytes = peek(uri, dimension) ?? await loader();
+      return generation == _generation ? bytes : null;
+    });
+    _originalRequests[key] = request;
+    _originalTail = request.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return request.whenComplete(() {
+      if (identical(_originalRequests[key], request)) {
+        _originalRequests.remove(key);
+      }
+    });
   }
 
   Future<Uint8List?> load(
@@ -127,6 +160,8 @@ final class AvatarMediaPool {
     _generation++;
     _memory.clear();
     _requests.clear();
+    _originalRequests.clear();
+    _originalTail = Future.value();
     _memoryBytes = 0;
     if (_writes.isNotEmpty) {
       await Future.wait(_writes.toList(growable: false));

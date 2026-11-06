@@ -7,6 +7,8 @@ import '../services/notification_volume.dart';
 import 'room_event_visibility.dart';
 import 'forum_post.dart';
 import 'media_compression.dart';
+import 'media_gallery.dart';
+export 'media_gallery.dart';
 
 enum SessionStatus { starting, signedOut, signingIn, signedIn, failed }
 
@@ -82,6 +84,7 @@ class AppPreferences {
     this.sendReadReceipts = true,
     this.sendTypingNotifications = true,
     this.sharePresence = true,
+    this.shareMobilePresence = true,
     this.desktopIdleMinutes = 5,
     this.directLinkPreviewMode = DirectLinkPreviewMode.none,
     this.trustedPreviewDomainsAdded = const {},
@@ -143,6 +146,7 @@ class AppPreferences {
   final bool sendReadReceipts;
   final bool sendTypingNotifications;
   final bool sharePresence;
+  final bool shareMobilePresence;
   final int desktopIdleMinutes;
 
   /// Allows privacy-sensitive fallback preview requests to linked websites.
@@ -211,6 +215,7 @@ class AppPreferences {
     bool? sendReadReceipts,
     bool? sendTypingNotifications,
     bool? sharePresence,
+    bool? shareMobilePresence,
     int? desktopIdleMinutes,
     DirectLinkPreviewMode? directLinkPreviewMode,
     Set<String>? trustedPreviewDomainsAdded,
@@ -275,6 +280,7 @@ class AppPreferences {
     sendTypingNotifications:
         sendTypingNotifications ?? this.sendTypingNotifications,
     sharePresence: sharePresence ?? this.sharePresence,
+    shareMobilePresence: shareMobilePresence ?? this.shareMobilePresence,
     desktopIdleMinutes: desktopIdleMinutes ?? this.desktopIdleMinutes,
     directLinkPreviewMode:
         directLinkPreviewMode ??
@@ -592,6 +598,7 @@ class RoomSummary {
     this.topic = '',
     this.isDirect = false,
     this.encrypted = false,
+    this.joined = true,
     this.presence = UserPresence.offline,
     this.notificationMode = RoomNotificationMode.allMessages,
     this.mutedUntil,
@@ -617,6 +624,7 @@ class RoomSummary {
   final String topic;
   final bool isDirect;
   final bool encrypted;
+  final bool joined;
   final UserPresence presence;
   final RoomNotificationMode notificationMode;
   final DateTime? mutedUntil;
@@ -938,11 +946,13 @@ class SpacePagesSummary {
     this.welcome = '',
     this.rules = '',
     this.suggestedNotificationMode = RoomNotificationMode.mentionsOnly,
+    this.announcementChannelIds = const {},
   });
 
   final String welcome;
   final String rules;
   final RoomNotificationMode suggestedNotificationMode;
+  final Set<String> announcementChannelIds;
 }
 
 class SpaceProfileOverride {
@@ -1036,6 +1046,9 @@ class ChatAttachment {
     this.durationMilliseconds,
     this.waveform = const [],
     this.sourceEventId,
+    this.gallery,
+    this.hasGalleryMetadata = false,
+    this.gifIdentity,
   });
 
   final AttachmentKind kind;
@@ -1064,6 +1077,9 @@ class ChatAttachment {
 
   /// Changes when a Matrix replacement supplies new attachment content.
   final String? sourceEventId;
+  final MediaGalleryMembership? gallery;
+  final String? gifIdentity;
+  final bool hasGalleryMetadata;
 }
 
 class AttachmentDraft {
@@ -1083,6 +1099,7 @@ class AttachmentDraft {
     this.imagePrepared = false,
     this.videoPrepared = false,
     this.uploadTooLarge = false,
+    this.gallery,
   });
 
   final Uint8List bytes;
@@ -1099,6 +1116,7 @@ class AttachmentDraft {
   final bool imagePrepared;
   final bool videoPrepared;
   final bool uploadTooLarge;
+  final MediaGalleryMembership? gallery;
   AttachmentDraft copyWith({
     Uint8List? bytes,
     String? name,
@@ -1108,6 +1126,7 @@ class AttachmentDraft {
     bool? imagePrepared,
     bool? videoPrepared,
     bool? uploadTooLarge,
+    MediaGalleryMembership? gallery,
   }) => AttachmentDraft(
     bytes: bytes ?? this.bytes,
     name: name ?? this.name,
@@ -1124,6 +1143,7 @@ class AttachmentDraft {
     imagePrepared: imagePrepared ?? this.imagePrepared,
     videoPrepared: videoPrepared ?? this.videoPrepared,
     uploadTooLarge: uploadTooLarge ?? this.uploadTooLarge,
+    gallery: gallery ?? this.gallery,
   );
 }
 
@@ -1176,6 +1196,7 @@ class ReplyPreview {
     required this.body,
     this.senderId,
     this.senderColor,
+    this.avatarBytes,
   });
 
   final String eventId;
@@ -1183,4 +1204,5 @@ class ReplyPreview {
   final String body;
   final String? senderId;
   final int? senderColor;
+  final Uint8List? avatarBytes;
 }

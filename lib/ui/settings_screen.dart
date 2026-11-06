@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'update_dialog.dart';
 import 'socks_proxy_settings.dart';
@@ -18,7 +19,6 @@ import '../services/unified_push.dart';
 import '../services/update_checker.dart';
 import 'accent_color_picker.dart';
 import 'activity_settings.dart';
-import '../services/video_optimizer.dart';
 import 'theme_chooser.dart';
 import 'json_theme_settings.dart';
 import 'security_center.dart';
@@ -51,6 +51,8 @@ enum _SettingsPage {
   serverStorage,
   shortcuts,
   about,
+  chats,
+  search,
 }
 
 enum _SettingPlatform { cross, desktop, mobile }
@@ -60,13 +62,17 @@ _SettingPlatform _availabilityFor(_SettingsPage page) => switch (page) {
   _ => _SettingPlatform.cross,
 };
 
-bool _availableOnCurrentPlatform(
-  _SettingsPage page,
-) => switch (_availabilityFor(page)) {
-  _SettingPlatform.cross => true,
-  _SettingPlatform.desktop => defaultTargetPlatform != TargetPlatform.android,
-  _SettingPlatform.mobile => defaultTargetPlatform == TargetPlatform.android,
-};
+bool _availableOnCurrentPlatform(_SettingsPage page) =>
+    switch (_availabilityFor(page)) {
+      _SettingPlatform.cross => true,
+      _SettingPlatform.desktop => !_isMobileSettingsPlatform,
+      _SettingPlatform.mobile => _isMobileSettingsPlatform,
+    };
+
+bool get _isMobileSettingsPlatform => {
+  TargetPlatform.android,
+  TargetPlatform.iOS,
+}.contains(defaultTargetPlatform);
 
 Future<void> showDeltiecordSettings(
   BuildContext context,
@@ -110,6 +116,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   bool _checkingForUpdates = false;
   bool _notificationDiagnostics = false;
   bool _loggingOut = false;
+  String _settingsQuery = '';
+  final _settingsSearch = TextEditingController();
   late final MicrophoneTestController _microphoneTest =
       MicrophoneTestController();
 
@@ -118,12 +126,35 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    backend.refreshAudioInputs();
-    backend.refreshDevices();
-    backend.refreshProfile();
-    backend.refreshStorageUsage();
-    _reloadOwnProfile();
-    if (UnifiedPushPlatform.instance.supported) _reloadUnifiedPush();
+    _loadPage(_page);
+  }
+
+  void _loadPage(_SettingsPage page) {
+    Future<void>? refresh;
+    switch (page) {
+      case _SettingsPage.account:
+        refresh = backend.refreshProfile();
+        _reloadOwnProfile();
+      case _SettingsPage.audioVideo:
+        refresh = backend.refreshAudioInputs();
+      case _SettingsPage.devices:
+        refresh = backend.refreshDevices();
+      case _SettingsPage.storage:
+        refresh = backend.refreshStorageUsage();
+      case _SettingsPage.notifications:
+        if (UnifiedPushPlatform.instance.supported) _reloadUnifiedPush();
+      default:
+        break;
+    }
+    if (refresh != null) {
+      unawaited(
+        refresh.catchError((Object _) {
+          if (mounted) {
+            _showSettingMessage('Could not refresh settings. Try again.');
+          }
+        }),
+      );
+    }
   }
 
   void _reloadOwnProfile() {
@@ -147,6 +178,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
 
   @override
   void dispose() {
+    _settingsSearch.dispose();
     _microphoneTest.dispose();
     super.dispose();
   }
@@ -320,32 +352,66 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     color: context.deltiecord.panel,
     child: Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: TextField(
+            key: const ValueKey('settings-search'),
+            controller: _settingsSearch,
+            decoration: InputDecoration(
+              hintText: 'Search settings',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _settingsQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _settingsSearch.clear();
+                        setState(() => _settingsQuery = '');
+                      },
+                    ),
+            ),
+            onChanged: (value) =>
+                setState(() => _settingsQuery = value.trim().toLowerCase()),
+          ),
+        ),
         Expanded(
           child: ListView(
             key: const ValueKey('settings-navigation-list'),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             children: [
-              for (final group in const <String, List<_SettingsPage>>{
-                'Account': [
-                  _SettingsPage.account,
-                  _SettingsPage.activity,
-                  _SettingsPage.devices,
-                  _SettingsPage.encryption,
-                ],
-                'Preferences': [
-                  _SettingsPage.audioVideo,
-                  _SettingsPage.appearance,
-                  _SettingsPage.accessibility,
-                  _SettingsPage.privacy,
-                  _SettingsPage.shortcuts,
-                ],
-                'App': [
-                  _SettingsPage.notifications,
-                  _SettingsPage.storage,
-                  _SettingsPage.serverStorage,
-                  _SettingsPage.about,
-                ],
-              }.entries) ...[
+              for (final group
+                  in const <String, List<_SettingsPage>>{
+                    'Everyday': [
+                      _SettingsPage.account,
+                      _SettingsPage.notifications,
+                      _SettingsPage.appearance,
+                      _SettingsPage.chats,
+                      _SettingsPage.audioVideo,
+                    ],
+                    'Preferences': [
+                      _SettingsPage.activity,
+                      _SettingsPage.privacy,
+                      _SettingsPage.accessibility,
+                    ],
+                    'Search & storage': [
+                      _SettingsPage.search,
+                      _SettingsPage.storage,
+                      _SettingsPage.serverStorage,
+                    ],
+                    'Account & app': [
+                      _SettingsPage.encryption,
+                      _SettingsPage.devices,
+                      _SettingsPage.shortcuts,
+                      _SettingsPage.about,
+                    ],
+                  }.entries.where(
+                    (group) => group.value.any(
+                      (page) =>
+                          _availableOnCurrentPlatform(page) &&
+                          _matchesSettings(page, _settingsQuery),
+                    ),
+                  )) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
                   child: Text(
@@ -354,7 +420,8 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                   ),
                 ),
                 for (final page in group.value)
-                  if (_availableOnCurrentPlatform(page))
+                  if (_availableOnCurrentPlatform(page) &&
+                      _matchesSettings(page, _settingsQuery))
                     ListTile(
                       dense: true,
                       visualDensity: const VisualDensity(vertical: -1),
@@ -365,10 +432,13 @@ class _SettingsScreenState extends State<_SettingsScreen> {
                         style: const TextStyle(fontSize: 16),
                       ),
                       trailing: mobile ? const Icon(Icons.chevron_right) : null,
-                      onTap: () => setState(() {
-                        _page = page;
-                        if (mobile) _mobilePageOpen = true;
-                      }),
+                      onTap: () {
+                        _loadPage(page);
+                        setState(() {
+                          _page = page;
+                          if (mobile) _mobilePageOpen = true;
+                        });
+                      },
                     ),
               ],
             ],
@@ -400,6 +470,10 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       );
 
   Widget _pageBody() => switch (_page) {
+    _SettingsPage.chats => _chats(),
+    _SettingsPage.search => _section('Search', [
+      HistoryIndexSettings(backend: backend),
+    ]),
     _SettingsPage.account => _account(),
     _SettingsPage.activity => _section('Activity', [
       ActivitySettingsPanel(backend: backend),
@@ -652,16 +726,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ),
       ],
-      if (videoOptimizationSupported)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Optimize videos before sending'),
-
-          value: backend.preferences.optimizeVideos,
-          onChanged: (value) => backend.updatePreferences(
-            backend.preferences.copyWith(optimizeVideos: value),
-          ),
-        ),
     ]),
     _SettingsPage.notifications => _section('Notifications', [
       SegmentedButton<bool>(
@@ -677,106 +741,12 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       if (_notificationDiagnostics) NotificationDiagnostics(backend: backend),
       if (!_notificationDiagnostics) ...[
         if (backend.notificationError case final error?) Text(error),
-        if (!kIsWeb)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.notifications_outlined),
-            label: const Text('Send test system notification'),
-            onPressed: () async {
-              try {
-                await backend.testSystemNotification();
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Notification test failed. Check system permissions and retry.',
-                      ),
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-        if (kIsWeb) ...[
-          const Text(
-            'On iPhone or iPad, use Safari → Share → Add to Home Screen, then open SeND there to enable notifications.',
-          ),
-          FilledButton.icon(
-            icon: const Icon(Icons.notifications_active_outlined),
-            label: const Text('Enable browser notifications'),
-            onPressed: () async {
-              try {
-                await backend.enableWebNotifications();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Browser notifications enabled.'),
-                    ),
-                  );
-                }
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Couldn\'t enable notifications. Check browser permissions.',
-                      ),
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.fact_check_outlined),
-            label: const Text('Check browser notification setup'),
-            onPressed: () async {
-              String report;
-              try {
-                report = await browser.browserPushDiagnostics();
-              } catch (_) {
-                report = 'Couldn\'t read browser settings. Reload SeND.';
-              }
-              if (!mounted || !context.mounted) return;
-              await showDialog<void>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Browser notification setup'),
-                  content: SingleChildScrollView(child: SelectableText(report)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.send_outlined),
-            label: const Text('Send test push notification'),
-            onPressed: () async {
-              var message =
-                  'Test sent. No alert? Check notification permissions and Focus.';
-              try {
-                await browser.testBrowserPush();
-              } catch (_) {
-                message =
-                    'Test push failed. Enable browser notifications again, then retry. Tests are limited to two per minute.';
-              }
-              if (mounted && context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(message)));
-              }
-            },
-          ),
-        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(
-            defaultTargetPlatform == TargetPlatform.android
+            kIsWeb
+                ? 'Browser notifications'
+                : _isMobileSettingsPlatform
                 ? 'System notifications'
                 : 'Desktop notifications',
           ),
@@ -867,8 +837,10 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Notification sound'),
-            subtitle: const Text(
-              'Play SeND’s notification sound on this desktop.',
+            subtitle: Text(
+              kIsWeb
+                  ? 'Play SeND’s notification sound in this browser.'
+                  : 'Play SeND’s notification sound on this desktop.',
             ),
             value: backend.preferences.notificationSound,
             onChanged: (value) => backend.updatePreferences(
@@ -947,6 +919,111 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             ],
           ),
         ],
+        ExpansionTile(
+          title: Text(
+            kIsWeb ? 'Browser notification setup' : 'Notification tests',
+          ),
+          children: [
+            if (!kIsWeb)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.notifications_outlined),
+                label: const Text('Send test system notification'),
+                onPressed: () async {
+                  try {
+                    await backend.testSystemNotification();
+                  } catch (_) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Notification test failed. Check system permissions and retry.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            if (kIsWeb) ...[
+              const Text(
+                'On iPhone or iPad, use Safari → Share → Add to Home Screen, then open SeND there to enable notifications.',
+              ),
+              FilledButton.icon(
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Enable browser notifications'),
+                onPressed: () async {
+                  try {
+                    await backend.enableWebNotifications();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Browser notifications enabled.'),
+                        ),
+                      );
+                    }
+                  } catch (_) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Couldn\'t enable notifications. Check browser permissions.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.fact_check_outlined),
+                label: const Text('Check browser notification setup'),
+                onPressed: () async {
+                  String report;
+                  try {
+                    report = await browser.browserPushDiagnostics();
+                  } catch (_) {
+                    report = 'Couldn\'t read browser settings. Reload SeND.';
+                  }
+                  if (!mounted || !context.mounted) return;
+                  await showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Browser notification setup'),
+                      content: SingleChildScrollView(
+                        child: SelectableText(report),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Send test push notification'),
+                onPressed: () async {
+                  var message =
+                      'Test sent. No alert? Check notification permissions and Focus.';
+                  try {
+                    await browser.testBrowserPush();
+                  } catch (_) {
+                    message =
+                        'Test push failed. Enable browser notifications again, then retry. Tests are limited to two per minute.';
+                  }
+                  if (mounted && context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(message)));
+                  }
+                },
+              ),
+            ],
+          ],
+        ),
       ],
     ]),
     _SettingsPage.privacy => _privacy(),
@@ -960,55 +1037,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       if (FavouriteReactionsStore.instance.warning case final warning?)
         Text(warning),
       if (kIsWeb) ...[const BrowserStorageUsage(), const Divider(height: 28)],
-      MediaCompressionSettings(backend: backend),
-      const Divider(height: 28),
-      HistoryIndexSettings(backend: backend),
-      const Divider(height: 28),
-      const Text(
-        'Your homeserver can see your synced favourites, frequently used emoji and chat layout.',
-      ),
-      OutlinedButton(
-        onPressed: () async {
-          final accepted = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Import device favourites?'),
-              content: const Text(
-                'Import this device\'s favourites into your current account?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Import'),
-                ),
-              ],
-            ),
-          );
-          if (accepted != true) return;
-          try {
-            await FavouriteReactionsStore.instance.importDeviceFavourites();
-            final gifs = GifService();
-            try {
-              await gifs.importDeviceFavourites();
-            } finally {
-              gifs.dispose();
-            }
-            if (mounted) _showSettingMessage('Device favourites imported.');
-          } catch (_) {
-            if (mounted) _showSettingMessage('Could not import favourites.');
-          }
-        },
-        child: const Text('Import device favourites'),
-      ),
-      OutlinedButton.icon(
-        onPressed: () => showPersonalOrganisation(context, backend),
-        icon: const Icon(Icons.folder_copy_outlined),
-        label: const Text('Chats and spaces'),
-      ),
 
       const SizedBox(height: 12),
       _value('Application data', _formatBytes(backend.storageUsageBytes)),
@@ -1030,6 +1058,54 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             onPressed: backend.storageLoading ? null : backend.clearMediaCache,
             icon: const Icon(Icons.cleaning_services_outlined),
             label: const Text('Clear media cache'),
+          ),
+        ],
+      ),
+      const Divider(height: 28),
+      ExpansionTile(
+        title: const Text('Import device favourites'),
+        children: [
+          const Text(
+            'Your homeserver can see your synced favourites, frequently used emoji and chat layout.',
+          ),
+          OutlinedButton(
+            onPressed: () async {
+              final accepted = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Import device favourites?'),
+                  content: const Text(
+                    'Import this device\'s favourites into your current account?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Import'),
+                    ),
+                  ],
+                ),
+              );
+              if (accepted != true) return;
+              try {
+                await FavouriteReactionsStore.instance.importDeviceFavourites();
+                final gifs = GifService();
+                try {
+                  await gifs.importDeviceFavourites();
+                } finally {
+                  gifs.dispose();
+                }
+                if (mounted) _showSettingMessage('Device favourites imported.');
+              } catch (_) {
+                if (mounted) {
+                  _showSettingMessage('Could not import favourites.');
+                }
+              }
+            },
+            child: const Text('Import device favourites'),
           ),
         ],
       ),
@@ -1146,6 +1222,49 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     ]),
   };
 
+  Widget _chats() {
+    final preferences = backend.preferences;
+    return _section('Chats & media', [
+      if (!_isMobileSettingsPlatform)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Send with Ctrl+Enter'),
+          subtitle: const Text('Enter adds a new line.'),
+          value: backend.preferences.sendWithCtrlEnter,
+          onChanged: (value) => backend.updatePreferences(
+            backend.preferences.copyWith(sendWithCtrlEnter: value),
+          ),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Autoplay GIFs'),
+        value: preferences.autoplayGifs,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(autoplayGifs: value),
+        ),
+      ),
+      SwitchListTile(
+        key: const Key('use-24-hour-time'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Use 24-hour timestamps'),
+        subtitle: const Text('Turn off to show chat timestamps with AM/PM.'),
+        value: preferences.use24HourTime,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(use24HourTime: value),
+        ),
+      ),
+
+      const Divider(height: 28),
+      MediaCompressionSettings(backend: backend),
+      const Divider(height: 28),
+      OutlinedButton.icon(
+        onPressed: () => showPersonalOrganisation(context, backend),
+        icon: const Icon(Icons.folder_copy_outlined),
+        label: const Text('Chats and spaces'),
+      ),
+    ]);
+  }
+
   Widget _shortcuts() {
     final bindings = backend.preferences.shortcutBindings;
     String? conflictFor(AppShortcutAction action, String candidate) {
@@ -1211,6 +1330,15 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       FutureBuilder<UserProfileSummary>(
         future: profileFuture,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return ListTile(
+              title: const Text('Could not load your profile.'),
+              trailing: TextButton(
+                onPressed: () => setState(_reloadOwnProfile),
+                child: const Text('Retry'),
+              ),
+            );
+          }
           final profile = snapshot.data;
           if (profile == null) {
             return const SizedBox(
@@ -1256,13 +1384,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
   Widget _appearance() {
     final preferences = backend.preferences;
     return _section('Appearance', [
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Sync appearance between devices'),
-
-        value: preferences.syncAppearance,
-        onChanged: _changeAppearanceSync,
-      ),
       const SizedBox(height: 12),
       ThemeChooser(
         customActive: preferences.themeJson.isNotEmpty,
@@ -1287,7 +1408,20 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         },
       ),
       const SizedBox(height: 20),
-      JsonThemeSettings(backend: backend),
+      Text(
+        preferences.themeJson.isEmpty
+            ? 'Accent colour'
+            : 'Default accent (themes may override this)',
+      ),
+      const SizedBox(height: 8),
+      AccentColorPickerButton(
+        color: preferences.accentColor,
+        label: 'Open colour wheel',
+        onChanged: (color) => backend.updatePreferences(
+          backend.preferences.copyWith(accentColor: color),
+        ),
+      ),
+
       const SizedBox(height: 20),
       Text('Interface scale — ${(preferences.interfaceScale * 100).round()}%'),
       Slider(
@@ -1303,7 +1437,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
 
       const SizedBox(height: 20),
-      if (defaultTargetPlatform != TargetPlatform.android) ...[
+      if (!_isMobileSettingsPlatform) ...[
         Text('Side panel — ${preferences.sidePanelWidth.round()} px'),
         Slider(
           value: preferences.sidePanelWidth,
@@ -1315,14 +1449,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ),
       ],
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Autoplay GIFs'),
-        value: preferences.autoplayGifs,
-        onChanged: (value) => backend.updatePreferences(
-          backend.preferences.copyWith(autoplayGifs: value),
-        ),
-      ),
       if (defaultTargetPlatform == TargetPlatform.linux ||
           defaultTargetPlatform == TargetPlatform.windows)
         SwitchListTile(
@@ -1354,20 +1480,7 @@ class _SettingsScreenState extends State<_SettingsScreen> {
         },
       ),
       const SizedBox(height: 16),
-      Text(
-        preferences.themeJson.isEmpty
-            ? 'Accent colour'
-            : 'Default accent (themes may override this)',
-      ),
-      const SizedBox(height: 8),
-      AccentColorPickerButton(
-        color: preferences.accentColor,
-        label: 'Open colour wheel',
-        onChanged: (color) => backend.updatePreferences(
-          backend.preferences.copyWith(accentColor: color),
-        ),
-      ),
-      if (defaultTargetPlatform == TargetPlatform.linux) ...[
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) ...[
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Native title bar'),
@@ -1386,6 +1499,17 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           ),
         ),
       ],
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Sync appearance between devices'),
+
+        value: preferences.syncAppearance,
+        onChanged: _changeAppearanceSync,
+      ),
+      ExpansionTile(
+        title: const Text('Custom themes'),
+        children: [JsonThemeSettings(backend: backend)],
+      ),
     ]);
   }
 
@@ -1429,59 +1553,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
     return _section('Privacy & presence', [
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Categorize encrypted uploads'),
-        subtitle: const Text(
-          'Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.',
-        ),
-        value: preferences.shareUploadCategories,
-        onChanged: (value) => backend.updatePreferences(
-          preferences.copyWith(shareUploadCategories: value),
-        ),
-      ),
-      SocksProxySettingsTile(homeserver: backend.homeserver),
-      const Divider(height: 28),
-      DropdownButtonFormField<DirectLinkPreviewMode>(
-        key: const ValueKey('direct-link-preview-mode'),
-        initialValue: preferences.directLinkPreviewMode,
-        decoration: const InputDecoration(
-          labelText: 'Direct link-preview fallback',
-          helperMaxLines: 4,
-          helperText:
-              'Direct previews let websites see your IP address and request details.',
-        ),
-        items: const [
-          DropdownMenuItem(
-            value: DirectLinkPreviewMode.none,
-            child: Text('Never'),
-          ),
-          DropdownMenuItem(
-            value: DirectLinkPreviewMode.trustedProviders,
-            child: Text('Known providers only'),
-          ),
-          DropdownMenuItem(
-            value: DirectLinkPreviewMode.allPublicSites,
-            child: Text('All public websites'),
-          ),
-        ],
-        onChanged: (mode) {
-          if (mode == null) return;
-          backend.updatePreferences(
-            backend.preferences.copyWith(directLinkPreviewMode: mode),
-          );
-        },
-      ),
-      if (preferences.directLinkPreviewMode ==
-          DirectLinkPreviewMode.trustedProviders)
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _manageTrustedPreviewDomains,
-            icon: const Icon(Icons.domain_outlined),
-            label: const Text('Manage known preview sites'),
-          ),
-        ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
         title: const Text('Send read receipts'),
         subtitle: const Text('Let rooms know which messages you have read.'),
         value: preferences.sendReadReceipts,
@@ -1522,7 +1593,18 @@ class _SettingsScreenState extends State<_SettingsScreen> {
           backend.preferences.copyWith(sharePresence: value),
         ),
       ),
-      if (defaultTargetPlatform != TargetPlatform.android)
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Show when I’m on mobile'),
+        subtitle: const Text(
+          'Use a phone icon for your online status on mobile.',
+        ),
+        value: preferences.shareMobilePresence,
+        onChanged: (value) => backend.updatePreferences(
+          backend.preferences.copyWith(shareMobilePresence: value),
+        ),
+      ),
+      if (!_isMobileSettingsPlatform)
         const ListTile(
           contentPadding: EdgeInsets.zero,
           title: Text('Desktop away status'),
@@ -1530,16 +1612,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
             'Set you as away after 10 minutes of inactivity on your PC, or in SeND when system activity isn\'t available.',
           ),
         ),
-      SwitchListTile(
-        key: const ValueKey('improve-twitter-links-toggle'),
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Use FxTwitter previews'),
-        subtitle: const Text('Keep the original links in messages.'),
-        value: preferences.improveTwitterLinks,
-        onChanged: (value) => backend.updatePreferences(
-          backend.preferences.copyWith(improveTwitterLinks: value),
-        ),
-      ),
       const Divider(height: 28),
       Text('Blocked users', style: Theme.of(context).textTheme.titleMedium),
       if (backend.blockedUserIds.isEmpty)
@@ -1556,6 +1628,76 @@ class _SettingsScreenState extends State<_SettingsScreen> {
               child: const Text('Unblock'),
             ),
           ),
+
+      const Divider(height: 28),
+      ExpansionTile(
+        title: const Text('Network & upload privacy'),
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Categorize encrypted uploads'),
+            subtitle: const Text(
+              'Shares upload types and GIF sources with your homeserver, not messages, filenames or encryption keys.',
+            ),
+            value: preferences.shareUploadCategories,
+            onChanged: (value) => backend.updatePreferences(
+              preferences.copyWith(shareUploadCategories: value),
+            ),
+          ),
+          SocksProxySettingsTile(homeserver: backend.homeserver),
+          const Divider(height: 28),
+          DropdownButtonFormField<DirectLinkPreviewMode>(
+            key: const ValueKey('direct-link-preview-mode'),
+            initialValue: preferences.directLinkPreviewMode,
+            decoration: const InputDecoration(
+              labelText: 'Direct link-preview fallback',
+              helperMaxLines: 4,
+              helperText:
+                  'Direct previews let websites see your IP address and request details.',
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: DirectLinkPreviewMode.none,
+                child: Text('Never'),
+              ),
+              DropdownMenuItem(
+                value: DirectLinkPreviewMode.trustedProviders,
+                child: Text('Known providers only'),
+              ),
+              DropdownMenuItem(
+                value: DirectLinkPreviewMode.allPublicSites,
+                child: Text('All public websites'),
+              ),
+            ],
+            onChanged: (mode) {
+              if (mode == null) return;
+              backend.updatePreferences(
+                backend.preferences.copyWith(directLinkPreviewMode: mode),
+              );
+            },
+          ),
+          if (preferences.directLinkPreviewMode ==
+              DirectLinkPreviewMode.trustedProviders)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _manageTrustedPreviewDomains,
+                icon: const Icon(Icons.domain_outlined),
+                label: const Text('Manage known preview sites'),
+              ),
+            ),
+          SwitchListTile(
+            key: const ValueKey('improve-twitter-links-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Use FxTwitter previews'),
+            subtitle: const Text('Keep the original links in messages.'),
+            value: preferences.improveTwitterLinks,
+            onChanged: (value) => backend.updatePreferences(
+              backend.preferences.copyWith(improveTwitterLinks: value),
+            ),
+          ),
+        ],
+      ),
     ]);
   }
 
@@ -1690,16 +1832,6 @@ class _SettingsScreenState extends State<_SettingsScreen> {
       ),
 
       const SizedBox(height: 12),
-      SwitchListTile(
-        key: const Key('use-24-hour-time'),
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Use 24-hour timestamps'),
-        subtitle: const Text('Turn off to show chat timestamps with AM/PM.'),
-        value: preferences.use24HourTime,
-        onChanged: (value) => backend.updatePreferences(
-          backend.preferences.copyWith(use24HourTime: value),
-        ),
-      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Animate profile pictures in messages'),
@@ -2109,6 +2241,8 @@ class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
 }
 
 IconData _iconFor(_SettingsPage page) => switch (page) {
+  _SettingsPage.chats => Icons.chat_bubble_outline,
+  _SettingsPage.search => Icons.search,
   _SettingsPage.account => Icons.person_outline,
   _SettingsPage.activity => Icons.sports_esports_outlined,
   _SettingsPage.devices => Icons.devices_outlined,
@@ -2125,6 +2259,8 @@ IconData _iconFor(_SettingsPage page) => switch (page) {
 };
 
 String _labelFor(_SettingsPage page) => switch (page) {
+  _SettingsPage.chats => 'Chats & media',
+  _SettingsPage.search => 'Search',
   _SettingsPage.account => 'Account',
   _SettingsPage.activity => 'Activity',
   _SettingsPage.devices => 'Devices',
@@ -2134,11 +2270,45 @@ String _labelFor(_SettingsPage page) => switch (page) {
   _SettingsPage.privacy => 'Privacy',
   _SettingsPage.appearance => 'Appearance',
   _SettingsPage.accessibility => 'Accessibility',
-  _SettingsPage.storage => 'Storage',
+  _SettingsPage.storage => 'Local storage',
   _SettingsPage.serverStorage => 'Server storage',
   _SettingsPage.shortcuts => 'Shortcuts',
   _SettingsPage.about => 'About',
 };
+
+bool _matchesSettings(_SettingsPage page, String query) {
+  final keywords = switch (page) {
+    _SettingsPage.account =>
+      'profile name avatar banner password account homeserver delete',
+    _SettingsPage.notifications =>
+      'sound volume vibration previews alerts background ntfy sunup push permissions delivery diagnostics',
+    _SettingsPage.appearance =>
+      'theme accent colour colors font interface scale window custom json',
+    _SettingsPage.chats =>
+      'enter send keyboard typing autoplay gifs quality compression image video favourites folders archive chats spaces timestamps 24 hour',
+    _SettingsPage.audioVideo =>
+      'microphone mic speaker output camera volume call ringtone echo noise',
+    _SettingsPage.activity =>
+      'last.fm lastfm libre.fm librefm spotify music games sharing presence rpc',
+    _SettingsPage.privacy =>
+      'read receipts typing online presence blocked proxy socks ip previews',
+    _SettingsPage.accessibility => 'text size font motion animation contrast',
+    _SettingsPage.search =>
+      'search history index download messages cache limit',
+    _SettingsPage.storage =>
+      'cache media clear device local browser favourites import',
+    _SettingsPage.serverStorage =>
+      'server uploads quota delete prune storage disk capacity legacy',
+    _SettingsPage.encryption =>
+      'security encryption recovery key password backup',
+    _SettingsPage.devices => 'sessions sign out verification device',
+    _SettingsPage.shortcuts => 'keyboard shortcuts bindings hotkeys',
+    _SettingsPage.about =>
+      'version build update credits licences logs diagnostics',
+  };
+  final text = '${_labelFor(page)} $keywords'.toLowerCase();
+  return query.isEmpty || query.split(RegExp(r'\s+')).every(text.contains);
+}
 
 IconData _deviceIcon(DeviceSessionSummary device) {
   final name = device.displayName.toLowerCase();

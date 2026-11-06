@@ -196,27 +196,32 @@ class _ArchivePullListState extends State<ArchivePullList>
   @override
   Widget build(BuildContext context) {
     final desktop = _desktop;
-    final visible = widget.enabled && (desktop || _shown);
+    final homeEntry = !widget.enabled;
+    final visible = desktop || homeEntry || _shown;
     final rowHeight = desktop ? 36.0 : _rowHeight;
     // A permanent leading slot avoids recycling GIF decoders when revealing
     // or hiding Archive. The visible row itself scrolls with the chats.
-    final listEntry = widget.enabled;
+    final listEntry = widget.enabled || homeEntry;
     Widget entry() => SizedBox(
       key: const ValueKey('home-archive-entry'),
       height: rowHeight,
       child: InkWell(
-        onTap: _open,
+        onTap: homeEntry ? () => widget.backend.setArchiveOpen(false) : _open,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          // Match each layout's DM row inset, avatar slot and title gap.
+          padding: EdgeInsets.only(left: desktop ? 8 : 4, right: 8),
           child: Row(
             children: [
-              const SizedBox(
-                width: 28,
-                child: Icon(Icons.archive_outlined, size: 20),
+              SizedBox(
+                width: desktop ? 34 : 44,
+                child: Icon(
+                  homeEntry ? Icons.unarchive_outlined : Icons.archive_outlined,
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Archive')),
-              Text('${widget.backend.archivedRooms.length}'),
+              SizedBox(width: desktop ? 10 : 12),
+              Expanded(child: Text(homeEntry ? 'Home' : 'Archive')),
+              if (!homeEntry) Text('${widget.backend.archivedRooms.length}'),
             ],
           ),
         ),
@@ -249,7 +254,7 @@ class _ArchivePullListState extends State<ArchivePullList>
         return widget.itemBuilder(context, index - (listEntry ? 1 : 0));
       },
     );
-    if (desktop) {
+    if (desktop || homeEntry) {
       return ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: Stack(

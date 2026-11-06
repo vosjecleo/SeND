@@ -1,6 +1,37 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  Future<Uint8List> _loadSavedGifPreview(SavedGifReference reference) async {
+    final client = _matrix;
+    final lease = _sessionScope.capture();
+    final room = client.getRoomById(reference.roomId);
+    if (room == null || room.membership != Membership.join) {
+      throw StateError('The original GIF is unavailable.');
+    }
+    var event = _currentAttachmentEvent(reference.eventId);
+    if (event?.room.id != room.id) event = null;
+    event ??= await room.getEventById(reference.eventId);
+    if (event?.type == EventTypes.Encrypted && client.encryption != null) {
+      event = await client.encryption!.decryptRoomEvent(event!);
+    }
+    if (event == null ||
+        event.redacted ||
+        !event.hasAttachment ||
+        event.messageType != MessageTypes.Image ||
+        (!_isAnimatedImageMime(event.attachmentMimetype) &&
+            event.content['net.send.animated'] != true) ||
+        !lease.isCurrent ||
+        !identical(client, _client)) {
+      throw StateError('The original GIF is unavailable.');
+    }
+    final file = await BoundedMatrixMedia.attachment(
+      event,
+      maximumBytes: 25 * 1024 * 1024,
+      isCurrent: () => lease.isCurrent && identical(client, _client),
+    );
+    return file.bytes;
+  }
+
   void _rememberUploadedAttachment(String eventId, AttachmentDraft draft) {
     if (draft.mimeType.startsWith('image/')) {
       _cacheMediaBytes('$eventId:original', draft.bytes);
@@ -112,7 +143,9 @@ extension _MatrixMedia on MatrixBackend {
   }) async {
     final room = _matrix.getRoomById(roomId ?? _selectedRoomId ?? '');
     if (room == null) throw StateError('The selected room is unavailable.');
+    final account = _personal;
     try {
+      attachment = assignMediaGallery([attachment]).single;
       attachment = await prepareImage(
         attachment,
         _preferences.imageCompression,
@@ -237,11 +270,14 @@ extension _MatrixMedia on MatrixBackend {
                   additionalContent != null ||
                       animatedImage ||
                       attachment.spoiler ||
+                      attachment.gallery != null ||
                       attachment.gifSource != null ||
                       replyEvent != null ||
                       attachment.caption?.trim().isNotEmpty == true
                   ? {
                       ...?additionalContent,
+                      if (attachment.gallery case final gallery?)
+                        MediaGalleryMembership.contentKey: gallery.toJson(),
                       if (animatedImage) 'net.send.animated': true,
                       ..._mentionsFor(
                         attachment.caption ?? '',
@@ -271,6 +307,19 @@ extension _MatrixMedia on MatrixBackend {
         return;
       }
       final eventId = await operation;
+      if (eventId != null &&
+          attachment.gifSource != null &&
+          identical(account, _personal)) {
+        // Account data contains a reference only, never attachment keys.
+        try {
+          await account?.set(
+            'gif.upload:${attachment.gifSource}',
+            SavedGifReference(roomId: room.id, eventId: eventId).toJson(),
+          );
+        } catch (_) {
+          /* Sending succeeded; remembering reuse is best effort. */
+        }
+      }
       if (eventId == null && _connectionStatus != ConnectionStatus.online) {
         _offlineSendRooms[transactionId] = room.id;
         _notifyBackendListeners();
@@ -346,8 +395,17 @@ extension _MatrixMedia on MatrixBackend {
     required bool thumbnail,
     required int generation,
   }) async {
-    final file = await event.downloadAndDecryptAttachment(
-      getThumbnail: thumbnail && event.hasThumbnail,
+    final file = await BoundedMatrixMedia.attachment(
+      event,
+      thumbnail: thumbnail && event.hasThumbnail,
+      isCurrent: () => generation == _attachmentCacheGeneration,
+      maximumBytes:
+          thumbnail ||
+              event.type == EventTypes.Sticker ||
+              event.messageType == MessageTypes.Image ||
+              event.attachmentMimetype.startsWith('image/')
+          ? BoundedMatrixMedia.inlineBytes
+          : BoundedMatrixMedia.fileBytes,
     );
     final bytes = file.bytes;
     // Cache only bounded media. This avoids repeatedly downloading/decrypting
@@ -376,6 +434,11 @@ extension _MatrixMedia on MatrixBackend {
       _mediaPlaybackSources.remove(messageId);
     }
     if (kIsWeb) {
+      if (_matrix.contentScannerConfig != null) {
+        throw StateError(
+          'Bounded video loading is unavailable with this scanner.',
+        );
+      }
       // Browser video elements cannot attach Authorization headers or use the
       // native loopback range proxy. Keep this fallback explicitly bounded.
       final size = event.infoMap.tryGet<int>('size');

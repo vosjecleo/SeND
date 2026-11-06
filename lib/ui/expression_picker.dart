@@ -26,15 +26,25 @@ Future<Object?> showExpressionPicker(
     return showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       requestFocus: false,
       backgroundColor: Colors.transparent,
-      builder: (context) => ThemeSurface(
-        kind: 'popup',
-        color: context.deltiecord.surface,
-        child: SafeArea(
-          child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * .62,
-            child: content,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: ThemeSurface(
+          kind: 'popup',
+          color: context.deltiecord.surface,
+          child: SafeArea(
+            child: SizedBox(
+              height:
+                  (MediaQuery.sizeOf(context).height -
+                          MediaQuery.viewInsetsOf(context).bottom -
+                          MediaQuery.paddingOf(context).top)
+                      .clamp(0.0, MediaQuery.sizeOf(context).height * .72),
+              child: content,
+            ),
           ),
         ),
       ),

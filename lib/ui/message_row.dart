@@ -174,11 +174,7 @@ class _MessageRowState extends State<_MessageRow> {
   Widget build(BuildContext context) {
     final pinged =
         message.pingedCurrentUser ||
-        message.hasVisualMention ||
-        (widget.albumMessages?.any(
-              (m) => m.pingedCurrentUser || m.hasVisualMention,
-            ) ??
-            false);
+        (widget.albumMessages?.any((m) => m.pingedCurrentUser) ?? false);
     final compactness = widget.backend.preferences.compactness;
     final highlight = messageHighlightDecoration(
       context,
@@ -187,7 +183,8 @@ class _MessageRowState extends State<_MessageRow> {
       flashing: widget.highlighted,
       idleColour: _hovered ? context.deltiecord.hover : Colors.transparent,
     );
-    final rowPadding = (7 - compactness * 5) / 2;
+    final rowPadding =
+        (7 - compactness * 5) / 2 + MessageSpacing.extraVerticalPadding;
     final groupGap = 7 - compactness * 2;
     final local = message.timestamp.toLocal();
     final now = DateTime.now();
@@ -203,10 +200,14 @@ class _MessageRowState extends State<_MessageRow> {
         : '${local.day}/${local.month}/${local.year} $clock';
     if (message.system) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 28,
+          vertical: 7 + MessageSpacing.extraVerticalPadding,
+        ),
         child: Text(
           message.body,
-          style: const TextStyle(
+          style: TextStyle(
+            height: MessageSpacing.inheritedLineHeight(context),
             color: Color(0xff989aa5),
             fontSize: DeltiecordTypeScale.normal,
             fontStyle: FontStyle.italic,
@@ -257,6 +258,13 @@ class _MessageRowState extends State<_MessageRow> {
                               openDiscussion(context, widget.backend, message),
                         ),
                   onReply: () => _performAction(widget.onReply),
+                  onForward: () => _performAction(
+                    () => showForwardMessageDialog(
+                      context,
+                      widget.backend,
+                      widget.albumMessages ?? [message],
+                    ),
+                  ),
                   onCopy: () {
                     unawaited(
                       Clipboard.setData(ClipboardData(text: message.body)),
@@ -299,6 +307,14 @@ class _MessageRowState extends State<_MessageRow> {
         ),
       ),
       child: TripleTapEdit(
+        onReply:
+            !message.own &&
+                !message.pending &&
+                !message.failed &&
+                !message.redacted &&
+                !message.decryptionPending
+            ? widget.onReply
+            : null,
         onEdit:
             message.own &&
                 !message.pending &&
@@ -329,6 +345,13 @@ class _MessageRowState extends State<_MessageRow> {
               child: Opacity(
                 opacity: message.pending ? 0.55 : 1,
                 child: MeasuredAvatarStack(
+                  maxBodyHeight:
+                      MediaQuery.textScalerOf(
+                            context,
+                          ).scale(DeltiecordTypeScale.normal) *
+                          MessageSpacing.richLineHeight *
+                          1.8 +
+                      2,
                   senderKey: _senderMeasureKey,
                   bodyKey: _bodyMeasureKey,
                   enabled:
@@ -341,7 +364,7 @@ class _MessageRowState extends State<_MessageRow> {
                   children: [
                     Padding(
                       padding: EdgeInsets.fromLTRB(
-                        10,
+                        TimelineColumns.desktopAvatarInset,
                         rowPadding,
                         20,
                         rowPadding,
@@ -349,8 +372,10 @@ class _MessageRowState extends State<_MessageRow> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(width: 40),
-                          const SizedBox(width: 10),
+                          const SizedBox(
+                            width: TimelineColumns.desktopAvatarSlot,
+                          ),
+                          const SizedBox(width: TimelineColumns.desktopGap),
                           Expanded(
                             child: Column(
                               key: ValueKey('message-content-${message.id}'),
@@ -366,6 +391,9 @@ class _MessageRowState extends State<_MessageRow> {
                                       child: Row(
                                         children: [
                                           CustomPaint(
+                                            key: ValueKey(
+                                              'reply-connector-${message.id}',
+                                            ),
                                             size: const Size(42, 20),
                                             painter: _ReplyConnectorPainter(
                                               color: context.deltiecord.muted,
@@ -373,43 +401,11 @@ class _MessageRowState extends State<_MessageRow> {
                                           ),
                                           const SizedBox(width: 8),
                                           Flexible(
-                                            child: Text.rich(
-                                              TextSpan(
-                                                children: [
-                                                  TextSpan(
-                                                    text: '${reply.sender}  ',
-                                                    style: TextStyle(
-                                                      color:
-                                                          reply.senderColor ==
-                                                              null
-                                                          ? null
-                                                          : Color(
-                                                              reply
-                                                                  .senderColor!,
-                                                            ),
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                  TextSpan(
-                                                    text: reply.body.replaceAll(
-                                                      '\n',
-                                                      ' ',
-                                                    ),
-                                                    style: TextStyle(
-                                                      color: context
-                                                          .deltiecord
-                                                          .muted,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize:
-                                                    DeltiecordTypeScale.normal,
-                                              ),
+                                            child: ReplyQuoteText(
+                                              reply: reply,
+                                              muted: context.deltiecord.muted,
+                                              fontSize:
+                                                  DeltiecordTypeScale.normal,
                                             ),
                                           ),
                                         ],
@@ -512,7 +508,8 @@ class _MessageRowState extends State<_MessageRow> {
                                               ),
                                               text: message.body,
                                               style: TextStyle(
-                                                height: 1.16,
+                                                height: MessageSpacing
+                                                    .desktopPlainLineHeight,
                                                 fontStyle: message.redacted
                                                     ? FontStyle.italic
                                                     : FontStyle.normal,
@@ -558,6 +555,7 @@ class _MessageRowState extends State<_MessageRow> {
                                                 key: ValueKey(albumMessage.id),
                                                 backend: widget.backend,
                                                 message: albumMessage,
+                                                dimPending: !message.pending,
                                                 onOpen: () => showDialog<void>(
                                                   context: context,
                                                   builder: (_) =>
@@ -712,7 +710,7 @@ class _MessageRowState extends State<_MessageRow> {
                         // Keep the avatar centred against the sender header and
                         // first content line. The near-equal outer and inner
                         // gutters make the timeline read as one aligned column.
-                        left: 10,
+                        left: TimelineColumns.desktopAvatarInset,
                         top:
                             rowPadding +
                             (MediaQuery.textScalerOf(
@@ -722,7 +720,10 @@ class _MessageRowState extends State<_MessageRow> {
                                     MediaQuery.textScalerOf(
                                           context,
                                         ).scale(DeltiecordTypeScale.normal) *
-                                        1.16 -
+                                        (message.formattedBody == null
+                                            ? MessageSpacing
+                                                  .desktopPlainLineHeight
+                                            : MessageSpacing.richLineHeight) -
                                     38) /
                                 2 +
                             (message.reply == null ? 0 : 22),
@@ -752,7 +753,7 @@ class _MessageRowState extends State<_MessageRow> {
                                     .preferences
                                     .animateTimelineAvatars ||
                                 _hovered,
-                            radius: 19,
+                            radius: TimelineColumns.desktopAvatarSize / 2,
                             backgroundColor: context.deltiecord.elevated,
                             backgroundImage: message.avatarBytes == null
                                 ? null
@@ -817,7 +818,7 @@ class _ReplyConnectorPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
     final path = Path()
-      ..moveTo(size.width * 0.48, size.height)
+      ..moveTo(size.width * 0.48, size.height - 3)
       ..lineTo(size.width * 0.48, size.height * 0.52)
       ..quadraticBezierTo(
         size.width * 0.48,
@@ -865,6 +866,7 @@ class _MessageActions extends StatelessWidget {
     required this.message,
     this.onThread,
     required this.onReply,
+    required this.onForward,
     required this.onCopy,
     required this.onBookmark,
     required this.bookmarked,
@@ -880,6 +882,7 @@ class _MessageActions extends StatelessWidget {
   });
   final ChatMessage message;
   final VoidCallback onReply, onCopy, onBookmark, onUnread, onLink;
+  final VoidCallback onForward;
   final bool bookmarked, pinned;
   final VoidCallback? onThread,
       onPin,
@@ -904,6 +907,8 @@ class _MessageActions extends StatelessWidget {
           onReply();
         case MessageAction.react:
           onReact?.call();
+        case MessageAction.forward:
+          onForward();
         case MessageAction.copy:
           onCopy();
         case MessageAction.unread:

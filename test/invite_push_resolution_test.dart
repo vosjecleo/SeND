@@ -1,6 +1,53 @@
 import 'package:deltiecord/services/android_push_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
+import 'dart:typed_data';
+import 'dart:convert';
+import 'package:deltiecord/services/avatar_media_pool.dart';
+
+class _InviterRoom extends InvitedRoom {
+  _InviterRoom() : super(Membership.invite);
+  @override
+  Event? getState(String type, [String key = '']) =>
+      type == EventTypes.RoomMember
+      ? Event.fromJson({
+          'type': type,
+          'sender': '@inviter:example.org',
+          'state_key': key,
+          'content': {'membership': 'invite'},
+          'event_id': r'$invite',
+          'origin_server_ts': 1,
+        }, this)
+      : null;
+}
+
+class _ProfileClient extends InviteClient {
+  _ProfileClient(super.room);
+  String? requested;
+  @override
+  Future<CachedProfileInformation> getUserProfile(
+    String userId, {
+    Duration timeout = const Duration(seconds: 30),
+    Duration maxCacheAge = const Duration(days: 1),
+  }) async {
+    requested = userId;
+    return CachedProfileInformation.fromProfile(
+      ProfileInformation(avatarUrl: Uri.parse('mxc://example.org/inviter')),
+      outdated: false,
+      updated: DateTime.now(),
+    );
+  }
+}
+
+class _UnreadRoom extends Fake implements Room {
+  _UnreadRoom(this.pushRuleState);
+  @override
+  final PushRuleState pushRuleState;
+  @override
+  int get notificationCount => 2;
+  @override
+  int get highlightCount => 0;
+}
 
 class InviteClient extends Fake implements Client {
   final Room room;
@@ -65,6 +112,41 @@ class _HeadlessClient extends InviteClient {
 }
 
 void main() {
+  test(
+    'all-message notifications use the notification count, including groups',
+    () {
+      expect(notificationUnreadCount(_UnreadRoom(PushRuleState.notify)), 2);
+      expect(
+        notificationUnreadCount(_UnreadRoom(PushRuleState.mentionsOnly)),
+        0,
+      );
+      expect(notificationUnreadCount(_UnreadRoom(PushRuleState.dontNotify)), 0);
+    },
+  );
+  test(
+    'invitation avatar comes from the authenticated inviter, not the room',
+    () async {
+      final client = _ProfileClient(_InviterRoom());
+      final pool = AvatarMediaPool();
+      final Uint8List bytes = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      );
+      pool.seed(
+        Uri.parse('mxc://example.org/inviter'),
+        bytes,
+        AvatarMediaPool.rowDimension,
+      );
+      addTearDown(() => pool.clear(disk: false));
+      final notification = await resolveAndroidPushNotification(
+        client,
+        '!invite:example.org',
+        r'$invite',
+        avatarPool: pool,
+      );
+      expect(client.requested, '@inviter:example.org');
+      expect(notification!['senderAvatar'], same(bytes));
+    },
+  );
   test(
     'headless notification client opts out of online presence before init',
     () async {

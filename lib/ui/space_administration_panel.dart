@@ -59,10 +59,12 @@ class SpaceAdministrationPanel extends StatefulWidget {
   const SpaceAdministrationPanel({
     required this.backend,
     required this.spaceId,
+    this.onDirtyChanged,
     super.key,
   });
   final ChatBackend backend;
   final String spaceId;
+  final ValueChanged<bool>? onDirtyChanged;
   @override
   State<SpaceAdministrationPanel> createState() =>
       _SpaceAdministrationPanelState();
@@ -79,6 +81,8 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
   Object? _revision;
   bool _loading = false;
   SpaceRoles? _reviewedRoles;
+  String _memberQuery = '';
+  int _memberLimit = 50;
 
   @override
   void initState() {
@@ -120,6 +124,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
           _reviewedRoles = data.roles;
           _target ??= widget.spaceId;
           _dirty = false;
+          widget.onDirtyChanged?.call(false);
         });
       }
     } catch (_) {
@@ -225,6 +230,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       }
       _roles = SpaceRoles(roles: next, members: _roles.members);
       _dirty = true;
+      widget.onDirtyChanged?.call(true);
     });
   }
 
@@ -243,6 +249,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       if (mounted) {
         setState(() {
           _dirty = false;
+          widget.onDirtyChanged?.call(false);
           _notice =
               'Role appearance saved. Apply role power below to update permissions in the chosen rooms.';
         });
@@ -272,8 +279,17 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Apply permissions?'),
-        content: Text(
-          'Apply ${rule?.label ?? 'Role power levels'} to ${targets.length} ${targets.length == 1 ? 'room' : 'rooms'}? Other permissions stay unchanged; role changes keep manual member overrides.',
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Apply ${rule?.label ?? 'Role power levels'} to ${targets.length} ${targets.length == 1 ? 'room' : 'rooms'}? Other permissions stay unchanged; role changes keep manual member overrides.',
+            ),
+            const SizedBox(height: 12),
+            for (final room in targets) Text(room.name),
+          ],
         ),
         actions: [
           TextButton(
@@ -364,6 +380,9 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
         const Text(
           'The top assigned role sets the colour; the highest power level sets permissions.',
         ),
+        const Text(
+          'Saving roles changes their names, colours and assignments. Review and apply permissions below to change what members can do.',
+        ),
         for (final (index, role) in _roles.roles.indexed)
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -388,6 +407,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
                             members: _roles.members,
                           );
                           _dirty = true;
+                          widget.onDirtyChanged?.call(true);
                         }),
                 ),
                 IconButton(
@@ -408,6 +428,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
                             },
                           );
                           _dirty = true;
+                          widget.onDirtyChanged?.call(true);
                         }),
                 ),
               ],
@@ -422,7 +443,24 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
         ExpansionTile(
           title: const Text('Member roles'),
           children: [
-            for (final member in data.members.entries)
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'Search members',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) => setState(() {
+                _memberQuery = value.trim().toLowerCase();
+                _memberLimit = 50;
+              }),
+            ),
+            for (final member
+                in data.members.entries
+                    .where(
+                      (entry) => '${entry.key} ${entry.value}'
+                          .toLowerCase()
+                          .contains(_memberQuery),
+                    )
+                    .take(_memberLimit))
               ExpansionTile(
                 title: Text(member.value),
                 subtitle: Text(member.key),
@@ -446,9 +484,15 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
                                 members: {..._roles.members, member.key: ids},
                               );
                               _dirty = true;
+                              widget.onDirtyChanged?.call(true);
                             }),
                     ),
                 ],
+              ),
+            if (data.members.length > _memberLimit)
+              TextButton(
+                onPressed: () => setState(() => _memberLimit += 50),
+                child: const Text('Show more'),
               ),
           ],
         ),
@@ -457,7 +501,7 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
           child: const Text('Save roles'),
         ),
         const Divider(height: 32),
-        Text('Rules', style: Theme.of(context).textTheme.titleLarge),
+        Text('Permissions', style: Theme.of(context).textTheme.titleLarge),
         const Text(
           'Some actions share permissions; encrypted messages can\'t have separate rules for each message type.',
         ),
@@ -515,31 +559,36 @@ class _SpaceAdministrationPanelState extends State<SpaceAdministrationPanel> {
           onPressed: _busy || _dirty || !data.canEditRoles
               ? null
               : () => _apply(),
-          child: const Text('Apply saved role power to selected rooms'),
+          child: const Text('Review and apply role permissions'),
         ),
-        for (final rule in administrationRules)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: _PermissionEditor(
-              key: ValueKey(
-                '${target.id}/${rule.key}/${rule.level(target.powerLevels)}',
+        ExpansionTile(
+          title: const Text('Advanced permission levels'),
+          children: [
+            for (final rule in administrationRules)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _PermissionEditor(
+                  key: ValueKey(
+                    '${target.id}/${rule.key}/${rule.level(target.powerLevels)}',
+                  ),
+                  initialValue: rule.level(target.powerLevels),
+                  label: rule.label,
+                  enabled: !_busy && !_dirty && target.canEdit,
+                  onSave: (value) {
+                    final level = int.tryParse(value);
+                    if (level == null || level < 0 || level > target.ownPower) {
+                      setState(
+                        () => _notice =
+                            'Choose a level from 0 to ${target.ownPower} for this room.',
+                      );
+                      return;
+                    }
+                    _apply(rule: rule, level: level);
+                  },
+                ),
               ),
-              initialValue: rule.level(target.powerLevels),
-              label: rule.label,
-              enabled: !_busy && !_dirty && target.canEdit,
-              onSave: (value) {
-                final level = int.tryParse(value);
-                if (level == null || level < 0 || level > target.ownPower) {
-                  setState(
-                    () => _notice =
-                        'Choose a level from 0 to ${target.ownPower} for this room.',
-                  );
-                  return;
-                }
-                _apply(rule: rule, level: level);
-              },
-            ),
-          ),
+          ],
+        ),
       ],
     );
   }

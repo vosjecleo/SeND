@@ -163,8 +163,11 @@ class _AndroidNotificationSetupState extends State<AndroidNotificationSetup> {
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'Notification delivery'),
         items: const [
-          DropdownMenuItem(value: 'builtin', child: Text('Built-in')),
-          DropdownMenuItem(value: 'unified', child: Text('UnifiedPush')),
+          DropdownMenuItem(value: 'builtin', child: Text('SeND (built-in)')),
+          DropdownMenuItem(
+            value: 'unified',
+            child: Text('Another notification app'),
+          ),
           DropdownMenuItem(value: 'off', child: Text('Off')),
         ],
         onChanged: _busy

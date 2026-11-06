@@ -2,7 +2,7 @@ import 'package:html/parser.dart' as html_parser;
 
 /// Keep room-wide aliases out of URLs, escaped text and longer identifiers.
 final roomMentionPattern = RegExp(
-  r'(?<![A-Za-z0-9_@/\\])@(everyone|room)(?![A-Za-z0-9_:/-]|\.[A-Za-z0-9])',
+  r'(?<![A-Za-z0-9_@/\\])@(everyone|all|room)(?![A-Za-z0-9_:/-]|\.[A-Za-z0-9])',
 );
 bool containsRoomMention(String text) => roomMentionPattern.hasMatch(text);
 

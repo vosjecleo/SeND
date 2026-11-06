@@ -1,0 +1,21 @@
+/// Trending plus seventeen fixed searches fills nine two-column rows.
+const gifCategorySearches = <String>[
+  '',
+  'Hello',
+  'Good morning',
+  'Good night',
+  'Thank you',
+  'Congratulations',
+  'Happy birthday',
+  'Celebrate',
+  'LOL',
+  'Love',
+  'Hugs',
+  'Happy',
+  'Surprised',
+  'Confused',
+  'Sad',
+  'Angry',
+  'Kitten',
+  'Puppy',
+];

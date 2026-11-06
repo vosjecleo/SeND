@@ -140,6 +140,20 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
 
   void _refreshPreview() => setState(() {});
 
+  bool _dismissSelectionOnScroll(ScrollStartNotification notification) {
+    // Ignore scrolling inside a multiline field. Parent scrolling can move
+    // the focused field behind the fixed preview while its overlay stays up.
+    if (notification.depth != 0) return false;
+    final editable = FocusManager.instance.primaryFocus?.context
+        ?.findAncestorStateOfType<EditableTextState>();
+    if (editable?.context
+            .findAncestorStateOfType<_ProfileEditorDialogState>() ==
+        this) {
+      editable!.hideToolbar();
+    }
+    return false;
+  }
+
   void _resetSpaceFields() {
     if (!_spaceProfile) return;
     setState(() {
@@ -423,389 +437,398 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: Flex(
-                direction: compact ? Axis.vertical : Axis.horizontal,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: compact ? 4 : 3,
-                    child: ClipRect(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.all(compact ? 12 : 22),
-                        child: DeltiecordProfileCard(
-                          profile: _preview,
-                          preview: true,
+              child: NotificationListener<ScrollStartNotification>(
+                onNotification: _dismissSelectionOnScroll,
+                child: Flex(
+                  direction: compact ? Axis.vertical : Axis.horizontal,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: compact ? 4 : 3,
+                      child: ClipRect(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.all(compact ? 12 : 22),
+                          child: DeltiecordProfileCard(
+                            profile: _preview,
+                            preview: true,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (compact)
-                    const Divider(height: 1)
-                  else
-                    const VerticalDivider(width: 1),
-                  Flexible(
-                    flex: compact ? 6 : 2,
-                    fit: compact ? FlexFit.tight : FlexFit.loose,
-                    child: SizedBox(
-                      width: compact ? double.infinity : 380,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            TextField(
-                              controller: _displayName,
-                              decoration: InputDecoration(
-                                labelText: 'Display name',
-                                suffixIcon: _spaceProfile
-                                    ? IconButton(
-                                        tooltip: 'Use general display name',
-                                        onPressed: () => _displayName.text =
-                                            widget.initialProfile.displayName,
-                                        icon: const Icon(Icons.restart_alt),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _pronouns,
-                              maxLength: 16,
-                              inputFormatters: [
-                                LengthLimitingTextInputFormatter(16),
-                              ],
-                              enabled: widget
-                                  .initialProfile
-                                  .extensibleFieldsSupported,
-                              decoration: InputDecoration(
-                                labelText: 'Pronouns',
-                                suffixIcon: _spaceProfile
-                                    ? IconButton(
-                                        tooltip: 'Use general pronouns',
-                                        onPressed: () => _pronouns.text =
-                                            normalizedProfilePronouns(
-                                              widget.initialProfile.pronouns,
-                                            ) ??
-                                            '',
-                                        icon: const Icon(Icons.restart_alt),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _bio,
-                              enabled: widget
-                                  .initialProfile
-                                  .extensibleFieldsSupported,
-                              maxLines: 5,
-                              maxLength: 500,
-                              decoration: InputDecoration(
-                                labelText: 'About me',
-                                alignLabelWithHint: true,
-                                suffixIcon: _spaceProfile
-                                    ? IconButton(
-                                        tooltip: 'Use general About me',
-                                        onPressed: () => _bio.text =
-                                            widget.initialProfile.bio ?? '',
-                                        icon: const Icon(Icons.restart_alt),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            TextField(
-                              controller: _status,
-                              maxLength: 120,
-                              decoration: InputDecoration(
-                                labelText: 'Status',
-                                hintText: 'What are you up to?',
-                                suffixIcon: _spaceProfile
-                                    ? IconButton(
-                                        tooltip: 'Use general status',
-                                        onPressed: () => _status.text =
-                                            widget
-                                                .initialProfile
-                                                .statusMessage ??
-                                            '',
-                                        icon: const Icon(Icons.restart_alt),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text('Profile outline & gradient — top'),
-                            const SizedBox(height: 6),
-                            AccentColorPickerButton(
-                              color: _profileColor,
-                              label: 'Choose outline / top colour',
-                              onChanged: (color) => setState(() {
-                                _profileColor = color;
-                                _inheritProfileColor = false;
-                              }),
-                            ),
-                            if (_spaceProfile)
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  _profileColor =
-                                      widget.initialProfile.profileColor ??
-                                      0xff6975d9;
-                                  _inheritProfileColor = true;
-                                }),
-                                child: const Text('Use general top colour'),
-                              ),
-                            const SizedBox(height: 10),
-                            const Text('Profile gradient — bottom'),
-                            const SizedBox(height: 6),
-                            AccentColorPickerButton(
-                              color: _profileColorSecondary,
-                              label: 'Choose bottom colour',
-                              onChanged: (color) => setState(() {
-                                _profileColorSecondary = color;
-                                _inheritProfileColorSecondary = false;
-                              }),
-                            ),
-                            if (_spaceProfile)
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  _profileColorSecondary =
-                                      widget
-                                          .initialProfile
-                                          .profileColorSecondary ??
-                                      0xff343966;
-                                  _inheritProfileColorSecondary = true;
-                                }),
-                                child: const Text('Use general bottom colour'),
-                              ),
-                            const SizedBox(height: 4),
-                            OutlinedButton.icon(
-                              onPressed:
-                                  widget
-                                      .initialProfile
-                                      .extensibleFieldsSupported
-                                  ? _pickTimezone
-                                  : null,
-                              icon: const Icon(Icons.public),
-                              label: Text(
-                                _timezone?.trim().isNotEmpty == true
-                                    ? TimezoneCatalog.offsetLabel(_timezone)
-                                    : 'Choose timezone',
-                              ),
-                            ),
-                            if (_spaceProfile)
-                              TextButton(
-                                onPressed: () => setState(
-                                  () => _timezone =
-                                      widget.initialProfile.timezone,
+                    if (compact)
+                      const Divider(height: 1)
+                    else
+                      const VerticalDivider(width: 1),
+                    Flexible(
+                      flex: compact ? 6 : 2,
+                      fit: compact ? FlexFit.tight : FlexFit.loose,
+                      child: SizedBox(
+                        width: compact ? double.infinity : 380,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TextField(
+                                controller: _displayName,
+                                decoration: InputDecoration(
+                                  labelText: 'Display name',
+                                  suffixIcon: _spaceProfile
+                                      ? IconButton(
+                                          tooltip: 'Use general display name',
+                                          onPressed: () => _displayName.text =
+                                              widget.initialProfile.displayName,
+                                          icon: const Icon(Icons.restart_alt),
+                                        )
+                                      : null,
                                 ),
-                                child: const Text('Use general timezone'),
                               ),
-                            const Divider(height: 26),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: _pickAvatar,
-                                  icon: const Icon(
-                                    Icons.account_circle_outlined,
-                                  ),
-                                  label: const Text('Choose avatar'),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _pronouns,
+                                maxLength: 16,
+                                inputFormatters: [
+                                  LengthLimitingTextInputFormatter(16),
+                                ],
+                                enabled: widget
+                                    .initialProfile
+                                    .extensibleFieldsSupported,
+                                decoration: InputDecoration(
+                                  labelText: 'Pronouns',
+                                  suffixIcon: _spaceProfile
+                                      ? IconButton(
+                                          tooltip: 'Use general pronouns',
+                                          onPressed: () => _pronouns.text =
+                                              normalizedProfilePronouns(
+                                                widget.initialProfile.pronouns,
+                                              ) ??
+                                              '',
+                                          icon: const Icon(Icons.restart_alt),
+                                        )
+                                      : null,
                                 ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _bio,
+                                enabled: widget
+                                    .initialProfile
+                                    .extensibleFieldsSupported,
+                                maxLines: 5,
+                                maxLength: 500,
+                                decoration: InputDecoration(
+                                  labelText: 'About me',
+                                  alignLabelWithHint: true,
+                                  suffixIcon: _spaceProfile
+                                      ? IconButton(
+                                          tooltip: 'Use general About me',
+                                          onPressed: () => _bio.text =
+                                              widget.initialProfile.bio ?? '',
+                                          icon: const Icon(Icons.restart_alt),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: _status,
+                                maxLength: 120,
+                                decoration: InputDecoration(
+                                  labelText: 'Status',
+                                  hintText: 'What are you up to?',
+                                  suffixIcon: _spaceProfile
+                                      ? IconButton(
+                                          tooltip: 'Use general status',
+                                          onPressed: () => _status.text =
+                                              widget
+                                                  .initialProfile
+                                                  .statusMessage ??
+                                              '',
+                                          icon: const Icon(Icons.restart_alt),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text('Profile outline & gradient — top'),
+                              const SizedBox(height: 6),
+                              AccentColorPickerButton(
+                                color: _profileColor,
+                                label: 'Choose outline / top colour',
+                                onChanged: (color) => setState(() {
+                                  _profileColor = color;
+                                  _inheritProfileColor = false;
+                                }),
+                              ),
+                              if (_spaceProfile)
                                 TextButton(
                                   onPressed: () => setState(() {
-                                    _avatar = _spaceProfile
-                                        ? widget.initialProfile.avatarBytes
-                                        : null;
-                                    _removeAvatar = !_spaceProfile;
-                                    _inheritAvatar = _spaceProfile;
+                                    _profileColor =
+                                        widget.initialProfile.profileColor ??
+                                        0xff6975d9;
+                                    _inheritProfileColor = true;
                                   }),
-                                  child: Text(
-                                    _spaceProfile
-                                        ? 'Use general avatar'
-                                        : 'Remove avatar',
-                                  ),
+                                  child: const Text('Use general top colour'),
                                 ),
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      widget
-                                          .initialProfile
-                                          .extensibleFieldsSupported
-                                      ? _pickBanner
-                                      : null,
-                                  icon: const Icon(Icons.image_outlined),
-                                  label: const Text('Choose banner'),
-                                ),
-                                TextButton(
-                                  onPressed:
-                                      widget
-                                          .initialProfile
-                                          .extensibleFieldsSupported
-                                      ? () => setState(() {
-                                          _banner = _spaceProfile
-                                              ? widget
-                                                    .initialProfile
-                                                    .bannerBytes
-                                              : null;
-                                          _removeBanner = !_spaceProfile;
-                                          _bannerChanged = true;
-                                          _inheritBanner = _spaceProfile;
-                                        })
-                                      : null,
-                                  child: Text(
-                                    _spaceProfile
-                                        ? 'Use general banner'
-                                        : 'Remove banner',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Divider(height: 26),
-                            Text(
-                              'Voice tile',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-
-                            const SizedBox(height: 8),
-                            AccentColorPickerButton(
-                              color: _voiceColor,
-                              label: 'Choose voice colour',
-                              onChanged: (color) => setState(() {
-                                _voiceColor = color;
-                                _voiceColorChanged = true;
-                                _removeVoiceColor = false;
-                                _inheritVoiceColor = false;
-                              }),
-                            ),
-                            if (_spaceProfile)
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  _voiceColor =
-                                      widget.initialProfile.voiceColor ??
-                                      widget.initialProfile.profileColor ??
-                                      0xff353846;
-                                  _inheritVoiceColor = true;
+                              const SizedBox(height: 10),
+                              const Text('Profile gradient — bottom'),
+                              const SizedBox(height: 6),
+                              AccentColorPickerButton(
+                                color: _profileColorSecondary,
+                                label: 'Choose bottom colour',
+                                onChanged: (color) => setState(() {
+                                  _profileColorSecondary = color;
+                                  _inheritProfileColorSecondary = false;
                                 }),
-                                child: const Text('Use general voice colour'),
                               ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      widget
-                                          .initialProfile
-                                          .extensibleFieldsSupported
-                                      ? _pickVoiceBackground
-                                      : null,
-                                  icon: const Icon(Icons.wallpaper_outlined),
-                                  label: const Text('Voice background'),
-                                ),
+                              if (_spaceProfile)
                                 TextButton(
-                                  onPressed:
-                                      widget
-                                          .initialProfile
-                                          .extensibleFieldsSupported
-                                      ? () => setState(() {
-                                          _voiceBackground = _spaceProfile
-                                              ? widget
-                                                    .initialProfile
-                                                    .voiceBackgroundBytes
-                                              : null;
-                                          _voiceBackgroundChanged = true;
-                                          _removeVoiceBackground =
-                                              !_spaceProfile;
-                                          _inheritVoiceBackground =
-                                              _spaceProfile;
-                                          if (_spaceProfile) {
-                                            _voiceColor =
-                                                widget
-                                                    .initialProfile
-                                                    .voiceColor ??
-                                                widget
-                                                    .initialProfile
-                                                    .profileColor ??
-                                                0xff353846;
-                                            _inheritVoiceColor = true;
-                                          } else {
-                                            _voiceColorChanged = true;
-                                            _removeVoiceColor = true;
-                                          }
-                                        })
-                                      : null,
-                                  child: Text(
-                                    _spaceProfile
-                                        ? 'Use general voice tile'
-                                        : 'Use avatar colour',
+                                  onPressed: () => setState(() {
+                                    _profileColorSecondary =
+                                        widget
+                                            .initialProfile
+                                            .profileColorSecondary ??
+                                        0xff343966;
+                                    _inheritProfileColorSecondary = true;
+                                  }),
+                                  child: const Text(
+                                    'Use general bottom colour',
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child:
-                                    !_removeVoiceBackground &&
-                                        _voiceBackground != null
-                                    ? Image.memory(
-                                        _voiceBackground!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : FutureBuilder<Color>(
-                                        future: _removeVoiceColor
-                                            ? representativeAvatarColor(_avatar)
-                                            : Future.value(Color(_voiceColor)),
-                                        builder: (context, snapshot) =>
-                                            ColoredBox(
-                                              color:
-                                                  snapshot.data ??
-                                                  const Color(0xff353846),
-                                              child: Center(
-                                                child: CircleAvatar(
-                                                  radius: 34,
-                                                  backgroundImage:
-                                                      _avatar == null
-                                                      ? null
-                                                      : MemoryImage(_avatar!),
-                                                  child: _avatar == null
-                                                      ? const Icon(
-                                                          Icons.person,
-                                                          size: 34,
-                                                        )
-                                                      : null,
+                              const SizedBox(height: 4),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    widget
+                                        .initialProfile
+                                        .extensibleFieldsSupported
+                                    ? _pickTimezone
+                                    : null,
+                                icon: const Icon(Icons.public),
+                                label: Text(
+                                  _timezone?.trim().isNotEmpty == true
+                                      ? TimezoneCatalog.offsetLabel(_timezone)
+                                      : 'Choose timezone',
+                                ),
+                              ),
+                              if (_spaceProfile)
+                                TextButton(
+                                  onPressed: () => setState(
+                                    () => _timezone =
+                                        widget.initialProfile.timezone,
+                                  ),
+                                  child: const Text('Use general timezone'),
+                                ),
+                              const Divider(height: 26),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: _pickAvatar,
+                                    icon: const Icon(
+                                      Icons.account_circle_outlined,
+                                    ),
+                                    label: const Text('Choose avatar'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      _avatar = _spaceProfile
+                                          ? widget.initialProfile.avatarBytes
+                                          : null;
+                                      _removeAvatar = !_spaceProfile;
+                                      _inheritAvatar = _spaceProfile;
+                                    }),
+                                    child: Text(
+                                      _spaceProfile
+                                          ? 'Use general avatar'
+                                          : 'Remove avatar',
+                                    ),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed:
+                                        widget
+                                            .initialProfile
+                                            .extensibleFieldsSupported
+                                        ? _pickBanner
+                                        : null,
+                                    icon: const Icon(Icons.image_outlined),
+                                    label: const Text('Choose banner'),
+                                  ),
+                                  TextButton(
+                                    onPressed:
+                                        widget
+                                            .initialProfile
+                                            .extensibleFieldsSupported
+                                        ? () => setState(() {
+                                            _banner = _spaceProfile
+                                                ? widget
+                                                      .initialProfile
+                                                      .bannerBytes
+                                                : null;
+                                            _removeBanner = !_spaceProfile;
+                                            _bannerChanged = true;
+                                            _inheritBanner = _spaceProfile;
+                                          })
+                                        : null,
+                                    child: Text(
+                                      _spaceProfile
+                                          ? 'Use general banner'
+                                          : 'Remove banner',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 26),
+                              Text(
+                                'Voice tile',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+
+                              const SizedBox(height: 8),
+                              AccentColorPickerButton(
+                                color: _voiceColor,
+                                label: 'Choose voice colour',
+                                onChanged: (color) => setState(() {
+                                  _voiceColor = color;
+                                  _voiceColorChanged = true;
+                                  _removeVoiceColor = false;
+                                  _inheritVoiceColor = false;
+                                }),
+                              ),
+                              if (_spaceProfile)
+                                TextButton(
+                                  onPressed: () => setState(() {
+                                    _voiceColor =
+                                        widget.initialProfile.voiceColor ??
+                                        widget.initialProfile.profileColor ??
+                                        0xff353846;
+                                    _inheritVoiceColor = true;
+                                  }),
+                                  child: const Text('Use general voice colour'),
+                                ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed:
+                                        widget
+                                            .initialProfile
+                                            .extensibleFieldsSupported
+                                        ? _pickVoiceBackground
+                                        : null,
+                                    icon: const Icon(Icons.wallpaper_outlined),
+                                    label: const Text('Voice background'),
+                                  ),
+                                  TextButton(
+                                    onPressed:
+                                        widget
+                                            .initialProfile
+                                            .extensibleFieldsSupported
+                                        ? () => setState(() {
+                                            _voiceBackground = _spaceProfile
+                                                ? widget
+                                                      .initialProfile
+                                                      .voiceBackgroundBytes
+                                                : null;
+                                            _voiceBackgroundChanged = true;
+                                            _removeVoiceBackground =
+                                                !_spaceProfile;
+                                            _inheritVoiceBackground =
+                                                _spaceProfile;
+                                            if (_spaceProfile) {
+                                              _voiceColor =
+                                                  widget
+                                                      .initialProfile
+                                                      .voiceColor ??
+                                                  widget
+                                                      .initialProfile
+                                                      .profileColor ??
+                                                  0xff353846;
+                                              _inheritVoiceColor = true;
+                                            } else {
+                                              _voiceColorChanged = true;
+                                              _removeVoiceColor = true;
+                                            }
+                                          })
+                                        : null,
+                                    child: Text(
+                                      _spaceProfile
+                                          ? 'Use general voice tile'
+                                          : 'Use avatar colour',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child:
+                                      !_removeVoiceBackground &&
+                                          _voiceBackground != null
+                                      ? Image.memory(
+                                          _voiceBackground!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : FutureBuilder<Color>(
+                                          future: _removeVoiceColor
+                                              ? representativeAvatarColor(
+                                                  _avatar,
+                                                )
+                                              : Future.value(
+                                                  Color(_voiceColor),
+                                                ),
+                                          builder: (context, snapshot) =>
+                                              ColoredBox(
+                                                color:
+                                                    snapshot.data ??
+                                                    const Color(0xff353846),
+                                                child: Center(
+                                                  child: CircleAvatar(
+                                                    radius: 34,
+                                                    backgroundImage:
+                                                        _avatar == null
+                                                        ? null
+                                                        : MemoryImage(_avatar!),
+                                                    child: _avatar == null
+                                                        ? const Icon(
+                                                            Icons.person,
+                                                            size: 34,
+                                                          )
+                                                        : null,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                      ),
-                              ),
-                            ),
-                            if (!widget
-                                .initialProfile
-                                .extensibleFieldsSupported) ...[
-                              const SizedBox(height: 12),
-                              const Text(
-                                'This homeserver only supports name and avatar changes.',
-                              ),
-                            ],
-                            if (_error case final error?) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                error,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
+                                        ),
                                 ),
                               ),
+                              if (!widget
+                                  .initialProfile
+                                  .extensibleFieldsSupported) ...[
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'This homeserver only supports name and avatar changes.',
+                                ),
+                              ],
+                              if (_error case final error?) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  error,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const Divider(height: 1),

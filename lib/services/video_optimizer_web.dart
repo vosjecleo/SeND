@@ -112,6 +112,7 @@ Future<AttachmentDraft> probeVideo(AttachmentDraft draft) async {
     spoiler: draft.spoiler,
     caption: draft.caption,
     gifSource: draft.gifSource,
+    gallery: draft.gallery,
     durationMilliseconds: duration,
     videoWidth: width,
     videoHeight: height,
@@ -187,6 +188,7 @@ Future<AttachmentDraft> optimizeVideo(
         spoiler: draft.spoiler,
         caption: draft.caption,
         gifSource: draft.gifSource,
+        gallery: draft.gallery,
         videoPrepared: true,
       ),
     );

@@ -1,5 +1,6 @@
 import '../audio_attachment_player.dart';
 import '../../services/socks_proxy.dart';
+import '../../services/native_link_video_proxy.dart';
 import '../video_playback_status.dart';
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
@@ -26,6 +27,7 @@ import '../../services/temporary_attachment_store.dart';
 import '../deltiecord_theme.dart';
 import '../advanced_chat_dialogs.dart';
 import '../lifecycle_memory_image.dart';
+import '../timeline_media_geometry.dart';
 
 /// Fits media inside a bounded frame without changing its aspect ratio.
 ///
@@ -40,17 +42,13 @@ Size mobileMediaFrameSize({
   int? height,
   double fallbackAspectRatio = 3 / 4,
 }) {
-  final metadataRatio =
-      width != null && height != null && width > 0 && height > 0
-      ? width / height
-      : fallbackAspectRatio;
-  final aspectRatio = metadataRatio.isFinite
-      ? metadataRatio.clamp(0.25, 4.0).toDouble()
-      : fallbackAspectRatio;
-  if (maxWidth / maxHeight > aspectRatio) {
-    return Size(maxHeight * aspectRatio, maxHeight);
-  }
-  return Size(maxWidth, maxWidth / aspectRatio);
+  return fitTimelineMediaFrame(
+    maxWidth: maxWidth,
+    maxHeight: maxHeight,
+    width: width,
+    height: height,
+    fallbackAspectRatio: fallbackAspectRatio,
+  );
 }
 
 class MobileAttachmentView extends StatefulWidget {
@@ -361,16 +359,21 @@ class _MobileImageState extends State<_MobileImage>
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
     final attachment = widget.message.attachment!;
-    final frame = mobileMediaFrameSize(
-      maxWidth: attachment.sticker
-          ? 128
-          : min(420, max(120, screen.width - 76)),
-      maxHeight: attachment.sticker
-          ? 128
-          : min(520, max(180, screen.height * 0.48)),
-      width: _decodedDimensions?.width ?? attachment.width,
-      height: _decodedDimensions?.height ?? attachment.height,
-    );
+    final width = _decodedDimensions?.width ?? attachment.width;
+    final height = _decodedDimensions?.height ?? attachment.height;
+    final frame = attachment.sticker
+        ? mobileMediaFrameSize(
+            maxWidth: 128,
+            maxHeight: 128,
+            width: width,
+            height: height,
+          )
+        : timelineImageFrameSize(
+            screen: screen,
+            mobile: true,
+            width: width,
+            height: height,
+          );
     return SizedBox(
       key: ValueKey('mobile-image-frame-${widget.message.id}'),
       width: frame.width,
@@ -690,6 +693,8 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
                     child: Center(
                       child: GifFavouriteGesture(
                         uri: m.attachment!.gifSource,
+                        reference: uploadedGifReference(widget.backend, m),
+                        bytes: snapshot.data!,
                         child: LifecycleMemoryImage(
                           bytes: snapshot.data!,
                           animated: m.attachment!.animated,
@@ -1443,6 +1448,7 @@ class MobileLinkPreviewVideo extends StatefulWidget {
 
 class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
     with WidgetsBindingObserver {
+  NativeLinkVideoProxy? _safePlayback;
   Player? _player;
   VideoController? _controller;
   StreamSubscription<int?>? _widthSubscription;
@@ -1493,9 +1499,15 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       }
     });
     try {
-      final uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
-      SocksProxy.requireLocalPlayback(uri);
-      await player.open(Media(uri.toString()), play: true);
+      var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
+      if (!kIsWeb) {
+        await _safePlayback?.close();
+        final proxy = _safePlayback = NativeLinkVideoProxy();
+        await proxy.openAndPlay(player, uri);
+      } else {
+        SocksProxy.requireLocalPlayback(uri);
+        await player.open(Media(uri.toString()), play: true);
+      }
       if (widget.loop) await player.setPlaylistMode(PlaylistMode.single);
       if (!mounted) {
         await player.dispose();
@@ -1517,6 +1529,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       if (!shouldPlay) await player.pause();
     } catch (_) {
       await player.dispose();
+      await _safePlayback?.close();
       if (mounted) setState(() => _error = 'Could not play embedded video');
     } finally {
       if (mounted) setState(() => _opening = false);
@@ -1591,6 +1604,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
     _heightSubscription?.cancel();
     final player = _player;
     if (player != null) unawaited(player.dispose());
+    unawaited(_safePlayback?.close());
     super.dispose();
   }
 

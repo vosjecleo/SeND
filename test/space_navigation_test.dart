@@ -113,6 +113,7 @@ void main() {
       ..categoryList = const [
         ChannelCategorySummary(id: 'general', name: 'General', roomIds: []),
       ];
+    backend.editableRoomIds.add('!space:example.org');
     await tester.pumpWidget(DeltiecordApp(backend: backend));
 
     await tester.tap(
@@ -129,13 +130,15 @@ void main() {
     );
     expect(find.byKey(const Key('space-settings-name')), findsOneWidget);
     expect(find.byKey(const Key('space-settings-topic')), findsOneWidget);
-    expect(find.byKey(const Key('space-settings-muted')), findsOneWidget);
     expect(find.text('Manage roles and permissions'), findsOneWidget);
     expect(
       find.text('1 text rooms  •  1 voice rooms  •  1 categories'),
       findsOneWidget,
     );
     expect(find.text('Copy Space link'), findsOneWidget);
+    await tester.tap(find.text('My notifications'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('space-settings-muted')), findsOneWidget);
   });
 
   testWidgets('Space profiles reuse the full profile editor with inheritance', (

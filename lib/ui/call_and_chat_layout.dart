@@ -9,15 +9,34 @@ class CallAndChatLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => Column(
-      children: [
-        if (call != null && constraints.maxHeight >= 360)
-          SizedBox(
-            height: (constraints.maxHeight * .40).clamp(0, 340).toDouble(),
-            child: call,
+    builder: (context, constraints) {
+      final showCall = call != null && constraints.maxHeight >= 360;
+      final top = MediaQuery.paddingOf(context).top;
+      return Column(
+        children: [
+          if (showCall)
+            SizedBox(
+              height: (constraints.maxHeight * .40)
+                  .clamp(
+                    0,
+                    constraints.maxWidth < 700
+                        ? ((constraints.maxWidth - 24) / 2 * 9 / 16 + 76 + top)
+                              .clamp(0.0, 340.0 + top)
+                        : 340 + top,
+                  )
+                  .toDouble(),
+              child: SafeArea(bottom: false, child: call!),
+            ),
+          Expanded(
+            key: const ValueKey('call-chat-conversation'),
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: showCall,
+              child: chat,
+            ),
           ),
-        Expanded(key: const ValueKey('call-chat-conversation'), child: chat),
-      ],
-    ),
+        ],
+      );
+    },
   );
 }

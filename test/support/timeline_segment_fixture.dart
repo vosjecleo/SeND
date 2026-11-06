@@ -43,7 +43,8 @@ class SegmentClient extends Client {
 }
 
 class SegmentRoom extends Room {
-  SegmentRoom(Client client) : super(id: '!segments:test', client: client) {
+  SegmentRoom(Client client, {super.id = '!segments:test'})
+    : super(client: client) {
     setState(
       Event.fromJson({
         'type': EventTypes.RoomMember,

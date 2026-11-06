@@ -1,8 +1,42 @@
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/media_album.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 
 void main() {
+  for (final mobile in [false, true]) {
+    testWidgets('collage frame respects ordinary media width, mobile=$mobile', (
+      tester,
+    ) async {
+      final screen = mobile ? const Size(430, 900) : const Size(1440, 1000);
+      tester.view.physicalSize = screen;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                MediaAlbumGrid(
+                  mobile: mobile,
+                  messages: [
+                    _media('one', DateTime(2026), AttachmentKind.image),
+                    _media('two', DateTime(2026), AttachmentKind.image),
+                  ],
+                  itemBuilder: (_, _) => const ColoredBox(color: Colors.blue),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final frame = tester.getRect(find.byType(ClipRRect));
+      expect(frame.width, closeTo(mobile ? 354 : 420, .1));
+      expect(frame.left, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
   test('groups adjacent captionless still media by sender and time', () {
     final now = DateTime.utc(2026, 9, 15, 12);
     final messages = [

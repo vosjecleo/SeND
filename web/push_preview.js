@@ -50,9 +50,9 @@
     if (signal.aborted) return null;
     const decrypted = JSON.parse(crypto.decrypt_notification(session.key, event.content.ciphertext, session.id, session.room));
     const content = decrypted.event.content;
-    if (decrypted.event.type !== 'm.room.message' || !content || content['m.relates_to']?.rel_type === 'm.replace') return null;
+    if (!['m.room.message', 'm.sticker'].includes(decrypted.event.type) || !content || content['m.relates_to']?.rel_type === 'm.replace') return null;
     // Spoilers must never be revealed on a lock screen. Do not render HTML.
-    const body = ['m.text', 'm.notice', 'm.emote'].includes(content.msgtype)
+    const body = decrypted.event.type === 'm.sticker' ? 'Sticker' : ['m.text', 'm.notice', 'm.emote'].includes(content.msgtype)
       ? clean((content.body || '').replace(/\|\|[\s\S]*?\|\|/g, '[spoiler]'))
       : ({'m.image': 'Sent an image', 'm.video': 'Sent a video', 'm.audio': 'Sent audio', 'm.file': 'Sent a file'}[content.msgtype] || 'New message');
     if (!body || content.formatted_body?.includes('data-mx-spoiler') || signal.aborted) return null;

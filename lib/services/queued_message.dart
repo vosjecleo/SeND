@@ -101,6 +101,8 @@ class QueuedMessage {
             encrypted: true,
             spoiler: draft!.spoiler,
             caption: body.isEmpty ? null : body,
+            gallery: draft!.gallery,
+            hasGalleryMetadata: draft!.gallery != null,
             width: draft!.videoWidth,
             height: draft!.videoHeight,
           ),

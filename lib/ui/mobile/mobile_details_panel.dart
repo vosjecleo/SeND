@@ -100,6 +100,7 @@ class MobileDetailsPanel extends StatelessWidget {
                 size: 36,
                 bytes: member.avatarBytes,
                 fallback: member.displayName,
+                userId: member.userId,
                 presence: member.presence,
               ),
               title: Row(

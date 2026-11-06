@@ -9,6 +9,38 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final sample in [
+    (html: 'A reply', body: 'A reply', plain: true),
+    (html: 'A &amp; B<br>next', body: 'A & B\nnext', plain: true),
+    (html: '<strong>A reply</strong>', body: 'A reply', plain: false),
+    (
+      html: '<a href="https://example.org">link</a>',
+      body: 'link',
+      plain: false,
+    ),
+  ]) {
+    testWidgets('reply fallback preserves authored formatting: ${sample.html}', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MatrixHtmlText(
+              html:
+                  '<mx-reply><blockquote>Quoted text</blockquote></mx-reply>${sample.html}',
+              fallback: sample.body,
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.byType(MatrixPlainText),
+        sample.plain ? findsOneWidget : findsNothing,
+      );
+      final text = tester.widget<SelectableText>(find.byType(SelectableText));
+      expect(text.textSpan!.toPlainText(), sample.body);
+    });
+  }
   testWidgets('pretty-printed HTML does not add a source-whitespace row', (
     tester,
   ) async {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show BrowserContextMenu;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_vodozemac/flutter_vodozemac.dart' as vodozemac;
 import 'package:media_kit/media_kit.dart';
@@ -21,6 +22,7 @@ import 'services/frame_diagnostics.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) await BrowserContextMenu.disableContextMenu();
   enableFrameDiagnostics();
   await SocksProxy.initialize();
   if (kIsWeb && !await initializeBrowser()) {

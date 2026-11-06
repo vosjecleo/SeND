@@ -28,6 +28,8 @@ class _SfuConnection {
 class RtcSfuSession extends ChangeNotifier {
   static const _membershipError =
       'Call membership or media keys could not be refreshed. Retrying.';
+  static const _verificationError =
+      'Some call devices are blocked or unverified. Check device verification to hear each other.';
   RtcSfuSession({
     required this.matrixRoom,
     required this.transport,
@@ -176,9 +178,15 @@ class RtcSfuSession extends ChangeNotifier {
         if (!_closed) notifyListeners();
       },
       onHealthy: () {
-        if (error == _membershipError) {
-          error = null;
-          if (!_closed) notifyListeners();
+        final verification = _membership?.hasUnverifiedDevices == true;
+        if (error == null ||
+            error == _membershipError ||
+            error == _verificationError) {
+          final nextError = verification ? _verificationError : null;
+          if (error != nextError) {
+            error = nextError;
+            if (!_closed) notifyListeners();
+          }
         }
       },
     );

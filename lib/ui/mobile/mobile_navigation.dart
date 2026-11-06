@@ -11,6 +11,8 @@ import '../advanced_chat_views.dart';
 import '../presence_controls.dart';
 import '../relative_activity_time.dart';
 import '../space_settings_screen.dart';
+import '../create_server_dialog.dart';
+import '../channel_join_indicator.dart';
 import '../personal_organisation.dart';
 import '../home_room_menu.dart';
 import '../archive_navigation.dart';
@@ -137,22 +139,6 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                         ),
                                         child: Row(
                                           children: [
-                                            if (backend.archiveOpen)
-                                              IconButton(
-                                                tooltip: 'Back to Home',
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints.tightFor(
-                                                      width: 28,
-                                                      height: 28,
-                                                    ),
-                                                onPressed: () => backend
-                                                    .setArchiveOpen(false),
-                                                icon: const Icon(
-                                                  Icons.arrow_back,
-                                                  size: 20,
-                                                ),
-                                              ),
                                             Expanded(
                                               child: Text(
                                                 selectedSpace == null
@@ -219,18 +205,22 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
                                         onPressed: () => _openInbox(context),
                                         icon: InboxIcon(backend: backend),
                                       ),
-                                      IconButton(
-                                        key: const ValueKey(
-                                          'mobile-start-chat',
+                                      if (selectedSpace == null ||
+                                          backend.canCreateSpaceRoom(
+                                            selectedSpace,
+                                          ))
+                                        IconButton(
+                                          key: const ValueKey(
+                                            'mobile-start-chat',
+                                          ),
+                                          tooltip: selectedSpace == null
+                                              ? 'Start a chat'
+                                              : 'Create a room',
+                                          onPressed: () => selectedSpace == null
+                                              ? _startChat(context)
+                                              : _showCreateActions(context),
+                                          icon: const Icon(Icons.add),
                                         ),
-                                        tooltip: selectedSpace == null
-                                            ? 'Start a chat'
-                                            : 'Create a room',
-                                        onPressed: () => selectedSpace == null
-                                            ? _startChat(context)
-                                            : _showCreateActions(context),
-                                        icon: const Icon(Icons.add),
-                                      ),
                                     ],
                                   ),
                                 ),
@@ -328,31 +318,50 @@ class _MobileNavigationPanelState extends State<MobileNavigationPanel> {
 
   Future<void> _startChat(BuildContext context) async {
     final controller = TextEditingController();
+    var encrypted = true;
     final userId = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Start a direct chat'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '@user:homeserver.tld'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, update) => AlertDialog(
+          title: const Text('Start a direct chat'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '@user:homeserver.tld',
+                ),
+              ),
+              SwitchListTile(
+                title: const Text('End-to-end encryption'),
+                value: encrypted,
+                onChanged: (value) => update(() => encrypted = value),
+              ),
+              if (!encrypted)
+                const Text(
+                  'People with access to this room’s server history can read its messages.',
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Start'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Start'),
-          ),
-        ],
       ),
     );
     controller.dispose();
     if (userId != null && userId.isNotEmpty) {
-      await backend.startDirectChat(userId);
+      await backend.startDirectChatWithEncryption(userId, encrypted: encrypted);
     }
   }
 
@@ -511,34 +520,8 @@ class _SpaceRail extends StatelessWidget {
     ),
   );
 
-  Future<void> _createSpace(BuildContext context) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create Space'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (name != null && name.isNotEmpty && context.mounted) {
-      final encrypted = await chooseSpaceEncryption(context);
-      if (encrypted != null) {
-        await backend.createSpace(name: name, encrypted: encrypted);
-      }
-    }
-  }
+  Future<void> _createSpace(BuildContext context) =>
+      showCreateServerDialog(context, backend);
 
   Future<void> _showSpaceActions(
     BuildContext context,
@@ -965,7 +948,11 @@ class _RoomList extends StatelessWidget {
                       status: room.statusMessage,
                     )
                   : null,
-              trailing: room.unreadCount == 0 && age.isEmpty && !pinned
+              trailing:
+                  room.unreadCount == 0 &&
+                      age.isEmpty &&
+                      !pinned &&
+                      !roomIsMuted(room)
                   ? null
                   : Column(
                       mainAxisSize: MainAxisSize.min,
@@ -982,8 +969,12 @@ class _RoomList extends StatelessWidget {
                           ),
                         if (room.unreadCount > 0 && age.isNotEmpty)
                           const SizedBox(height: 2),
-                        if (age.isNotEmpty || pinned)
-                          ChatActivityStamp(age: age, pinned: pinned),
+                        if (age.isNotEmpty || pinned || roomIsMuted(room))
+                          ChatActivityStamp(
+                            age: age,
+                            pinned: pinned,
+                            muted: roomIsMuted(room),
+                          ),
                       ],
                     ),
               onTap: () => onOpenRoom(room),
@@ -1015,6 +1006,40 @@ class _SpaceRoomList extends StatelessWidget {
         .expand((category) => category.roomIds)
         .toSet();
     final children = <Widget>[];
+    if (backend.selectedSpaceCategories.isEmpty) {
+      for (final voice in [false, true]) {
+        final section = rooms.where((room) => room.isVoice == voice).toList();
+        if (section.isEmpty) continue;
+        children.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 9, 10, 3),
+            child: Text(
+              voice ? 'VOICE ROOMS' : 'TEXT ROOMS',
+              style: TextStyle(
+                color: context.deltiecord.muted,
+                fontSize: DeltiecordTypeScale.normal,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .5,
+              ),
+            ),
+          ),
+        );
+        for (final room in section) {
+          children.add(
+            _SpaceRoomTile(
+              backend: backend,
+              room: room,
+              onTap: () => onOpenRoom(room),
+            ),
+          );
+        }
+      }
+      return ListView(
+        key: const ValueKey('mobile-space-room-list'),
+        padding: const EdgeInsets.only(bottom: 84),
+        children: children,
+      );
+    }
     for (final category in backend.selectedSpaceCategories) {
       children.add(
         ListTile(
@@ -1152,51 +1177,54 @@ class _SpaceRoomTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _SelectedRoomSurface(
     selected: backend.selectedRoom?.id == room.id,
-    child: ListTile(
-      selected: backend.selectedRoom?.id == room.id,
-      selectedColor: Theme.of(context).colorScheme.onSurface,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-      minLeadingWidth: 20,
-      horizontalTitleGap: 8,
-      dense: true,
-      visualDensity: const VisualDensity(vertical: -4),
-      minTileHeight: 32,
-      minVerticalPadding: 0,
-      leading: Icon(
-        room.isVoice
-            ? Icons.volume_up_outlined
-            : room.presentation == RoomPresentation.forum
-            ? Icons.forum_outlined
-            : Icons.tag,
-        size: 20,
-      ),
-      title: Text(
-        room.name,
-        style: TextStyle(
-          fontWeight:
-              room.unreadCount > 0 ||
-                  room.markedUnread ||
-                  room.hasUnreadMessages
-              ? FontWeight.w700
-              : FontWeight.w400,
+    child: ChannelJoinIndicator(
+      joined: room.joined,
+      child: ListTile(
+        selected: backend.selectedRoom?.id == room.id,
+        selectedColor: Theme.of(context).colorScheme.onSurface,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        minLeadingWidth: 20,
+        horizontalTitleGap: 8,
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -4),
+        minTileHeight: 32,
+        minVerticalPadding: 0,
+        leading: Icon(
+          room.isVoice
+              ? Icons.volume_up_outlined
+              : room.presentation == RoomPresentation.forum
+              ? Icons.forum_outlined
+              : Icons.tag,
+          size: 20,
         ),
+        title: Text(
+          room.name,
+          style: TextStyle(
+            fontWeight:
+                room.unreadCount > 0 ||
+                    room.markedUnread ||
+                    room.hasUnreadMessages
+                ? FontWeight.w700
+                : FontWeight.w400,
+          ),
+        ),
+        subtitle: room.isVoice && room.voiceParticipants.isNotEmpty
+            ? Text(
+                room.voiceParticipants.isEmpty
+                    ? 'Nobody connected'
+                    : '${room.voiceParticipants.length} connected',
+              )
+            : null,
+        trailing: room.unreadCount == 0
+            ? null
+            : Badge(label: Text('${room.unreadCount}')),
+        onTap: onTap,
+        onLongPress: () {
+          final box = context.findRenderObject() as RenderBox?;
+          final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+          showChannelActions(context, backend, room, position);
+        },
       ),
-      subtitle: room.isVoice && room.voiceParticipants.isNotEmpty
-          ? Text(
-              room.voiceParticipants.isEmpty
-                  ? 'Nobody connected'
-                  : '${room.voiceParticipants.length} connected',
-            )
-          : null,
-      trailing: room.unreadCount == 0
-          ? null
-          : Badge(label: Text('${room.unreadCount}')),
-      onTap: onTap,
-      onLongPress: () {
-        final box = context.findRenderObject() as RenderBox?;
-        final position = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-        showChannelActions(context, backend, room, position);
-      },
     ),
   );
 }
@@ -1231,6 +1259,7 @@ class _MobileUserIsland extends StatelessWidget {
               bytes: backend.profileAvatarBytes,
               fallback: backend.profileDisplayName ?? backend.userId ?? '?',
               presence: backend.profilePresence,
+              userId: backend.userId,
               size: 46,
             ),
             const SizedBox(width: 9),

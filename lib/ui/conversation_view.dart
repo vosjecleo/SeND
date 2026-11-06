@@ -72,6 +72,7 @@ class _ConversationState extends State<_Conversation> {
   final _scrollController = ScrollController();
   final _timelineViewportKey = GlobalKey();
   final Map<String, GlobalKey> _messageKeys = {};
+  final _galleryRowKeys = GalleryRowKeys();
   String? _roomId;
   bool _loadingAnchoredHistory = false;
   bool _fillingInitialViewport = false;
@@ -82,6 +83,8 @@ class _ConversationState extends State<_Conversation> {
   bool _scrolledAwayFromPresent = false;
   DateTime _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _suppressPaginationUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  bool? _paginationTowardOlder;
+  Timer? _edgeRetry;
   int _navigationGeneration = 0;
   int? _presentNavigation;
   String? get _composerTargetId =>
@@ -127,26 +130,64 @@ class _ConversationState extends State<_Conversation> {
     final paginationSuppressed = DateTime.now().isBefore(
       _suppressPaginationUntil,
     );
+    if (_presentNavigation != null) return;
+    if (paginationSuppressed && isUserDriven && _edgeRetry == null) {
+      final room = _roomId;
+      _edgeRetry = Timer(
+        _suppressPaginationUntil.difference(DateTime.now()) +
+            const Duration(milliseconds: 1),
+        () {
+          _edgeRetry = null;
+          if (mounted && room == _roomId) {
+            // Timer expiry is monotonic, even if the wall clock changes.
+            _suppressPaginationUntil = DateTime.fromMillisecondsSinceEpoch(0);
+            _loadTimelineNearEdges();
+          }
+        },
+      );
+    }
+    final older =
+        _paginationTowardOlder ??
+        (position.userScrollDirection == ScrollDirection.reverse);
     if (!paginationSuppressed &&
         isUserDriven &&
-        position.userScrollDirection == ScrollDirection.reverse &&
+        older &&
+        widget.backend.canLoadMoreHistory &&
+        !widget.backend.historyLoading &&
         position.pixels >= position.maxScrollExtent - 240) {
       _loadOlderAnchored();
     } else if (!paginationSuppressed &&
         isUserDriven &&
-        position.userScrollDirection == ScrollDirection.forward &&
+        !older &&
         position.pixels <= 240 &&
         widget.backend.canLoadMoreFuture) {
       _loadNewerAnchored();
     }
   }
 
-  void _noteTimelineUserInput(PointerEvent _) {
+  void _noteTimelineUserInput(PointerEvent event) {
+    if (event is PointerDownEvent) _paginationTowardOlder = null;
     if (_presentNavigation != null) {
       _navigationGeneration++;
       setState(() => _presentNavigation = null);
     }
-    _timelineUserInputUntil = DateTime.now().add(const Duration(seconds: 1));
+    _timelineUserInputUntil = DateTime.now().add(const Duration(seconds: 2));
+  }
+
+  void _noteTimelineSignal(PointerSignalEvent event) {
+    _noteTimelineUserInput(event);
+    if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+      _paginationTowardOlder = event.scrollDelta.dy < 0;
+      _loadTimelineNearEdges();
+    }
+  }
+
+  void _noteTimelinePan(PointerPanZoomUpdateEvent event) {
+    _noteTimelineUserInput(event);
+    if (event.panDelta.dy != 0) {
+      _paginationTowardOlder = event.panDelta.dy > 0;
+      _loadTimelineNearEdges();
+    }
   }
 
   SegmentTimelineAnchor? _captureVisibleAnchor() =>
@@ -172,6 +213,8 @@ class _ConversationState extends State<_Conversation> {
     final anchor = _captureVisibleAnchor();
     final navigation = _navigationGeneration;
     final inputUntil = _timelineUserInputUntil;
+    _edgeRetry?.cancel();
+    _edgeRetry = null;
     _suppressPaginationUntil = DateTime.now().add(
       const Duration(milliseconds: 700),
     );
@@ -188,6 +231,9 @@ class _ConversationState extends State<_Conversation> {
       // The backend reports its user-facing pagination error separately.
     } finally {
       _loadingAnchoredHistory = false;
+      if (mounted && navigation == _navigationGeneration) {
+        _loadTimelineNearEdges();
+      }
     }
   }
 
@@ -317,6 +363,10 @@ class _ConversationState extends State<_Conversation> {
         !_scrolledAwayFromPresent &&
         (!_scrollController.hasClients || _scrollController.offset <= 48);
     if (_roomId != roomId) {
+      _edgeRetry?.cancel();
+      _edgeRetry = null;
+      _paginationTowardOlder = null;
+      _timelineUserInputUntil = DateTime.fromMillisecondsSinceEpoch(0);
       _draggingFiles = false;
       _clearDropSession();
       widget.backend.setConversationAtPresent(false);
@@ -357,6 +407,7 @@ class _ConversationState extends State<_Conversation> {
 
   @override
   void dispose() {
+    _edgeRetry?.cancel();
     _dropSession?.onDisposed.removeListener(_clearDropSession);
     widget.backend.setConversationAtPresent(false);
     _scrollController.dispose();
@@ -372,24 +423,12 @@ class _ConversationState extends State<_Conversation> {
   }
 
   Future<void> _deleteMessage(ChatMessage message) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: const Text('Delete this message for everyone?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final albums = MediaAlbumIndex.fromNewestFirst(widget.backend.messages);
+    await deleteMessageGroup(
+      context,
+      widget.backend,
+      albums.albums[message.id] ?? [message],
     );
-    if (confirmed == true) await widget.backend.redactMessage(message.id);
     _focusComposerAfterBuild();
   }
 
@@ -616,7 +655,12 @@ class _ConversationState extends State<_Conversation> {
     final room = backend.selectedRoom!;
     final messages = backend.timelineMessages;
     final receipts = receiptFrontiers(messages);
-    final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
+    final mediaAlbums = MediaAlbumIndex.fromNewestFirst(
+      messages,
+      roomId: room.id,
+      segmentId: backend.timelineSegmentId,
+    );
+    _galleryRowKeys.bind(mediaAlbums, _messageKeys);
     _scheduleInitialViewportFill();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _reportTimelineAtPresent(),
@@ -628,7 +672,7 @@ class _ConversationState extends State<_Conversation> {
     _messageKeys.removeWhere((eventId, _) => !retainedIds.contains(eventId));
     final messageIndexes = <String, int>{
       for (var index = 0; index < messages.length; index++)
-        messages[index].timelineKey: index,
+        mediaAlbums.rowIdentity(messages[index]): index,
     };
     final mediaMessages = messages
         .where(
@@ -657,8 +701,8 @@ class _ConversationState extends State<_Conversation> {
                   ThemeSurface(
                     color: context.deltiecord.surface,
                     child: Container(
-                      height: 56,
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      constraints: const BoxConstraints(minHeight: 56),
+                      padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
                       alignment: Alignment.centerLeft,
                       child: Row(
                         children: [
@@ -669,15 +713,17 @@ class _ConversationState extends State<_Conversation> {
                               icon: const Icon(Icons.menu),
                               onPressed: open,
                             ),
-                          _RoomIcon(
-                            key: const ValueKey('conversation-header-avatar'),
-                            room: room,
-                            size: 30,
-                            showPresence:
-                                room.isDirect && !room.usesChannelIcon,
-                            autoplay: true,
-                          ),
-                          const SizedBox(width: 8),
+                          if (!room.usesChannelIcon) ...[
+                            _RoomIcon(
+                              key: const ValueKey('conversation-header-avatar'),
+                              room: room,
+                              size: 38,
+                              showPresence:
+                                  room.isDirect && !room.usesChannelIcon,
+                              autoplay: true,
+                            ),
+                            const SizedBox(width: 12),
+                          ],
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -685,6 +731,9 @@ class _ConversationState extends State<_Conversation> {
                               children: [
                                 Text(
                                   room.name,
+                                  key: const ValueKey(
+                                    'conversation-header-name',
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontSize: DeltiecordTypeScale.bigUi,
@@ -704,6 +753,9 @@ class _ConversationState extends State<_Conversation> {
                                 else if (room.topic.isNotEmpty)
                                   Text(
                                     room.topic,
+                                    key: const ValueKey(
+                                      'conversation-header-topic',
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -925,7 +977,9 @@ class _ConversationState extends State<_Conversation> {
                             child: Listener(
                               onPointerDown: _noteTimelineUserInput,
                               onPointerMove: _noteTimelineUserInput,
-                              onPointerSignal: _noteTimelineUserInput,
+                              onPointerSignal: _noteTimelineSignal,
+                              onPointerPanZoomStart: _noteTimelineUserInput,
+                              onPointerPanZoomUpdate: _noteTimelinePan,
                               child: backend.timelineLoading && messages.isEmpty
                                   ? const Center(
                                       child: CircularProgressIndicator(),
@@ -987,12 +1041,14 @@ class _ConversationState extends State<_Conversation> {
                                         final message = messages[index];
                                         if (mediaAlbums.hiddenMessageIds
                                             .contains(message.id)) {
-                                          return const SizedBox.shrink();
+                                          return SizedBox.shrink(
+                                            key: ValueKey(
+                                              mediaAlbums.rowIdentity(message),
+                                            ),
+                                          );
                                         }
-                                        final older =
-                                            index + 1 < messages.length
-                                            ? messages[index + 1]
-                                            : null;
+                                        final older = mediaAlbums
+                                            .olderVisibleMessage(message.id);
                                         final startsGroup =
                                             mediaAlbums.albums.containsKey(
                                               message.id,
@@ -1012,7 +1068,9 @@ class _ConversationState extends State<_Conversation> {
                                                 const Duration(minutes: 7) ||
                                             message.reply != null;
                                         return Column(
-                                          key: ValueKey(message.timelineKey),
+                                          key: ValueKey(
+                                            mediaAlbums.rowIdentity(message),
+                                          ),
                                           children: [
                                             if (older == null ||
                                                 !DateUtils.isSameDay(
@@ -1023,7 +1081,10 @@ class _ConversationState extends State<_Conversation> {
                                                 date: message.timestamp,
                                               ),
                                             if (message.id ==
-                                                backend.firstUnreadMessageId)
+                                                mediaAlbums.visibleMessageId(
+                                                  backend.firstUnreadMessageId ??
+                                                      '',
+                                                ))
                                               const _UnreadDivider(),
                                             _MessageRow(
                                               key: _messageKeyFor(message),

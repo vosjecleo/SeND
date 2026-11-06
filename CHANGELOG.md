@@ -3,6 +3,73 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 137 (2026-11-06)
+
+- Forward text, files and whole photo galleries to another conversation.
+  Reuse uploaded media and its encryption metadata without uploading it again.
+  Keep gallery order and offer Forward directly below React.
+- Give each new photo selection its own gallery identity. Separate uploads no
+  longer merge accidentally, and messages arriving during an upload do not
+  split the gallery. Deleting a gallery deletes all its message events, not the
+  underlying server files. Keep pending-media sizing, alignment and corners
+  consistent with delivered media.
+- Add masonry GIF results, infinite scrolling and more categories. Favourite
+  uploaded GIFs as well as KLIPY results, synchronize favourites and reuse saved
+  media when sending them again. Show favourite stars in the picker and viewer.
+  Cache only the first five category-result links locally for 12 hours, not GIF
+  files or a searchable server-side index.
+- Keep expression pickers above the mobile keyboard and below the status bar.
+  Use arrows and Tab for mention completion as well as emoji completion. Remove
+  duplicate expression options from the attachment menu.
+- Stop hidden mobile chat fields taking keyboard focus. Cancel stale keyboard
+  restoration when opening room or member lists, while keeping drafts and
+  allowing deliberate search input. Dismiss profile-editor selection overlays
+  when scrolling without changing the selection or closing the keyboard.
+- Load small, static avatar thumbnails first, then upgrade cached images in
+  the background. Fetch independent profile images concurrently. Keep reply
+  previews visible while their original messages load, including sticker and
+  out-of-window replies; one failed lookup no longer hides other quotes.
+- Keep queued and delivered reply heights consistent, including Matrix's HTML
+  reply fallback. Add small, static avatars after quoted names, preserve space
+  between reply connectors and avatars, and align chat headers, gutters and
+  typing indicators. Desktop retains its extra message spacing; mobile keeps
+  its previous spacing.
+- Replace Archive's back button with a slim Home row. Align both shortcut rows
+  with DM avatars and labels. Make desktop history loading respond to scrolling
+  without requiring the older-messages button for each page.
+- Reorder settings around common tasks and expand server settings. Join
+  accessible server rooms automatically, with a per-server opt-out and progress
+  feedback. Mark unjoined channels without changing row spacing, hide creation
+  controls when permissions prohibit the action, and preserve invite-only
+  defaults. Correct directory visibility saving and server-room classification.
+- Fix notification navigation opening the wrong room list, resolve inviter
+  avatars, and label sticker notifications correctly. Restore sticker packs on
+  resume and preserve local data when SDK initialization fails; genuine revoked
+  sessions still require sign-in.
+- Fit mobile call tiles without excess empty space. Preserve call membership
+  through transient updates and retain interoperability with older clients.
+  Fix native X/FxTwitter playback without relaxing video-network restrictions.
+- Add green phone-shaped online indicators, enabled by default with a Privacy
+  opt-out. Publish short-lived, device-owned signals only while the mobile app
+  is active and online. Keep badges inside avatar bounds, cut out the avatar
+  behind them, and use a gray ring for offline status.
+- Set the Linux window title to SeND's version and the current room, including
+  its server when applicable. Update GTK's actual window title as well as its
+  header label; keep the application ID unchanged for desktop integration.
+- Respect cross-signing trust when sharing message and MatrixRTC keys. Rotate
+  legacy outbound sessions before sending, without deleting inbound sessions or
+  recovery keys. Bound automatic media downloads and image decoding before
+  cache limits apply. Pin and revalidate external native-video connections,
+  including seeks and redirects, and block external playlist references.
+- Move Sunup forwarding out of gateway request threads into a bounded, durable
+  queue. Limit provider concurrency and admission for signup/test requests, and
+  retain retries, expiry and endpoint cleanup. This requires the matching push
+  worker update on self-hosted installations.
+
+Latest only; Stable remains unchanged. Existing accounts, sessions and
+encryption keys are retained. Forwarded media remains dependent on the original
+upload, so deleting that file from server storage also affects its forwards.
+
 ## SeND 0.9.42 build 136 (2026-11-02)
 
 - Keep disconnected history in separate timeline ranges with their own cursors

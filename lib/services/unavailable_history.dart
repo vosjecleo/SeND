@@ -7,23 +7,30 @@ List<ChatMessage> collapseUnavailableHistory(
   List<ChatMessage> messages,
   Set<String> unavailableIds,
 ) {
-  var count = 0;
-  while (count < messages.length &&
-      unavailableIds.contains(messages[count].id)) {
-    count++;
+  final result = <ChatMessage>[];
+  for (var i = 0; i < messages.length;) {
+    final start = i;
+    while (i < messages.length && unavailableIds.contains(messages[i].id)) {
+      i++;
+    }
+    final count = i - start;
+    if (count < 2) {
+      result.add(messages[start]);
+      if (count == 0) i++;
+      continue;
+    }
+    final first = messages[start];
+    result.add(
+      ChatMessage(
+        id: first.id,
+        sender: '',
+        body:
+            'Can\'t read $count earlier messages without their encryption keys.',
+        timestamp: first.timestamp,
+        pending: false,
+        system: true,
+      ),
+    );
   }
-  if (count < 2) return messages;
-  final first = messages.first;
-  return [
-    ChatMessage(
-      id: first.id,
-      sender: '',
-      body:
-          'Can\'t read $count earlier messages without their encryption keys.',
-      timestamp: first.timestamp,
-      pending: false,
-      system: true,
-    ),
-    ...messages.skip(count),
-  ];
+  return result.length == messages.length ? messages : result;
 }

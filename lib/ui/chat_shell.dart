@@ -1,5 +1,8 @@
 import 'audio_attachment_player.dart';
+import 'reply_quote_text.dart';
+import 'avatar_presence.dart';
 import '../services/socks_proxy.dart';
+import '../services/native_link_video_proxy.dart';
 import 'dart:async';
 import 'video_playback_status.dart';
 import 'activity_widgets.dart';
@@ -10,11 +13,14 @@ import 'measured_avatar_stack.dart';
 import 'emoji_typography.dart';
 import 'channel_category_menu.dart';
 import 'message_action_menu.dart';
+import 'forward_message_dialog.dart';
+import 'delete_message_group.dart';
 import 'message_highlight.dart';
 import 'read_only_conversation.dart';
 import '../services/raw_image.dart';
 import 'threshold_feedback.dart';
 import 'queued_attachment_preview.dart';
+import 'timeline_media_geometry.dart';
 import '../services/queued_message.dart';
 import 'attachment_image_editor.dart';
 import 'navigation_polish.dart';
@@ -84,8 +90,12 @@ import 'poll_card.dart';
 import 'member_management.dart';
 import 'presence_controls.dart';
 import 'space_settings_screen.dart';
+import 'create_server_dialog.dart';
+import 'channel_join_indicator.dart';
 import 'personal_organisation.dart';
 import 'typing_indicator.dart';
+import 'timeline_columns.dart';
+import 'message_spacing.dart';
 import 'timeline_scroll_anchor.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
@@ -710,6 +720,37 @@ class _ChatShellState extends State<ChatShell> {
     setState(() => _pendingSends++);
     try {
       if (sendingRoomId == null) return;
+      final reuse =
+          gif.message ?? widget.backend.uploadedGifForSource(gif.shareUrl);
+      if (reuse != null) {
+        try {
+          final sent = await sendSavedGifToRoom(
+            context,
+            widget.backend,
+            GifSearchResult.saved(reuse, width: gif.width, height: gif.height),
+            roomId: sendingRoomId,
+            replyToMessageId: submittedReply?.id,
+          );
+          if (sent &&
+              mounted &&
+              widget.backend.selectedRoom?.id == sendingRoomId &&
+              _replyingTo?.id == submittedReply?.id) {
+            setState(() => _replyingTo = null);
+            unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not send this GIF. The original message may be unavailable.',
+                ),
+              ),
+            );
+          }
+        }
+        return;
+      }
       await widget.backend.enqueueRoomSend(sendingRoomId, () async {
         final service = GifService();
         late Uint8List bytes;

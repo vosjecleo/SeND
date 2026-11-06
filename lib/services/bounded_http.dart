@@ -8,12 +8,16 @@ Future<Uint8List> readBoundedResponse(
   Stream<List<int>> response, {
   required int maximumBytes,
   Duration inactivityTimeout = const Duration(seconds: 10),
+  bool Function()? isCurrent,
 }) async {
   if (maximumBytes <= 0) {
     throw ArgumentError.value(maximumBytes, 'maximumBytes');
   }
   final output = BytesBuilder(copy: false);
   await for (final chunk in response.timeout(inactivityTimeout)) {
+    if (isCurrent?.call() == false) {
+      throw StateError('Media request was cancelled.');
+    }
     if (output.length + chunk.length > maximumBytes) {
       throw const HttpException('HTTP response exceeded its safe size limit.');
     }

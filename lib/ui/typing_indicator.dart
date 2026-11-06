@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'deltiecord_theme.dart';
+import 'timeline_columns.dart';
 
 const double typingIndicatorHeight = 16;
 
@@ -18,13 +19,14 @@ double typingIndicatorHeightFor(BuildContext context) =>
 class TypingIndicator extends StatefulWidget {
   const TypingIndicator({
     required this.names,
-    this.textInset = 60,
-    this.avatarInset = 10,
+    this.textInset = TimelineColumns.desktopTextInset,
+    this.avatarInset = TimelineColumns.desktopAvatarInset,
+    this.avatarSize = TimelineColumns.desktopAvatarSize,
     super.key,
   });
 
   final List<String> names;
-  final double textInset, avatarInset;
+  final double textInset, avatarInset, avatarSize;
 
   @override
   State<TypingIndicator> createState() => _TypingIndicatorState();
@@ -113,8 +115,11 @@ class _TypingIndicatorState extends State<TypingIndicator>
                       child: Padding(
                         padding: EdgeInsets.only(
                           left: widget.avatarInset,
-                          right: (widget.textInset - widget.avatarInset - 40)
-                              .clamp(0, double.infinity),
+                          right:
+                              (widget.textInset -
+                                      widget.avatarInset -
+                                      widget.avatarSize)
+                                  .clamp(0, double.infinity),
                         ),
                         child: AnimatedBuilder(
                           animation: _controller,

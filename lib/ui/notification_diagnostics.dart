@@ -30,6 +30,8 @@ String notificationStateReport(UnifiedPushState s) {
     'Last push received: ${time(s.lastMessageReceived)}',
     'Last notification posted: ${time(s.lastNotificationPosted)}',
     'Background worker: ${stage(s.lastWorkerResult)}',
+    if (s.lastWorkerResult == 'suppressed_active_desktop')
+      'Phone alerts were paused because SeND was active on a desktop.',
     'Test sent: ${time(s.lastTestRequest)}',
     'Test received: ${time(s.lastTestReceived)}',
     'Test result: ${stage(s.lastTestResult)}',
@@ -94,6 +96,10 @@ class _NotificationDiagnosticsState extends State<NotificationDiagnostics> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text('Tests check delivery, not message decryption.'),
+      if (!kIsWeb && UnifiedPushPlatform.instance.supported)
+        const Text(
+          'A test here does not check delivery while SeND is closed. Check background access if notifications stop.',
+        ),
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,

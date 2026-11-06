@@ -3,6 +3,13 @@ import 'dart:math' as math;
 const spaceRolesEventType = 'net.deltiecord.space.roles';
 const spacePolicyEventType = 'net.deltiecord.space.policy';
 
+enum SpaceCategoryAction { create, rename, delete, move }
+
+class SpaceJoinResult {
+  const SpaceJoinResult({this.joined = 0, this.failed = 0});
+  final int joined, failed;
+}
+
 class RoomAccessSettings {
   const RoomAccessSettings({
     required this.roomId,

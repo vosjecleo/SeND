@@ -5,59 +5,8 @@ class _SpaceBar extends StatelessWidget {
 
   final ChatBackend backend;
 
-  Future<void> _createSpace(BuildContext context) async {
-    final name = TextEditingController();
-    final topic = TextEditingController();
-    final create = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create Space'),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Space name'),
-              ),
-              TextField(
-                controller: topic,
-                decoration: const InputDecoration(
-                  labelText: 'Topic (optional)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: Navigator.of(context).pop,
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-    final spaceName = name.text.trim();
-    final spaceTopic = topic.text.trim();
-    name.dispose();
-    topic.dispose();
-    if (create == true && spaceName.isNotEmpty) {
-      if (!context.mounted) return;
-      final encrypted = await chooseSpaceEncryption(context);
-      if (encrypted == null) return;
-      await backend.createSpace(
-        name: spaceName,
-        topic: spaceTopic,
-        encrypted: encrypted,
-      );
-    }
-  }
+  Future<void> _createSpace(BuildContext context) =>
+      showCreateServerDialog(context, backend);
 
   Future<void> _searchSpaces(BuildContext context) => showDialog<void>(
     context: context,
@@ -974,12 +923,15 @@ class _RoomPanelState extends State<_RoomPanel> {
   }
 
   Future<void> _startDirectMessage(BuildContext context) async {
-    final matrixId = await showDialog<String>(
+    final choice = await showDialog<({String userId, bool encrypted})>(
       context: context,
       builder: (context) => const _StartDirectMessageDialog(),
     );
-    if (matrixId != null && RegExp(r'^@[^:]+:.+$').hasMatch(matrixId)) {
-      await backend.startDirectChat(matrixId);
+    if (choice != null && RegExp(r'^@[^:]+:.+$').hasMatch(choice.userId)) {
+      await backend.startDirectChatWithEncryption(
+        choice.userId,
+        encrypted: choice.encrypted,
+      );
     }
   }
 
@@ -1069,22 +1021,6 @@ class _RoomPanelState extends State<_RoomPanel> {
                                         icon: const Icon(Icons.menu, size: 20),
                                         onPressed: open,
                                       ),
-                                    if (backend.archiveOpen)
-                                      IconButton(
-                                        tooltip: 'Back to Home',
-                                        padding: EdgeInsets.zero,
-                                        constraints:
-                                            const BoxConstraints.tightFor(
-                                              width: 28,
-                                              height: 28,
-                                            ),
-                                        onPressed: () =>
-                                            backend.setArchiveOpen(false),
-                                        icon: const Icon(
-                                          Icons.arrow_back,
-                                          size: 20,
-                                        ),
-                                      ),
                                     Expanded(
                                       child: Text(
                                         backend.selectedSpaceId == null
@@ -1150,63 +1086,68 @@ class _RoomPanelState extends State<_RoomPanel> {
                                   },
                                 ),
                               ),
-                              PopupMenuButton<String>(
-                                tooltip: backend.selectedSpaceId == null
-                                    ? 'Start chat or create room'
-                                    : 'Create room',
-                                icon: const ThemeIcon(Icons.add, size: 20),
-                                onSelected: (value) {
-                                  if (value == 'direct') {
-                                    _startDirectMessage(context);
-                                  }
-                                  if (value == 'room') _createRoom(context);
-                                  if (value == 'category') {
-                                    _createCategory(context);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  if (backend.selectedSpaceId == null)
-                                    const PopupMenuItem(
-                                      value: 'direct',
+                              if (backend.selectedSpaceId == null ||
+                                  backend.canCreateSpaceRoom(
+                                    backend.selectedSpaceId!,
+                                  ))
+                                PopupMenuButton<String>(
+                                  tooltip: backend.selectedSpaceId == null
+                                      ? 'Start chat or create room'
+                                      : 'Create room',
+                                  icon: const ThemeIcon(Icons.add, size: 20),
+                                  onSelected: (value) {
+                                    if (value == 'direct') {
+                                      _startDirectMessage(context);
+                                    }
+                                    if (value == 'room') _createRoom(context);
+                                    if (value == 'category') {
+                                      _createCategory(context);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    if (backend.selectedSpaceId == null)
+                                      const PopupMenuItem(
+                                        value: 'direct',
+                                        child: ListTile(
+                                          dense: true,
+                                          leading: ThemeIcon(
+                                            Icons.person_add_alt_1_outlined,
+                                          ),
+                                          title: Text('Start direct message'),
+                                        ),
+                                      ),
+                                    PopupMenuItem(
+                                      value: 'room',
                                       child: ListTile(
                                         dense: true,
-                                        leading: ThemeIcon(
-                                          Icons.person_add_alt_1_outlined,
+                                        leading: const ThemeIcon(
+                                          Icons.add_comment_outlined,
                                         ),
-                                        title: Text('Start direct message'),
-                                      ),
-                                    ),
-                                  PopupMenuItem(
-                                    value: 'room',
-                                    child: ListTile(
-                                      dense: true,
-                                      leading: const ThemeIcon(
-                                        Icons.add_comment_outlined,
-                                      ),
-                                      title: Text(
-                                        backend.selectedSpaceId == null
-                                            ? 'Create group chat'
-                                            : 'Create room',
-                                      ),
-                                    ),
-                                  ),
-                                  if (backend.selectedSpaceId
-                                      case final spaceId?
-                                      when backend.canManageSpaceChannelLayout(
-                                        spaceId,
-                                      ))
-                                    const PopupMenuItem(
-                                      value: 'category',
-                                      child: ListTile(
-                                        dense: true,
-                                        leading: ThemeIcon(
-                                          Icons.create_new_folder_outlined,
+                                        title: Text(
+                                          backend.selectedSpaceId == null
+                                              ? 'Create group chat'
+                                              : 'Create room',
                                         ),
-                                        title: Text('Create category'),
                                       ),
                                     ),
-                                ],
-                              ),
+                                    if (backend.selectedSpaceId
+                                        case final spaceId?
+                                        when backend
+                                            .canManageSpaceChannelLayout(
+                                              spaceId,
+                                            ))
+                                      const PopupMenuItem(
+                                        value: 'category',
+                                        child: ListTile(
+                                          dense: true,
+                                          leading: ThemeIcon(
+                                            Icons.create_new_folder_outlined,
+                                          ),
+                                          title: Text('Create category'),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                             ],
                           ),
                         ],
@@ -1351,48 +1292,58 @@ class _CurrentUserPanel extends StatelessWidget {
                         clipBehavior: Clip.none,
                         children: [
                           Positioned.fill(
-                            child: ThemeAvatarClip(
-                              child: backend.profileAvatarBytes == null
-                                  ? ColoredBox(
-                                      color: context.deltiecord.elevated,
-                                      child: const ThemeIcon(
-                                        Icons.person,
-                                        size: 19,
+                            child: ClipPath(
+                              clipper: AvatarPresenceCutout(
+                                phone: showsMobilePresence(
+                                  context,
+                                  backend.userId,
+                                  backend.profilePresence,
+                                ),
+                                badgeSize: presenceBadgeSize(
+                                  11,
+                                  phone: showsMobilePresence(
+                                    context,
+                                    backend.userId,
+                                    backend.profilePresence,
+                                  ),
+                                ),
+                              ),
+                              child: ThemeAvatarClip(
+                                child: backend.profileAvatarBytes == null
+                                    ? ColoredBox(
+                                        color: context.deltiecord.elevated,
+                                        child: const ThemeIcon(
+                                          Icons.person,
+                                          size: 19,
+                                        ),
+                                      )
+                                    : Image.memory(
+                                        backend.profileAvatarBytes!,
+                                        fit: BoxFit.cover,
                                       ),
-                                    )
-                                  : Image.memory(
-                                      backend.profileAvatarBytes!,
-                                      fit: BoxFit.cover,
-                                    ),
+                              ),
                             ),
                           ),
                           Positioned(
-                            right: -1,
-                            bottom: -1,
-                            child: Container(
+                            right: 0,
+                            bottom: 0,
+                            child: PresenceBadge(
                               key: ValueKey(
                                 'current-user-presence-'
                                 '${backend.profilePresence.name}',
                               ),
-                              width: 11,
-                              height: 11,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: switch (backend.profilePresence) {
-                                  UserPresence.online => const Color(
-                                    0xff43b581,
-                                  ),
-                                  UserPresence.away => const Color(0xffffc857),
-                                  UserPresence.doNotDisturb => const Color(
-                                    0xffe5484d,
-                                  ),
-                                  UserPresence.offline => const Color(
-                                    0xff747680,
-                                  ),
-                                },
-                                border: Border.all(
-                                  color: context.deltiecord.island,
-                                  width: 2,
+                              presence: backend.profilePresence,
+                              phone: showsMobilePresence(
+                                context,
+                                backend.userId,
+                                backend.profilePresence,
+                              ),
+                              size: presenceBadgeSize(
+                                11,
+                                phone: showsMobilePresence(
+                                  context,
+                                  backend.userId,
+                                  backend.profilePresence,
                                 ),
                               ),
                             ),
@@ -1503,6 +1454,7 @@ class _StartDirectMessageDialog extends StatefulWidget {
 
 class _StartDirectMessageDialogState extends State<_StartDirectMessageDialog> {
   final _userIdController = TextEditingController();
+  bool _encrypted = true;
 
   @override
   void dispose() {
@@ -1511,7 +1463,9 @@ class _StartDirectMessageDialogState extends State<_StartDirectMessageDialog> {
   }
 
   void _submit() {
-    Navigator.of(context).pop(_userIdController.text.trim());
+    Navigator.of(
+      context,
+    ).pop((userId: _userIdController.text.trim(), encrypted: _encrypted));
   }
 
   @override
@@ -1520,15 +1474,30 @@ class _StartDirectMessageDialogState extends State<_StartDirectMessageDialog> {
       title: const Text('Start direct message'),
       content: SizedBox(
         width: 420,
-        child: TextField(
-          key: const Key('new-direct-message-id'),
-          controller: _userIdController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Matrix ID',
-            hintText: '@person:example.org',
-          ),
-          onSubmitted: (_) => _submit(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const Key('new-direct-message-id'),
+              controller: _userIdController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Matrix ID',
+                hintText: '@person:example.org',
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('End-to-end encryption'),
+              value: _encrypted,
+              onChanged: (value) => setState(() => _encrypted = value),
+            ),
+            if (!_encrypted)
+              const Text(
+                'People with access to this room’s server history can read its messages.',
+              ),
+          ],
         ),
       ),
       actions: [
@@ -2280,64 +2249,67 @@ class _RoomListTile extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onSecondaryTapDown: (details) =>
             _showContextMenu(context, details.globalPosition),
-        child: ListTile(
-          dense: true,
-          visualDensity: const VisualDensity(vertical: -4),
-          minTileHeight: 30,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-          minVerticalPadding: 0,
-          minLeadingWidth: 0,
-          horizontalTitleGap: 8,
-          selected: backend.selectedRoom?.id == room.id,
-          leading: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (mayArrange) dragGrip(),
-              _RoomIcon(
-                room: room,
-                size: 21,
-                autoplay: backend.selectedRoom?.id == room.id || hovered,
-              ),
-            ],
-          ),
-          title: Text(
-            room.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: hovered || backend.selectedRoom?.id == room.id
-                  ? Theme.of(context).colorScheme.onSurface
-                  : context.deltiecord.muted,
-              fontWeight:
-                  room.unreadCount > 0 ||
-                      room.markedUnread ||
-                      room.hasUnreadMessages
-                  ? FontWeight.w700
-                  : FontWeight.w400,
+        child: ChannelJoinIndicator(
+          joined: room.joined,
+          child: ListTile(
+            dense: true,
+            visualDensity: const VisualDensity(vertical: -4),
+            minTileHeight: 30,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 0,
+            minLeadingWidth: 0,
+            horizontalTitleGap: 8,
+            selected: backend.selectedRoom?.id == room.id,
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (mayArrange) dragGrip(),
+                _RoomIcon(
+                  room: room,
+                  size: 21,
+                  autoplay: backend.selectedRoom?.id == room.id || hovered,
+                ),
+              ],
             ),
+            title: Text(
+              room.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hovered || backend.selectedRoom?.id == room.id
+                    ? Theme.of(context).colorScheme.onSurface
+                    : context.deltiecord.muted,
+                fontWeight:
+                    room.unreadCount > 0 ||
+                        room.markedUnread ||
+                        room.hasUnreadMessages
+                    ? FontWeight.w700
+                    : FontWeight.w400,
+              ),
+            ),
+            subtitle: room.isVoice
+                ? participantCount == 0
+                      ? null
+                      : Text('$participantCount connected')
+                : !room.usesChannelIcon &&
+                      room.isDirect &&
+                      backend.selectedSpaceId == null &&
+                      ActivityStatus.hasContent(backend, room)
+                ? ActivityStatus(
+                    backend: backend,
+                    userId: room.directUserId,
+                    presence: room.presence,
+                    status: room.statusMessage,
+                  )
+                : null,
+            trailing: backend.selectedSpaceId == null && room.unreadCount > 0
+                ? Badge(label: Text('${room.unreadCount}'))
+                : null,
+            onTap: () {
+              backend.selectRoom(room.id);
+              _DesktopNavigation.of(context)?.close();
+            },
           ),
-          subtitle: room.isVoice
-              ? participantCount == 0
-                    ? null
-                    : Text('$participantCount connected')
-              : !room.usesChannelIcon &&
-                    room.isDirect &&
-                    backend.selectedSpaceId == null &&
-                    ActivityStatus.hasContent(backend, room)
-              ? ActivityStatus(
-                  backend: backend,
-                  userId: room.directUserId,
-                  presence: room.presence,
-                  status: room.statusMessage,
-                )
-              : null,
-          trailing: backend.selectedSpaceId == null && room.unreadCount > 0
-              ? Badge(label: Text('${room.unreadCount}'))
-              : null,
-          onTap: () {
-            backend.selectRoom(room.id);
-            _DesktopNavigation.of(context)?.close();
-          },
         ),
       ),
     );
@@ -2516,8 +2488,12 @@ class _HomeRoomListTile extends StatelessWidget {
                               ),
                             if (room.unreadCount > 0 && age.isNotEmpty)
                               const SizedBox(height: 2),
-                            if (age.isNotEmpty || pinned)
-                              ChatActivityStamp(age: age, pinned: pinned),
+                            if (age.isNotEmpty || pinned || roomIsMuted(room))
+                              ChatActivityStamp(
+                                age: age,
+                                pinned: pinned,
+                                muted: roomIsMuted(room),
+                              ),
                           ],
                         ),
                       ],
@@ -2569,47 +2545,49 @@ class _RoomIcon extends StatelessWidget {
       );
     }
     final avatar = room.avatarBytes;
+    final phone =
+        showPresence &&
+        showsMobilePresence(context, room.directUserId, room.presence);
     return SizedBox.square(
       dimension: size,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: ThemeAvatar(
-              autoplay: autoplay,
-              backgroundColor: context.deltiecord.elevated,
-              backgroundImage: avatar == null ? null : MemoryImage(avatar),
-              child: avatar == null
-                  ? Text(
-                      room.name.trim().isEmpty
-                          ? '?'
-                          : room.name.trim().characters.first.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: size * 0.4,
-                        fontWeight: FontWeight.w700,
-                      ),
+            child: ClipPath(
+              clipper: showPresence
+                  ? AvatarPresenceCutout(
+                      phone: phone,
+                      badgeSize: presenceBadgeSize(11, phone: phone),
                     )
                   : null,
+              child: ThemeAvatar(
+                autoplay: autoplay,
+                backgroundColor: context.deltiecord.elevated,
+                backgroundImage: avatar == null ? null : MemoryImage(avatar),
+                child: avatar == null
+                    ? Text(
+                        room.name.trim().isEmpty
+                            ? '?'
+                            : room.name.trim().characters.first.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: size * 0.4,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
+              ),
             ),
           ),
           if (showPresence)
             Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
+              right: 0,
+              bottom: 0,
+              child: PresenceBadge(
                 key: ValueKey('presence-${room.id}-${room.presence.name}'),
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: switch (room.presence) {
-                    UserPresence.online => const Color(0xff43b581),
-                    UserPresence.away => const Color(0xffffc857),
-                    UserPresence.doNotDisturb => const Color(0xffe5484d),
-                    UserPresence.offline => const Color(0xff747680),
-                  },
-                  border: Border.all(color: context.deltiecord.panel, width: 2),
-                ),
+                presence: room.presence,
+                phone: phone,
+                size: presenceBadgeSize(11, phone: phone),
               ),
             ),
         ],

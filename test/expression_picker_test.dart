@@ -1,4 +1,5 @@
 import 'package:deltiecord/services/gif_service.dart';
+import 'package:deltiecord/app.dart';
 import 'package:deltiecord/ui/expression_picker.dart';
 import 'package:deltiecord/ui/emoji_picker_dialog.dart';
 import 'package:deltiecord/ui/advanced_chat_dialogs.dart';
@@ -12,6 +13,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_backend.dart';
 
 void main() {
+  testWidgets(
+    'composer plus menu contains attachments and polls, not duplicate expressions',
+    (tester) async {
+      const room = RoomSummary(
+        id: 'room',
+        name: 'Menu test',
+        lastMessage: '',
+        unreadCount: 0,
+        usesChannelIcon: false,
+      );
+      final backend = FakeBackend()
+        ..currentStatus = SessionStatus.signedIn
+        ..roomList = [room];
+      await tester.pumpWidget(DeltiecordApp(backend: backend));
+      await tester.tap(find.text(room.name));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add content'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add file'), findsOneWidget);
+      expect(find.text('Poll'), findsOneWidget);
+      for (final label in ['Emoji', 'GIF', 'Sticker / GIF', 'Sticker pack']) {
+        expect(find.text(label), findsNothing);
+      }
+      await tester.tap(find.text('Poll'));
+      await tester.pumpAndSettle();
+      expect(find.text('Question'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'expression picker defaults to emoji and exposes sticker management',
     (tester) async {
@@ -73,6 +103,9 @@ void main() {
       await tester.pumpAndSettle();
       for (final label in ['Camera', 'Picker', 'Poll', 'Files']) {
         expect(find.text(label), findsOneWidget);
+      }
+      for (final label in ['Emoji', 'GIF', 'Sticker / GIF', 'Sticker pack']) {
+        expect(find.text(label), findsNothing);
       }
       expect(tester.takeException(), isNull);
     },

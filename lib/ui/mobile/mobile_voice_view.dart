@@ -235,19 +235,7 @@ class _MobileVoiceViewState extends State<MobileVoiceView> {
   Widget _participants({
     required int itemCount,
     required IndexedWidgetBuilder itemBuilder,
-  }) => widget.compact
-      ? CompactVoiceGrid(itemCount: itemCount, itemBuilder: itemBuilder)
-      : GridView.builder(
-          padding: const EdgeInsets.all(10),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 360,
-            childAspectRatio: 1.15,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-          ),
-          itemCount: itemCount,
-          itemBuilder: itemBuilder,
-        );
+  }) => CompactVoiceGrid(itemCount: itemCount, itemBuilder: itemBuilder);
 
   Future<void> _showDeviceSheet() async {
     await widget.backend.refreshAudioInputs();
@@ -400,12 +388,14 @@ class _VoiceParticipantTile extends StatelessWidget {
                   ),
                 if (media == null)
                   Center(
-                    child: MobileAvatar(
-                      bytes: profile?.avatarBytes,
-                      fallback: profile?.displayName ?? userId,
-                      size: 86,
-                      borderColor: _voiceAvatarBorder(context),
-                      speaking: isSpeaking,
+                    child: LayoutBuilder(
+                      builder: (context, bounds) => MobileAvatar(
+                        bytes: profile?.avatarBytes,
+                        fallback: profile?.displayName ?? userId,
+                        size: (bounds.maxHeight * .55).clamp(24.0, 86.0),
+                        borderColor: _voiceAvatarBorder(context),
+                        speaking: isSpeaking,
+                      ),
                     ),
                   ),
                 Positioned(

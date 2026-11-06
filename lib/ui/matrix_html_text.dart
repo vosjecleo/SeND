@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'message_spacing.dart';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -257,12 +258,16 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
       recognizer.dispose();
     }
     _recognizers.clear();
+    final baseStyle = widget.style ?? const TextStyle();
     final style = isUnicodeEmojiOnly(widget.text)
         ? (widget.style ?? const TextStyle()).copyWith(
             fontSize: _standaloneEmojiSize,
             height: 1,
           )
-        : widget.style ?? const TextStyle();
+        : baseStyle.copyWith(
+            height:
+                baseStyle.height ?? MessageSpacing.inheritedLineHeight(context),
+          );
     final spans = <InlineSpan>[];
     var offset = 0;
     for (final match in _urlPattern.allMatches(widget.text)) {
@@ -371,6 +376,25 @@ class MatrixHtmlText extends StatefulWidget {
   State<MatrixHtmlText> createState() => _MatrixHtmlTextState();
 }
 
+bool _isPlainReply(dom.DocumentFragment document, String fallback) {
+  var hasReply = false;
+  final text = StringBuffer();
+  for (final node in document.nodes) {
+    if (node is dom.Text) {
+      text.write(node.data);
+    } else if (node is dom.Element && node.localName == 'mx-reply') {
+      hasReply = true;
+    } else if (node is dom.Element &&
+        node.localName == 'br' &&
+        node.attributes.isEmpty) {
+      text.write('\n');
+    } else {
+      return false;
+    }
+  }
+  return hasReply && text.toString() == fallback;
+}
+
 class _MatrixHtmlTextState extends State<MatrixHtmlText> {
   late final TapGestureRecognizer _spoilerTap = TapGestureRecognizer()
     ..onTap = () => setState(() => _spoilersRevealed = true);
@@ -393,10 +417,26 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     }
     _linkRecognizers.clear();
     final document = html_parser.parseFragment(widget.html);
+    // The SDK adds HTML solely to carry the legacy reply fallback, even when
+    // the authored message is plain text. Use the same renderer as its local
+    // echo rather than changing line metrics once the event arrives.
+    if (_isPlainReply(document, widget.fallback)) {
+      final platform = Theme.of(context).platform;
+      final mobile =
+          platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+      return MatrixPlainText(
+        text: widget.fallback,
+        selectable: widget.selectable,
+        trailing: widget.trailing,
+        style: mobile
+            ? null
+            : const TextStyle(height: MessageSpacing.desktopPlainLineHeight),
+      );
+    }
     final emojiOnly = _emojiOnlyNodes(document.nodes);
     final standaloneEmoji = emojiOnly.valid && emojiOnly.found;
     final style = TextStyle(
-      height: standaloneEmoji ? 1 : 1.28,
+      height: standaloneEmoji ? 1 : MessageSpacing.richLineHeightFor(context),
       fontSize: standaloneEmoji ? _standaloneEmojiSize : null,
     );
     final spans = List<InlineSpan>.of(
@@ -422,7 +462,7 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
     if (spans.isEmpty) {
       final fallbackStyle = isUnicodeEmojiOnly(widget.fallback)
           ? const TextStyle(fontSize: _standaloneEmojiSize, height: 1)
-          : const TextStyle();
+          : TextStyle(height: MessageSpacing.richLineHeightFor(context));
       final span = TextSpan(
         children: [
           ..._emojiAwareTextSpans(

@@ -335,12 +335,23 @@ extension _MatrixEventMapping on MatrixBackend {
 
   ReplyPreview? _colouredReply(Event event, SpaceRoles roles) {
     final reply = _replyPreviews[event.eventId];
-    if (reply == null) return null;
+    if (reply == null) {
+      final target = messageReplyTarget(event.content);
+      if (target == null) return null;
+      return ReplyPreview(
+        eventId: target,
+        sender: 'Reply',
+        body: 'View original message',
+      );
+    }
     return ReplyPreview(
       eventId: reply.eventId,
       sender: reply.sender,
       body: reply.body,
       senderId: reply.senderId,
+      avatarBytes:
+          _senderAvatarBytes['${event.room.id}|${reply.senderId}'] ??
+          _senderAvatarBytes[reply.senderId],
       senderColor: reply.senderId == null
           ? null
           : roles.colorFor(reply.senderId!),
@@ -472,6 +483,13 @@ extension _MatrixEventMapping on MatrixBackend {
     return ChatAttachment(
       sourceEventId: event.eventId,
       kind: kind,
+      gifIdentity: validGifIdentity(event.content[gifIdentityContentKey]),
+      gallery: MediaGalleryMembership.fromJson(
+        event.content[MediaGalleryMembership.contentKey],
+      ),
+      hasGalleryMetadata: event.content.containsKey(
+        MediaGalleryMembership.contentKey,
+      ),
       name: text.name,
       mimeType: event.attachmentMimetype,
       size: event.infoMap.tryGet<int>('size'),

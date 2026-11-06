@@ -65,6 +65,9 @@ extension _MatrixAdministration on MatrixBackend {
               lastMessage: 'Open to join channel',
               unreadCount: 0,
               usesChannelIcon: true,
+              joined:
+                  client.getRoomById(room.roomId)?.membership ==
+                  Membership.join,
               presentation: client.getRoomById(room.roomId) != null
                   ? _presentationFor(client.getRoomById(room.roomId)!)
                   : RoomPresentation.values
@@ -150,12 +153,20 @@ extension _MatrixAdministration on MatrixBackend {
       'm.room.history_visibility',
     );
     final policy = await _optionalRoomState(roomId, spacePolicyEventType);
-    final directory = await _matrix.getRoomVisibilityOnDirectory(roomId);
+    // Read the server's directory flag, not the room's join rule, and avoid a
+    // cached response surviving a save/reopen cycle.
+    final directory = await _matrix.request(
+      RequestType.GET,
+      '/client/v3/directory/list/room/${Uri.encodeComponent(roomId)}',
+      query: {
+        '_send_refresh': DateTime.now().microsecondsSinceEpoch.toString(),
+      },
+    );
     return RoomAccessSettings(
       roomId: roomId,
       joinRule: access['join_rule'] as String? ?? 'invite',
       historyVisibility: history['history_visibility'] as String? ?? 'shared',
-      discoverable: directory == Visibility.public,
+      discoverable: directory['visibility'] == 'public',
       canEditAccess: room.canChangeStateEvent(EventTypes.RoomJoinRules),
       canEditHistory: room.canChangeStateEvent('m.room.history_visibility'),
       canEditPolicy: room.canChangeStateEvent(spacePolicyEventType),

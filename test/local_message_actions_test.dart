@@ -15,7 +15,61 @@ ChatMessage message({bool own = true, bool pending = false}) => ChatMessage(
   canRedact: true,
 );
 void main() {
-  testWidgets('discussion is a full action row immediately below React', (
+  testWidgets('three taps reply to another author, a drag does not', (
+    tester,
+  ) async {
+    var replies = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TripleTapEdit(
+            onReply: () => replies++,
+            child: const SizedBox(
+              width: 200,
+              height: 100,
+              child: Text('Other message'),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.text('Other message'));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(replies, 1);
+    await tester.drag(find.text('Other message'), const Offset(100, 0));
+    await tester.tap(find.text('Other message'));
+    await tester.pump();
+    expect(replies, 1);
+  });
+
+  testWidgets('mobile message actions have comfortable touch targets', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageActionList(
+            comfortable: true,
+            message: message(own: false),
+            actions: const [
+              MessageAction.reply,
+              MessageAction.react,
+              MessageAction.forward,
+            ],
+            onAction: (_) {},
+          ),
+        ),
+      ),
+    );
+    for (final tile in tester.widgetList<ListTile>(find.byType(ListTile))) {
+      expect(tile.minTileHeight, greaterThanOrEqualTo(48));
+      expect(tile.dense, false);
+    }
+    expect(find.byType(ListTile), findsNWidgets(3));
+  });
+  testWidgets('forward follows React, discussion follows Forward', (
     tester,
   ) async {
     var opened = 0;
@@ -33,6 +87,10 @@ void main() {
     );
     expect(
       tester.getTopLeft(find.text('Start discussion')).dy,
+      greaterThan(tester.getTopLeft(find.text('Forward')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Forward')).dy,
       greaterThan(tester.getTopLeft(find.text('React')).dy),
     );
     expect(
@@ -46,6 +104,7 @@ void main() {
     expect(messageActionOrder(message(), canEdit: true, canPin: true), [
       MessageAction.reply,
       MessageAction.react,
+      MessageAction.forward,
       null,
       MessageAction.copy,
       MessageAction.unread,

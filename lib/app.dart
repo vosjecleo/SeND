@@ -19,6 +19,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'backend/chat_backend.dart';
 import 'models/chat_models.dart';
 import 'services/desktop_window_service.dart';
+import 'services/desktop_window_title.dart';
 import 'services/font_preferences.dart';
 import 'services/browser_safe_area.dart';
 import 'ui/scaled_media.dart';
@@ -51,6 +52,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
   TargetPlatform? get platformOverride => widget.platformOverride;
   Object? _configuration;
   ThemeData? _cachedTheme;
+  String? _desktopTitle;
 
   @override
   void initState() {
@@ -123,6 +125,34 @@ class _DeltiecordAppState extends State<DeltiecordApp>
                     ? defaultTargetPlatform == TargetPlatform.android ||
                           defaultTargetPlatform == TargetPlatform.iOS
                     : Platform.isAndroid || Platform.isIOS));
+        if (!mobile && !kIsWeb) {
+          final room = backend.status == SessionStatus.signedIn
+              ? backend.selectedRoom
+              : null;
+          String? server;
+          if (room != null && !room.isDirect) {
+            final parent = backend.spaces.where(
+              (space) => backend
+                  .roomsInSpace(space.id)
+                  .any((child) => child.id == room.id),
+            );
+            server =
+                parent
+                    .where((space) => space.id == backend.selectedSpaceId)
+                    .firstOrNull
+                    ?.name ??
+                parent.firstOrNull?.name;
+          }
+          final title = desktopWindowTitle(room: room, serverName: server);
+          if (_desktopTitle != title) {
+            _desktopTitle = title;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _desktopTitle == title) {
+                unawaited(DesktopWindowService.setTitle(title));
+              }
+            });
+          }
+        }
         if (_configuration != configuration || _cachedTheme == null) {
           _configuration = configuration;
           final emojiFontFamily = normalizeEmojiFontFamily(

@@ -83,6 +83,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
       // ignore: deprecated_member_use
       statusMessage: peer == null ? null : _matrix.presences[peer]?.statusMsg,
       encrypted: room.encrypted,
+      joined: room.membership == Membership.join,
       presence: isChannel ? UserPresence.offline : _roomPresence(room),
       notificationMode: _notificationModeFor(room),
       mutedUntil: _temporaryRoomMutes[room.id],
@@ -181,6 +182,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
   );
 
   Future<void> _refreshRoomMetadata() async {
+    if (_client?.isLogged() == true) _spaceFollowing.start();
     _roomMetadataRefreshRequested = true;
     if (_refreshingRoomMetadata || !_matrix.isLogged()) return;
     _refreshingRoomMetadata = true;
@@ -205,6 +207,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
                 ...joinedRooms.where((room) => room.id != selectedRoomId),
               ];
         var processed = 0;
+        final avatars = <Future<void>>[];
         for (final room in orderedRooms) {
           try {
             await room.postLoad();
@@ -226,7 +229,18 @@ extension _MatrixRoomMetadata on MatrixBackend {
                       (watch) => watch.visible(),
                     ) ??
                     false);
-            if (visible) changed = await _refreshAvatar(room) || changed;
+            if (visible) {
+              avatars.add(() async {
+                try {
+                  if (await _refreshAvatar(room)) {
+                    changed = true;
+                    _notifyBackendListeners();
+                  }
+                } catch (_) {
+                  /* Other rows can still finish their thumbnails. */
+                }
+              }());
+            }
             if (!room.isSpace) {
               changed = await _refreshPreview(room) || changed;
             }
@@ -239,6 +253,7 @@ extension _MatrixRoomMetadata on MatrixBackend {
             await Future<void>.delayed(Duration.zero);
           }
         }
+        await Future.wait(avatars);
         if (kIsWeb && _roomMetadataRefreshRequested) {
           await Future<void>.delayed(const Duration(milliseconds: 16));
         }
@@ -279,6 +294,8 @@ extension _MatrixRoomMetadata on MatrixBackend {
   }
 
   Future<bool> _refreshAvatar(Room room) async {
+    final client = room.client;
+    if (!identical(client, _client)) return false;
     final avatar = room.avatar;
     if (_avatarUris.containsKey(room.id) &&
         _avatarUris[room.id] == avatar &&
@@ -290,11 +307,16 @@ extension _MatrixRoomMetadata on MatrixBackend {
     _avatarUris[room.id] = avatar;
     _avatarBytes.remove(room.id);
     if (avatar == null || !avatar.isScheme('mxc')) return true;
-    final pooled = _avatarMediaPool.peek(avatar, AvatarMediaPool.rowDimension);
+    final pooled =
+        _avatarMediaPool.peek(avatar, AvatarMediaPool.profileDimension) ??
+        _avatarMediaPool.peek(avatar, AvatarMediaPool.rowDimension);
     final bytes =
         pooled ??
         await _avatarMedia(avatar, AvatarMediaPool.rowDimension) ??
         Uint8List(0);
+    if (!identical(client, _client) || _avatarUris[room.id] != avatar) {
+      return false;
+    }
     if (bytes.isNotEmpty) {
       _avatarBytes[room.id] = bytes;
       final directUserId = room.directChatMatrixID;

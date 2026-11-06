@@ -36,7 +36,6 @@ Future<void> main() async {
             database: database,
             logLevel: Level.error,
             importantStateEvents: {rtcCallMemberType},
-            shareKeysWith: ShareKeysWith.all,
           )
           ..homeserver = Uri.parse('https://matrix.deltie.net')
           ..syncPresence = PresenceType.offline;

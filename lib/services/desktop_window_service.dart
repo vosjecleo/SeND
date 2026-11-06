@@ -12,6 +12,20 @@ class DesktopWindowService {
 
   static const _channel = MethodChannel('net.deltie.deltiecord/window');
   static AppPreferences? _applied;
+  static String? _title;
+
+  static Future<void> setTitle(String title) async {
+    if (!DesktopPlatformCapabilities.current.supportsDesktopWindowChannel ||
+        _title == title) {
+      return;
+    }
+    _title = title;
+    try {
+      await _channel.invokeMethod<void>('setTitle', title);
+    } on MissingPluginException {
+      // Older runners and non-GTK platforms keep their existing title.
+    }
+  }
 
   static Future<void> apply(AppPreferences preferences) async {
     if (!DesktopPlatformCapabilities.current.supportsDesktopWindowChannel ||

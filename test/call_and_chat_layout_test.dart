@@ -3,6 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'status inset is above the call, not a gap above the DM app bar',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 850));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(400, 850),
+              padding: EdgeInsets.only(top: 32),
+              viewPadding: EdgeInsets.only(top: 32),
+            ),
+            child: Scaffold(
+              body: CallAndChatLayout(
+                call: const ColoredBox(
+                  key: Key('call-content'),
+                  color: Colors.blue,
+                ),
+                chat: Scaffold(
+                  appBar: AppBar(
+                    key: const Key('dm-bar'),
+                    title: const Text('Recipient'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final call = tester.getRect(find.byKey(const Key('call-content')));
+      final header = tester.getRect(find.byKey(const Key('dm-bar')));
+      expect(call.top, 32);
+      expect(header.top, closeTo(call.bottom, .1));
+      expect(header.height, kToolbarHeight);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('chat remains mounted and below the call when joining/leaving', (
     tester,
   ) async {

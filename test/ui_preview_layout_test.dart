@@ -37,7 +37,7 @@ class _CallBackend extends FakeBackend {
 }
 
 void main() {
-  testWidgets('one-line jumbo emoji keeps its avatar centered too', (
+  testWidgets('jumbo emoji keeps its avatar near the first sender line', (
     tester,
   ) async {
     final backend = FakeBackend()
@@ -63,7 +63,8 @@ void main() {
     final body = tester.getRect(
       find.byKey(const ValueKey('mobile-message-body-emoji')),
     );
-    expect(avatar.center.dy, closeTo((sender.top + body.bottom) / 2, 1));
+    expect(avatar.center.dy, lessThan((sender.top + body.bottom) / 2 - 5));
+    expect(avatar.top, lessThan(sender.bottom));
     await tester.pumpWidget(const SizedBox());
   });
   for (final reply in [false, true]) {

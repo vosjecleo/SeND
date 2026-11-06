@@ -673,6 +673,7 @@ class ActivityController extends ChangeNotifier {
         id,
         _combined(id).live.map((a) => a.toJson()).toList(),
         _combined(id).recent?.toJson(),
+        _combined(id).mobileOnline,
       ],
   ]);
 }

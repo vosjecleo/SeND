@@ -16,6 +16,17 @@ SPEC.loader.exec_module(PROXY)
 
 
 class GiphyProxySecurityTests(unittest.TestCase):
+    def test_klipy_pagination_is_forwarded_and_bounded(self):
+        with mock.patch.object(PROXY, '_read_secret', return_value='test-only-key'), \
+             mock.patch.object(PROXY.urllib.request, 'urlopen') as upstream:
+            response = upstream.return_value.__enter__.return_value
+            response.status = 200
+            response.headers.get_content_type.return_value = 'application/json'
+            response.read.return_value = b'{"result":true,"data":{"current_page":2,"data":[]}}'
+            PROXY._klipy_request(page=2)
+            self.assertIn('page=2', upstream.call_args.args[0].full_url)
+            for page in [0, -1, 10001, True, '2']:
+                with self.assertRaises(ValueError): PROXY._klipy_request(page=page)
     def test_public_media_cors_is_fixed_and_never_credentialed(self):
         for method, args in [(PROXY.Handler._json, ({'ok': True},)),
                              (PROXY.Handler._bytes, (b'GIF89a', 'image/gif'))]:

@@ -234,6 +234,7 @@ class _LinkVideoPlayer extends StatefulWidget {
 }
 
 class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
+  NativeLinkVideoProxy? _safePlayback;
   Player? _player;
   VideoController? _controller;
   StreamSubscription<int?>? _widthSubscription;
@@ -281,9 +282,15 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
       _error = null;
     });
     try {
-      final uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
-      SocksProxy.requireLocalPlayback(uri);
-      await player.open(Media(uri.toString()), play: true);
+      var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
+      if (!kIsWeb) {
+        await _safePlayback?.close();
+        final proxy = _safePlayback = NativeLinkVideoProxy();
+        await proxy.openAndPlay(player, uri);
+      } else {
+        SocksProxy.requireLocalPlayback(uri);
+        await player.open(Media(uri.toString()), play: true);
+      }
       if (widget.loop) await player.setPlaylistMode(PlaylistMode.single);
       _opened = true;
     } catch (exception) {
@@ -291,6 +298,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
       await player.dispose();
       _player = null;
       _controller = null;
+      await _safePlayback?.close();
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -301,6 +309,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
     _widthSubscription?.cancel();
     _heightSubscription?.cancel();
     _player?.dispose();
+    unawaited(_safePlayback?.close());
     super.dispose();
   }
 
@@ -841,20 +850,23 @@ class _AttachmentViewState extends State<_AttachmentView> {
 
     return switch (widget.attachment.kind) {
       AttachmentKind.image => _buildImage(),
-      AttachmentKind.video => _InlineVideo(
-        key: ValueKey((
-          widget.messageId,
-          widget.attachment.sourceEventId,
-          widget.attachment.hasThumbnail,
-        )),
-        backend: widget.backend,
-        messageId: widget.messageId,
-        attachment: widget.attachment,
-        onSave: _save,
-        onOpen: _open,
-        onContextMenu: (position, fullscreen) =>
-            _showContextMenu(position, image: false, fullscreen: fullscreen),
-        onFullscreen: _showMedia,
+      AttachmentKind.video => ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: _InlineVideo(
+          key: ValueKey((
+            widget.messageId,
+            widget.attachment.sourceEventId,
+            widget.attachment.hasThumbnail,
+          )),
+          backend: widget.backend,
+          messageId: widget.messageId,
+          attachment: widget.attachment,
+          onSave: _save,
+          onOpen: _open,
+          onContextMenu: (position, fullscreen) =>
+              _showContextMenu(position, image: false, fullscreen: fullscreen),
+          onFullscreen: _showMedia,
+        ),
       ),
       AttachmentKind.audio => AudioAttachmentPlayer(
         backend: widget.backend,
@@ -874,21 +886,13 @@ class _AttachmentViewState extends State<_AttachmentView> {
           _decodedDimensions?.width ?? widget.attachment.width;
       final metadataHeight =
           _decodedDimensions?.height ?? widget.attachment.height;
-      final ratio =
-          metadataWidth != null &&
-              metadataHeight != null &&
-              metadataWidth > 0 &&
-              metadataHeight > 0
-          ? (metadataWidth / metadataHeight).clamp(0.25, 4.0).toDouble()
-          : 3 / 4;
-      final maxWidth = min(
-        constraints.maxWidth,
-        min(420.0, screen.width * 0.5),
+      final frame = timelineImageFrameSize(
+        screen: screen,
+        mobile: false,
+        availableWidth: constraints.maxWidth,
+        width: metadataWidth,
+        height: metadataHeight,
       );
-      final maxHeight = min(520.0, screen.height * 0.5);
-      final frame = maxWidth / maxHeight > ratio
-          ? Size(maxHeight * ratio, maxHeight)
-          : Size(maxWidth, maxWidth / ratio);
       return FutureBuilder<Uint8List>(
         future: _imageBytes,
         initialData: widget.backend.cachedAttachmentPreview(widget.messageId),
@@ -929,12 +933,15 @@ class _AttachmentViewState extends State<_AttachmentView> {
                   image: true,
                   fullscreen: _showMedia,
                 ),
-                child: _PreferenceAwareImage(
-                  bytes: bytes,
-                  animated: widget.attachment.animated,
-                  autoplay:
-                      widget.backend.preferences.autoplayGifs &&
-                      !widget.backend.preferences.reducedMotion,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _PreferenceAwareImage(
+                    bytes: bytes,
+                    animated: widget.attachment.animated,
+                    autoplay:
+                        widget.backend.preferences.autoplayGifs &&
+                        !widget.backend.preferences.reducedMotion,
+                  ),
                 ),
               ),
             ),
@@ -1382,9 +1389,11 @@ class _InlineVideoState extends State<_InlineVideo> {
     return Align(
       widthFactor: 1,
       alignment: Alignment.centerLeft,
-      child: SizedBox(
+      child: Container(
         width: width,
         height: height,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -1656,6 +1665,11 @@ class _MediaLightboxState extends State<_MediaLightbox> {
                               child: Center(
                                 child: GifFavouriteGesture(
                                   uri: _message.attachment?.gifSource,
+                                  reference: uploadedGifReference(
+                                    widget.backend,
+                                    _message,
+                                  ),
+                                  bytes: bytes,
                                   child: LifecycleMemoryImage(
                                     bytes: bytes,
                                     animated:

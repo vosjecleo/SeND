@@ -384,7 +384,53 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     }
   }
 
-  Future<void> _refreshStickerPacks() async {
+  Future<void> _refreshStickerPacks() {
+    _stickerPackRefreshRequested = true;
+    return _stickerPackRefreshPending ??= _pumpStickerPackRefresh()
+        .whenComplete(() {
+          _stickerPackRefreshPending = null;
+        });
+  }
+
+  Future<void> _pumpStickerPackRefresh() async {
+    do {
+      _stickerPackRefreshRequested = false;
+      await _loadStickerPacks();
+    } while (_stickerPackRefreshRequested);
+  }
+
+  Future<void> _loadStickerPacks() async {
+    final client = _matrix;
+    final selectedRoom = _selectedRoomId;
+    final selectedSpace = _selectedSpaceId;
+    final lease = _sessionScope.capture();
+    final subscriptions = client.accountData['im.ponies.emote_rooms']?.content
+        .tryGetMap<String, Object?>('rooms');
+    // Pack state is deliberately lazy in the SDK. Hydrate subscribed pack
+    // rooms before replacing the picker, including stores from older builds.
+    final ids = <String>{
+      ?selectedRoom,
+      ?selectedSpace,
+      ...?subscriptions?.keys,
+    };
+    for (final id in ids) {
+      final room = client.getRoomById(id);
+      if (room == null || room.membership != Membership.join || !room.partial) {
+        continue;
+      }
+      try {
+        await room.postLoad();
+      } catch (_) {
+        // Retain the last complete picker on a temporary storage failure.
+        return;
+      }
+    }
+    if (!lease.isCurrent ||
+        !identical(client, _client) ||
+        selectedRoom != _selectedRoomId ||
+        selectedSpace != _selectedSpaceId) {
+      return;
+    }
     final packs = <StickerPackSummary>[];
     final parsedIds = <String>{};
     final enabledRooms = _matrix.accountData['im.ponies.emote_rooms']?.content
@@ -479,8 +525,8 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       parsePack(id, entry.value.content, false, accountDataType: entry.key);
     }
     final selectedSpaceId = _selectedSpaceId;
-    final selectedSpace = _matrix.getRoomById(selectedSpaceId ?? '');
-    final spacePacks = selectedSpace?.states['im.ponies.room_emotes'];
+    final selectedSpaceRoom = _matrix.getRoomById(selectedSpaceId ?? '');
+    final spacePacks = selectedSpaceRoom?.states['im.ponies.room_emotes'];
     if (spacePacks != null && selectedSpaceId != null) {
       for (final entry in spacePacks.entries) {
         parsePack(
@@ -1225,6 +1271,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final userId = _matrix.userID;
     if (userId == null) return;
     _presenceMode = mode;
+    unawaited(_mobilePresence?.refresh());
     _activities?.refresh();
     _profilePresence = switch (mode) {
       PresenceMode.online || PresenceMode.doNotDisturb => UserPresence.online,
@@ -1396,11 +1443,11 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
   Future<void> _acceptRoomInvite(String roomId) async {
     final room = _matrix.getRoomById(roomId);
     if (room == null) throw StateError('That invitation is unavailable.');
-    await room.join();
-    await _matrix.waitForRoomInSync(roomId, join: true);
+    await _spaceFollowing.joinChannel(roomId, join: () => room.join());
     await _notifications.clearRoom(roomId);
     final joined = _matrix.getRoomById(roomId)!;
     if (joined.isSpace) {
+      _spaceFollowing.spaceJoined(joined.id);
       _selectSpace(joined.id);
     } else {
       String? parentJoinError;
@@ -1417,8 +1464,10 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       if (_spaceForRoom(joined) == null && parents.length == 1) {
         final parent = parents.single;
         try {
-          await parent.join();
-          await _matrix.waitForRoomInSync(parent.id, join: true);
+          await _spaceFollowing.joinChannel(
+            parent.id,
+            join: () => parent.join(),
+          );
           await _notifications.clearRoom(parent.id);
         } catch (_) {
           parentJoinError =
@@ -1426,7 +1475,15 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         }
       }
       final space = _spaceForRoom(joined);
-      if (space != null) _selectSpace(space.id);
+      if (space != null) {
+        _selectSpace(space.id);
+        try {
+          await _spaceFollowing.channelJoined(space.id, joined.id);
+        } catch (_) {
+          parentJoinError ??=
+              'Joined the channel, but could not apply its notification settings.';
+        }
+      }
       await _selectRoom(joined.id);
       if (parentJoinError != null) _error = parentJoinError;
     }
@@ -1474,6 +1531,10 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         .getRoomById(spaceId)
         ?.getState(MatrixBackend._spacePagesEventType);
     return SpacePagesSummary(
+      announcementChannelIds:
+          (event?.content['announcement_channel_ids'] as List? ?? const [])
+              .whereType<String>()
+              .toSet(),
       welcome: event?.content.tryGet<String>('welcome') ?? '',
       rules: event?.content.tryGet<String>('rules') ?? '',
       suggestedNotificationMode:
@@ -1494,6 +1555,7 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
           'welcome': pages.welcome,
           'rules': pages.rules,
           'suggested_notifications': pages.suggestedNotificationMode.name,
+          'announcement_channel_ids': pages.announcementChannelIds.toList(),
         });
   }
 

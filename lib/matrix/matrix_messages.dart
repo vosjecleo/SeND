@@ -1,6 +1,131 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMessages on MatrixBackend {
+  Future<void> _forwardMessages({
+    required String sourceRoomId,
+    required List<String> eventIds,
+    required String destinationRoomId,
+    required bool allowUnencrypted,
+    bool mediaOnly = false,
+    String? replyToMessageId,
+  }) async {
+    final client = _matrix;
+    final source = client.getRoomById(sourceRoomId);
+    final destination = client.getRoomById(destinationRoomId);
+    final ids = eventIds.toSet().toList(growable: false);
+    var sent = 0;
+    try {
+      if (source == null ||
+          destination == null ||
+          ids.isEmpty ||
+          source.membership != Membership.join ||
+          !canSendMessagesToRoom(destinationRoomId)) {
+        throw StateError('This conversation is unavailable.');
+      }
+      if (!destination.encrypted && !allowUnencrypted) {
+        throw StateError('Confirm forwarding to an unencrypted room first.');
+      }
+      final payloads = <Map<String, dynamic>>[];
+      // Validate every collage member before sending any of them.
+      for (final id in ids) {
+        var event = _currentAttachmentEvent(id);
+        if (event?.room.id != sourceRoomId) event = null;
+        event ??= await source.getEventById(id);
+        if (event?.type == EventTypes.Encrypted && client.encryption != null) {
+          event = await client.encryption!.decryptRoomEvent(
+            event!,
+            store: false,
+          );
+        }
+        if (event == null ||
+            event.redacted ||
+            event.type != EventTypes.Message) {
+          throw StateError('This message is no longer available.');
+        }
+        event = await _applyIndexedRevision(source, event);
+        final content = forwardedMessageContent(event.content);
+        if (event.messageType == MessageTypes.Image &&
+            (_isAnimatedImageMime(event.attachmentMimetype) ||
+                event.content['net.send.animated'] == true)) {
+          content[gifIdentityContentKey] =
+              validGifIdentity(event.content[gifIdentityContentKey]) ??
+              gifIdentityFor(sourceRoomId, event.eventId);
+        }
+        if (mediaOnly) {
+          if (event.messageType != MessageTypes.Image ||
+              (!_isAnimatedImageMime(event.attachmentMimetype) &&
+                  event.content['net.send.animated'] != true)) {
+            throw StateError('This message is not an animated image.');
+          }
+          final name = event.attachmentMimetype == 'image/webp'
+              ? 'animation.webp'
+              : 'animation.gif';
+          content['body'] = name;
+          content['filename'] = name;
+          content.remove('format');
+          content.remove('formatted_body');
+        }
+        payloads.add(content);
+      }
+      if (!identical(client, _client)) throw StateError('Account changed.');
+      final visual = payloads
+          .where(
+            (content) =>
+                {
+                  MessageTypes.Image,
+                  MessageTypes.Video,
+                }.contains(content['msgtype']) &&
+                content['net.send.animated'] != true &&
+                content['net.deltiecord.gif_source'] == null,
+          )
+          .toList();
+      // Legacy heuristic galleries can exceed today's composer batch limit.
+      // Preserve every file, using bounded fresh batches rather than rejecting
+      // the whole forward or silently truncating it.
+      for (
+        var start = 0;
+        start < visual.length;
+        start += MediaGalleryMembership.maximumItems
+      ) {
+        final proposedEnd = start + MediaGalleryMembership.maximumItems;
+        final end = proposedEnd < visual.length ? proposedEnd : visual.length;
+        final group = visual.sublist(start, end);
+        final galleryId = newMediaGalleryId();
+        for (final (index, content) in group.indexed) {
+          content[MediaGalleryMembership.contentKey] = MediaGalleryMembership(
+            id: galleryId,
+            index: index,
+            count: group.length,
+          ).toJson();
+        }
+      }
+      await _prepareEncryptedSend(destination);
+      for (final content in payloads) {
+        if (!identical(client, _client) ||
+            !canSendMessagesToRoom(destinationRoomId) ||
+            (!destination.encrypted && !allowUnencrypted)) {
+          throw StateError('This conversation is unavailable.');
+        }
+        // sendEvent encrypts the fresh event with the destination's session.
+        // EncryptedFile metadata refers to unchanged, already-uploaded bytes.
+        Event? reply;
+        if (replyToMessageId != null && sent == 0) {
+          reply = _eventById(replyToMessageId);
+          if (reply?.room.id != destination.id) reply = null;
+          reply ??= await destination.getEventById(replyToMessageId);
+          if (reply != null) {
+            content.addAll(_mentionsFor('', reply, destination));
+          }
+        }
+        final eventId = await destination.sendEvent(content, inReplyTo: reply);
+        if (eventId == null) throw StateError('Message not sent.');
+        sent++;
+      }
+    } catch (_) {
+      throw ForwardingFailure(sent, ids.length);
+    }
+  }
+
   Future<List<ChatMessage>> _loadPinnedMessages() async {
     final room = _matrix.getRoomById(_selectedRoomId ?? '');
     if (room == null || room.pinnedEventIds.isEmpty) return const [];

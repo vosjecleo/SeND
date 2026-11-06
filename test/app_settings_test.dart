@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_backend.dart';
+import 'support/widget_helpers.dart';
 
 void main() {
   testWidgets('shows login controls when signed out', (tester) async {
@@ -55,6 +56,14 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Appearance'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Accessibility'),
+      80,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('settings-navigation-list')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('Accessibility'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('About'),
@@ -113,13 +122,23 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Privacy'),
       80,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('settings-navigation-list')),
+        matching: find.byType(Scrollable),
+      ),
     );
     await tester.tap(find.text('Privacy'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Network & upload privacy'));
+    await tester.tap(find.text('Network & upload privacy'));
     await tester.pumpAndSettle();
 
     expect(backend.preferences.fetchDirectLinkPreviews, isFalse);
     expect(find.textContaining('see your IP address'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('direct-link-preview-mode')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('direct-link-preview-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Known providers only').last);
@@ -183,7 +202,7 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Devices'));
+    await openSettingsSection(tester, 'Devices');
     await tester.pump();
 
     expect(find.text('SeND Desktop (this device)'), findsOneWidget);
@@ -205,11 +224,17 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Devices'));
+    await openSettingsSection(tester, 'Devices');
     await tester.pump();
     await tester.tap(find.byTooltip('Remove device'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'secret');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog).last,
+        matching: find.byType(TextField),
+      ),
+      'secret',
+    );
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
 
@@ -230,7 +255,7 @@ void main() {
     expect(find.text('Fix encryption'), findsNothing);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Security'));
+    await openSettingsSection(tester, 'Security');
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();
@@ -252,7 +277,7 @@ void main() {
     await tester.pumpWidget(DeltiecordApp(backend: backend));
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Security'));
+    await openSettingsSection(tester, 'Security');
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open encryption & recovery'));
     await tester.pumpAndSettle();

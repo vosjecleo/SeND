@@ -87,7 +87,7 @@ void main() {
       await tester.ensureVisible(find.text('Also apply to child rooms'));
       await tester.tap(find.text('Also apply to child rooms'));
       await tester.pumpAndSettle();
-      final apply = find.text('Apply saved role power to selected rooms');
+      final apply = find.text('Review and apply role permissions');
       await tester.ensureVisible(apply);
       await tester.tap(apply);
       await tester.pumpAndSettle();

@@ -406,6 +406,42 @@ class DirectLinkPreviewFetcher {
     return null;
   }
 
+  /// The player must not resolve a previously probed remote URL itself.
+  /// This stream keeps every redirect and actual connection inside the same
+  /// public-address boundary as previews. Callers must bound and cancel it.
+  Future<DirectPreviewResponse> openVideo(
+    Uri initialUrl, {
+    String? range,
+  }) async {
+    var current = initialUrl;
+    for (var redirects = 0; redirects <= _maximumRedirects; redirects++) {
+      _validateScheme(current);
+      final response = await _request(
+        current,
+        'video/*,application/octet-stream;q=0.5',
+        headers: {HttpHeaders.rangeHeader: ?range},
+      );
+      if (_isRedirect(response.statusCode)) {
+        await _cancelBody(response.body);
+        if (response.location == null || redirects == _maximumRedirects) {
+          throw const HttpException('Invalid video redirect.');
+        }
+        current = current.resolveUri(response.location!);
+        continue;
+      }
+      if (response.statusCode != 200 && response.statusCode != 206 ||
+          !(response.contentType?.startsWith('video/') == true ||
+              response.contentType == 'application/octet-stream') ||
+          (_responseResourceSize(response) ?? _maximumPreviewVideoBytes + 1) >
+              _maximumPreviewVideoBytes) {
+        await _cancelBody(response.body);
+        throw const HttpException('Unsupported or oversized embedded video.');
+      }
+      return response;
+    }
+    throw const HttpException('Too many video redirects.');
+  }
+
   Future<LinkPreview?> _resolveYouTube(
     Uri url,
     LinkPreview fallback, {
@@ -742,21 +778,23 @@ class PinnedDirectPreviewTransport implements DirectPreviewTransport {
       final port = target.hasPort
           ? target.port
           : (target.isScheme('https') ? 443 : 80);
-      // HttpClient expects a connection factory to return an already-secured
-      // socket for HTTPS. The old implementation returned a plain pinned
-      // socket, which made every HTTPS preview fail with HTTP 400. TLS needs
-      // the hostname for SNI/certificate verification, so resolve/connect by
-      // hostname and validate the *actual* peer before returning the task.
-      // This catches DNS rebinding before HttpClient can send the request.
+      // Pin TCP to the validated IP even for TLS. Upgrade with the original
+      // hostname for SNI/certificate validation, without a second DNS lookup.
+      final tcp = await Socket.startConnect(address, port);
       final ConnectionTask<Socket> task;
       if (target.isScheme('https')) {
-        task = await SecureSocket.startConnect(
-          target.host,
-          port,
-          supportedProtocols: const ['http/1.1'],
+        task = ConnectionTask.fromSocket(
+          tcp.socket.then(
+            (socket) => SecureSocket.secure(
+              socket,
+              host: target.host,
+              supportedProtocols: const ['http/1.1'],
+            ),
+          ),
+          tcp.cancel,
         );
       } else {
-        task = await Socket.startConnect(address, port);
+        task = tcp;
       }
       final socket = await task.socket;
       if (!isPublicInternetAddress(

@@ -40,6 +40,11 @@ PUSH_HOSTS = {'web.push.apple.com', 'fcm.googleapis.com',
 _lock = threading.Lock()
 _delivery_lock = threading.Lock()
 _wake = threading.Event()
+_sunup_wake = threading.Event()
+_sunup_delivery_lock = threading.Lock()
+# One process-wide pool, used only by the background consumer, never WSGI.
+_sunup_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='sunup')
+_request_network_slots = threading.BoundedSemaphore(2)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -60,6 +65,12 @@ def database():
                '(id TEXT NOT NULL, room TEXT NOT NULL, event TEXT NOT NULL, '
                'expires REAL NOT NULL, retry_at REAL NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, '
                'PRIMARY KEY(id,room))')
+    db.execute('CREATE TABLE IF NOT EXISTS sunup_pending '
+               '(endpoint TEXT NOT NULL, room TEXT NOT NULL, event TEXT NOT NULL, '
+               'source TEXT NOT NULL, expires REAL NOT NULL, retry_at REAL NOT NULL DEFAULT 0, '
+               'attempts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(endpoint,room))')
+    db.execute('CREATE TABLE IF NOT EXISTS sunup_gone '
+               '(endpoint_hash TEXT PRIMARY KEY, expires REAL NOT NULL)')
     try:
         with db:
             yield db
@@ -141,6 +152,8 @@ def config():
 
 @app.post('/api/push/subscribe')
 def subscribe():
+    if not _request_network_slots.acquire(blocking=False):
+        return jsonify(error='Push service busy; retry later'), 503
     try:
         body = request.get_json()
         subscription = validate_subscription(body.get('subscription'))
@@ -161,6 +174,8 @@ def subscribe():
     except Exception:
         # Never log exceptions containing the OpenID token or push endpoint.
         return jsonify(error='Could not verify browser subscription'), 400
+    finally:
+        _request_network_slots.release()
 
 
 @app.post('/api/push/visibility')
@@ -278,16 +293,32 @@ def notify():
         if isinstance(device, dict) and device.get('app_id') == 'net.deltie.deltiecord'
         and isinstance(device.get('pushkey'), str)))
     if sunup_keys:
-        # At most twenty devices, four five-second requests at a time. Keep
-        # this below the worker's timeout even when Mozilla is unreachable.
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            try:
-                results = list(executor.map(
-                    lambda key: forward_sunup(key, room, event), sunup_keys))
-            except (OSError, ValueError):
-                # Keep pushers on temporary failure. Synapse retries 5xx.
-                return jsonify(error='Push service unavailable; retry later'), 503
-        rejected.extend(key for key, accepted in zip(sunup_keys, results) if not accepted)
+        peer = _client_identity(request.remote_addr, request.headers.get('X-Real-IP'))
+        source = hashlib.sha256(peer.encode()).hexdigest()
+        now = time.time()
+        with _lock, database() as db:
+            db.execute('DELETE FROM sunup_pending WHERE expires<?', (now,))
+            db.execute('DELETE FROM sunup_gone WHERE expires<?', (now,))
+            for key in sunup_keys:
+                digest = hashlib.sha256(key.encode()).hexdigest()
+                if (not valid_sunup_endpoint(key) or db.execute(
+                        'SELECT 1 FROM sunup_gone WHERE endpoint_hash=?', (digest,)).fetchone()):
+                    rejected.append(key)
+                    continue
+                if not room or not event:
+                    continue
+                exists = db.execute('SELECT 1 FROM sunup_pending WHERE endpoint=? AND room=?',
+                                    (key, room)).fetchone()
+                if not exists and (db.execute('SELECT COUNT(*) FROM sunup_pending').fetchone()[0] >= 4096
+                                   or db.execute('SELECT COUNT(*) FROM sunup_pending WHERE source=?',
+                                                 (source,)).fetchone()[0] >= 256):
+                    # No ACK for dropped work. Synapse retries overload, while
+                    # browser-facing routes retain all their request threads.
+                    return jsonify(error='Notification queue is full; retry later'), 503
+                db.execute('INSERT INTO sunup_pending VALUES (?,?,?,?,?,0,0) '
+                           'ON CONFLICT(endpoint,room) DO UPDATE SET event=excluded.event, '
+                           'expires=excluded.expires', (key, room, event, source, now + 3600))
+        _sunup_wake.set()
     for device in devices:
         if not isinstance(device, dict) or device.get('app_id') != 'net.deltie.deltiecord.web':
             continue
@@ -320,13 +351,7 @@ def notify():
     return jsonify(rejected=rejected)
 
 
-def forward_sunup(endpoint, room, event):
-    """Forward identifiers only to Sunup's fixed Mozilla service, not arbitrary URLs.
-
-    Sunup forwards the payload bytes unchanged. The aes128gcm header follows
-    UnifiedPush common-proxies' Autopush transport convention; these IDs are
-    TLS-protected, not end-to-end encrypted. Never include message plaintext.
-    """
+def valid_sunup_endpoint(endpoint):
     if not isinstance(endpoint, str) or len(endpoint) > 4096:
         return False
     try:
@@ -337,7 +362,16 @@ def forward_sunup(endpoint, room, event):
                  and url.path.startswith(('/wpush/v1/', '/wpush/v2/')))
     except ValueError:
         return False
-    if not valid:
+    return valid
+
+
+def forward_sunup(endpoint, room, event):
+    """Forward IDs only to Mozilla. Endpoint capabilities never enter logs.
+
+    The aes128gcm header is Sunup's transport marker, not payload encryption.
+    Identifiers are TLS-protected; message plaintext and keys are never sent.
+    """
+    if not valid_sunup_endpoint(endpoint):
         return False
     if not room or not event:
         return True
@@ -356,6 +390,52 @@ def forward_sunup(endpoint, room, event):
             return False
         raise OSError('Push delivery failed') from None
     return True
+
+
+def drain_sunup():
+    if not _sunup_delivery_lock.acquire(blocking=False):
+        return
+    try:
+        now = time.time()
+        with _lock, database() as db:
+            db.execute('DELETE FROM sunup_pending WHERE expires<?', (now,))
+            rows = db.execute('SELECT endpoint,room,event,attempts FROM sunup_pending '
+                              'WHERE retry_at<=? ORDER BY retry_at LIMIT 4', (now,)).fetchall()
+
+        def deliver(row):
+            key, room, event, attempts = row
+            try:
+                return row, forward_sunup(key, room, event)
+            except Exception:
+                return row, None
+
+        for (key, room, event, attempts), accepted in _sunup_pool.map(deliver, rows):
+            with _lock, database() as db:
+                if accepted is None:
+                    db.execute('UPDATE sunup_pending SET attempts=attempts+1,retry_at=? '
+                               'WHERE endpoint=? AND room=? AND event=?',
+                               (time.time() + min(60, 2 ** min(attempts + 1, 6)), key, room, event))
+                elif not accepted:
+                    db.execute('DELETE FROM sunup_pending WHERE endpoint=?', (key,))
+                    db.execute('INSERT OR REPLACE INTO sunup_gone VALUES (?,?)',
+                               (hashlib.sha256(key.encode()).hexdigest(), time.time() + 86400))
+                    db.execute('DELETE FROM sunup_gone WHERE endpoint_hash IN '
+                               '(SELECT endpoint_hash FROM sunup_gone ORDER BY expires DESC LIMIT -1 OFFSET 8192)')
+                else:
+                    db.execute('DELETE FROM sunup_pending WHERE endpoint=? AND room=? AND event=?',
+                               (key, room, event))
+    finally:
+        _sunup_delivery_lock.release()
+
+
+def sunup_delivery_loop():
+    while True:
+        _sunup_wake.wait(1)
+        _sunup_wake.clear()
+        try:
+            drain_sunup()
+        except Exception:
+            app.logger.error('Sunup queue unavailable; retrying')
 
 
 def drain_pending():
@@ -413,6 +493,7 @@ def delivery_loop():
 # and drive the same drain function deterministically, without background I/O.
 if os.environ.get('WEB_PUSH_QUEUE') == '1':
     threading.Thread(target=delivery_loop, daemon=True, name='web-push-delivery').start()
+    threading.Thread(target=sunup_delivery_loop, daemon=True, name='sunup-delivery').start()
 
 
 @app.post('/api/push/test')
@@ -427,6 +508,8 @@ def test_push():
         return jsonify(error='Registration expired; enable notifications again'), 404
     if not _allowed(hashlib.sha256(key.encode()).hexdigest(), 2, 'webpush-test'):
         return jsonify(error='Wait a minute before testing again'), 429
+    if not _request_network_slots.acquire(blocking=False):
+        return jsonify(error='Push service busy; retry later'), 503
     try:
         send(validate_subscription(json.loads(row[0])), {'test': True, 'room_id': '', 'event_id': ''})
     except WebPushException as error:
@@ -435,4 +518,6 @@ def test_push():
         return jsonify(error='Push provider refused delivery; try enabling notifications again'), 503
     except Exception:
         return jsonify(error='Push delivery failed; try again later'), 503
+    finally:
+        _request_network_slots.release()
     return jsonify(ok=True)

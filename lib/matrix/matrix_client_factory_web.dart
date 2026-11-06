@@ -18,7 +18,6 @@ Future<Client> createMatrixClient() async => RtcMatrixClient(
     deltiecordSpaceRolesEventType,
     'net.deltiecord.space.policy',
   },
-  shareKeysWith: ShareKeysWith.all,
 );
 
 Future<Directory> getDeltiecordDataDirectory() =>

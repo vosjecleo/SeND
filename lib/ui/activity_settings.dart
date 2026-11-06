@@ -250,6 +250,64 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
                     }
                   },
           ),
+        Wrap(
+          spacing: 8,
+          children: [
+            if (backend.supportsActivityDetection)
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add program'),
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        final result = await FilePicker.pickFiles(
+                          dialogTitle: 'Choose a program executable',
+                        );
+                        final file = result?.files.single;
+                        if (mounted && file?.path != null) {
+                          await edit(file!.path!, file.name);
+                        }
+                      },
+              ),
+            TextButton.icon(
+              icon: const Icon(Icons.music_note),
+              label: Text(
+                settings.lastFmUser.isEmpty
+                    ? 'Connect Last.fm'
+                    : 'Reconnect Last.fm (${settings.lastFmUser})',
+              ),
+              onPressed: _saving ? null : lastFm,
+            ),
+            if (settings.lastFmUser.isNotEmpty)
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => save(
+                        settings.copyWith(lastFmUser: '', lastFmKey: ''),
+                      ),
+                child: const Text('Disconnect Last.fm'),
+              ),
+            TextButton.icon(
+              icon: const Icon(Icons.music_note),
+              label: Text(
+                settings.libreFmUser.isEmpty
+                    ? 'Link Libre.fm'
+                    : 'Change Libre.fm (${settings.libreFmUser})',
+              ),
+              onPressed: _saving ? null : libreFm,
+            ),
+            if (settings.libreFmUser.isNotEmpty)
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => save(
+                        settings.copyWith(libreFmUser: '', useLibreFm: false),
+                      ),
+                child: const Text('Unlink Libre.fm'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
         if (backend.supportsActivityDetection)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -318,63 +376,6 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
                     },
             ),
           ),
-        Wrap(
-          spacing: 8,
-          children: [
-            if (backend.supportsActivityDetection)
-              TextButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Add program'),
-                onPressed: _saving
-                    ? null
-                    : () async {
-                        final result = await FilePicker.pickFiles(
-                          dialogTitle: 'Choose a program executable',
-                        );
-                        final file = result?.files.single;
-                        if (mounted && file?.path != null) {
-                          await edit(file!.path!, file.name);
-                        }
-                      },
-              ),
-            TextButton.icon(
-              icon: const Icon(Icons.music_note),
-              label: Text(
-                settings.lastFmUser.isEmpty
-                    ? 'Connect Last.fm'
-                    : 'Reconnect Last.fm (${settings.lastFmUser})',
-              ),
-              onPressed: _saving ? null : lastFm,
-            ),
-            if (settings.lastFmUser.isNotEmpty)
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => save(
-                        settings.copyWith(lastFmUser: '', lastFmKey: ''),
-                      ),
-                child: const Text('Disconnect Last.fm'),
-              ),
-            TextButton.icon(
-              icon: const Icon(Icons.music_note),
-              label: Text(
-                settings.libreFmUser.isEmpty
-                    ? 'Link Libre.fm'
-                    : 'Change Libre.fm (${settings.libreFmUser})',
-              ),
-              onPressed: _saving ? null : libreFm,
-            ),
-            if (settings.libreFmUser.isNotEmpty)
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => save(
-                        settings.copyWith(libreFmUser: '', useLibreFm: false),
-                      ),
-                child: const Text('Unlink Libre.fm'),
-              ),
-          ],
-        ),
         const Divider(),
       ],
     );

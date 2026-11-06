@@ -171,17 +171,52 @@ class _FirstRunTourDialogState extends State<FirstRunTourDialog> {
         ),
       ),
       if (kIsWeb)
-        const _TourPage(
+        _TourPage(
           icon: Icons.install_mobile,
           title: 'Install SeND on your Home Screen',
           body:
               'Browser storage can be cleared, taking your session and encryption keys with it. Keep your recovery key safe.',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'On iPhone and iPad, open SeND from your Home Screen to enable notifications.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () async {
+                  try {
+                    await widget.backend.enableWebNotifications();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Browser notifications enabled.'),
+                        ),
+                      );
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Could not enable notifications. Check browser permissions and try again.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Enable browser notifications'),
+              ),
+            ],
+          ),
         ),
       _TourPage(
         icon: Icons.search,
         title: 'Choose local search storage',
         body: '',
-        child: HistoryIndexSettings(backend: widget.backend),
+        child: HistoryIndexSettings(backend: widget.backend, compact: true),
       ),
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _TourPage(

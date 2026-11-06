@@ -59,9 +59,6 @@ Future<Client> createMatrixClient() async {
       deltiecordSpaceRolesEventType,
       'net.deltiecord.space.policy',
     },
-    // SeND warns about verification separately. Excluding an unverified
-    // device here would create ciphertext its owner cannot decrypt.
-    shareKeysWith: ShareKeysWith.all,
   );
 }
 

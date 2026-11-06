@@ -4,6 +4,8 @@ import os
 import pathlib
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -27,6 +29,8 @@ class WebPushTests(unittest.TestCase):
                                  'content': {'body': 'secret plaintext'},
                                  'devices': [{'app_id': 'net.deltie.deltiecord', 'pushkey': endpoint}]}})
             self.assertEqual(response.status_code, 200)
+            opener.assert_not_called()
+            gateway.drain_sunup()
             req = opener.return_value.open.call_args.args[0]
             self.assertEqual(req.full_url, endpoint)
             self.assertEqual(json.loads(req.data), {'notification': {
@@ -45,7 +49,82 @@ class WebPushTests(unittest.TestCase):
                 'notification': {'room_id': '!r', 'event_id': '$e', 'devices': [{
                     'app_id': 'net.deltie.deltiecord',
                     'pushkey': 'https://updates.push.services.mozilla.com/wpush/v2/x'}]}})
-            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.status_code, 200)  # Durable ACK, not delivery.
+            gateway.drain_sunup()
+            with gateway.database() as db:
+                self.assertEqual(db.execute('SELECT attempts FROM sunup_pending').fetchone()[0], 1)
+
+    def test_sunup_blocked_providers_do_not_occupy_request_threads(self):
+        entered = threading.Event()
+        release = threading.Event()
+        def blocked(*args):
+            entered.set()
+            release.wait(3)
+            return True
+        with mock.patch.object(gateway, 'forward_sunup', side_effect=blocked):
+            for index in range(4):
+                response = self.client.post('/_matrix/push/v1/notify', json={'notification': {
+                    'room_id': '!room:test', 'event_id': '$e', 'devices': [{
+                        'app_id': 'net.deltie.deltiecord', 'pushkey':
+                        f'https://updates.push.services.mozilla.com/wpush/v2/{index}'}]}})
+                self.assertEqual(response.status_code, 200)
+            worker = threading.Thread(target=gateway.drain_sunup)
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                start = time.monotonic()
+                with mock.patch.object(gateway, 'public_key', return_value='synthetic-public-key'):
+                    response = self.client.get('/api/push/config')
+                self.assertLess(time.monotonic() - start, 0.5)
+                self.assertEqual(response.status_code, 200)
+                gateway.drain_sunup()  # A second consumer cannot duplicate work.
+            finally:
+                release.set()
+                worker.join(3)
+            self.assertFalse(worker.is_alive())
+
+    def test_sunup_queue_is_bounded_and_expired_endpoints_are_rejected(self):
+        endpoint = 'https://updates.push.services.mozilla.com/wpush/v2/gone'
+        def notify(room):
+            return self.client.post('/_matrix/push/v1/notify', json={'notification': {
+                'room_id': room, 'event_id': '$e', 'devices': [{
+                    'app_id': 'net.deltie.deltiecord', 'pushkey': endpoint}]}})
+        with gateway.database() as db:
+            db.executemany('INSERT INTO sunup_pending VALUES (?,?,?,?,?,0,0)', [
+                (f'https://updates.push.services.mozilla.com/wpush/v2/{n}', '!r', '$e',
+                 'other', time.time() + 60) for n in range(4096)])
+        self.assertEqual(notify('!new').status_code, 503)
+        with gateway.database() as db:
+            db.execute('DELETE FROM sunup_pending')
+        self.assertEqual(notify('!gone').status_code, 200)
+        with mock.patch.object(gateway, 'forward_sunup', return_value=False):
+            gateway.drain_sunup()
+        self.assertEqual(notify('!gone').json['rejected'], [endpoint])
+
+    def test_sunup_source_quota_and_latest_event_survive_inflight_delivery(self):
+        endpoint = 'https://updates.push.services.mozilla.com/wpush/v2/latest'
+        def notify(event):
+            return self.client.post('/_matrix/push/v1/notify', json={'notification': {
+                'room_id': '!room', 'event_id': event, 'devices': [{
+                    'app_id': 'net.deltie.deltiecord', 'pushkey': endpoint}]}})
+        self.assertEqual(notify('$old').status_code, 200)
+        def newer(*args):
+            self.assertEqual(notify('$new').status_code, 200)
+            return True
+        with mock.patch.object(gateway, 'forward_sunup', side_effect=newer):
+            gateway.drain_sunup()
+        with gateway.database() as db:
+            self.assertEqual(db.execute('SELECT event FROM sunup_pending').fetchone()[0], '$new')
+            source = db.execute('SELECT source FROM sunup_pending').fetchone()[0]
+            db.executemany('INSERT INTO sunup_pending VALUES (?,?,?,?,?,0,0)', [
+                (f'https://updates.push.services.mozilla.com/wpush/v2/{n}', '!room', '$e',
+                 source, time.time() + 60) for n in range(255)])
+        # Existing work coalesces at capacity, but new endpoint work is refused.
+        self.assertEqual(notify('$newer').status_code, 200)
+        response = self.client.post('/_matrix/push/v1/notify', json={'notification': {
+            'room_id': '!room', 'event_id': '$e', 'devices': [{
+                'app_id': 'net.deltie.deltiecord', 'pushkey': endpoint + 'extra'}]}})
+        self.assertEqual(response.status_code, 503)
 
     def test_declarative_payload_has_private_fallback_and_safe_navigation(self):
         from urllib.parse import urlsplit, parse_qs

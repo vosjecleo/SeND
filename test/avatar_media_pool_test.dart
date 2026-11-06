@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:crypto/crypto.dart';
 
 import 'package:deltiecord/services/avatar_media_pool.dart';
@@ -20,6 +21,78 @@ void main() {
       await cacheDirectory.delete(recursive: true);
     }
   });
+  test(
+    'background originals are serial and coalesced while thumbnails remain free',
+    () async {
+      final pool = AvatarMediaPool(directory: cacheDirectory);
+      final first = Completer<Uint8List?>();
+      var active = 0, maximum = 0, starts = 0;
+      final a = Uri.parse('mxc://example.org/one');
+      final b = Uri.parse('mxc://example.org/two');
+      Future<Uint8List?> loadFirst() async {
+        starts++;
+        active++;
+        maximum = active;
+        final result = await first.future;
+        active--;
+        return result;
+      }
+
+      final one = pool.queueOriginal(a, 512, loadFirst);
+      final same = pool.queueOriginal(a, 512, loadFirst);
+      final two = pool.queueOriginal(b, 512, () async {
+        starts++;
+        active++;
+        if (active > maximum) maximum = active;
+        active--;
+        return Uint8List.fromList([2]);
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(starts, 1);
+      expect(
+        await pool.load(
+          Uri.parse('mxc://example.org/thumbnail'),
+          128,
+          () async => Uint8List.fromList([3]),
+        ),
+        [3],
+      );
+      first.complete(Uint8List.fromList([1]));
+      expect(await one, [1]);
+      expect(await same, [1]);
+      expect(await two, [2]);
+      expect(starts, 2);
+      expect(maximum, 1);
+      await pool.clear();
+    },
+  );
+  test(
+    'clearing invalidates an active original and cancels queued original work',
+    () async {
+      final pool = AvatarMediaPool(directory: cacheDirectory);
+      final pending = Completer<Uint8List?>();
+      final first = pool.queueOriginal(
+        Uri.parse('mxc://example.org/one'),
+        512,
+        () => pending.future,
+      );
+      var secondStarted = false;
+      final second = pool.queueOriginal(
+        Uri.parse('mxc://example.org/two'),
+        512,
+        () async {
+          secondStarted = true;
+          return Uint8List.fromList([2]);
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+      await pool.clear(disk: false);
+      pending.complete(Uint8List.fromList([1]));
+      expect(await first, isNull);
+      expect(await second, isNull);
+      expect(secondStarted, false);
+    },
+  );
 
   test('coalesces concurrent requests for one MXC thumbnail', () async {
     final pool = AvatarMediaPool(directory: cacheDirectory);

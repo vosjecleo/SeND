@@ -68,7 +68,6 @@ Future<void> main() async {
               'SeND RTC temporary test',
               database: database,
               logLevel: Level.error,
-              shareKeysWith: ShareKeysWith.all,
               importantStateEvents: {rtcCallMemberType},
             )
             ..homeserver = Uri.parse('https://matrix.deltie.net')

@@ -35,6 +35,18 @@ Future<void> enterComposer(WidgetTester tester, String text) async {
   await tester.pump();
 }
 
+Future<void> openSettingsSection(WidgetTester tester, String label) async {
+  await tester.enterText(find.byKey(const ValueKey('settings-search')), label);
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.descendant(
+      of: find.byKey(const ValueKey('settings-navigation-list')),
+      matching: find.text(label),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> revealMessageActions(WidgetTester tester, Finder message) async {
   final mouse = await tester.createGesture(
     buttons: kSecondaryButton,

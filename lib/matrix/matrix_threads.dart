@@ -304,6 +304,10 @@ class _MatrixThreadSession extends ThreadSession {
     }
   }
 
+  void _replyPreviewChanged() {
+    if (_active) notifyListeners();
+  }
+
   void _persistSnapshot() {
     final timeline = _timeline;
     if (!_active || timeline == null) return;

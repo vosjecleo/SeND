@@ -10,6 +10,17 @@ import 'rtc_room_membership.dart';
 typedef RtcMediaKeyReceiver =
     Future<void> Function(RtcMember member, Uint8List key, int index);
 
+List<DeviceKeys> rtcMediaKeyRecipients(
+  Room room,
+  Iterable<RtcMember> members,
+) => [
+  for (final member in members)
+    if (rtcUserStillJoined(room, member.userId))
+      if (room.client.userDeviceKeys[member.userId]?.deviceKeys[member.deviceId]
+          case final device?)
+        if (device.encryptToDevice) device,
+];
+
 /// Matrix owns membership and Olm key distribution. LiveKit never receives
 /// media keys. This compatibility publisher uses current Element Call's
 /// state format on homeservers without MSC4354 sticky-event support.
@@ -65,6 +76,12 @@ class RtcMembershipSession {
   String _membersFingerprint = '';
   Uint8List? _outbound;
   int _keyIndex = -1;
+  DateTime _lastKeyShare = DateTime(1970);
+  bool get hasUnverifiedDevices => members.any((member) {
+    final device =
+        client.userDeviceKeys[member.userId]?.deviceKeys[member.deviceId];
+    return device != null && !device.encryptToDevice;
+  });
   final _pendingKeys = <ToDeviceEvent>[];
 
   RtcMember get ownMember => RtcMember(
@@ -279,6 +296,11 @@ class RtcMembershipSession {
               (m) => [
                 m.deviceIdentity,
                 m.memberId,
+                client
+                        .userDeviceKeys[m.userId]
+                        ?.deviceKeys[m.deviceId]
+                        ?.encryptToDevice ??
+                    false,
                 m.createdAt.millisecondsSinceEpoch,
                 m.transports.map((t) => t.toJson()).toList(),
               ],
@@ -290,6 +312,24 @@ class RtcMembershipSession {
         await _rotateKey(next);
         _membersFingerprint = fingerprint;
         if (!_closed) onMembersChanged(List.unmodifiable(next));
+      } else if (next.isNotEmpty &&
+          _outbound != null &&
+          _clock().difference(_lastKeyShare) >= const Duration(seconds: 20)) {
+        // A successful to-device send isn't proof that a joining/resuming peer
+        // received it. Re-send the current epoch, without changing the wire
+        // format or weakening device trust, so one lost exchange can recover.
+        await client
+            .updateUserDeviceKeys(
+              additionalUsers: next.map((m) => m.userId).toSet(),
+            )
+            .timeout(const Duration(seconds: 15));
+        if (!_closed) {
+          await _shareKey(
+            rtcMediaKeyRecipients(room, next),
+            _outbound!,
+            _keyIndex,
+          );
+        }
       }
       await _receiveKeys();
       await pauseMedia(!_leaseHealthy);
@@ -381,30 +421,10 @@ class RtcMembershipSession {
             additionalUsers: recipients.map((m) => m.userId).toSet(),
           )
           .timeout(const Duration(seconds: 15));
-      final devices = <DeviceKeys>[];
-      for (final member in recipients) {
-        if (!rtcUserStillJoined(room, member.userId)) continue;
-        final device =
-            client.userDeviceKeys[member.userId]?.deviceKeys[member.deviceId];
-        if (device == null || device.blocked) continue;
-        devices.add(device);
-      }
+      // sendToDeviceEncrypted does not apply the Megolm recipient policy.
+      final devices = rtcMediaKeyRecipients(room, recipients);
       if (devices.isNotEmpty) {
-        await client
-            .sendToDeviceEncrypted(devices, rtcEncryptionKeyType, {
-              'room_id': room.id,
-              'member_id': memberId,
-              'member': {'id': memberId, 'claimed_device_id': client.deviceID},
-              'media_key': {
-                'index': index,
-                'key': base64Encode(key).replaceAll('=', ''),
-              },
-              'keys': {
-                'index': index,
-                'key': base64Encode(key).replaceAll('=', ''),
-              },
-            })
-            .timeout(const Duration(seconds: 15));
+        await _shareKey(devices, key, index);
       }
       // Give recipients time to install the key before switching encryption.
       await Future<void>.delayed(const Duration(seconds: 1));
@@ -418,6 +438,25 @@ class RtcMembershipSession {
     _outbound = key;
     _keyIndex = index;
     await pauseMedia(!_leaseHealthy);
+  }
+
+  Future<void> _shareKey(
+    List<DeviceKeys> devices,
+    Uint8List key,
+    int index,
+  ) async {
+    if (_closed || devices.isEmpty) return;
+    final encoded = base64Encode(key).replaceAll('=', '');
+    await client
+        .sendToDeviceEncrypted(devices, rtcEncryptionKeyType, {
+          'room_id': room.id,
+          'member_id': memberId,
+          'member': {'id': memberId, 'claimed_device_id': client.deviceID},
+          'media_key': {'index': index, 'key': encoded},
+          'keys': {'index': index, 'key': encoded},
+        })
+        .timeout(const Duration(seconds: 15));
+    _lastKeyShare = _clock();
   }
 
   Future<void> _receiveKeys() async {
@@ -438,11 +477,11 @@ class RtcMembershipSession {
           )
           .firstOrNull;
       if (member == null) continue;
-      _pendingKeys.remove(event);
       final device =
           client.userDeviceKeys[member.userId]?.deviceKeys[member.deviceId];
-      if (device == null ||
-          device.blocked ||
+      if (device == null) continue; // Keep it until the device query completes.
+      _pendingKeys.remove(event);
+      if (device.blocked ||
           event.encryptedContent?['sender_key'] != device.curve25519Key) {
         continue;
       }

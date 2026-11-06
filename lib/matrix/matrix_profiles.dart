@@ -442,17 +442,14 @@ extension _MatrixProfiles on MatrixBackend {
         cacheKey,
         max(width, height),
         () async {
-          final response = await _matrix
-              .getContentThumbnail(
-                uri.host,
-                uri.pathSegments.join('/'),
-                width,
-                height,
-                method: Method.scale,
-                animated: false,
-              )
-              .timeout(const Duration(seconds: 4));
-          return response.data;
+          return BoundedMatrixMedia.image(
+            _matrix,
+            uri,
+            width: width,
+            height: height,
+            crop: false,
+            animated: false,
+          ).timeout(const Duration(seconds: 4));
         },
       );
       if (preview != null && preview.isNotEmpty) publish(preview);
@@ -460,7 +457,11 @@ extension _MatrixProfiles on MatrixBackend {
       // An unavailable still preview must not prevent the original loading.
     }
     try {
-      final bytes = await original();
+      final bytes = await _avatarMediaPool.queueOriginal(
+        uri,
+        width == 128 && height == 128 ? AvatarMediaPool.profileDimension : 4096,
+        original,
+      );
       if (bytes != null && bytes.length <= 8 * 1024 * 1024) publish(bytes);
     } catch (_) {
       // Keep the still preview if the animated original is unavailable.
@@ -692,6 +693,7 @@ extension _MatrixProfiles on MatrixBackend {
     _profileStatusMessage = profile.statusMessage;
     _profileColor = profile.profileColor;
     _ownProfileHydrated = true;
+    unawaited(_mobilePresence?.refresh());
     _configureClientPresence();
     if (firstHydration) unawaited(_refreshDesktopPresence());
     final userId = _matrix.userID;
@@ -751,59 +753,146 @@ extension _MatrixProfiles on MatrixBackend {
   Future<Uint8List?> _profileMedia(Uri? mxc, int width, int height) async {
     if (mxc == null || !mxc.isScheme('mxc')) return null;
     try {
-      final response = await _matrix.getContentThumbnail(
-        mxc.host,
-        mxc.pathSegments.join('/'),
-        width,
-        height,
-        method: Method.crop,
+      return await BoundedMatrixMedia.image(
+        _matrix,
+        mxc,
+        width: width,
+        height: height,
       );
-      return response.data;
     } catch (_) {
       return null;
     }
   }
 
-  Future<Uint8List?> _avatarMedia(Uri? mxc, int dimension) {
+  Future<Uint8List?> _avatarMedia(Uri? mxc, int dimension) async {
     if (mxc == null) return Future<Uint8List?>.value();
-    final effectiveDimension = max(dimension, AvatarMediaPool.profileDimension);
-    // Thumbnail animation is optional on Matrix homeservers. Preserve the
-    // original avatar (shared across row/profile sizes) rather than trusting a
-    // thumbnail endpoint which can silently flatten GIFs to PNGs.
-    return _avatarMediaPool.load(mxc, effectiveDimension, () async {
+    final client = _matrix;
+    final generation = _avatarMediaPool.generation;
+    bool current() =>
+        identical(client, _client) && generation == _avatarMediaPool.generation;
+    Future<Uint8List?> original() async {
+      if (!current()) return null;
       try {
-        final original = await _matrix.getContent(
-          mxc.host,
-          mxc.pathSegments.join('/'),
+        final bytes = await _avatarMediaPool.load(
+          mxc,
+          4096,
+          () => BoundedMatrixMedia.image(
+            client,
+            mxc,
+            maximumBytes: _avatarMediaPool.maximumEntryBytes,
+          ),
         );
-        if (original.data.isNotEmpty &&
-            original.data.length <= _avatarMediaPool.maximumEntryBytes) {
-          return original.data;
-        }
+        return bytes;
       } catch (_) {
-        // Preserve support for servers which only expose thumbnails.
+        /* Servers without originals may still offer thumbnails. */
       }
-      final response = await _matrix.getContentThumbnail(
-        mxc.host,
-        mxc.pathSegments.join('/'),
-        effectiveDimension,
-        effectiveDimension,
-        method: Method.crop,
-        animated: true,
+      if (!current()) return null;
+      return _avatarMediaPool.load(
+        mxc,
+        dimension,
+        () => BoundedMatrixMedia.image(
+          client,
+          mxc,
+          width: dimension,
+          height: dimension,
+        ),
       );
-      return response.data;
-    });
+    }
+
+    void upgrade() {
+      unawaited(() async {
+        // Let row callers publish their thumbnail before a fast disk upgrade.
+        await Future<void>.delayed(Duration.zero);
+        if (!current()) return;
+        try {
+          final bytes = await _avatarMediaPool.queueOriginal(
+            mxc,
+            AvatarMediaPool.profileDimension,
+            original,
+          );
+          if (bytes != null && current()) _publishAvatarOriginal(mxc, bytes);
+        } catch (_) {
+          /* Keep the already visible thumbnail. */
+        }
+      }());
+    }
+
+    final pooled =
+        _avatarMediaPool.peek(
+          mxc,
+          max(dimension, AvatarMediaPool.profileDimension),
+        ) ??
+        _avatarMediaPool.peek(mxc, dimension);
+    if (pooled != null) {
+      if (dimension <= AvatarMediaPool.rowDimension &&
+          _avatarMediaPool.peek(mxc, AvatarMediaPool.profileDimension) ==
+              null) {
+        upgrade();
+      }
+      return pooled;
+    }
+    if (dimension > AvatarMediaPool.rowDimension) return original();
+    Uint8List? preview;
+    try {
+      preview = await _avatarMediaPool.load(
+        mxc.replace(query: 'send_still=${dimension}x$dimension'),
+        dimension,
+        () => BoundedMatrixMedia.image(
+          client,
+          mxc,
+          width: dimension,
+          height: dimension,
+          crop: false,
+          animated: false,
+        ),
+      );
+    } catch (_) {
+      /* Fall back only when a small thumbnail is unavailable. */
+    }
+    if (!current()) return null;
+    if (preview == null) return original();
+    upgrade();
+    return preview;
+  }
+
+  void _publishAvatarOriginal(Uri uri, Uint8List bytes) {
+    var changed = false;
+    void publish(Map<String, Uint8List> values, String key) {
+      if (identical(values[key], bytes)) return;
+      values[key] = bytes;
+      changed = true;
+    }
+
+    for (final entry in _avatarUris.entries) {
+      if (entry.value == uri) publish(_avatarBytes, entry.key);
+    }
+    for (final entry in _senderAvatarUris.entries) {
+      if (entry.value == uri) publish(_senderAvatarBytes, entry.key);
+    }
+    for (final entry in _memberAvatarUris.entries) {
+      if (entry.value == uri) publish(_senderAvatarBytes, entry.key);
+    }
+    for (final entry in _profileCache.entries) {
+      if (entry.value.avatarUri == uri &&
+          !identical(entry.value.profile.avatarBytes, bytes)) {
+        entry.value.profile = entry.value.profile.withMedia(avatar: bytes);
+        if (entry.key == _matrix.userID) {
+          _applyOwnProfileSummary(entry.value.profile);
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      _profileRevision++;
+      _notifyBackendListeners();
+    }
   }
 
   Future<Uint8List?> _profileOriginalMedia(Uri? mxc) async {
     if (mxc == null || !mxc.isScheme('mxc')) return null;
     return _avatarMediaPool.load(mxc, 4096, () async {
       try {
-        final response = await _matrix.getContent(
-          mxc.host,
-          mxc.pathSegments.join('/'),
-        );
-        return response.data;
+        return await BoundedMatrixMedia.image(_matrix, mxc);
       } catch (_) {
         // Older media repositories may reject the authenticated original-media
         // endpoint. A large scale thumbnail still looks substantially better
@@ -999,8 +1088,18 @@ extension _MatrixProfiles on MatrixBackend {
     return _profileFieldsCapability;
   }
 
-  Future<void> _startDirectChat(String userId) async {
-    final roomId = await _matrix.startDirectChat(userId);
+  Future<void> _startDirectChat(String userId, {bool? encrypted}) async {
+    final existing = _matrix.getRoomById(
+      _matrix.getDirectChatFromUserId(userId) ?? '',
+    );
+    final roomId = await _matrix.startDirectChat(
+      userId,
+      enableEncryption: encrypted,
+      skipExistingChat:
+          encrypted != null &&
+          existing != null &&
+          existing.encrypted != encrypted,
+    );
     _selectSpace(null);
     await _selectRoom(roomId);
   }

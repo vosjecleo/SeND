@@ -1,20 +1,76 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'dart:convert';
 import '../backend/chat_backend.dart';
 import '../services/spoiler_reveals.dart';
 import 'deltiecord_theme.dart';
+import 'lifecycle_memory_image.dart';
+import 'timeline_media_geometry.dart';
 
 import '../models/chat_models.dart';
 
-/// Finds adjacent image/video messages which can be presented as
-/// one visual attachment group. The stable event IDs remain untouched so
-/// receipts, replies, deletion and permalink navigation keep their semantics.
+/// Groups explicit upload batches; adjacency is only a legacy fallback.
+/// Event IDs and server order stay intact. Only their presentation is grouped.
 class MediaAlbumIndex {
-  MediaAlbumIndex._(this.albums, this.hiddenMessageIds);
+  MediaAlbumIndex._(
+    this.albums,
+    this.hiddenMessageIds,
+    this.roomId,
+    this.segmentId,
+    this._olderVisible,
+  );
 
-  factory MediaAlbumIndex.fromNewestFirst(List<ChatMessage> messages) {
+  factory MediaAlbumIndex.fromNewestFirst(
+    List<ChatMessage> messages, {
+    String? roomId,
+    String? segmentId,
+  }) {
     final albums = <String, List<ChatMessage>>{};
     final hidden = <String>{};
+    final tagged = <(String, String, String?), List<ChatMessage>>{};
+    for (final message in messages) {
+      final gallery = message.attachment?.gallery;
+      if (gallery == null ||
+          !gallery.isValid ||
+          gallery.count <= 1 ||
+          message.senderId == null ||
+          message.failed ||
+          message.redacted ||
+          message.system ||
+          message.attachment!.sticker ||
+          !{
+            AttachmentKind.image,
+            AttachmentKind.video,
+          }.contains(message.attachment!.kind)) {
+        continue;
+      }
+      tagged
+          .putIfAbsent((
+            gallery.id,
+            message.senderId!,
+            message.threadRootId,
+          ), () => [])
+          .add(message);
+    }
+    for (final run in tagged.values) {
+      final count = run.first.attachment!.gallery!.count;
+      final indices = run.map((m) => m.attachment!.gallery!.index).toSet();
+      // Contradictory metadata must never hide distinct messages.
+      if (run.any((m) => m.attachment!.gallery!.count != count) ||
+          indices.length != run.length ||
+          run.length > count) {
+        continue;
+      }
+      final anchor = run.last; // Earliest loaded event, not newest arrival.
+      final ordered = List<ChatMessage>.of(run)
+        ..sort(
+          (a, b) => a.attachment!.gallery!.index.compareTo(
+            b.attachment!.gallery!.index,
+          ),
+        );
+      albums[anchor.id] = ordered;
+      hidden.addAll(run.where((m) => m.id != anchor.id).map((m) => m.id));
+    }
     for (var index = 0; index < messages.length;) {
       final first = messages[index];
       if (!_eligible(first)) {
@@ -48,11 +104,29 @@ class MediaAlbumIndex {
       }
       index = cursor;
     }
-    return MediaAlbumIndex._(albums, hidden);
+    final olderVisible = <String, ChatMessage?>{};
+    ChatMessage? older;
+    for (final message in messages.reversed) {
+      if (hidden.contains(message.id)) continue;
+      olderVisible[message.id] = older;
+      older = message;
+    }
+    return MediaAlbumIndex._(albums, hidden, roomId, segmentId, olderVisible);
   }
 
   final Map<String, List<ChatMessage>> albums;
   final Set<String> hiddenMessageIds;
+  final String? roomId;
+  final String? segmentId;
+  final Map<String, ChatMessage?> _olderVisible;
+  ChatMessage? olderVisibleMessage(String id) => _olderVisible[id];
+  String rowIdentity(ChatMessage message) {
+    final gallery = albums[message.id]?.first.attachment?.gallery;
+    return gallery == null
+        ? message.timelineKey
+        : 'send-gallery:${jsonEncode([roomId, segmentId, message.senderId, message.threadRootId, gallery.id])}';
+  }
+
   String visibleMessageId(String eventId) {
     if (!hiddenMessageIds.contains(eventId)) return eventId;
     for (final entry in albums.entries) {
@@ -64,6 +138,8 @@ class MediaAlbumIndex {
   static bool _eligible(ChatMessage message) {
     final attachment = message.attachment;
     if (attachment == null ||
+        attachment.gallery != null ||
+        attachment.hasGalleryMetadata ||
         message.pending ||
         message.queued ||
         message.failed ||
@@ -80,19 +156,45 @@ class MediaAlbumIndex {
   }
 }
 
-/// Discord-style three-cell album: the first item owns the left half, the next
-/// two share the right. Additional items are represented by a blurred +N tile.
+/// Stable row identities and scroll/jump aliases for explicitly tagged galleries.
+class GalleryRowKeys {
+  final _cards = <String, GlobalKey>{};
+
+  /// Alias hidden members for jumping, but mount each key only on its card.
+  void bind(MediaAlbumIndex index, Map<String, GlobalKey> rows) {
+    final previous = _cards.values.toSet();
+    rows.removeWhere((_, key) => previous.contains(key));
+    final identities = <String>{};
+    for (final entry in index.albums.entries) {
+      final members = entry.value;
+      if (members.first.attachment?.gallery == null) continue;
+      final anchor = members.firstWhere((m) => m.id == entry.key);
+      final id = index.rowIdentity(anchor);
+      identities.add(id);
+      final key = _cards.putIfAbsent(id, GlobalKey.new);
+      for (final member in members) {
+        rows[member.id] = key;
+        rows[member.timelineKey] = key;
+      }
+    }
+    _cards.removeWhere((id, _) => !identities.contains(id));
+  }
+}
+
+/// Three-cell album: one item on the left, two on the right, then a +N tile.
 class MediaAlbumGrid extends StatelessWidget {
   const MediaAlbumGrid({
     required this.messages,
     required this.itemBuilder,
     this.height = 280,
+    this.mobile = false,
     super.key,
   });
 
   final List<ChatMessage> messages;
   final Widget Function(BuildContext context, ChatMessage message) itemBuilder;
   final double height;
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) {
@@ -126,50 +228,62 @@ class MediaAlbumGrid extends StatelessWidget {
     final captions = messages
         .where((m) => m.attachment?.caption?.trim().isNotEmpty == true)
         .toList();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final message in captions)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              message.attachment!.caption!,
-              key: ValueKey('album-caption-${message.id}'),
-            ),
-          ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            height: height,
-            child: count == 1
-                ? tile(0)
-                : count == 2
-                ? Row(
-                    children: [
-                      Expanded(child: tile(0)),
-                      const SizedBox(width: 2),
-                      Expanded(child: tile(1)),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(child: tile(0)),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(child: tile(1)),
-                            const SizedBox(height: 2),
-                            Expanded(child: tile(2)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      widthFactor: 1,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: timelineMediaWidthLimit(
+            MediaQuery.sizeOf(context),
+            mobile: mobile,
           ),
         ),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final message in captions)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  message.attachment!.caption!,
+                  key: ValueKey('album-caption-${message.id}'),
+                ),
+              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: height,
+                child: count == 1
+                    ? tile(0)
+                    : count == 2
+                    ? Row(
+                        children: [
+                          Expanded(child: tile(0)),
+                          const SizedBox(width: 2),
+                          Expanded(child: tile(1)),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Expanded(child: tile(0)),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Expanded(child: tile(1)),
+                                const SizedBox(height: 2),
+                                Expanded(child: tile(2)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -181,18 +295,32 @@ class MediaAlbumTile extends StatefulWidget {
     required this.backend,
     required this.message,
     required this.onOpen,
+    this.dimPending = true,
     super.key,
   });
   final ChatBackend backend;
   final ChatMessage message;
   final VoidCallback onOpen;
+  final bool dimPending;
   @override
   State<MediaAlbumTile> createState() => _MediaAlbumTileState();
 }
 
 class _MediaAlbumTileState extends State<MediaAlbumTile> {
   Future<Uint8List>? _bytes;
+  AttachmentDraft? _sourceDraft;
   Future<Uint8List> _load() async {
+    final draft =
+        widget.backend.queuedAttachment(widget.message.id) ??
+        widget.backend.queuedAttachment(widget.message.transactionId ?? '');
+    _sourceDraft = draft;
+    if (draft != null) {
+      final bytes = draft.mimeType.startsWith('image/')
+          ? draft.bytes
+          : draft.videoThumbnail;
+      if (bytes != null && bytes.isNotEmpty) return bytes;
+      throw StateError('Preview is not ready.');
+    }
     try {
       return await widget.backend.downloadAttachment(
         widget.message.id,
@@ -207,15 +335,30 @@ class _MediaAlbumTileState extends State<MediaAlbumTile> {
   @override
   void didUpdateWidget(MediaAlbumTile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final draft =
+        widget.backend.queuedAttachment(widget.message.id) ??
+        widget.backend.queuedAttachment(widget.message.transactionId ?? '');
     if (oldWidget.message.id != widget.message.id ||
-        oldWidget.backend != widget.backend) {
+        oldWidget.backend != widget.backend ||
+        !identical(_sourceDraft?.bytes, draft?.bytes) ||
+        !identical(_sourceDraft?.videoThumbnail, draft?.videoThumbnail) ||
+        oldWidget.message.attachment?.sourceEventId !=
+            widget.message.attachment?.sourceEventId) {
       _bytes = null;
+      _sourceDraft = draft;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final attachment = widget.message.attachment!;
+    return Opacity(
+      opacity: widget.dimPending && widget.message.pending ? .55 : 1,
+      child: _buildTile(context, attachment),
+    );
+  }
+
+  Widget _buildTile(BuildContext context, ChatAttachment attachment) {
     final reveals = SpoilerReveals.forBackend(widget.backend);
     if (attachment.spoiler && !reveals.contains(widget.message.id)) {
       return Material(
@@ -228,7 +371,7 @@ class _MediaAlbumTileState extends State<MediaAlbumTile> {
     }
     _bytes ??= _load();
     return InkWell(
-      onTap: widget.onOpen,
+      onTap: widget.message.pending ? null : widget.onOpen,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -236,14 +379,18 @@ class _MediaAlbumTileState extends State<MediaAlbumTile> {
             future: _bytes,
             builder: (context, snapshot) {
               if (snapshot.hasData) {
-                return Image.memory(
-                  snapshot.data!,
+                return LifecycleMemoryImage(
+                  bytes: snapshot.data!,
+                  decodeWidth: 840,
+                  animated: attachment.animated,
+                  autoplay:
+                      widget.backend.preferences.autoplayGifs &&
+                      !widget.backend.preferences.reducedMotion,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      const Center(child: Icon(Icons.broken_image_outlined)),
                 );
               }
               if (snapshot.hasError) {
+                if (widget.message.pending) return const SizedBox.expand();
                 return Center(
                   child: IconButton(
                     tooltip: 'Retry preview',

@@ -187,30 +187,24 @@ class CompactVoiceGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
-      final columns = (bounds.maxWidth >= 720 ? 3 : 2).clamp(
-        1,
-        itemCount > 0 ? itemCount : 1,
-      );
-      final rows = itemCount == 0 ? 1 : (itemCount / columns).ceil();
-      final height = ((bounds.maxHeight - 16 - (rows - 1) * 8) / rows).clamp(
-        60.0,
-        double.infinity,
-      );
-      return GridView.builder(
+      final columns = bounds.maxWidth >= 720 ? 3 : 2;
+      final width = ((bounds.maxWidth - 16 - (columns - 1) * 8) / columns)
+          .clamp(0.0, 360.0);
+      return SingleChildScrollView(
         key: const ValueKey('compact-voice-grid'),
         padding: const EdgeInsets.all(8),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          mainAxisExtent: height,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-        ),
-        itemCount: itemCount,
-        itemBuilder: (context, index) => Center(
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: itemBuilder(context, index),
-          ),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var index = 0; index < itemCount; index++)
+              SizedBox(
+                width: width,
+                height: width * 9 / 16,
+                child: itemBuilder(context, index),
+              ),
+          ],
         ),
       );
     },

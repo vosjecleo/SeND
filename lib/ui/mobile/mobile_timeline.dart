@@ -1,8 +1,11 @@
 import 'dart:async';
+import '../reply_quote_text.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../activity_widgets.dart';
+import '../gif_favourite_button.dart';
 import '../emoji_typography.dart';
 import '../message_action_menu.dart';
+import '../forward_message_dialog.dart';
 import '../message_highlight.dart';
 import '../read_only_conversation.dart';
 import '../../services/raw_image.dart';
@@ -47,8 +50,11 @@ import '../advanced_chat_views.dart';
 import '../matrix_html_text.dart';
 import '../poll_card.dart';
 import '../typing_indicator.dart';
+import '../timeline_columns.dart';
+import '../message_spacing.dart';
 import '../room_search_panel.dart';
 import '../media_album.dart';
+import '../delete_message_group.dart';
 import '../encryption_attention_banner.dart';
 import '../message_metadata.dart';
 import '../rich_message.dart';
@@ -97,6 +103,7 @@ class MobileTimelineView extends StatefulWidget {
 }
 
 class _MobileTimelineViewState extends State<MobileTimelineView> {
+  final _galleryRowKeys = GalleryRowKeys();
   late final TextEditingController _composer;
   final _focus = FocusNode();
   final _scroll = ScrollController();
@@ -131,6 +138,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   late List<CustomEmojiTextSpan> _customEmojiSpans;
   late String _previousComposerText;
   List<MentionSuggestion> _mentionMatches = const [];
+  int _mentionSelection = 0;
   int? _mentionStart;
   StreamSubscription<void>? _sharedContentSubscription;
   void Function()? _removeBrowserPaste;
@@ -294,6 +302,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     setState(() {
       _mentionStart = match.start + (match.group(0)!.startsWith(' ') ? 1 : 0);
       _mentionMatches = matches;
+      _mentionSelection = 0;
     });
   }
 
@@ -699,7 +708,19 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
   Widget build(BuildContext context) {
     final messages = backend.timelineMessages;
     final receipts = receiptFrontiers(messages);
-    final mediaAlbums = MediaAlbumIndex.fromNewestFirst(messages);
+    final mediaAlbums = MediaAlbumIndex.fromNewestFirst(
+      messages,
+      roomId: widget.room.id,
+      segmentId: backend.timelineSegmentId,
+    );
+    _galleryRowKeys.bind(mediaAlbums, _messageKeys);
+    final galleryActiveKeys = _messageKeys.values.toSet();
+    _messageIdsByKey.removeWhere((key, _) => !galleryActiveKeys.contains(key));
+    for (final entry in mediaAlbums.albums.entries) {
+      if (entry.value.first.attachment?.gallery == null) continue;
+      final key = _messageKeys[entry.key];
+      if (key != null) _messageIdsByKey[key] = entry.key;
+    }
     final physicalPixel = 1 / MediaQuery.devicePixelRatioOf(context);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _reportTimelineAtPresent(),
@@ -733,11 +754,12 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       messages: messages,
       receiptIds: receipts,
       hiddenIds: mediaAlbums.hiddenMessageIds,
-      contentInset: 64,
+      contentInset: 58,
       child: Scaffold(
         key: const ValueKey('mobile-timeline'),
         appBar: AppBar(
           toolbarHeight: 64,
+          leadingWidth: TimelineColumns.mobileTextInset,
           leading: IconButton(
             key: const ValueKey('mobile-open-navigation'),
             onPressed: widget.onOpenNavigation,
@@ -768,6 +790,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                     children: [
                       Text(
                         widget.room.name,
+                        key: const ValueKey('conversation-header-name'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w700),
@@ -793,6 +816,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                         )
                       else
                         Text(
+                          key: const ValueKey('conversation-header-topic'),
                           widget.room.topic.isNotEmpty
                               ? widget.room.topic
                               : '${backend.selectedRoomMembers.length} members',
@@ -949,7 +973,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                         !backend.historyLoading
                   ? const Center(child: Text('No messages yet'))
                   : Stack(
-                      clipBehavior: Clip.none,
+                      clipBehavior: Clip.hardEdge,
                       children: [
                         KeyedSubtree(
                           key: _timelineViewportKey,
@@ -1012,9 +1036,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                                 )) {
                                   return const SizedBox.shrink();
                                 }
-                                final older = index + 1 < messages.length
-                                    ? messages[index + 1]
-                                    : null;
+                                final older = mediaAlbums.olderVisibleMessage(
+                                  message.id,
+                                );
                                 final grouped =
                                     !mediaAlbums.albums.containsKey(
                                       message.id,
@@ -1155,8 +1179,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                           // scaling cannot expose a seam above the composer.
                           bottom: -physicalPixel,
                           child: TypingIndicator(
-                            textInset: 62,
-                            avatarInset: 14,
+                            textInset: TimelineColumns.mobileTextInset,
+                            avatarInset: TimelineColumns.mobileAvatarInset,
+                            avatarSize: TimelineColumns.mobileAvatarSize,
                             names: backend.typingUserNames,
                           ),
                         ),
@@ -1234,6 +1259,9 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
                       setState(() => _emojiSelection = index),
                   onDismissEmojiCompletion: _clearEmojiCompletion,
                   mentionMatches: _mentionMatches,
+                  mentionSelection: _mentionSelection,
+                  onMentionSelectionChanged: (index) =>
+                      setState(() => _mentionSelection = index),
                   onMentionSelected: _acceptMention,
                 ),
               ),
@@ -1585,6 +1613,36 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     final reply = _reply;
     setState(() => _pendingSends++);
     try {
+      final reuse = gif.message ?? backend.uploadedGifForSource(gif.shareUrl);
+      if (reuse != null) {
+        try {
+          final sent = await sendSavedGifToRoom(
+            context,
+            backend,
+            GifSearchResult.saved(reuse, width: gif.width, height: gif.height),
+            roomId: roomId,
+            replyToMessageId: reply?.id,
+          );
+          if (sent &&
+              mounted &&
+              backend.selectedRoom?.id == roomId &&
+              _reply?.id == reply?.id) {
+            setState(() => _reply = null);
+            unawaited(_giphy.recordSent(gif).catchError((Object _) {}));
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not send this GIF. The original message may be unavailable.',
+                ),
+              ),
+            );
+          }
+        }
+        return;
+      }
       await backend.enqueueRoomSend(roomId, () async {
         final service = GifService();
         late Uint8List bytes;
@@ -1761,7 +1819,14 @@ double _mobileReplyHeight(BuildContext context) {
   final painter = TextPainter(
     text: TextSpan(
       text: 'Ag',
-      style: DefaultTextStyle.of(context).style.copyWith(fontSize: 12),
+      style: DefaultTextStyle.of(
+        context,
+      ).style.copyWith(fontSize: 12, height: 1.2),
+    ),
+    strutStyle: const StrutStyle(
+      fontSize: 12,
+      height: 1.2,
+      forceStrutHeight: true,
     ),
     textDirection: Directionality.of(context),
     textScaler: MediaQuery.textScalerOf(context),
@@ -1805,12 +1870,13 @@ class _MobileMessageBodyRow extends StatelessWidget {
           message.threadReplyCount == 0,
       singleEntryHeight:
           lineHeight(style.copyWith(fontWeight: FontWeight.w700)) +
-          (isUnicodeEmojiOnly(message.body)
-              ? lineHeight(
-                  colourEmojiStyle(style.copyWith(fontSize: 64, height: 1)),
-                  text: message.body,
-                )
-              : lineHeight(style.copyWith(height: 1.28))) +
+          lineHeight(
+            style.copyWith(
+              height: message.formattedBody == null
+                  ? MessageSpacing.inheritedLineHeight(context)
+                  : 1.28,
+            ),
+          ) +
           4 +
           (message.reply == null ? 0 : _mobileReplyHeight(context)),
       children: children,
@@ -1863,9 +1929,19 @@ class _RenderMessageRow extends RenderFlex {
   @override
   void performLayout() {
     super.performLayout();
-    if (!centerShortEntry ||
-        lastChild == null ||
-        lastChild!.size.height > singleEntryHeight) {
+    if (!centerShortEntry || lastChild == null) {
+      return;
+    }
+    // A normal inline emoji can add a few pixels without adding a text row.
+    if (lastChild!.size.height > singleEntryHeight + 4) {
+      // Keep tall text/emoji entries aligned with a normal first line, not
+      // the centre of the entire body. The allowance includes 2px of slack.
+      final avatar = firstChild!;
+      final data = avatar.parentData! as FlexParentData;
+      data.offset = Offset(
+        data.offset.dx,
+        max(0, (singleEntryHeight - 2 - avatar.size.height) / 2),
+      );
       return;
     }
     RenderBox? child = firstChild;
@@ -1934,6 +2010,14 @@ class _MobileMessageRow extends StatelessWidget {
       enabled: !navigationGestureActive,
       onReply: onReply,
       child: TripleTapEdit(
+        onReply:
+            !message.own &&
+                !message.pending &&
+                !message.failed &&
+                !message.redacted &&
+                !message.decryptionPending
+            ? onReply
+            : null,
         onEdit:
             message.own &&
                 !message.pending &&
@@ -1954,15 +2038,11 @@ class _MobileMessageRow extends StatelessWidget {
                 flashing: highlighted,
                 mentioned:
                     message.pingedCurrentUser ||
-                    message.hasVisualMention ||
-                    (albumMessages?.any(
-                          (m) => m.pingedCurrentUser || m.hasVisualMention,
-                        ) ??
-                        false),
+                    (albumMessages?.any((m) => m.pingedCurrentUser) ?? false),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: TimelineColumns.mobileAvatarInset,
                   vertical: 2,
                 ),
                 child: _MobileMessageBodyRow(
@@ -2012,6 +2092,9 @@ class _MobileMessageRow extends StatelessWidget {
                                   child: Row(
                                     children: [
                                       CustomPaint(
+                                        key: ValueKey(
+                                          'mobile-reply-connector-${message.id}',
+                                        ),
                                         size: const Size(40, 20),
                                         painter: _MobileReplyConnector(
                                           color: context.deltiecord.muted,
@@ -2019,36 +2102,10 @@ class _MobileMessageRow extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 8),
                                       Flexible(
-                                        child: Text.rich(
-                                          TextSpan(
-                                            children: [
-                                              TextSpan(
-                                                text: '${reply.sender}  ',
-                                                style: TextStyle(
-                                                  color:
-                                                      reply.senderColor == null
-                                                      ? null
-                                                      : Color(
-                                                          reply.senderColor!,
-                                                        ),
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                              TextSpan(
-                                                text: reply.body.replaceAll(
-                                                  '\n',
-                                                  ' ',
-                                                ),
-                                                style: TextStyle(
-                                                  color:
-                                                      context.deltiecord.muted,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 12),
+                                        child: ReplyQuoteText(
+                                          reply: reply,
+                                          muted: context.deltiecord.muted,
+                                          fontSize: 12,
                                         ),
                                       ),
                                     ],
@@ -2164,12 +2221,14 @@ class _MobileMessageRow extends StatelessWidget {
                                 receiptIds: receiptIds,
                                 child: MediaAlbumGrid(
                                   messages: album,
+                                  mobile: true,
                                   height: 250,
                                   itemBuilder: (context, albumMessage) =>
                                       MediaAlbumTile(
                                         key: ValueKey(albumMessage.id),
                                         backend: backend,
                                         message: albumMessage,
+                                        dimPending: !message.pending,
                                         onOpen: () => showDialog<void>(
                                           context: context,
                                           barrierColor: Colors.black,
@@ -2184,7 +2243,7 @@ class _MobileMessageRow extends StatelessWidget {
                             )
                           else if (backend.queuedAttachment(message.id)
                               case final draft?)
-                            QueuedAttachmentPreview(draft: draft)
+                            QueuedAttachmentPreview(draft: draft, mobile: true)
                           else if (message.attachment != null)
                             Padding(
                               key: ValueKey(
@@ -2272,9 +2331,11 @@ class _MobileMessageRow extends StatelessWidget {
   Future<void> _showActions(BuildContext context) async {
     final action = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: MessageActionList(
+          comfortable: true,
           message: message,
           actions: messageActionOrder(
             message,
@@ -2292,6 +2353,14 @@ class _MobileMessageRow extends StatelessWidget {
       ),
     );
     switch (action) {
+      case 'forward':
+        if (context.mounted) {
+          await showForwardMessageDialog(
+            context,
+            backend,
+            albumMessages ?? [message],
+          );
+        }
       case 'thread':
         if (context.mounted) openDiscussion(context, backend, message);
       case 'retry':
@@ -2304,24 +2373,7 @@ class _MobileMessageRow extends StatelessWidget {
         onEdit?.call();
       case 'delete':
         if (!message.own || !context.mounted) return;
-        final yes = await showDialog<bool>(
-          context: context,
-          builder: (dialog) => AlertDialog(
-            title: const Text('Delete message?'),
-            content: const Text('Delete this message for everyone?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialog, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialog, true),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        );
-        if (yes == true) await backend.redactMessage(message.id);
+        await deleteMessageGroup(context, backend, albumMessages ?? [message]);
       case 'unread':
         await backend.markMessageUnread(message.id);
       case 'copy':
@@ -2451,6 +2503,8 @@ class _MobileComposer extends StatefulWidget {
     required this.onEmojiSelectionChanged,
     required this.onDismissEmojiCompletion,
     required this.mentionMatches,
+    required this.mentionSelection,
+    required this.onMentionSelectionChanged,
     required this.onMentionSelected,
   });
   final ChatBackend backend;
@@ -2480,6 +2534,8 @@ class _MobileComposer extends StatefulWidget {
   final ValueChanged<int> onEmojiSelectionChanged;
   final VoidCallback onDismissEmojiCompletion;
   final List<MentionSuggestion> mentionMatches;
+  final int mentionSelection;
+  final ValueChanged<int> onMentionSelectionChanged;
   final ValueChanged<MentionSuggestion> onMentionSelected;
 
   @override
@@ -2577,6 +2633,24 @@ class _MobileComposerState extends State<_MobileComposer> {
       }
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         widget.onDismissEmojiCompletion();
+        return KeyEventResult.handled;
+      }
+    }
+    if (widget.mentionMatches.isNotEmpty) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+          event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        widget.onMentionSelectionChanged(
+          (widget.mentionSelection +
+                  (event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1)) %
+              widget.mentionMatches.length,
+        );
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.tab &&
+          !HardwareKeyboard.instance.isShiftPressed) {
+        widget.onMentionSelected(
+          widget.mentionMatches[widget.mentionSelection],
+        );
         return KeyEventResult.handled;
       }
     }
@@ -2734,32 +2808,36 @@ class _MobileComposerState extends State<_MobileComposer> {
               if (widget.mentionMatches.isNotEmpty)
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 210),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.mentionMatches.length,
-                    itemBuilder: (context, index) {
-                      final mention = widget.mentionMatches[index];
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.alternate_email, size: 18),
-                        title: Text(mention.displayName),
-                        subtitle: Text(mention.matrixId),
-                        onTap: () => widget.onMentionSelected(mention),
-                      );
-                    },
+                  child: Material(
+                    color: Colors.transparent,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: widget.mentionMatches.length,
+                      itemBuilder: (context, index) {
+                        final mention = widget.mentionMatches[index];
+                        return ListTile(
+                          selected: index == widget.mentionSelection,
+                          dense: true,
+                          leading: const Icon(Icons.alternate_email, size: 18),
+                          title: Text(mention.displayName),
+                          subtitle: Text(mention.matrixId),
+                          onTap: () => widget.onMentionSelected(mention),
+                        );
+                      },
+                    ),
                   ),
                 ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
-                    onPressed: widget.onAdd,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 48,
-                      height: 48,
+                  SizedBox(
+                    width: 44,
+                    height: 48,
+                    child: IconButton(
+                      onPressed: widget.onAdd,
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.add_circle_outline),
                     ),
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.add_circle_outline),
                   ),
                   Expanded(
                     child: ConstrainedBox(
@@ -2769,7 +2847,7 @@ class _MobileComposerState extends State<_MobileComposer> {
                       ),
                       child: Padding(
                         key: const ValueKey('mobile-composer-field-surface'),
-                        padding: const EdgeInsets.fromLTRB(4, 12, 2, 12),
+                        padding: const EdgeInsets.fromLTRB(2, 12, 2, 12),
                         child: Focus(
                           onKeyEvent: _handleKey,
                           child: TextField(
@@ -2806,8 +2884,9 @@ class _MobileComposerState extends State<_MobileComposer> {
                               border: InputBorder.none,
                               filled: false,
                               // EditableText keeps a four-pixel caret inset of
-                              // its own. 6 + 48 + 4 + that caret inset lands on
-                              // the 62px text column used by timeline messages.
+                              // its own. 6 + 44 + 2 + that caret inset lands on
+                              // the 56px text column used by timeline messages
+                              // and channel headers.
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
                             ),
