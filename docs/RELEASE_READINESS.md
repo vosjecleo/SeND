@@ -91,6 +91,33 @@ packaging/publication stage. Release automation verifies checksums before mirror
 and PWA updates. Test screenshots demonstrate UI, not physical iOS/Android
 behavior, end-to-end push delivery or two-client audio quality.
 
+## Recorded release: 0.9.42+138
+
+Published to Latest on 2026-11-06 from `a74f07e`, tag `v0.9.42-b138`.
+Circular status faces are slightly smaller within unchanged avatar cutouts.
+The offline ring and phone indicator are retained. Reply avatars precede the
+quoted author and text without changing their size or row height.
+
+The added reply regression was reproduced with usable quotes blocked behind
+unrelated key-backup work. Reply hydration now starts independently, coalesces
+lookups, retries transient failures within a bounded budget, reacts to matching
+key arrivals and resume/reconnect, and cancels on navigation or account changes.
+Focused native and Chromium checks passed for these cases and reply layout.
+The Web CI suite now includes the reply hydration and quote-order regressions.
+Timeline segmentation, pagination and event retention were not changed.
+
+All five required CI workflows passed for the tagged commit, followed by
+release publication and Flatpak packaging/publication. The local full preflight
+was interrupted by a laptop restart before completion; publication resumed from
+the completed, successful exact-commit CI validation, not a claimed local full
+pass. All 12 core mirror artifacts and the Flatpak binary/source pair passed
+checksum checks after deployment. The PWA reports build 138, and its final
+same-origin signed metadata matches the mirror byte-for-byte, expiring on
+2027-02-04. Stable's version fields and download lists are unchanged.
+
+No local package installation or backend-service update was performed by this
+hotfix. The separate push-worker operator step remains recorded under build 137.
+
 ## Recorded release: 0.9.42+137
 
 Published to Latest on 2026-11-06 from `f2abdeb`, tag `v0.9.42-b137`. Cleo
