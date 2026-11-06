@@ -226,6 +226,7 @@ class MatrixPlainText extends StatefulWidget {
     this.style,
     this.selectable = true,
     this.trailing,
+    this.confirmLinks = false,
     super.key,
   });
 
@@ -233,6 +234,7 @@ class MatrixPlainText extends StatefulWidget {
   final TextStyle? style;
   final bool selectable;
   final InlineSpan? trailing;
+  final bool confirmLinks;
 
   @override
   State<MatrixPlainText> createState() => _MatrixPlainTextState();
@@ -293,7 +295,12 @@ class _MatrixPlainTextState extends State<MatrixPlainText> {
       );
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
-          if (uri != null) launchUrl(uri);
+          if (uri == null) return;
+          if (widget.confirmLinks) {
+            _confirmFormattedLink(context, uri);
+          } else {
+            launchUrl(uri);
+          }
         };
       _recognizers.add(recognizer);
       spans.add(
@@ -426,6 +433,8 @@ class _MatrixHtmlTextState extends State<MatrixHtmlText> {
           platform == TargetPlatform.android || platform == TargetPlatform.iOS;
       return MatrixPlainText(
         text: widget.fallback,
+        // Keep rich-message link confirmation while matching local-echo metrics.
+        confirmLinks: true,
         selectable: widget.selectable,
         trailing: widget.trailing,
         style: mobile

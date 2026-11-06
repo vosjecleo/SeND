@@ -25,6 +25,8 @@ void main() {
             ..currentPreferences = AppPreferences(fontScale: scale);
           if (mobile) {
             await pumpMobile(tester, backend);
+            await tester.tap(find.text(room.name).hitTestable().first);
+            await tester.pumpAndSettle();
           } else {
             tester.view.physicalSize = const Size(1000, 800);
             tester.view.devicePixelRatio = 1;
