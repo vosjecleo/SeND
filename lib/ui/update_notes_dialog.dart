@@ -23,7 +23,8 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
             'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
             '• Smaller round status indicators with wider outlines\n\n'
             '• Offline ring kept; mobile phone indicator unchanged\n\n'
-            '• Reply avatars now appear before the name and quoted text',
+            '• Reply avatars now appear before the name and quoted text\n\n'
+            '• Reply previews update without sending a message or reloading',
           ),
         ),
       ),

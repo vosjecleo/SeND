@@ -7,6 +7,7 @@ part of 'matrix_backend.dart';
 /// generation established by this lifecycle.
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
+    _cancelReplyHydration();
     _sessionScope.invalidate();
     cancelQueuedSends();
     if (kIsWeb) BrowserPushPreviews.stop();
@@ -151,6 +152,7 @@ extension _MatrixSession on MatrixBackend {
         if (previousStatus != _connectionStatus) _notifyBackendListeners();
         if (_connectionStatus == ConnectionStatus.online &&
             previousStatus != ConnectionStatus.online) {
+          _retryPendingReplies();
           unawaited(_retryOfflineSends());
           unawaited(_sendDueScheduledMessages());
           if (Platform.isAndroid) unawaited(_restoreUnifiedPushPusher());
@@ -214,6 +216,7 @@ extension _MatrixSession on MatrixBackend {
     required String password,
   }) async {
     _status = SessionStatus.signingIn;
+    _cancelReplyHydration();
     _sessionScope.invalidate();
     _connectionStatus = ConnectionStatus.connecting;
     _error = null;
@@ -242,6 +245,7 @@ extension _MatrixSession on MatrixBackend {
     required String password,
   }) async {
     _status = SessionStatus.signingIn;
+    _cancelReplyHydration();
     _sessionScope.invalidate();
     _connectionStatus = ConnectionStatus.connecting;
     _error = null;
@@ -319,6 +323,7 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _logoutSession() async {
+    _cancelReplyHydration();
     _sessionScope.invalidate();
     _preferenceWriter.reset();
     _settingsEchoGuard.clear();

@@ -805,6 +805,7 @@ class MatrixBackend extends ChatBackend {
   final Map<String, DateTime> _memberAvatarRetryAfter = {};
   final Map<String, String> _decryptedPreviews = {};
   final Map<String, ReplyPreview> _replyPreviews = {};
+  final Map<Timeline, _ReplyHydrationJob> _replyHydrationJobs = {};
   final Map<String, List<LinkPreview>> _linkPreviews = {};
   final Set<String> _hydratedPollResponseIds = {};
   final LinkPreviewCache _linkPreviewUrlCache = LinkPreviewCache();
@@ -1949,6 +1950,7 @@ class MatrixBackend extends ChatBackend {
     }
     final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    if (foreground) _retryPendingReplies();
     unawaited(_mobilePresence?.refresh());
     if (foreground) unawaited(_tickHistoryGaps());
     if (!foreground && (kIsWeb || Platform.isAndroid || Platform.isIOS)) {
@@ -2951,6 +2953,7 @@ class MatrixBackend extends ChatBackend {
       _getAttachmentReference(messageId);
 
   Future<void> _closeTimeline({bool preserveSegments = false}) async {
+    _cancelReplyHydration();
     _forumRoots.clear();
     _forumCursor = null;
     _forumHasMore = true;
@@ -2988,6 +2991,7 @@ class MatrixBackend extends ChatBackend {
 
   @override
   void dispose() {
+    _cancelReplyHydration();
     _spaceFollow?.dispose();
     _timelineSegments.dispose();
     _sessionScope.dispose();

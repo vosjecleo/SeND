@@ -12,7 +12,7 @@
   <url type="homepage">https://deltie.net/SeND</url>
   <url type="bugtracker">https://github.com/VosjeCleo/SeND/issues</url>
   <releases><release version="0.9.42+138" date="2026-11-06" type="development">
-    <description><p>Smaller circular status indicators with wider avatar outlines, and reply avatars before quoted names and text.</p></description>
+    <description><p>Refined status outlines, left-aligned reply avatars and reply previews that refresh without reloading.</p></description>
   </release><release version="0.9.42+137" date="2026-11-06" type="development">
     <description><p>Message and gallery forwarding, GIF favourites, clearer server settings, mobile keyboard fixes, faster avatars and security fixes.</p></description>
   </release><release version="0.9.42+134" date="2026-10-29" type="development">

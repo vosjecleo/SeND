@@ -1,5 +1,19 @@
 part of 'matrix_backend.dart';
 
+class _ReplyHydrationJob {
+  Future<void>? running;
+  Timer? retry;
+  StreamSubscription<String>? keys;
+  final missingSessions = <String>{};
+  int retries = 0;
+  bool requested = false;
+
+  void dispose() {
+    retry?.cancel();
+    unawaited(keys?.cancel());
+  }
+}
+
 /// Decrypts timeline events and progressively hydrates optional metadata.
 ///
 /// Text is published before avatars, replies, and previews. Hydration passes
@@ -133,27 +147,108 @@ extension _MatrixTimelineSupport on MatrixBackend {
     }
   }
 
-  Future<void> _hydrateReplies(Timeline timeline) async {
+  void _cancelReplyHydration([Timeline? timeline]) {
+    if (timeline != null) {
+      _replyHydrationJobs.remove(timeline)?.dispose();
+      return;
+    }
+    for (final job in _replyHydrationJobs.values) {
+      job.dispose();
+    }
+    _replyHydrationJobs.clear();
+  }
+
+  void _retryPendingReplies() {
+    for (final timeline in _replyHydrationJobs.keys.toList()) {
+      unawaited(_hydrateReplies(timeline));
+    }
+  }
+
+  Iterable<Event> _replySources(Timeline timeline) =>
+      _timelineWindowEvents(timeline).where(
+        (event) =>
+            {
+              EventTypes.Message,
+              EventTypes.Sticker,
+              PollEventContent.startType,
+            }.contains(event.type) &&
+            event.inReplyToEventId() != null,
+      );
+
+  Future<void> _hydrateReplies(
+    Timeline timeline, {
+    bool automaticRetry = false,
+  }) {
     final lease = _sessionScope.capture();
     final client = timeline.room.client;
-    bool current() => lease.isCurrent && identical(client, _client);
+    if (!lease.isCurrent || !identical(client, _client)) {
+      return Future.value();
+    }
+    if (_replySources(timeline).isEmpty) {
+      _cancelReplyHydration(timeline);
+      return Future.value();
+    }
+    final job = _replyHydrationJobs.putIfAbsent(
+      timeline,
+      _ReplyHydrationJob.new,
+    );
+    bool current() =>
+        lease.isCurrent &&
+        identical(client, _client) &&
+        identical(_replyHydrationJobs[timeline], job);
+    job.retry?.cancel();
+    job.retry = null;
+    if (!automaticRetry) job.retries = 0;
+    if (job.running case final work?) {
+      job.requested = true;
+      return work;
+    }
+    job.keys ??= timeline.room.onSessionKeyReceived.stream.listen((session) {
+      if (current() && job.missingSessions.contains(session)) {
+        unawaited(_hydrateReplies(timeline));
+      }
+    });
+    final work = Future<void>.microtask(() async {
+      do {
+        job.requested = false;
+        job.missingSessions.clear();
+        await _hydrateRepliesPass(timeline, current, job.missingSessions.add);
+      } while (current() && job.requested);
+    });
+    job.running = work;
+    return work.whenComplete(() {
+      job.running = null;
+      if (!current()) return;
+      final pending = _replySources(
+        timeline,
+      ).any((event) => !_replyPreviews.containsKey(event.eventId));
+      if (!pending) {
+        _cancelReplyHydration(timeline);
+      } else if (job.retries < 3) {
+        // Cover startup races without polling unavailable history forever.
+        final delay = [1, 3, 10][job.retries++];
+        job.retry = Timer(Duration(seconds: delay), () {
+          if (current()) {
+            unawaited(_hydrateReplies(timeline, automaticRetry: true));
+          }
+        });
+      }
+    });
+  }
+
+  Future<void> _hydrateRepliesPass(
+    Timeline timeline,
+    bool Function() current,
+    void Function(String) missingSession,
+  ) async {
+    final client = timeline.room.client;
     final loaded = <String, Event>{
       for (final range in _timelineSegments.ranges)
         if (range.timeline.room.id == timeline.room.id)
           for (final event in range.events) event.eventId: event,
       for (final event in _timelineWindowEvents(timeline)) event.eventId: event,
     };
-    final replies = _timelineWindowEvents(timeline)
-        .where(
-          (event) =>
-              {
-                EventTypes.Message,
-                EventTypes.Sticker,
-                PollEventContent.startType,
-              }.contains(event.type) &&
-              event.inReplyToEventId() != null,
-        )
-        .toList();
+    final replies = _replySources(timeline).toList();
     final lookups = <String, Future<Event?>>{};
     Future<void> hydrate(Event event) async {
       if (!current()) return;
@@ -169,6 +264,10 @@ extension _MatrixTimelineSupport on MatrixBackend {
         );
         if (!current()) return;
         if (repliedTo == null) return;
+        final sessionId = repliedTo.content['session_id'];
+        if (repliedTo.type == EventTypes.Encrypted && sessionId is String) {
+          missingSession(sessionId);
+        }
         if (repliedTo.type == EventTypes.Encrypted &&
             client.encryption != null) {
           repliedTo = await client.encryption!.decryptRoomEvent(repliedTo);

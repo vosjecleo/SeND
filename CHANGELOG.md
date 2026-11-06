@@ -10,6 +10,11 @@ its known limitations at the time. For current issues, see [Known issues](KNOWN_
   the approved mobile phone indicator unchanged.
 - Place reply-preview avatars before the quoted sender's name and message on
   desktop and mobile. Keep their size, static rendering and reply-row height.
+- Refresh reply previews as originals become available, without requiring a
+  new message or reload. Cached quotes no longer wait for unrelated key-backup
+  work. Retry temporary lookup failures a limited number of times and refresh
+  encrypted originals when their keys arrive. Cancel pending work on navigation
+  or account changes.
 
 UI hotfix, Latest only. Stable, accounts, encryption sessions and server services
 are unchanged.

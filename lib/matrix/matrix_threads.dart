@@ -241,6 +241,7 @@ class _MatrixThreadSession extends ThreadSession {
       return;
     }
     _timeline = timeline;
+    unawaited(backend._hydrateReplies(timeline));
     backend.addListener(_backendChanged);
     // Room-wide limited-sync trimming must not discard a separately paged
     // discussion root/history. Live event and key subscriptions remain active.
@@ -485,6 +486,7 @@ class _MatrixThreadSession extends ThreadSession {
       unawaited(room.setTyping(false).catchError((Object _) {}));
     }
     backend.removeListener(_backendChanged);
+    if (_timeline case final timeline?) backend._cancelReplyHydration(timeline);
     _timeline?.cancelSubscriptions();
     _timeline = null;
     backend._threadSessions.remove(this);

@@ -541,6 +541,8 @@ extension _MatrixRoomOperations on MatrixBackend {
       // backup-backed events hydrate under the small loading strip.
       _roomMessageCache[roomId] = List.unmodifiable(_mappedMessages);
       _notifyBackendListeners();
+      // Cached quotes must not wait for unrelated historical encryption keys.
+      unawaited(_hydrateReplies(timeline));
       final backupTimer = Stopwatch()..start();
       await _loadRoomBackupKeys(room, timeline);
       keyBackupMs = backupTimer.elapsedMilliseconds;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:deltiecord/matrix/matrix_backend.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
+import 'package:matrix/encryption.dart';
 // ignore: implementation_imports
 import 'package:matrix/src/models/timeline_chunk.dart';
 import 'support/backend_browser_fixture_stub.dart'
@@ -10,16 +11,51 @@ import 'support/backend_browser_fixture_stub.dart'
 class _Database extends Fake implements MatrixSdkDatabase {
   @override
   Future<void> close() async {}
+  @override
+  Future<void> transaction(Future<void> Function() action) => action();
+}
+
+class _BackupKeys extends Fake implements KeyManager {
+  final started = Completer<void>();
+  final gate = Completer<bool>();
+  @override
+  bool get enabled => true;
+  @override
+  Future<bool> isCached() {
+    if (!started.isCompleted) started.complete();
+    return gate.future;
+  }
+}
+
+class _Encryption extends Fake implements Encryption {
+  _Encryption(this.keys);
+  final _BackupKeys keys;
+  Future<Event> Function(Event)? decrypt;
+  @override
+  KeyManager get keyManager => keys;
+  @override
+  bool get enabled => false;
+  @override
+  Future<void> dispose() async {}
+  @override
+  Future<Event> decryptRoomEvent(
+    Event event, {
+    bool store = false,
+    EventUpdateType updateType = EventUpdateType.timeline,
+  }) async => decrypt == null ? event : await decrypt!(event);
 }
 
 class _Client extends Client {
-  _Client() : super('reply-preview-tests', database: _Database());
+  _Client({this.crypto}) : super('reply-preview-tests', database: _Database());
+  final Encryption? crypto;
+  @override
+  Encryption? get encryption => crypto;
   @override
   String get userID => '@me:test';
 }
 
 class _Room extends Room {
-  _Room(Client client) : super(id: '!reply:test', client: client) {
+  _Room(Client client, {super.id = '!reply:test'}) : super(client: client) {
     for (final user in ['@friend:test', '@me:test']) {
       setState(
         Event.fromJson({
@@ -34,6 +70,9 @@ class _Room extends Room {
     }
   }
   final events = <Event>[];
+  bool encryptedForTest = false;
+  @override
+  bool get encrypted => encryptedForTest || super.encrypted;
   Future<Event?> Function(String)? lookup;
   @override
   Future<Event?> getEventById(String id) async => lookup?.call(id);
@@ -86,6 +125,197 @@ void main() {
   setUp(() {
     addTearDown(installBackendBrowserFixture());
   });
+  testWidgets('automatic reply retries are bounded and stop on disposal', (
+    tester,
+  ) async {
+    final client = _Client();
+    final room = _Room(client);
+    room.events.add(room.event(r'$reply', 'Reply', reply: r'$missing'));
+    var lookups = 0;
+    var available = false;
+    room.lookup = (_) async {
+      lookups++;
+      return available
+          ? room.event(r'$missing', 'Recovered after resume')
+          : null;
+    };
+    client.rooms = [room];
+    final backend = MatrixBackend(client: client);
+    await backend.selectRoom(room.id);
+    await tester.pump();
+    final initial = lookups;
+    expect(initial, greaterThan(0));
+    for (final seconds in [1, 3, 10]) {
+      await tester.pump(Duration(seconds: seconds));
+      await tester.pump();
+    }
+    expect(lookups, initial + 3);
+    await tester.pump(const Duration(minutes: 1));
+    expect(lookups, initial + 3);
+    available = true;
+    backend.setApplicationForeground(false);
+    backend.setApplicationForeground(true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(backend.messages.single.reply?.body, 'Recovered after resume');
+    expect(lookups, initial + 4);
+    backend.dispose();
+    await tester.pump(const Duration(minutes: 1));
+    expect(lookups, initial + 4);
+  });
+  test(
+    'transient lookup failure retries and publishes without a new message',
+    () async {
+      final client = _Client();
+      final room = _Room(client);
+      room.events.add(room.event(r'$reply', 'Reply', reply: r'$remote'));
+      var lookups = 0;
+      room.lookup = (_) async => ++lookups == 1
+          ? null
+          : room.event(r'$remote', 'Recovered without sending');
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      final published = Completer<void>();
+      backend.addListener(() {
+        if (!published.isCompleted &&
+            backend.messages.any(
+              (m) => m.reply?.body == 'Recovered without sending',
+            )) {
+          published.complete();
+        }
+      });
+      await backend.selectRoom(room.id);
+      await published.future.timeout(const Duration(seconds: 5));
+      expect(lookups, 2);
+      expect(backend.messages.length, 1);
+    },
+  );
+  test(
+    'a key for an out-of-window original refreshes the visible quote',
+    () async {
+      final crypto = _Encryption(_BackupKeys());
+      var ready = false;
+      final client = _Client(crypto: crypto);
+      final room = _Room(client);
+      room.events.add(room.event(r'$reply', 'Reply', reply: r'$remote'));
+      final encrypted = Event.fromJson({
+        ...room
+            .event(r'$remote', 'Encrypted', type: EventTypes.Encrypted)
+            .toJson(),
+        'content': {
+          'algorithm': 'm.megolm.v1.aes-sha2',
+          'session_id': 'remote-session',
+          'ciphertext': 'synthetic',
+        },
+      }, room);
+      var lookups = 0, decryptions = 0;
+      room.lookup = (_) async {
+        lookups++;
+        return encrypted;
+      };
+      crypto.decrypt = (event) async {
+        decryptions++;
+        return ready
+            ? room.event(r'$remote', 'Original after key arrival')
+            : event;
+      };
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      final published = Completer<void>();
+      backend.addListener(() {
+        if (!published.isCompleted &&
+            backend.messages.any(
+              (m) => m.reply?.body == 'Original after key arrival',
+            )) {
+          published.complete();
+        }
+      });
+      await backend.selectRoom(room.id);
+      await settleReply(() => decryptions > 0);
+      expect(backend.messages.single.reply?.senderId, isNull);
+      ready = true;
+      room.onSessionKeyReceived.add('remote-session');
+      await published.future.timeout(const Duration(milliseconds: 500));
+      expect(lookups, 1, reason: 'The encrypted original was already cached.');
+      expect(backend.messages.single.reply?.body, 'Original after key arrival');
+    },
+  );
+  test(
+    'room changes cancel retries and ignore late lookup completion',
+    () async {
+      final client = _Client();
+      final first = _Room(client);
+      final second = _Room(client, id: '!other:test');
+      final gate = Completer<Event?>();
+      first.events.add(
+        first.event(r'$old-reply', 'Old reply', reply: r'$remote'),
+      );
+      first.lookup = (_) => gate.future;
+      second.events.addAll([
+        second.event(r'$old-reply', 'Other room', reply: r'$other-original'),
+        second.event(r'$other-original', 'Other original'),
+      ]);
+      client.rooms = [first, second];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.selectRoom(first.id);
+      await backend.selectRoom(second.id);
+      await settleReply(
+        () => backend.messages.any((m) => m.reply?.body == 'Other original'),
+      );
+      var staleQuotePublished = false;
+      backend.addListener(() {
+        staleQuotePublished |= backend.messages.any(
+          (m) => m.reply?.body == 'Old original',
+        );
+      });
+      gate.complete(first.event(r'$remote', 'Old original'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(
+        backend.messages.singleWhere((m) => m.id == r'$old-reply').reply?.body,
+        'Other original',
+      );
+      expect(staleQuotePublished, isFalse);
+    },
+  );
+  test(
+    'cached reply resolves and notifies while unrelated backup work is blocked',
+    () async {
+      final keys = _BackupKeys();
+      final client = _Client(crypto: _Encryption(keys));
+      final room = _Room(client)..encryptedForTest = true;
+      room.events.addAll([
+        room.event(r'$reply', 'Reply', reply: r'$original'),
+        room.event(r'$original', 'Original already here'),
+      ]);
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      var publishedResolved = false;
+      backend.addListener(() {
+        if (backend.messages.any(
+          (m) => m.id == r'$reply' && m.reply?.body == 'Original already here',
+        )) {
+          publishedResolved = true;
+        }
+      });
+      final opening = backend.selectRoom(room.id);
+      await keys.started.future;
+      try {
+        await settleReply(() => publishedResolved);
+        expect(publishedResolved, isTrue);
+        expect(
+          backend.messages.singleWhere((m) => m.id == r'$reply').reply?.body,
+          'Original already here',
+        );
+      } finally {
+        keys.gate.complete(false);
+        await opening;
+      }
+    },
+  );
   test('replies sharing a remote target coalesce their lookup', () async {
     final client = _Client();
     final room = _Room(client);
