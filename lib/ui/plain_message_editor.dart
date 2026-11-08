@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart'
 import '../backend/chat_backend.dart';
 import '../services/custom_emoji.dart';
 import '../services/composer_editing.dart';
+import '../services/clipboard_image.dart';
 import 'composer_emoji_span.dart';
 import 'rich_message.dart';
 import 'inline_composer_preview.dart';
@@ -97,17 +98,17 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
   }
 
   Future<void> _paste() async {
-    if (!widget.enabled || await widget.onPasteImage() || !mounted) return;
-    final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
-    if (!mounted || clipboard?.text == null) return;
-    final value = _text.value;
-    final selection = value.selection;
-    final start = selection.isValid ? selection.start : value.text.length;
-    final end = selection.isValid ? selection.end : start;
-    final inserted = clipboard!.text!;
-    _text.value = TextEditingValue(
-      text: value.text.replaceRange(start, end, inserted),
-      selection: TextSelection.collapsed(offset: start + inserted.length),
+    if (!widget.enabled) return;
+    final document = widget.controller.document;
+    final roomId = widget.backend.selectedRoom?.id;
+    await pasteComposerClipboard(
+      controller: _text,
+      pasteImage: widget.onPasteImage,
+      isCurrent: () =>
+          mounted &&
+          widget.enabled &&
+          roomId == widget.backend.selectedRoom?.id &&
+          identical(widget.controller.document, document),
     );
   }
 
@@ -116,19 +117,29 @@ class _PlainMessageEditorState extends State<PlainMessageEditor> {
     EditableTextState state,
   ) => SelectionToolbar(
     anchors: state.contextMenuAnchors,
-    items: state.contextMenuButtonItems
-        .map(
-          (item) => item.type == ContextMenuButtonType.paste
-              ? ContextMenuButtonItem(
-                  type: ContextMenuButtonType.paste,
-                  onPressed: () {
-                    state.hideToolbar();
-                    _paste();
-                  },
-                )
-              : item,
-        )
-        .toList(),
+    items: [
+      ...state.contextMenuButtonItems.map(
+        (item) => item.type == ContextMenuButtonType.paste
+            ? ContextMenuButtonItem(
+                type: ContextMenuButtonType.paste,
+                onPressed: () {
+                  state.hideToolbar();
+                  _paste();
+                },
+              )
+            : item,
+      ),
+      if (!state.contextMenuButtonItems.any(
+        (item) => item.type == ContextMenuButtonType.paste,
+      ))
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.paste,
+          onPressed: () {
+            state.hideToolbar();
+            _paste();
+          },
+        ),
+    ],
   );
 
   @override

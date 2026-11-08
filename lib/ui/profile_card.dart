@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../models/chat_models.dart';
@@ -373,11 +374,10 @@ class _ProfileHeader extends StatelessWidget {
     final palette = context.deltiecord;
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The editor exports a 3:1 banner; never crop it again in a different
-        // ratio for popovers, narrow phones or the desktop sidebar.
-        final bannerHeight = constraints.maxWidth / 3;
+        // All profile surfaces, including the editor, share this geometry.
+        final bannerHeight = constraints.maxWidth / 2;
         final avatarSize = (constraints.maxWidth * .26).clamp(64.0, 124.0);
-        final presenceSize = (avatarSize * .18).clamp(14.0, 20.0);
+        final presenceSize = (avatarSize * .18).clamp(14.0, 20.0) * 1.1;
         final presenceInset =
             (avatarSize / 2 -
                     avatarSize * .3535533906 -
@@ -393,7 +393,7 @@ class _ProfileHeader extends StatelessWidget {
                 .clamp(0.0, avatarSize)
                 .toDouble();
         return SizedBox(
-          height: bannerHeight + 60,
+          height: bannerHeight + avatarSize / 2,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -440,10 +440,17 @@ class _ProfileHeader extends StatelessWidget {
                     badgeSize: presenceSize,
                     right: presenceInset,
                     bottom: presenceInset,
+                    clearance:
+                        showsMobilePresence(
+                          context,
+                          profile.userId,
+                          profile.presence,
+                        )
+                        ? 2 + presenceBadgeSize(presenceSize) * .05
+                        : 2,
                     child: Container(
                       width: avatarSize,
                       height: avatarSize,
-                      padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
                         shape:
                             Theme.of(
@@ -459,12 +466,13 @@ class _ProfileHeader extends StatelessWidget {
                                 true
                             ? BorderRadius.circular(10)
                             : null,
-                        color: palette.surface,
+                        // The existing banner/body gradient shows through;
+                        // there is no separately painted avatar bezel.
+                        color: Colors.transparent,
                       ),
                       child: ThemeAvatarClip(
                         clipBehavior: Clip.antiAlias,
-                        child: ColoredBox(
-                          color: palette.elevated,
+                        child: _ProfileAvatarBackdrop(
                           child:
                               avatarPreview ??
                               (profile.avatarBytes == null
@@ -589,6 +597,37 @@ class _ProfileHeader extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Continue the card's actual gradient behind transparent avatar pixels. The
+/// shader uses the card's coordinates, not a new gradient fitted to the circle.
+class _ProfileAvatarBackdrop extends SingleChildRenderObjectWidget {
+  const _ProfileAvatarBackdrop({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _ProfileAvatarBackdropBox();
+}
+
+class _ProfileAvatarBackdropBox extends RenderProxyBox {
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    for (RenderObject? node = parent; node != null; node = node.parent) {
+      if (node is! RenderDecoratedBox) continue;
+      final decoration = node.decoration;
+      if (decoration is! BoxDecoration || decoration.gradient == null) continue;
+      final origin = globalToLocal(node.localToGlobal(Offset.zero));
+      context.canvas.drawRect(
+        offset & size,
+        Paint()
+          ..shader = decoration.gradient!.createShader(
+            (origin & node.size).shift(offset),
+          ),
+      );
+      break;
+    }
+    super.paint(context, offset);
   }
 }
 

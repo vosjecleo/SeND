@@ -18,6 +18,24 @@ class _Client extends mx.Client {
   String get userID => '@me:test';
   final direct = <String, List<String>>{};
   int accountWrites = 0;
+  final remoteStates = <String, List<mx.MatrixEvent>>{};
+  final left = <String>[];
+  final failedLeaves = <String>{};
+  @override
+  Future<List<mx.MatrixEvent>> getRoomState(String roomId) async =>
+      remoteStates[roomId] ?? [];
+  @override
+  Future<void> leaveRoom(String roomId, {String? reason}) async {
+    if (failedLeaves.contains(roomId)) {
+      throw StateError('Synthetic leave failure');
+    }
+    left.add(roomId);
+    // Leave acknowledgement does not synchronously update child membership.
+    if (getRoomById(roomId)?.isSpace == true) {
+      getRoomById(roomId)!.membership = mx.Membership.leave;
+    }
+  }
+
   @override
   Map<String, List<String>> get directChats => direct;
   @override
@@ -87,6 +105,19 @@ class Fixture {
       });
     }
     client.rooms = [space, channel, forum, dm, group];
+    client.remoteStates[space.id] = [
+      for (final child in [channel, forum])
+        mx.MatrixEvent.fromJson({
+          'type': mx.EventTypes.SpaceChild,
+          'state_key': child.id,
+          'event_id': '\$edge-${child.id}',
+          'sender': '@me:test',
+          'origin_server_ts': 1,
+          'content': {
+            'via': ['test'],
+          },
+        }),
+    ];
     client.direct['@peer:test'] = [dm.id, channel.id, forum.id];
     client.presences['@peer:test'] = mx.CachedPresence(
       mx.PresenceType.online,
@@ -102,6 +133,30 @@ class Fixture {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'leaving a server hides acknowledged children before membership sync',
+    () async {
+      final f = Fixture();
+      addTearDown(f.close);
+      await f.backend.leaveRoom(f.space.id);
+      expect(f.client.left, [f.channel.id, f.forum.id, f.space.id]);
+      expect(f.channel.membership, mx.Membership.join);
+      expect(f.backend.rooms.map((r) => r.id).toSet(), {f.dm.id, f.group.id});
+    },
+  );
+  test(
+    'a failed child leave keeps the parent and failed channel retryable',
+    () async {
+      final f = Fixture();
+      addTearDown(f.close);
+      f.client.failedLeaves.add(f.forum.id);
+      await expectLater(f.backend.leaveRoom(f.space.id), throwsStateError);
+      expect(f.client.left, [f.channel.id]);
+      expect(f.space.membership, mx.Membership.join);
+      f.backend.selectSpace(f.space.id);
+      expect(f.backend.rooms.map((r) => r.id), contains(f.forum.id));
+    },
+  );
   test(
     'joined server rooms cannot leak into Home through stale m.direct flags',
     () {

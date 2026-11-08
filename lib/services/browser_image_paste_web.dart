@@ -17,14 +17,26 @@ void Function() listenBrowserImagePaste({
   final listener = ((web.ClipboardEvent event) {
     if (!enabled()) return;
     final originalContext = contextKey?.call();
-    final items = event.clipboardData?.items;
-    if (items == null) return;
+    final data = event.clipboardData;
+    if (data == null) return;
+    final items = data.items;
     final files = <web.File>[];
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
-      if (item.kind == 'file' && item.type.startsWith('image/')) {
+      if (item.kind == 'file' &&
+          (item.type.isEmpty || item.type.startsWith('image/'))) {
         final file = item.getAsFile();
         if (file != null) files.add(file);
+      }
+    }
+    // Safari can expose clipboard files without equivalent DataTransfer items.
+    if (files.isEmpty) {
+      for (var i = 0; i < data.files.length; i++) {
+        final file = data.files.item(i);
+        if (file != null &&
+            (file.type.isEmpty || file.type.startsWith('image/'))) {
+          files.add(file);
+        }
       }
     }
     if (files.isEmpty) return; // Text/link paste remains the editor's job.
@@ -41,12 +53,14 @@ void Function() listenBrowserImagePaste({
         final drafts = <AttachmentDraft>[];
         for (final file in files) {
           final bytes = (await file.arrayBuffer().toDart).toDart.asUint8List();
+          final mime =
+              lookupMimeType(file.name, headerBytes: bytes) ?? file.type;
+          if (!mime.startsWith('image/')) continue;
           drafts.add(
             AttachmentDraft(
               bytes: bytes,
               name: file.name.isEmpty ? 'pasted-image.png' : file.name,
-              mimeType:
-                  lookupMimeType(file.name, headerBytes: bytes) ?? file.type,
+              mimeType: mime,
               spoiler: false,
             ),
           );

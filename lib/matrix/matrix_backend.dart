@@ -775,6 +775,7 @@ class MatrixBackend extends ChatBackend {
     _onTimelineSegmentsChanged,
   );
   final _segmentDecryptSeen = <String>{};
+  final _segmentMetadataSeen = <(String, String)>{};
   bool get _historyLoading => _timelineSegments.active?.loading ?? false;
 
   bool get _timelineDatabaseExhausted =>
@@ -1650,9 +1651,18 @@ class MatrixBackend extends ChatBackend {
 
   List<Room> get _joinedRooms =>
       _client?.rooms
-          .where((room) => room.membership == Membership.join)
+          .where(
+            (room) =>
+                room.membership == Membership.join &&
+                !_pendingRoomLeaves.contains(room.id),
+          )
           .toList(growable: false) ??
       const [];
+
+  // A successful /leave can precede its sync membership update. Keep those
+  // rooms out of navigation until the SDK catches up, including when their
+  // parent space disappears from sync first.
+  final _pendingRoomLeaves = <String>{};
 
   PersonalData? _personal;
   SpaceFollowController? _spaceFollow;
@@ -2966,6 +2976,7 @@ class MatrixBackend extends ChatBackend {
     if (!preserveSegments) {
       _timelineSegments.dispose();
       _segmentDecryptSeen.clear();
+      _segmentMetadataSeen.clear();
     }
     _timeline = null;
     _timelineSegments.active = null;

@@ -436,9 +436,16 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
   }
 
   Future<bool> _pasteImage() async {
+    final roomId = widget.roomId;
+    final rootId = widget.rootId;
     try {
       final bytes = await readClipboardImage();
-      if (!mounted || bytes == null) return false;
+      if (!mounted ||
+          bytes == null ||
+          roomId != widget.roomId ||
+          rootId != widget.rootId) {
+        return false;
+      }
       final mime = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
       _queueAttachments([
         AttachmentDraft(

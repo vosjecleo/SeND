@@ -1,0 +1,135 @@
+Pending bug report: server channels appear in Home after leaving a server.
+
+Reported on desktop Linux, with screenshot supplied on 2026-11-06. After leaving
+a server, several of its channels appeared beneath the DMs in Home. Some show
+letter avatars rather than channel icons. A row can look selected while the
+main pane still says to choose a room.
+
+Expected: leaving a server must not expose its channels as ordinary Home chats.
+The promised child-room leaves must finish correctly; shared-parent handling
+must not cause rejoining or incorrect DM classification.
+
+Read-only code check: _leaveRoom already fetches current space state, collects
+joined descendants, prepares auto-join exclusions and awaits child leaves before
+leaving the parent. This is not simply an absent recursive-leave feature.
+Investigate membership/sync ordering, incomplete or legacy child relationships,
+cached Home classification and the auto-join/shared-parent path. The screenshot
+alone does not establish the exact cause.
+
+Recorded only. No implementation, account changes or release requested yet.
+
+Reopened: reply previews still showing "Reply / View original message".
+
+Reported again after the build-138 fix. The new desktop screenshot shows one
+quote resolving while another remains a placeholder in the same conversation.
+Do not close this issue based only on the existing synthetic checks. The title
+shows version 0.9.42, not the installed build number.
+
+Investigate unresolved originals outside the loaded window, original-event
+lookup/caching, permissions, session-key/backup availability and retries after
+the original becomes readable. In particular, the current code observes late
+keys and retries decryption, but initial backup restoration enumerates sessions
+from timeline events, not separately fetched reply originals. A missing key for
+an older original is a candidate cause, not established by this screenshot.
+
+Keep the 138 tests for unrelated-backup blocking, transient lookup recovery,
+key arrival, bounded retries and navigation cancellation. Add a reproduction
+for the remaining path before considering the issue fixed.
+
+Recorded only, following the current no-implementation instruction.
+
+Incoming-event refresh investigation, 2026-11-07
+
+Report: fresh incoming and own events appear to refresh derived state late;
+quotes briefly show "View original message" and active-DM read receipts lag.
+
+Two synthetic reproductions confirm quote-refresh problems in current code:
+
+- Timeline.onUpdate runs before MatrixTimelineSegments accepts the new synced
+  rows. refreshKnown deliberately excludes unknown synced rows until the sync
+  batch proves continuity. A quote hydration pass can therefore miss the new
+  reply. The later segment-change callback republishes the rows, but does not
+  always request hydration when the timeline identity stays unchanged and the
+  new events are already decrypted. The quote resolves on a subsequent event.
+- A pending lookup for an older reply holds the per-timeline reply job open.
+  New replies request another pass, but wait for that lookup to finish, even
+  when their originals are already loaded. The shared metadata hydration job
+  can add another wait behind avatars, link previews, or poll responses.
+
+Evidence: ignored .dart_tool/incoming_event_probe_test.dart, two probes passing
+while asserting the incorrect behavior. Log: .migration/incoming-event-probe.log.
+These probes use actual SDK event delivery followed by sync-batch admission;
+no application source was changed. Existing reply-hydration test fixtures do
+not forward getTimeline's onUpdate argument, so those tests miss this arrival
+ordering. The 19 existing reply/receipt/coalescing checks also pass unchanged.
+
+Build 138 did not replace events with continuous polling. Its fallback quote
+retries run after 1, 3 and 10 seconds and then stop; key arrival, reconnection
+and ordinary hydration can trigger additional attempts. Native backend listener
+notifications are synchronous; web notifications coalesce for 16 milliseconds.
+There is no intentional multi-second UI notification timer for read receipts.
+
+Receipt path: the normal session sync listener is registered before the segment
+listener. Both it and the earlier Timeline.onUpdate can attempt acknowledgement
+before the newest synced row is admitted. _onTimelineSegmentsChanged does not
+itself call _markSelectedRoomRead. This is a concrete ordering concern and a
+likely shared contributor, but actual sender/recipient/server receipt timings
+have not been measured, and are not established by the quote probes.
+
+Proposed narrow correction: trigger cheap local quote resolution and selected
+room acknowledgement after rows are admitted; let new cached quotes bypass old
+network lookups. Keep metadata refresh event-driven and heavy network/key work
+off the immediate path. Preserve segment continuity checks, anchors, historical
+windows and read/privacy guards. Do not infer read state from online presence.
+
+iOS screenshot-paste investigation, 2026-11-07
+
+Report: screenshots no longer paste into the PWA; images previously worked.
+The exact iOS version, build and paste action have been requested.
+
+Code findings: mobile's ordinary Flutter Paste action reads plain text, while
+the separate Paste image action uses super_clipboard/navigator.clipboard.read.
+The browser image listener instead relies on a real document paste event with
+file items whose MIME type starts with image/, and requires composer focus.
+The ordinary Flutter toolbar callback does not explicitly route images through
+that browser handler. The listener also has no clipboardData.files fallback
+and rejects file items without an image MIME type before inspecting their bytes.
+These are candidate failures, not a reproduced iOS root cause. Safari's gesture
+and paste-permission rules require testing the actual toolbar and screenshot
+workflow; synthetic DOM paste coverage alone does not test it.
+
+Git history: the browser image listener's last change was build 134, increasing
+the pre-edit admission budget to 256 MiB. There is no later edit to that handler
+in builds 135-138. Do not attribute this report to compression or the 64 MiB
+post-compression sending limit without evidence. No fix, build or deployment
+has been performed for either newly reported issue.
+
+Local implementation authorized on 2026-11-08
+
+- Timeline segment admission now schedules metadata resolution and selected-room
+  read acknowledgement. New cached quotes bypass an older running lookup job.
+  Unknown synced rows still wait for continuity proof; no segment merging,
+  ordering, trimming or scroll-anchor policy was weakened.
+- Reply originals outside the loaded range can request their specific missing
+  backup session in the background when a cached backup key is available. These
+  requests are deduplicated per hydration job and cancelled logically by the
+  existing session/room lifetime guards. No full backup restore or key-sharing
+  policy change was added.
+- Successful room leaves are excluded from joined-room navigation until SDK
+  membership sync catches up. This covers the reproduced parent-first-sync
+  Home leak without hiding arbitrary standalone rooms with unjoined parents.
+  Failed leaves remain retryable; the parent is not left after a child failure.
+- Composer Paste tries image clipboard access in the user gesture before text,
+  retains a Paste action even for image-only clipboard contents, and guards
+  asynchronous text insertion across room switches. Browser paste accepts a
+  file-list fallback and identifies missing-MIME screenshots by their headers.
+  Native clipboard, synthetic browser tests and actual iOS clipboard testing
+  are distinct checks; no physical iOS validation has occurred on Deltie.
+
+Regression coverage now includes SDK callback/sync admission ordering, own and
+incoming replies, receipt-only updates, cached quotes during blocked lookups,
+targeted backup-key recovery, delayed leave membership, leave failures, profile
+banner/center alignment, unchanged member badge sizing, text/image paste and
+room-switch protection. Validation results are recorded separately in task
+logs. No commit, push, package build, version bump or deployment was requested.
+Previously staged production push-gateway hardening remains a separate task.

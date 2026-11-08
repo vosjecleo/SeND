@@ -17,6 +17,53 @@ class _MobileBackend extends FakeBackend {
 }
 
 void main() {
+  testWidgets('DM indicators shrink without changing member avatars', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Row(
+          children: [
+            MobileAvatar(
+              key: Key('dm-avatar'),
+              bytes: null,
+              fallback: 'DM',
+              size: 44,
+              presence: UserPresence.online,
+              presenceScale: .85,
+            ),
+            MobileAvatar(
+              key: Key('member-avatar'),
+              bytes: null,
+              fallback: 'Member',
+              size: 36,
+              presence: UserPresence.online,
+            ),
+          ],
+        ),
+      ),
+    );
+    final dm = find.byKey(const Key('dm-avatar'));
+    final member = find.byKey(const Key('member-avatar'));
+    expect(tester.getSize(dm), const Size.square(44));
+    expect(tester.getSize(member), const Size.square(36));
+    expect(
+      tester
+          .getSize(
+            find.descendant(of: dm, matching: find.byType(PresenceBadge)),
+          )
+          .width,
+      closeTo(presenceBadgeSize(44 * .27) * .85, .0001),
+    );
+    expect(
+      tester
+          .getSize(
+            find.descendant(of: member, matching: find.byType(PresenceBadge)),
+          )
+          .width,
+      closeTo(presenceBadgeSize(36 * .27), .0001),
+    );
+  });
   test('phone cutout leaves no avatar sliver to its right', () {
     final cutout = AvatarPresenceCutout(
       badgeSize: presenceBadgeSize(98 * .27, phone: true),

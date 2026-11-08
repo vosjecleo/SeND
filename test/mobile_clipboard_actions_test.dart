@@ -121,6 +121,14 @@ void main() {
       await action(ContextMenuButtonType.paste);
       expect(controller.text, 'new text');
       expect(state.widget.focusNode.hasFocus, true);
+      clipboard = ''; // An image-only clipboard is not text-pasteable.
+      // A new long press recreates the selection overlay after paste dismissed
+      // the previous one, just as the user opens the menu for a screenshot.
+      await tester.longPress(field);
+      await tester.pumpAndSettle();
+      expect(find.text('Paste'), findsOneWidget);
+      expect(find.text('Paste image'), findsNothing);
+      state.hideToolbar();
       await tester.pumpWidget(const SizedBox());
     },
   );

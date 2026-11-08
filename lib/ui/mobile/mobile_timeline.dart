@@ -1543,13 +1543,20 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     _addAttachments(drafts);
   }
 
-  Future<void> _pasteClipboardImage() async {
+  Future<bool> _pasteClipboardImage() async {
+    final roomId = backend.selectedRoom?.id;
     final bytes = await readClipboardImage();
-    if (!mounted || bytes == null || bytes.isEmpty) return;
+    if (!mounted ||
+        roomId != backend.selectedRoom?.id ||
+        bytes == null ||
+        bytes.isEmpty) {
+      return false;
+    }
     final mimeType = lookupMimeType('', headerBytes: bytes) ?? 'image/png';
     _insertKeyboardContent(
       KeyboardInsertedContent(mimeType: mimeType, uri: '', data: bytes),
     );
+    return true;
   }
 
   Future<void> _captureMedia({required bool video}) async {
@@ -2522,7 +2529,7 @@ class _MobileComposer extends StatefulWidget {
   final ValueChanged<AttachmentDraft> onToggleAttachmentSpoiler;
   final VoidCallback onAdd;
   final VoidCallback onEmoji;
-  final VoidCallback onPasteImage;
+  final Future<bool> Function() onPasteImage;
   final VoidCallback onSend;
   final VoidCallback? onRecord;
   final VoidCallback onSchedule;
@@ -2543,6 +2550,15 @@ class _MobileComposer extends StatefulWidget {
 }
 
 class _MobileComposerState extends State<_MobileComposer> {
+  Future<void> _paste() {
+    final roomId = widget.backend.selectedRoom?.id;
+    return pasteComposerClipboard(
+      controller: widget.controller,
+      pasteImage: widget.onPasteImage,
+      isCurrent: () => mounted && roomId == widget.backend.selectedRoom?.id,
+    );
+  }
+
   bool get _canRecord =>
       widget.onRecord != null &&
       widget.attachments.isEmpty &&
@@ -2582,14 +2598,29 @@ class _MobileComposerState extends State<_MobileComposer> {
   ) => SelectionToolbar(
     anchors: state.contextMenuAnchors,
     items: [
-      ...state.contextMenuButtonItems,
-      ContextMenuButtonItem(
-        label: 'Paste image',
-        onPressed: () {
-          state.hideToolbar();
-          widget.onPasteImage();
-        },
+      ...state.contextMenuButtonItems.map(
+        (item) => item.type == ContextMenuButtonType.paste
+            ? ContextMenuButtonItem(
+                type: ContextMenuButtonType.paste,
+                onPressed: () {
+                  state.hideToolbar();
+                  unawaited(_paste());
+                },
+              )
+            : item,
       ),
+      // Flutter's clipboard status can report "no text" for an image-only
+      // screenshot. Keep the unified Paste action available in that case.
+      if (!state.contextMenuButtonItems.any(
+        (item) => item.type == ContextMenuButtonType.paste,
+      ))
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.paste,
+          onPressed: () {
+            state.hideToolbar();
+            unawaited(_paste());
+          },
+        ),
     ],
   );
 
@@ -2608,6 +2639,12 @@ class _MobileComposerState extends State<_MobileComposer> {
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyV &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      unawaited(_paste());
+      return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape && widget.editing) {
       widget.onClearContext();

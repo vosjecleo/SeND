@@ -7,7 +7,12 @@ extension _MatrixEventMapping on MatrixBackend {
     final children = space.spaceChildren
         .map((child) => _client?.getRoomById(child.roomId ?? ''))
         .whereType<Room>()
-        .where((room) => room.membership == Membership.join && !room.isSpace)
+        .where(
+          (room) =>
+              room.membership == Membership.join &&
+              !room.isSpace &&
+              !_pendingRoomLeaves.contains(room.id),
+        )
         .toList();
     final override = _spaceRoomOrderOverrides[spaceId];
     if (override != null) {

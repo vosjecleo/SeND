@@ -23,12 +23,13 @@ class AvatarPresence extends StatelessWidget {
     this.badgeKey,
     this.right = 0,
     this.bottom = 0,
+    this.clearance = 2,
     super.key,
   });
   final Widget child;
   final UserPresence presence;
   final String? userId;
-  final double badgeSize, right, bottom;
+  final double badgeSize, right, bottom, clearance;
   final Key? badgeKey;
 
   @override
@@ -46,6 +47,7 @@ class AvatarPresence extends StatelessWidget {
             badgeSize: dimension,
             right: insetRight,
             bottom: insetBottom,
+            clearance: clearance,
           ),
           child: child,
         ),
@@ -127,9 +129,10 @@ class AvatarPresenceCutout extends CustomClipper<Path> {
     required this.phone,
     this.right = 0,
     this.bottom = 0,
+    this.clearance = 2,
   });
   final bool phone;
-  final double badgeSize, right, bottom;
+  final double badgeSize, right, bottom, clearance;
   @override
   Path getClip(Size size) {
     final rect =
@@ -148,11 +151,11 @@ class AvatarPresenceCutout extends CustomClipper<Path> {
       phone
           ? (Path()..addRRect(
               RRect.fromRectAndRadius(
-                rect.inflate(2),
-                const Radius.circular(3),
+                rect.inflate(clearance),
+                Radius.circular(badgeSize * .14 + clearance),
               ),
             ))
-          : (Path()..addOval(rect.inflate(2))),
+          : (Path()..addOval(rect.inflate(clearance))),
     );
   }
 
@@ -161,7 +164,8 @@ class AvatarPresenceCutout extends CustomClipper<Path> {
       phone != oldClipper.phone ||
       badgeSize != oldClipper.badgeSize ||
       right != oldClipper.right ||
-      bottom != oldClipper.bottom;
+      bottom != oldClipper.bottom ||
+      clearance != oldClipper.clearance;
 }
 
 class PhonePresenceCutout extends AvatarPresenceCutout {

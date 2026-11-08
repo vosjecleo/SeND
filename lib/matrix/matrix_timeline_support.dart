@@ -5,6 +5,7 @@ class _ReplyHydrationJob {
   Timer? retry;
   StreamSubscription<String>? keys;
   final missingSessions = <String>{};
+  final backupRequests = <String>{};
   int retries = 0;
   bool requested = false;
 
@@ -32,6 +33,19 @@ extension _MatrixTimelineSupport on MatrixBackend {
 
   void _onTimelineSegmentsChanged() {
     final active = _timelineSegments.active;
+    var admittedMetadata = false;
+    if (active != null) {
+      for (final event in active.events) {
+        if (_segmentMetadataSeen.add((event.eventId, event.type))) {
+          admittedMetadata = true;
+        }
+      }
+      // SDK callbacks can precede segment admission. Resolve local quotes after
+      // continuity is established, without waiting for optional network work.
+      if (admittedMetadata || !identical(_timeline, active.timeline)) {
+        unawaited(_hydrateReplies(active.timeline));
+      }
+    }
     final encrypted =
         active?.events
             .where((e) => e.type == EventTypes.Encrypted)
@@ -62,8 +76,11 @@ extension _MatrixTimelineSupport on MatrixBackend {
           // existing events and their SDK decryption status on failure.
         }
       }());
+    } else if (active != null && admittedMetadata) {
+      unawaited(_hydrateCurrentTimeline(active.timeline, _timelineGeneration));
     }
     _notifyBackendListeners();
+    unawaited(_markSelectedRoomRead());
   }
 
   Future<void> _hydrateSenderAvatars(Timeline timeline) async {
@@ -175,6 +192,40 @@ extension _MatrixTimelineSupport on MatrixBackend {
             event.inReplyToEventId() != null,
       );
 
+  void _requestReplyOriginalKey(Timeline timeline, String sessionId) {
+    final job = _replyHydrationJobs[timeline];
+    final manager = timeline.room.client.encryption?.keyManager;
+    if (job == null ||
+        manager == null ||
+        !manager.enabled ||
+        !job.backupRequests.add(sessionId)) {
+      return;
+    }
+    final lease = _sessionScope.capture();
+    bool current() =>
+        lease.isCurrent && identical(_replyHydrationJobs[timeline], job);
+    unawaited(() async {
+      try {
+        if (await manager.loadInboundGroupSession(
+                  timeline.room.id,
+                  sessionId,
+                ) !=
+                null ||
+            !current() ||
+            !await manager.isCached() ||
+            !current()) {
+          return;
+        }
+        // Out-of-window originals are not enumerated by the main room backup
+        // restore. Fetch only this session, without blocking other quotes.
+        await manager.loadSingleKey(timeline.room.id, sessionId);
+        if (current()) unawaited(_hydrateReplies(timeline));
+      } catch (_) {
+        // Unavailable history must not become an endless backup polling loop.
+      }
+    }());
+  }
+
   Future<void> _hydrateReplies(
     Timeline timeline, {
     bool automaticRetry = false,
@@ -201,6 +252,12 @@ extension _MatrixTimelineSupport on MatrixBackend {
     if (!automaticRetry) job.retries = 0;
     if (job.running case final work?) {
       job.requested = true;
+      // An older original may be unavailable indefinitely. It must not hold up
+      // quotes already decrypted in retained ranges. Avoid duplicating this
+      // pass when no job is running: the normal pass handles cached rows first.
+      unawaited(
+        _hydrateRepliesPass(timeline, current, (_) {}, localOnly: true),
+      );
       return work;
     }
     job.keys ??= timeline.room.onSessionKeyReceived.stream.listen((session) {
@@ -239,8 +296,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
   Future<void> _hydrateRepliesPass(
     Timeline timeline,
     bool Function() current,
-    void Function(String) missingSession,
-  ) async {
+    void Function(String) missingSession, {
+    bool localOnly = false,
+  }) async {
     final client = timeline.room.client;
     final loaded = <String, Event>{
       for (final range in _timelineSegments.ranges)
@@ -254,6 +312,10 @@ extension _MatrixTimelineSupport on MatrixBackend {
       if (!current()) return;
       final targetId = event.inReplyToEventId()!;
       var repliedTo = loaded[targetId];
+      if (localOnly &&
+          (repliedTo == null || repliedTo.type == EventTypes.Encrypted)) {
+        return;
+      }
       if (repliedTo == null && _replyPreviews.containsKey(event.eventId)) {
         return;
       }
@@ -273,6 +335,9 @@ extension _MatrixTimelineSupport on MatrixBackend {
           repliedTo = await client.encryption!.decryptRoomEvent(repliedTo);
         }
         if (!current()) return;
+        if (repliedTo.type == EventTypes.Encrypted && sessionId is String) {
+          _requestReplyOriginalKey(timeline, sessionId);
+        }
         if (!{
           EventTypes.Message,
           EventTypes.Sticker,

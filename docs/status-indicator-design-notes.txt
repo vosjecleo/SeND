@@ -1,0 +1,64 @@
+Status/profile design review, 2026-11-06
+
+Pending design notes only. Do not implement or release these changes yet.
+
+1. Full profiles: remove the gray surface-colored backing/line around avatars.
+   The exposed edge should continue the surrounding profile gradient, using
+   the same gradient coordinates rather than a separate gradient in the circle.
+
+2. Phone status: the cutout's rounded corners do not follow the phone icon's
+   rounded corners. Use matching geometry with clearance around the icon.
+   The current icon radius scales with its size, while the cutout uses a fixed
+   radius. Preview corrected clearance corners; production remains unchanged.
+
+3. DM rows: Cleo selected 85% of the current indicator sizes shown in the
+   comparison, on desktop and mobile. Do not resize the avatars themselves.
+   Keep badges inside the avatar's imaginary square, anchored bottom-right.
+
+   Full profiles: retain current indicator sizing as the baseline, not the
+   smaller DM treatment. Cleo suggested a slightly larger 110% candidate.
+   Treat 110% as the tentative full-profile indicator size, not an avatar-size
+   change. Remove the gray outline and correct phone cutout corners as above.
+
+   On full profiles only, increase the clear space between the phone icon and
+   the avatar to match the visible clearance around the circular status badge.
+   Compare painted edges, not widget bounds. Do not apply this extra clearance
+   to DM rows or mobile member lists.
+
+4. Mobile member-list sizing already looks good to Cleo. Keep the current 36px
+   member avatar/status sizes unchanged; use them as the comparison reference.
+   Do not make a global scaling change that alters them. The requested corner
+   geometry correction can still apply without changing these sizes.
+
+5. Retain the offline ring. DM sizing is selected at 85%; full-profile sizing
+   remains current as the baseline, with 110% suggested for the next review.
+
+6. Profile layout must be consistent across full profiles, sidebar/popover
+   profiles and editor previews, on both platforms. Crop the banner to landscape
+   2:1. Its bottom edge, where the body gradient starts, must pass exactly through
+   the avatar's vertical midpoint. Use shared geometry, not a fixed extra header
+   height that changes the relationship as the avatar or view width changes.
+   The current profile header still calculates a 3:1 banner; do not preserve
+   that ratio when implementing the newly requested design.
+
+Preview baselines: desktop DM 34px avatar with an 11px badge base; mobile DM
+44px and members 36px use a 0.27 avatar-size badge base; the full-profile example
+uses a 124px avatar and 20px badge base. Existing multipliers are 1.5 for phone
+and 1.25 for round badges; circular painted faces are inset by 5% per side.
+
+Preview-only candidates also show the gradient-backed profile edge and matched
+phone-cutout corners. Current rows retain build 138 geometry and profile bezel.
+No production source, preferences, versions, builds or deployments are changed.
+
+The generated sheets are indicator-sizing studies, not complete profile-card
+layout previews. They do not yet illustrate the newly requested 2:1 banner rule.
+
+Implementation authorized on 2026-11-08. Local source now applies the selected
+85% DM-row indicators, leaves member-list sizing unchanged, and uses the 110%
+profile indicator candidate. Phone cutouts share the icon's scaled corner radius
+plus clearance. Profile phone clearance also accounts for the circular face's
+painted inset. The gray avatar bezel is removed; existing backgrounds show
+through instead of painting a separate backing. All profile card surfaces and
+banner editing now use 2:1 geometry, with the banner edge at the avatar center.
+No avatar widget dimensions, offline-ring style, or global member sizes changed.
+Preview/release approval remains separate; no version bump or deployment here.

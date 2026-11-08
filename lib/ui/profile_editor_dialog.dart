@@ -255,7 +255,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       bytes: bytes,
       title: 'Crop profile banner',
       profile: _preview,
-      aspectRatio: 3,
+      aspectRatio: 2,
       maximumWidth: 1920,
     );
     if (cropped == null || !mounted) return;

@@ -7,6 +7,7 @@ part of 'matrix_backend.dart';
 /// generation established by this lifecycle.
 extension _MatrixSession on MatrixBackend {
   Future<void> _initializeSession() async {
+    _pendingRoomLeaves.clear();
     _cancelReplyHydration();
     _sessionScope.invalidate();
     cancelQueuedSends();
@@ -61,6 +62,9 @@ extension _MatrixSession on MatrixBackend {
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
       _syncSubscription = _matrix.onSync.stream.listen((update) {
+        _pendingRoomLeaves.removeWhere(
+          (id) => _matrix.getRoomById(id)?.membership != Membership.join,
+        );
         acknowledgeQueuedTransactions([
           for (final room in update.rooms?.join?.values ?? <JoinedRoomUpdate>[])
             for (final event in room.timeline?.events ?? <MatrixEvent>[])

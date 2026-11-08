@@ -32,12 +32,14 @@ class MobileRoomAvatar extends StatelessWidget {
     this.size = 40,
     this.autoplay = false,
     this.showPresence = true,
+    this.presenceScale = 1,
     super.key,
   });
   final RoomSummary room;
   final double size;
   final bool autoplay;
   final bool showPresence;
+  final double presenceScale;
   @override
   Widget build(BuildContext context) => room.usesChannelIcon || room.isVoice
       ? SizedBox.square(
@@ -58,6 +60,7 @@ class MobileRoomAvatar extends StatelessWidget {
           userId: room.directUserId,
           size: size,
           autoplay: autoplay,
+          presenceScale: presenceScale,
         );
 }
 
@@ -72,6 +75,7 @@ class MobileAvatar extends StatelessWidget {
     this.speaking = false,
     this.square = false,
     this.autoplay = true,
+    this.presenceScale = 1,
     super.key,
   });
 
@@ -84,6 +88,7 @@ class MobileAvatar extends StatelessWidget {
   final bool speaking;
   final bool square;
   final bool autoplay;
+  final double presenceScale;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +97,10 @@ class MobileAvatar extends StatelessWidget {
       userId,
       presence ?? UserPresence.offline,
     );
-    final badgeDimension = presenceBadgeSize(size * .27, phone: phone);
+    final badgeDimension = presenceBadgeSize(
+      size * .27 * presenceScale,
+      phone: phone,
+    );
     return SizedBox.square(
       dimension: size,
       child: Stack(

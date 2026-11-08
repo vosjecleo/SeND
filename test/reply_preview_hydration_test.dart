@@ -18,6 +18,17 @@ class _Database extends Fake implements MatrixSdkDatabase {
 class _BackupKeys extends Fake implements KeyManager {
   final started = Completer<void>();
   final gate = Completer<bool>();
+  final restored = <(String, String)>[];
+  void Function()? restore;
+  @override
+  Future<Null> loadInboundGroupSession(String roomId, String sessionId) async =>
+      null;
+  @override
+  Future<void> loadSingleKey(String roomId, String sessionId) async {
+    restored.add((roomId, sessionId));
+    restore?.call();
+  }
+
   @override
   bool get enabled => true;
   @override
@@ -48,6 +59,17 @@ class _Encryption extends Fake implements Encryption {
 class _Client extends Client {
   _Client({this.crypto}) : super('reply-preview-tests', database: _Database());
   final Encryption? crypto;
+  final marked = <String>[];
+  @override
+  Future<void> setReadMarker(
+    String roomId, {
+    String? mFullyRead,
+    String? mRead,
+    String? mReadPrivate,
+  }) async {
+    if (mFullyRead != null) marked.add(mFullyRead);
+  }
+
   @override
   Encryption? get encryption => crypto;
   @override
@@ -87,6 +109,7 @@ class _Room extends Room {
     int? limit = Room.defaultHistoryCount,
   }) async => Timeline(
     room: this,
+    onUpdate: onUpdate,
     chunk: TimelineChunk(events: List.of(events)),
   );
   Event event(
@@ -125,6 +148,134 @@ void main() {
   setUp(() {
     addTearDown(installBackendBrowserFixture());
   });
+  Future<void> deliver(_Client client, _Room room, Event event) async {
+    client.onTimelineEvent.add(event);
+    // Give the pre-admission SDK callback time to finish. The sync callback
+    // must independently resolve quotes and acknowledge the newly admitted row.
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    client.onSync.add(
+      SyncUpdate(
+        nextBatch: 'arrival-test',
+        rooms: RoomsUpdate(
+          join: {
+            room.id: JoinedRoomUpdate(
+              timeline: TimelineUpdate(
+                limited: false,
+                events: [MatrixEvent.fromJson(event.toJson())],
+              ),
+            ),
+          },
+        ),
+      ),
+    );
+  }
+
+  test(
+    'new synced replies resolve and acknowledge without another event',
+    () async {
+      final client = _Client();
+      final room = _Room(client);
+      room.events.add(room.event(r'$original', 'Cached original'));
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.selectRoom(room.id);
+      backend.setConversationVisible(true);
+      backend.setConversationAtPresent(true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await deliver(
+        client,
+        room,
+        room.event(r'$new', 'New reply', reply: r'$original'),
+      );
+      await settleReply(
+        () => backend.messages.any(
+          (m) => m.id == r'$new' && m.reply?.body == 'Cached original',
+        ),
+      );
+      expect(
+        backend.messages.firstWhere((m) => m.id == r'$new').reply?.body,
+        'Cached original',
+      );
+      await settleReply(() => client.marked.contains(r'$new'));
+      expect(client.marked, contains(r'$new'));
+    },
+  );
+
+  test(
+    'a slow old original cannot block a newly arrived cached quote',
+    () async {
+      final client = _Client();
+      final room = _Room(client);
+      final gate = Completer<Event?>();
+      room.events.addAll([
+        room.event(r'$old-reply', 'Old reply', reply: r'$remote'),
+        room.event(r'$original', 'Cached original'),
+      ]);
+      room.lookup = (_) => gate.future;
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(() {
+        backend.dispose();
+        if (!gate.isCompleted) gate.complete(null);
+      });
+      await backend.selectRoom(room.id);
+      await deliver(
+        client,
+        room,
+        room.event(r'$new', 'New reply', reply: r'$original'),
+      );
+      await settleReply(
+        () => backend.messages.any(
+          (m) => m.id == r'$new' && m.reply?.body == 'Cached original',
+        ),
+      );
+      expect(gate.isCompleted, false);
+      expect(
+        backend.messages.firstWhere((m) => m.id == r'$new').reply?.body,
+        'Cached original',
+      );
+    },
+  );
+  test(
+    'own replies resolve on admission and receipt-only sync publishes readers',
+    () async {
+      final client = _Client();
+      final room = _Room(client);
+      room.events.add(room.event(r'$original', 'Cached original'));
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.selectRoom(room.id);
+      final own = Event.fromJson({
+        ...room.event(r'$own', 'Own reply', reply: r'$original').toJson(),
+        'sender': '@me:test',
+      }, room);
+      await deliver(client, room, own);
+      await settleReply(
+        () => backend.messages.any(
+          (m) => m.id == r'$own' && m.reply?.body == 'Cached original',
+        ),
+      );
+      final sent = backend.messages.firstWhere((m) => m.id == r'$own');
+      expect(sent.own, true);
+      expect(sent.reply?.body, 'Cached original');
+      expect(sent.readBy, isEmpty);
+      var published = false;
+      backend.addListener(() {
+        published = backend.messages
+            .firstWhere((m) => m.id == r'$own')
+            .readBy
+            .any((reader) => reader.userId == '@friend:test');
+      });
+      // The SDK has applied a real receipt delta; the sync contains no new rows.
+      room.receiptState.global.otherUsers['@friend:test'] =
+          LatestReceiptStateData(r'$own', 123);
+      client.onSync.add(SyncUpdate(nextBatch: 'receipt-only'));
+      await settleReply(() => published);
+      expect(published, true);
+    },
+  );
   testWidgets('automatic reply retries are bounded and stop on disposal', (
     tester,
   ) async {
@@ -240,6 +391,47 @@ void main() {
       await published.future.timeout(const Duration(milliseconds: 500));
       expect(lookups, 1, reason: 'The encrypted original was already cached.');
       expect(backend.messages.single.reply?.body, 'Original after key arrival');
+    },
+  );
+  test(
+    'out-of-window quote restores only its own missing backup session',
+    () async {
+      final keys = _BackupKeys()..gate.complete(true);
+      final crypto = _Encryption(keys);
+      var restored = false;
+      keys.restore = () => restored = true;
+      final client = _Client(crypto: crypto);
+      final room = _Room(client);
+      room.events.add(room.event(r'$reply', 'Reply', reply: r'$remote'));
+      final original = Event.fromJson({
+        'event_id': r'$remote',
+        'sender': '@friend:test',
+        'type': EventTypes.Encrypted,
+        'origin_server_ts': 1,
+        'content': {
+          'algorithm': 'm.megolm.v1.aes-sha2',
+          'session_id': 'missing-quote-session',
+          'ciphertext': 'synthetic',
+        },
+      }, room);
+      room.lookup = (_) async => original;
+      crypto.decrypt = (event) async => restored
+          ? room.event(r'$remote', 'Original recovered from backup')
+          : event;
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.selectRoom(room.id);
+      await settleReply(
+        () =>
+            backend.messages.single.reply?.body ==
+            'Original recovered from backup',
+      );
+      expect(
+        backend.messages.single.reply?.body,
+        'Original recovered from backup',
+      );
+      expect(keys.restored, [(room.id, 'missing-quote-session')]);
     },
   );
   test(

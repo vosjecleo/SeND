@@ -871,7 +871,13 @@ extension _MatrixRoomOperations on MatrixBackend {
       for (final target in toLeave) {
         if (_voice?.activeRoomId == target.id) await _leaveVoiceRoom();
         // Stop on failure. The parent remains joined so the user can retry.
-        await target.leave();
+        _pendingRoomLeaves.add(target.id);
+        try {
+          await target.leave();
+        } catch (_) {
+          _pendingRoomLeaves.remove(target.id);
+          rethrow;
+        }
         if (_selectedRoomId == target.id) {
           _selectedRoomId = null;
           await _closeTimeline();

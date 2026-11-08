@@ -924,6 +924,7 @@ class _RoomList extends StatelessWidget {
                 child: MobileRoomAvatar(
                   room: room,
                   size: 44,
+                  presenceScale: .85,
                   autoplay: backend.selectedRoom?.id == room.id,
                 ),
               ),

@@ -2427,6 +2427,7 @@ class _HomeRoomListTile extends StatelessWidget {
                         child: _RoomIcon(
                           room: room,
                           size: 34,
+                          presenceScale: .85,
                           showPresence: room.isDirect,
                           autoplay: selected || hovered,
                         ),
@@ -2516,12 +2517,14 @@ class _RoomIcon extends StatelessWidget {
     required this.size,
     this.showPresence = false,
     this.autoplay = false,
+    this.presenceScale = 1,
   });
 
   final RoomSummary room;
   final double size;
   final bool showPresence;
   final bool autoplay;
+  final double presenceScale;
 
   @override
   Widget build(BuildContext context) {
@@ -2558,7 +2561,10 @@ class _RoomIcon extends StatelessWidget {
               clipper: showPresence
                   ? AvatarPresenceCutout(
                       phone: phone,
-                      badgeSize: presenceBadgeSize(11, phone: phone),
+                      badgeSize: presenceBadgeSize(
+                        11 * presenceScale,
+                        phone: phone,
+                      ),
                     )
                   : null,
               child: ThemeAvatar(
@@ -2587,7 +2593,7 @@ class _RoomIcon extends StatelessWidget {
                 key: ValueKey('presence-${room.id}-${room.presence.name}'),
                 presence: room.presence,
                 phone: phone,
-                size: presenceBadgeSize(11, phone: phone),
+                size: presenceBadgeSize(11 * presenceScale, phone: phone),
               ),
             ),
         ],
