@@ -349,9 +349,16 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('mobile-details-panel')),
-        matching: find.byType(MobileRoomAvatar),
+        matching: find.byType(MobileAvatar),
       ),
       findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('mobile-details-panel')),
+        matching: find.byIcon(Icons.tag),
+      ),
+      findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('mobile-details-panel')).hitTestable(),
