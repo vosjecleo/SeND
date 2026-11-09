@@ -125,7 +125,7 @@ void main() {
         final avatar = tester.getSize(find.byKey(avatarKey));
         final banner = tester.getSize(find.byKey(bannerKey));
         expect(avatar.width, avatar.height);
-        expect(banner.width / banner.height, closeTo(2, .0001));
+        expect(banner.width / banner.height, closeTo(680 / 240, .0001));
         final avatarRect = tester.getRect(find.byKey(avatarKey));
         final bannerRect = tester.getRect(find.byKey(bannerKey));
         expect(avatarRect.center.dy, closeTo(bannerRect.bottom, .0001));

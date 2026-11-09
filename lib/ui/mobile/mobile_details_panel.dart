@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../activity_widgets.dart';
-import '../navigation_polish.dart';
 
 import '../../backend/chat_backend.dart';
 import '../../models/chat_models.dart';
-import 'mobile_profile_sheet.dart';
-import 'mobile_widgets.dart';
-import '../member_management.dart';
+import '../room_details_panel.dart';
 
 class MobileDetailsPanel extends StatelessWidget {
   const MobileDetailsPanel({
@@ -16,7 +11,6 @@ class MobileDetailsPanel extends StatelessWidget {
     required this.onDismiss,
     super.key,
   });
-
   final ChatBackend backend;
   final RoomSummary room;
   final VoidCallback onDismiss;
@@ -27,116 +21,6 @@ class MobileDetailsPanel extends StatelessWidget {
     onHorizontalDragEnd: (details) {
       if ((details.primaryVelocity ?? 0) > 250) onDismiss();
     },
-    child: Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: onDismiss,
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const Text('Details'),
-      ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + MediaQuery.viewPaddingOf(context).bottom,
-        ),
-        children: [
-          if (!room.usesChannelIcon) ...[
-            Center(child: MobileRoomAvatar(room: room, size: 92)),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            room.name,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          if (room.topic.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(room.topic, textAlign: TextAlign.center),
-          ],
-          const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Notifications'),
-            subtitle: Text(backend.selectedRoomMuted ? 'Muted' : 'Enabled'),
-            value: !backend.selectedRoomMuted,
-            onChanged: (enabled) => backend.setSelectedRoomMuted(!enabled),
-          ),
-          if (backend.canInviteToRoom(room.id))
-            ListTile(
-              leading: const Icon(Icons.person_add_outlined),
-              title: const Text('Invite member'),
-              onTap: () => showInviteMember(context, backend),
-            ),
-          ListTile(
-            leading: const Icon(Icons.alternate_email),
-            title: const Text('Room aliases'),
-            onTap: () => showRoomAliasEditor(context, backend, room),
-          ),
-          ListTile(
-            leading: const Icon(Icons.link),
-            title: const Text('Copy room link'),
-            onTap: () => Clipboard.setData(
-              ClipboardData(text: 'https://matrix.to/#/${room.id}'),
-            ),
-          ),
-          const Divider(height: 28),
-          Text(
-            'Members — ${backend.selectedRoomMembers.length}',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 6),
-          for (final member in backend.selectedRoomMembers)
-            ListTile(
-              dense: true,
-              minTileHeight: 48,
-              minVerticalPadding: 3,
-              horizontalTitleGap: 10,
-              contentPadding: EdgeInsets.zero,
-              leading: MobileAvatar(
-                size: 36,
-                bytes: member.avatarBytes,
-                fallback: member.displayName,
-                userId: member.userId,
-                presence: member.presence,
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      member.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: member.nameColor == null
-                            ? null
-                            : Color(member.nameColor!),
-                      ),
-                    ),
-                  ),
-                  if (member.powerLevel >= 50) ...[
-                    const SizedBox(width: 6),
-                    MemberRoleBadge(powerLevel: member.powerLevel),
-                  ],
-                ],
-              ),
-              subtitle: member.presence == UserPresence.offline
-                  ? null
-                  : ActivityStatus(
-                      backend: backend,
-                      userId: member.userId,
-                      presence: member.presence,
-                      status: member.statusMessage,
-                    ),
-              onTap: () =>
-                  showMobileProfileSheet(context, backend, member.userId),
-              onLongPress: () => showMemberManagement(context, backend, member),
-            ),
-        ],
-      ),
-    ),
+    child: RoomDetailsPanel(backend: backend, room: room, onDismiss: onDismiss),
   );
 }

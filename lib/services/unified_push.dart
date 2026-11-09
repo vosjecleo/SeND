@@ -343,12 +343,30 @@ String? normalizeUnifiedPushEndpoint(String value) {
 /// the gateway reject the device and causes the homeserver to delete its
 /// pusher. Keep ntfy endpoints on their own origin. Sunup uses Mozilla's push
 /// transport, which needs the separate Matrix adapter hosted by Deltie.
-Uri? matrixPushGatewayForUnifiedPushEndpoint(String value) {
+Uri? matrixPushGatewayForUnifiedPushEndpoint(
+  String value, {
+  String sunupGateway = const String.fromEnvironment(
+    'SUNUP_GATEWAY_URL',
+    defaultValue: 'https://chat.deltie.net/_matrix/push/v1/notify',
+  ),
+}) {
   final normalized = normalizeUnifiedPushEndpoint(value);
   final endpoint = normalized == null ? null : Uri.tryParse(normalized);
   if (endpoint == null) return null;
   if (endpoint.host == 'updates.push.services.mozilla.com') {
-    return Uri.parse('https://chat.deltie.net/_matrix/push/v1/notify');
+    final configured = Uri.tryParse(sunupGateway);
+    if (configured == null || configured.hasQuery || configured.hasFragment) {
+      return null;
+    }
+    final normalized = normalizeUnifiedPushEndpoint(sunupGateway);
+    final gateway = normalized == null ? null : Uri.tryParse(normalized);
+    if (gateway == null ||
+        gateway.hasQuery ||
+        gateway.hasFragment ||
+        gateway.path != '/_matrix/push/v1/notify') {
+      return null;
+    }
+    return gateway;
   }
   return Uri(
     scheme: endpoint.scheme,

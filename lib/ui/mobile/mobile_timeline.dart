@@ -44,6 +44,7 @@ import '../voice_message_composer.dart';
 import 'mobile_attachment_picker.dart';
 import '../../services/clipboard_image.dart';
 import '../../services/browser_image_paste.dart';
+import '../large_upload_warning.dart';
 import '../advanced_chat_dialogs.dart';
 import '../member_management.dart';
 import '../advanced_chat_views.dart';
@@ -1353,6 +1354,8 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
     try {
       await backend.submitComposerMessage(
         roomId: roomId,
+        confirmLargeUpload: (files) async =>
+            mounted && await confirmLargeUpload(context, files),
         text: submittedText,
         formattedBody: formatted,
         attachments: submittedAttachments,
@@ -1369,7 +1372,10 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       if (error is AttachmentBudgetExceeded) {
         submittedAttachments = error.attachments;
       }
-      if (mounted) {
+      if (error is LargeUploadCancelled) {
+        submittedAttachments = error.attachments;
+      }
+      if (mounted && error is! LargeUploadCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1486,7 +1492,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Select fewer files to edit safely (256 MiB at a time).',
+                  'Select fewer files to edit safely (512 MiB at a time).',
                 ),
               ),
             );

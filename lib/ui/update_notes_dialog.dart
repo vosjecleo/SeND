@@ -21,10 +21,12 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
           ),
           child: const Text(
             'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
-            '• Refined profile banners, avatars and status indicators\n\n'
-            '• Faster reply previews and read-receipt updates\n\n'
-            '• Improved image pasting and media previews\n\n'
-            '• Video time displays, ten-second skips and smoother seeking\n\n'
+            '• Upload files up to 512 MiB, with a warning above 128 MiB\n\n'
+            '• Refreshed room details with Members, Media, Pins, Threads, Links and Files\n\n'
+            '• Video time displays, ten-second skips and fixes for seeking\n\n'
+            '• Animated FxTwitter GIF previews\n\n'
+            '• Optimized image uploads and refined profiles\n\n'
+            '• Fixes for reply previews, read receipts, media thumbnails and screenshot pasting\n\n'
             '• Fixes for channels appearing in Home after leaving a server',
           ),
         ),

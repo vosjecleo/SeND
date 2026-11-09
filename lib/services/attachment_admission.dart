@@ -2,10 +2,11 @@ import '../models/chat_models.dart';
 import 'image_preparation.dart';
 import 'video_preparation.dart';
 
-const attachmentUploadBudget = 64 * 1024 * 1024;
+const attachmentUploadBudget = 512 * 1024 * 1024;
+const attachmentWarningThreshold = 128 * 1024 * 1024;
 // Originals are held in memory by the existing editor. This is a read-safety
-// bound, not an upload allowance; the final 64 MiB budget still applies.
-const attachmentReadBudget = 256 * 1024 * 1024;
+// bound for the current batch, separate from the per-file upload allowance.
+const attachmentReadBudget = 512 * 1024 * 1024;
 const attachmentCountLimit = 20;
 
 void validateAttachmentSelection(Iterable<int> sizes) {
@@ -14,20 +15,36 @@ void validateAttachmentSelection(Iterable<int> sizes) {
     throw StateError('Choose at most 20 files.');
   }
   if (values.fold<int>(0, (a, b) => a + b) > attachmentReadBudget) {
-    throw StateError('Select fewer files to edit safely (256 MiB at a time).');
+    throw StateError('Select fewer files to edit safely (512 MiB at a time).');
   }
 }
 
 class AttachmentBudgetExceeded implements Exception {
   AttachmentBudgetExceeded(List<AttachmentDraft> drafts)
     : attachments = List.unmodifiable(
-        drafts.map((draft) => draft.copyWith(uploadTooLarge: true)),
+        drafts.map(
+          (draft) => draft.copyWith(
+            uploadTooLarge: draft.bytes.length > attachmentUploadBudget,
+          ),
+        ),
       );
   final List<AttachmentDraft> attachments;
   @override
   String toString() =>
       'Uh-oh! Your attachment is too big.\nSelect a (smaller) compression option or try another way';
 }
+
+class LargeUploadCancelled implements Exception {
+  LargeUploadCancelled(List<AttachmentDraft> drafts)
+    : attachments = List<AttachmentDraft>.unmodifiable(drafts);
+  final List<AttachmentDraft> attachments;
+  @override
+  String toString() => 'Upload cancelled.';
+}
+
+List<AttachmentDraft> largeUploads(Iterable<AttachmentDraft> drafts) => drafts
+    .where((draft) => draft.bytes.length > attachmentWarningThreshold)
+    .toList();
 
 Future<List<AttachmentDraft>> prepareAttachmentBatch(
   List<AttachmentDraft> drafts,
@@ -79,8 +96,7 @@ Future<List<AttachmentDraft>> prepareAttachmentBatch(
       ),
     );
   }
-  if (prepared.fold<int>(0, (total, item) => total + item.bytes.length) >
-      attachmentUploadBudget) {
+  if (prepared.any((item) => item.bytes.length > attachmentUploadBudget)) {
     throw AttachmentBudgetExceeded(prepared);
   }
   return prepared;

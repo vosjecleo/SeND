@@ -12,9 +12,15 @@ import secrets
 import socket
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from urllib.parse import urlsplit
 
+from install_storage import compose_command
+
 SOURCE = Path(__file__).resolve().parent
+UPLOAD_BYTES = 512 * 1024 * 1024
 IMAGES = {
     'synapse': 'matrixdotorg/synapse:v1.159.0',
     'postgres': 'postgres:16-alpine',
@@ -71,6 +77,14 @@ def write(root, name, value):
     path.chmod(0o600)
 
 
+def source_version():
+    match = re.search(r'^version:\s*(\d+\.\d+\.\d+\+\d+)\s*$',
+                      (SOURCE.parent / 'pubspec.yaml').read_text(), re.MULTILINE)
+    if not match:
+        raise ValueError('Could not read the SeND version from this source bundle.')
+    return match[1]
+
+
 def generate(root, config, credentials):
     """No subprocesses, network calls or host changes outside a NEW directory."""
     root = Path(root).absolute()
@@ -88,6 +102,10 @@ def generate(root, config, credentials):
     if not any(subnet.subnet_of(ipaddress.IPv4Network(net)) for net in
                ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')):
         raise ValueError('Use an unused private Docker subnet.')
+    allowed_credentials = {'telegram-token', 'klipy-key', 'oidc-secret', 'smtp-password'}
+    if any(name not in allowed_credentials or '\n' in value or '\r' in value
+           for name, value in credentials.items()):
+        raise ValueError('Use the supported credential fields and single-line values.')
     root.mkdir(parents=True, mode=0o700)
     origin = 'https://' + names['app']
     random = {key: secrets.token_hex(32) for key in ('db', 'registration', 'macaroon', 'turn', 'livekit')}
@@ -97,6 +115,9 @@ def generate(root, config, credentials):
         write(root, 'secrets/' + name, value + '\n')
     write(root, 'operator.json', {**config, **names})
     write(root, '.gitignore', '*\n')
+    # Both the Compose plugin and legacy docker-compose read this project name.
+    # Do not use the newer top-level `name`, which legacy Compose rejects.
+    write(root, '.env', 'COMPOSE_PROJECT_NAME=send\n')
     for name in ('install_storage.py', 'send_storage.py', 'storage_schema.sql', 'storage_audit.py'):
         write(root, 'storage/' + name, (SOURCE / name).read_text())
     helper_files = ('giphy_proxy.py', 'web_preview.py', 'web_push.py', 'hosting_config.py',
@@ -132,11 +153,13 @@ if not path.exists():
         'database': {'name': 'psycopg2', 'args': {'user': 'synapse', 'password': random['db'],
                     'database': 'synapse', 'host': 'postgres', 'cp_min': 5, 'cp_max': 10}},
         'registration_shared_secret': random['registration'], 'macaroon_secret_key': random['macaroon'],
-        'enable_registration': False, 'max_upload_size': '100M',
+        'enable_registration': False, 'max_upload_size': '512M',
+        'max_event_delay_duration': '24h',
         'turn_uris': [f"turn:{names['turn']}:3478?transport={x}" for x in ('udp', 'tcp')],
         'turn_shared_secret': random['turn'], 'turn_user_lifetime': '1h', 'turn_allow_guests': False,
         'url_preview_enabled': False,
-        'experimental_features': {'msc3266_enabled': True, 'msc4222_enabled': True},
+        'experimental_features': {'msc3266_enabled': True, 'msc4222_enabled': True,
+                                  'msc4133_enabled': True},
     }
     if config.get('oidc'):
         synapse['oidc_providers'] = [{
@@ -157,6 +180,7 @@ if not path.exists():
     write(root, 'livekit.yaml', {
         'port': 7880, 'bind_addresses': ['0.0.0.0'],
         'rtc': {'tcp_port': 7881, 'udp_port': 7882, 'use_external_ip': True},
+        'room': {'auto_create': False},
         'keys': {'send': random['livekit']},
     })
     write(root, 'turnserver.conf', f'''listening-port=3478
@@ -191,6 +215,7 @@ log-file=stdout
     # Containers need readable public files; credentials stay private.
     for path in (root / 'discovery').iterdir():
         path.chmod(0o644)
+    (root / 'discovery').chmod(0o755)
     write(root, 'Caddyfile', f'''{{
     email {config['email']}
 }}
@@ -209,6 +234,9 @@ log-file=stdout
     respond 404
 }}
 {names['matrix']} {{
+    request_body {{
+        max_size {UPLOAD_BYTES}
+    }}
     @matrix path /_matrix/* /_synapse/client/*
     reverse_proxy @matrix synapse:8008
     respond 404
@@ -245,6 +273,10 @@ log-file=stdout
         }}
         reverse_proxy web-push:8141
     }}
+    handle /api/servers/health {{
+        rewrite * /health
+        reverse_proxy media:8091
+    }}
     handle /api/servers/* {{
         reverse_proxy media:8091
     }}
@@ -265,7 +297,8 @@ log-file=stdout
 ''')
     def service(image, **kwargs):
         return {'image': image, 'restart': 'unless-stopped', **kwargs}
-    common = {'SEND_APP_ORIGIN': origin, 'TRUSTED_PROXY_CIDRS': config['subnet']}
+    common = {'SEND_APP_ORIGIN': origin, 'TRUSTED_PROXY_CIDRS': config['subnet'],
+              'DELTIECORD_VERSION': source_version()}
     services = {
         'postgres': service(IMAGES['postgres'], environment={
             'POSTGRES_USER': 'synapse', 'POSTGRES_DB': 'synapse', 'POSTGRES_PASSWORD': random['db'],
@@ -288,12 +321,18 @@ log-file=stdout
         'media': service('send-helpers:local', build='./helpers',
             command=['python', 'giphy_proxy.py'], volumes=['./secrets:/secrets:ro'],
             environment={**common, 'HOST': '0.0.0.0', 'PORT': '8091',
-                'KLIPY_API_KEY_FILE': '/secrets/klipy-key', 'TELEGRAM_BOT_TOKEN_FILE': '/secrets/telegram-token'}),
+                'KLIPY_API_KEY_FILE': '/secrets/klipy-key', 'TELEGRAM_BOT_TOKEN_FILE': '/secrets/telegram-token'},
+            healthcheck={'test': ['CMD', 'python', '-c',
+                "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8091/health',timeout=3)"],
+                'interval': '10s', 'timeout': '5s', 'retries': 12}),
         'web-push': service('send-helpers:local', build='./helpers', volumes=['push-data:/state'],
             command=['sh', '-c', 'python init_push.py && exec gunicorn --workers 1 --threads 4 --timeout 45 --bind 0.0.0.0:8141 web_push:app'],
             environment={**common, 'WEB_PUSH_STATE': '/state', 'WEB_PUSH_PRIVATE_KEY': '/state/vapid.pem',
                          'WEB_PUSH_CONTACT': 'mailto:' + config['email'], 'WEB_PUSH_QUEUE': '1',
-                         'WEB_PUSH_ISSUERS': json.dumps({names['server']: 'https://' + names['matrix']})}),
+                         'WEB_PUSH_ISSUERS': json.dumps({names['server']: 'https://' + names['matrix']})},
+            healthcheck={'test': ['CMD', 'python', '-c',
+                "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8141/api/push/config',timeout=3)"],
+                'interval': '10s', 'timeout': '5s', 'retries': 12}),
         'ntfy': service(IMAGES['ntfy'], command=['serve'], volumes=['ntfy-data:/var/cache/ntfy'],
             environment={'NTFY_BASE_URL': 'https://' + names['push'], 'NTFY_BEHIND_PROXY': 'true',
                          'NTFY_CACHE_FILE': '/var/cache/ntfy/cache.db',
@@ -309,7 +348,11 @@ log-file=stdout
     for name in ('media', 'web-push'):
         services[name]['cap_drop'] = ['ALL']
         services[name]['security_opt'] = ['no-new-privileges:true']
-    write(root, 'compose.yaml', {'name': 'send', 'services': services,
+    # Use the public names internally too, with real TLS at Caddy. This avoids
+    # hairpin routing failures during OpenID validation and local push delivery.
+    services['caddy']['networks'] = {'send': {'aliases': [names[k]
+        for k in ('server', 'matrix', 'app', 'rtc', 'push')]}}
+    write(root, 'compose.yaml', {'services': services,
         'networks': {'send': {'ipam': {'config': [{'subnet': config['subnet']}]}}},
         'volumes': {name: {} for name in ('database', 'matrix-data', 'push-data', 'ntfy-data', 'caddy-data', 'caddy-config')}})
     (root / 'web').mkdir()
@@ -317,13 +360,51 @@ log-file=stdout
         'GIF_PROXY_URL': origin + '/api/servers/klipy/search',
         'TELEGRAM_STICKER_PROXY_URL': origin + '/api/servers/telegram/stickers',
         'WEB_PREVIEW_PROXY_URL': origin + '/api/servers/preview',
+        'SUNUP_GATEWAY_URL': origin + '/_matrix/push/v1/notify',
     })
     write(root, 'deploy-web.py', (SOURCE.parent / 'packaging/deploy-web.py').read_text())
+    for source, target in [('sign-release.py', 'verify-release.py'),
+                           ('release-trust.json', 'release-trust.json')]:
+        write(root, target, (SOURCE.parent / 'packaging' / source).read_text())
+    write(root, 'setup-manifest.json', {
+        'schema': 1, 'send_version': source_version(), 'upload_bytes': UPLOAD_BYTES,
+        'default_account_bytes': 12 * 1024 * 1024 * 1024,
+        'files': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for directory in ('helpers', 'storage')
+                  for path in sorted((root / directory).iterdir()) if path.is_file()},
+    })
     return root
 
 
-def install_web(root, archive, checksum):
+def install_web(root, archive, checksum=None, *, manifest=None, signature=None):
     archive = Path(archive).resolve(strict=True)
+    if not archive.is_file():
+        raise ValueError('Choose a regular web release archive.')
+    if manifest is not None:
+        manifest = Path(manifest).resolve(strict=True)
+        signature = Path(signature or str(manifest) + '.sig').resolve(strict=True)
+        if (not manifest.is_file() or manifest.stat().st_size > 1024 * 1024 or
+                not signature.is_file() or signature.stat().st_size > 4096):
+            raise ValueError('The release manifest or signature is not a bounded regular file.')
+        subprocess.run([sys.executable, str(root / 'verify-release.py'), str(manifest),
+                        str(signature), '--verify', '--manifest'], check=True,
+                       capture_output=True)
+        data = json.loads(manifest.read_bytes())
+        web = data.get('platforms', {}).get('web', {})
+        if not isinstance(web, dict) or any(not isinstance(web.get(channel, []), list)
+                                            for channel in ('latest', 'stable')):
+            raise ValueError('The signed manifest has an invalid web release list.')
+        assets = [asset for channel in ('latest', 'stable')
+                  for asset in web.get(channel, []) if isinstance(asset, dict) and asset.get('name') == archive.name]
+        if any(not isinstance(asset.get('sha256'), str) or
+               not re.fullmatch(r'[0-9a-fA-F]{64}', asset['sha256']) for asset in assets):
+            raise ValueError('The signed manifest contains an invalid archive hash.')
+        hashes = {asset.get('sha256') for asset in assets}
+        if len(hashes) != 1:
+            raise ValueError('This web archive is missing or ambiguous in the signed manifest.')
+        checksum = hashes.pop()
+    if not isinstance(checksum, str):
+        raise ValueError('Provide a signed manifest or a separately trusted SHA-256.')
     if not re.fullmatch(r'[0-9a-fA-F]{64}', checksum):
         raise ValueError('Provide the SHA-256 from the trusted release manifest.')
     with archive.open('rb') as stream:
@@ -336,18 +417,111 @@ def install_web(root, archive, checksum):
                     str(root / 'web'), match[1]], check=True)
 
 
+def start_stack(command):
+    help_text = subprocess.check_output(command + ['up', '--help'], text=True)
+    args = ['up', '-d', '--no-build']
+    if '--wait' in help_text and '--wait-timeout' in help_text:
+        subprocess.run(command + args + ['--wait', '--wait-timeout', '180'], check=True)
+        return
+    subprocess.run(command + args, check=True)
+    # Legacy Compose lacks --wait. Inspect health without expanding secrets.
+    expected = len(subprocess.check_output(command + ['config', '--services'], text=True).split())
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        containers = subprocess.check_output(command + ['ps', '--all', '-q'], text=True).split()
+        if containers:
+            states = [json.loads(line) for line in subprocess.check_output(
+                ['docker', 'inspect', '--format', '{{json .State}}', *containers], text=True).splitlines()]
+            if any(state.get('Status') in ('exited', 'dead') or
+                   state.get('Health', {}).get('Status') == 'unhealthy' for state in states):
+                raise ValueError('A service failed its startup check. Inspect its redacted logs.')
+            if len(states) >= expected and all(state.get('Status') == 'running' and
+                   state.get('Health', {}).get('Status', 'healthy') == 'healthy' for state in states):
+                return
+        time.sleep(2)
+    raise ValueError('Services did not become ready within 180 seconds. No volumes were deleted.')
+
+
+def check_endpoints(config, *, require_storage=False):
+    names = {key: domain(config[key]) for key in ('server', 'matrix', 'app', 'rtc')}
+    def get(label, url, expected=200):
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                if response.status != expected:
+                    raise ValueError(label + ' returned an unexpected HTTP status.')
+                raw = response.read(1024 * 1024 + 1)
+                if len(raw) > 1024 * 1024:
+                    raise ValueError(label + ' exceeded its response limit.')
+                value = json.loads(raw)
+                if not isinstance(value, dict):
+                    raise ValueError(label + ' did not return a JSON object.')
+                return value
+        except urllib.error.HTTPError as error:
+            if error.code == expected:
+                error.close()
+                return None
+            raise ValueError(label + ' failed: HTTP ' + str(error.code)) from None
+        except (OSError, json.JSONDecodeError):
+            raise ValueError(label + ' failed. Check DNS, TLS and service logs.') from None
+    matrix = 'https://' + names['matrix']
+    app = 'https://' + names['app']
+    versions = get('Matrix', matrix + '/_matrix/client/versions')
+    if not versions.get('versions'):
+        raise ValueError('The Matrix version endpoint did not return supported versions.')
+    client = get('Client discovery', 'https://' + names['server'] + '/.well-known/matrix/client')
+    if client.get('m.homeserver', {}).get('base_url') != matrix or not any(
+            focus.get('livekit_service_url') == 'https://' + names['rtc'] + '/jwt'
+            for focus in client.get('org.matrix.msc4143.rtc_foci', [])):
+        raise ValueError('Client discovery does not match the Matrix/RTC hostnames.')
+    federation = get('Federation discovery', 'https://' + names['server'] + '/.well-known/matrix/server')
+    if federation.get('m.server') != names['matrix'] + ':443':
+        raise ValueError('Federation discovery does not match the Matrix hostname.')
+    if not get('Media helpers', app + '/api/servers/health').get('ok'):
+        raise ValueError('The media helper did not pass its health check.')
+    if not get('Web Push', app + '/api/push/config').get('public_key'):
+        raise ValueError('The Web Push service did not return its public key.')
+    get('Web preview bridge', app + '/api/servers/preview?kind=invalid', expected=400)
+    if require_storage:
+        get('Storage authentication', matrix + '/_synapse/client/send/v1/usage', expected=401)
+    print('Matrix discovery, media helpers, preview routing and Web Push checks passed.' +
+          (' Storage requires authentication.' if require_storage else ''))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path, default=Path('/opt/send'))
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--check', type=Path, help='Check an existing generated stack over HTTPS without changing it')
+    mode.add_argument('--deploy-web', type=Path, help='Deploy a signed PWA archive to an existing generated stack only')
+    parser.add_argument('--archive', type=Path)
+    parser.add_argument('--manifest', type=Path)
+    parser.add_argument('--signature', type=Path)
+    parser.add_argument('--require-storage', action='store_true', help='With --check, require the authenticated storage endpoint')
     args = parser.parse_args()
+    if args.deploy_web is not None:
+        if args.archive is None or args.manifest is None or args.require_storage:
+            parser.error('--deploy-web requires --archive and --manifest, without --require-storage.')
+        root = args.deploy_web.resolve(strict=True)
+        if not (root / 'operator.json').is_file():
+            parser.error('Choose an existing generated SeND stack directory.')
+        install_web(root, args.archive, manifest=args.manifest, signature=args.signature)
+        return
+    if any(value is not None for value in (args.archive, args.manifest, args.signature)):
+        parser.error('--archive, --manifest and --signature require --deploy-web.')
+    if args.check is not None:
+        check_endpoints(json.loads((args.check / 'operator.json').read_text()),
+                        require_storage=args.require_storage)
+        return
+    if args.require_storage:
+        parser.error('--require-storage is only used with --check.')
     os.umask(0o077)
     print('SeND server setup, for a NEW dedicated Linux host. Existing servers are not migrated.\n'
-          'Docker Engine and Compose v2 must be installed. DNS must point directly here.\n'
+          'Docker Engine and Docker Compose must be installed. DNS must point directly here.\n'
           'This creates private configuration, then asks before starting any services.\n'
           'Never change the Matrix server name after creating accounts.\n')
     if sys.platform != 'linux':
         raise ValueError('Run this installer on Linux.')
-    subprocess.run(['docker', 'compose', 'version'], check=True)
+    compose = compose_command()
     for command in (
         ['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=send'],
         ['docker', 'volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=send'],
@@ -356,7 +530,7 @@ def main():
             raise ValueError('An existing send Compose project was found. Use its update procedure, not this installer.')
     if args.directory.exists():
         raise ValueError('Destination exists. This installer will not overwrite it.')
-    config = {'server': ask('Matrix server name (user@this-domain)', validator=domain)}
+    config = {'server': ask('Matrix server name (@name:this-domain)', validator=domain)}
     for key, prefix in [('matrix', 'matrix'), ('app', 'chat'), ('rtc', 'rtc'), ('turn', 'turn'), ('push', 'push')]:
         config[key] = ask(key.capitalize() + ' hostname', prefix + '.' + config['server'], domain)
     config['ip'] = ask('Server public IPv4 address', validator=lambda v: str(ipaddress.IPv4Address(v)))
@@ -387,9 +561,15 @@ def main():
     print('Configuration written. Keep the entire directory private and back it up securely.')
     archive = ask('Path to the downloaded SeND web release .tar.gz (blank skips deployment)')
     if archive:
-        install_web(root, archive, ask('SHA-256 from its release manifest'))
+        manifest = ask('Path to its signed releases.json (blank for a separately trusted SHA-256)')
+        if manifest:
+            install_web(root, archive, manifest=manifest,
+                        signature=ask('Path to its signature', manifest + '.sig'))
+        else:
+            print('A hash does not authenticate the publisher. Obtain it through a separately trusted source.')
+            install_web(root, archive, ask('Trusted SHA-256'))
     else:
-        print('No PWA deployed. Use deploy-web.py with a checksum-verified release before opening the app.')
+        print('No PWA deployed. Use --deploy-web with a signed release before opening the app.')
     if not confirm('Build containers and start the stack now?'):
         return
     for key in ('server', 'matrix', 'app', 'rtc', 'turn', 'push'):
@@ -399,17 +579,22 @@ def main():
     for port in (80, 443, 3478, 7881):
         with socket.socket() as sock:
             sock.bind(('0.0.0.0', port))
-    command = ['docker', 'compose', '--project-directory', str(root)]
+    command = compose + ['--project-name', 'send', '--project-directory', str(root),
+                         '-f', str(root / 'compose.yaml')]
     subprocess.run(command + ['config', '--quiet'], check=True)
     subprocess.run(command + ['build'], check=True)
     subprocess.run(command + ['run', '--rm', '--no-deps', 'caddy', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile'], check=True)
-    subprocess.run(command + ['up', '-d', '--wait', '--wait-timeout', '180'], check=True)
-    if confirm('Enable SeND storage controls and the 12 GiB upload allowance?'):
+    start_stack(command)
+    storage = confirm('Enable SeND storage controls, media pruning and the 12 GiB allowance per account?')
+    if storage:
         subprocess.run([sys.executable, str(root / 'storage/install_storage.py'),
-            '--compose', str(root / 'compose.yaml'), '--config', str(root / 'homeserver.yaml'), '--apply'], check=True)
+            '--compose', str(root / 'compose.yaml'), '--config', str(root / 'homeserver.yaml'), '--apply'],
+            check=True, env={**os.environ, 'COMPOSE_PROJECT_NAME': 'send'})
     if confirm('Create the first Matrix administrator now?'):
         subprocess.run(command + ['exec', 'synapse', 'register_new_matrix_user',
             '-c', '/config/homeserver.yaml', 'http://localhost:8008', '--admin'], check=True)
+    if confirm('Check public HTTPS endpoints now?'):
+        check_endpoints(config, require_storage=storage)
     print('Containers started. Before inviting users, run the checks in server/INSTALL.md.\n'
           'A running container is not a verified call, encrypted message, or iOS notification.')
 
@@ -417,7 +602,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:
         print('Setup stopped: ' + str(error), file=sys.stderr)
         print('Existing configuration and volumes were not deleted. Inspect before retrying.', file=sys.stderr)
         sys.exit(1)

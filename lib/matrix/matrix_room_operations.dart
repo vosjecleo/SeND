@@ -822,10 +822,17 @@ extension _MatrixRoomOperations on MatrixBackend {
     final room = _matrix.getRoomById(roomId);
     if (room == null) throw StateError('That room is no longer available.');
     try {
+      final prepared = bytes == null
+          ? null
+          : await prepareProfileImage(bytes, ProfileImageRole.avatar);
       await room.setAvatar(
-        bytes == null
+        prepared == null
             ? null
-            : MatrixFile(bytes: bytes, name: 'room-avatar.png'),
+            : MatrixFile(
+                bytes: prepared.bytes,
+                name: 'room-avatar.${prepared.extension}',
+                mimeType: prepared.mimeType,
+              ),
       );
       _avatarUris.remove(roomId);
       await _refreshAvatar(room);

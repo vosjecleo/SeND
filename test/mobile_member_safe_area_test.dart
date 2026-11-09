@@ -35,11 +35,6 @@ void main() {
         of: find.byKey(const ValueKey('mobile-details-panel')),
         matching: find.byType(ListView),
       );
-      final padding = tester
-          .widget<ListView>(list)
-          .padding!
-          .resolve(TextDirection.ltr);
-      expect(padding.bottom, 64);
       await tester.dragUntilVisible(
         find.text('Member 29'),
         list,

@@ -25,12 +25,13 @@ class _Player extends Fake implements Player {
   int toggles = 0;
   int plays = 0;
   bool completed = false;
+  Duration videoDuration = const Duration(seconds: 120);
   @override
   PlayerStream get stream => events;
   @override
   PlayerState get state => PlayerState(
     position: const Duration(seconds: 30),
-    duration: const Duration(seconds: 120),
+    duration: videoDuration,
     playing: true,
     completed: completed,
   );
@@ -99,6 +100,26 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     },
   );
+  testWidgets('tapping the middle of a long video seeks to half, not EOF', (
+    tester,
+  ) async {
+    final player = _Player()
+      ..videoDuration = const Duration(milliseconds: 10709391);
+    addTearDown(player.close);
+    await show(tester, player);
+    final slider = find.byKey(const ValueKey('video-seek-slider'));
+    await tester.tapAt(tester.getCenter(slider));
+    await tester.pump();
+    expect(player.seeks, hasLength(1));
+    expect(
+      player.seeks.single.inMilliseconds,
+      closeTo(player.videoDuration.inMilliseconds / 2, 1),
+    );
+    expect(player.seeks.single, lessThan(player.videoDuration));
+    expect(player.toggles, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('scrubbing holds the thumb locally and commits only on release', (
     tester,
   ) async {

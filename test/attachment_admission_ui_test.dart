@@ -13,7 +13,18 @@ class _BudgetBackend extends FakeBackend {
   Future<List<AttachmentDraft>> prepareAttachmentsForSend(
     List<AttachmentDraft> drafts, {
     void Function(int index, String status, double? progress)? onProgress,
-  }) async => throw AttachmentBudgetExceeded(drafts);
+  }) async => throw _MarkedBudgetError(drafts);
+}
+
+// This widget test verifies presentation of backend-marked failures, without
+// allocating an oversized real image. Actual size classification is tested in
+// attachment_admission_test.dart.
+class _MarkedBudgetError extends AttachmentBudgetExceeded {
+  _MarkedBudgetError(super.drafts);
+  @override
+  List<AttachmentDraft> get attachments => super.attachments
+      .map((draft) => draft.copyWith(uploadTooLarge: true))
+      .toList();
 }
 
 void main() {

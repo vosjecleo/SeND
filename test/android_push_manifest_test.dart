@@ -34,7 +34,8 @@ void main() {
     expect(activity, contains('MAX_SHARED_ITEM_BYTES'));
     expect(activity, contains('MAX_SHARED_TOTAL_BYTES'));
     expect(activity, contains('uris.size > 20'));
-    expect(activity, contains('MAX_SHARED_TOTAL_BYTES = 256 * 1024 * 1024'));
+    expect(activity, contains('MAX_SHARED_TOTAL_BYTES = 512 * 1024 * 1024'));
+    expect(activity, contains('MAX_SHARED_ITEM_BYTES = 512 * 1024 * 1024'));
     expect(activity, contains('return mapOf("error"'));
   });
 

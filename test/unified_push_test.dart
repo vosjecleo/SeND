@@ -5,6 +5,51 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('Sunup uses the configured build endpoint', () {
+    const gateway = String.fromEnvironment(
+      'SUNUP_GATEWAY_URL',
+      defaultValue: 'https://chat.deltie.net/_matrix/push/v1/notify',
+    );
+    expect(
+      matrixPushGatewayForUnifiedPushEndpoint(
+        'https://updates.push.services.mozilla.com/wpush/v2/private-test',
+      ),
+      Uri.parse(gateway),
+    );
+  });
+  test(
+    'custom builds use their own Sunup gateway without changing ntfy routing',
+    () {
+      const sunup =
+          'https://updates.push.services.mozilla.com/wpush/v2/private-test';
+      const gateway = 'https://chat.example.org/_matrix/push/v1/notify';
+      expect(
+        matrixPushGatewayForUnifiedPushEndpoint(sunup, sunupGateway: gateway),
+        Uri.parse(gateway),
+      );
+      expect(
+        matrixPushGatewayForUnifiedPushEndpoint(
+          'https://ntfy.sh/up-secret',
+          sunupGateway: gateway,
+        ),
+        Uri.parse('https://ntfy.sh/_matrix/push/v1/notify'),
+      );
+      for (final invalid in [
+        'http://chat.example.org/_matrix/push/v1/notify',
+        'https://localhost/_matrix/push/v1/notify',
+        'https://127.0.0.1/_matrix/push/v1/notify',
+        'https://user:secret@chat.example.org/_matrix/push/v1/notify',
+        '$gateway?secret=x',
+        '$gateway#fragment',
+        'https://chat.example.org/wrong',
+      ]) {
+        expect(
+          matrixPushGatewayForUnifiedPushEndpoint(sunup, sunupGateway: invalid),
+          isNull,
+        );
+      }
+    },
+  );
 
   test('accepts the complete private ntfy capability endpoint', () {
     const endpoint = 'https://push.deltie.net/up-high-entropy?up=1';

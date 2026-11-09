@@ -11,6 +11,7 @@ import 'lifecycle_memory_image.dart';
 import 'profile_media_viewer.dart';
 import 'profile_watch.dart';
 import 'avatar_presence.dart';
+import '../models/profile_image_geometry.dart';
 
 class DeltiecordProfileCard extends StatelessWidget {
   const DeltiecordProfileCard({
@@ -375,7 +376,7 @@ class _ProfileHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         // All profile surfaces, including the editor, share this geometry.
-        final bannerHeight = constraints.maxWidth / 2;
+        final bannerHeight = constraints.maxWidth / profileBannerAspectRatio;
         final avatarSize = (constraints.maxWidth * .26).clamp(64.0, 124.0);
         final presenceSize = (avatarSize * .18).clamp(14.0, 20.0) * 1.1;
         final presenceInset =

@@ -156,6 +156,36 @@ void main() {
   );
 
   test('only GIF-like preview providers request looping playback', () {
+    final post = Uri.parse(
+      'https://fxtwitter.com/saab340fan/status/2119621387115499729',
+    );
+    expect(
+      shouldLoopLinkPreview(
+        post,
+        videoUrl: Uri.parse(
+          'https://video.twimg.com/tweet_video/HWpoYICW4AAoe4A.mp4',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldLoopLinkPreview(
+        post,
+        videoUrl: Uri.parse(
+          'https://video.twimg.com/ext_tw_video/123/pu/vid/test.mp4',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldLoopLinkPreview(
+        post,
+        videoUrl: Uri.parse(
+          'https://video.twimg.com.attacker.test/tweet_video/x.mp4',
+        ),
+      ),
+      isFalse,
+    );
     expect(
       shouldLoopLinkPreview(
         Uri.parse('https://media.giphy.com/media/x/giphy.mp4'),

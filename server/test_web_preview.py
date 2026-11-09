@@ -31,6 +31,20 @@ class PreviewTests(unittest.TestCase):
         response.read.assert_not_called()
         connection.close.assert_called_once()
 
+    def test_document_json_is_limited_to_the_fx_status_api(self):
+        self.assertTrue(preview.accepts_document(
+            'https://api.fxtwitter.com/status/123', 'application/json'))
+        for url in ('https://fxtwitter.com/alice/status/123',
+                    'https://api.fxtwitter.com/other',
+                    'https://other.fxtwitter.com/status/123',
+                    'https://imgur.com/status/123'):
+            with self.subTest(url=url):
+                self.assertFalse(preview.accepts_document(url, 'application/json'))
+        self.assertFalse(preview.accepts_document(
+            'https://api.fxtwitter.com/status/123', 'application/octet-stream'))
+        self.assertTrue(preview.accepts_document(
+            'https://fxtwitter.com/alice/status/123', 'text/html'))
+
     def test_url_allowlist(self):
         for url in ('http://i.imgur.com/a.png', 'https://localhost/a',
                     'https://imgur.com.evil.test/a', 'https://u:p@imgur.com/a',

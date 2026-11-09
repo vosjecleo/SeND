@@ -355,7 +355,21 @@ class DirectLinkPreviewFetcher {
       final document = html_parser.parse(
         utf8.decode(bytes, allowMalformed: true),
       );
-      final metadata = _metadataFromDocument(document, url);
+      var metadata = _metadataFromDocument(document, url);
+      if (metadata.videoUrl == null) {
+        final media = await _fxTwitterMedia(url, allowUrl: allowUrl);
+        if (media != null) {
+          metadata = _DocumentMetadata(
+            title: media.title ?? metadata.title,
+            description: media.description ?? metadata.description,
+            siteName: media.siteName ?? metadata.siteName,
+            imageUrl: media.imageUrl ?? metadata.imageUrl,
+            videoUrl: media.videoUrl,
+            width: media.width,
+            height: media.height,
+          );
+        }
+      }
       onMetadata?.call(
         LinkPreview(
           url: initialUrl,
@@ -541,6 +555,65 @@ class DirectLinkPreviewFetcher {
       );
     }
     return null;
+  }
+
+  /// Some FxEmbed HTML responses contain only text even for animated posts.
+  /// Its documented API supplies the real media rather than an author avatar.
+  Future<_DocumentMetadata?> _fxTwitterMedia(
+    Uri url, {
+    bool Function(Uri uri)? allowUrl,
+  }) async {
+    if (url.host.toLowerCase() != 'fxtwitter.com') return null;
+    final parts = url.pathSegments;
+    final status = parts.indexOf('status');
+    if (status < 0 ||
+        status + 1 >= parts.length ||
+        !RegExp(r'^\d{1,30}$').hasMatch(parts[status + 1])) {
+      return null;
+    }
+    final api = Uri.https('api.fxtwitter.com', '/status/${parts[status + 1]}');
+    if (allowUrl != null && !allowUrl(api)) return null;
+    try {
+      final response = await _request(api, 'application/json');
+      if (response.statusCode != 200 ||
+          response.contentLength > maximumDocumentBytes) {
+        await _cancelBody(response.body);
+        return null;
+      }
+      final bytes = await readBoundedResponse(
+        response.body,
+        maximumBytes: maximumDocumentBytes,
+        inactivityTimeout: requestTimeout,
+      );
+      final root = jsonDecode(utf8.decode(bytes));
+      if (root is! Map || root['tweet'] is! Map) return null;
+      final tweet = root['tweet'] as Map;
+      final media = tweet['media'];
+      if (media is! Map || media['all'] is! List) return null;
+      final item = (media['all'] as List).whereType<Map>().firstOrNull;
+      if (item == null) return null;
+      String? text(Object? value, int limit) => value is String
+          ? value.substring(0, value.length.clamp(0, limit))
+          : null;
+      Uri? uri(Object? value) =>
+          value is String && value.length <= 4096 ? Uri.tryParse(value) : null;
+      int? dimension(Object? value) =>
+          value is int && value > 0 && value <= 100000 ? value : null;
+      final video = item['type'] == 'gif' || item['type'] == 'video';
+      final author = tweet['author'];
+      return _DocumentMetadata(
+        title: author is Map ? text(author['name'], 512) : null,
+        description: text(tweet['text'], 4096),
+        siteName: 'FxTwitter',
+        imageUrl: uri(video ? item['thumbnail_url'] : item['url']),
+        videoUrl: video ? uri(item['url']) : null,
+        width: dimension(item['width']),
+        height: dimension(item['height']),
+      );
+    } catch (_) {
+      // API failure must not discard the original text preview.
+      return null;
+    }
   }
 
   Future<Uri?> _validateVideo(

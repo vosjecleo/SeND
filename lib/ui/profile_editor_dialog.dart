@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../backend/chat_backend.dart';
 import '../models/chat_models.dart';
+import '../models/profile_image_geometry.dart';
 import '../services/avatar_color.dart';
 import '../services/profile_text.dart';
 import '../services/timezone_catalog.dart';
@@ -227,7 +228,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       bytes: bytes,
       title: 'Crop profile picture',
       aspectRatio: 1,
-      maximumWidth: 1024,
+      maximumWidth: 512,
       circularPreview: true,
       profile: _preview,
     );
@@ -255,7 +256,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       bytes: bytes,
       title: 'Crop profile banner',
       profile: _preview,
-      aspectRatio: 2,
+      aspectRatio: profileBannerAspectRatio,
       maximumWidth: 1920,
     );
     if (cropped == null || !mounted) return;

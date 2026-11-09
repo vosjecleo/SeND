@@ -738,12 +738,19 @@ extension _MatrixSession on MatrixBackend {
     required String mimeType,
   }) async {
     try {
+      final prepared = bytes == null
+          ? null
+          : await prepareProfileImage(bytes, ProfileImageRole.avatar);
       await _matrix.setAvatar(
-        bytes == null
+        prepared == null
             ? null
-            : MatrixFile(bytes: bytes, name: fileName, mimeType: mimeType),
+            : MatrixFile(
+                bytes: prepared.bytes,
+                name: 'profile-avatar.${prepared.extension}',
+                mimeType: prepared.mimeType,
+              ),
       );
-      _profileAvatarBytes = bytes;
+      _profileAvatarBytes = prepared?.bytes;
       final userId = _matrix.userID;
       if (userId != null) _profileCache.remove(userId);
       _notifyBackendListeners();

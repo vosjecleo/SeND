@@ -28,8 +28,8 @@ class MainActivity : FlutterActivity() {
             "net.deltie.deltiecord/shared_content"
         private const val REGISTRATION_TIMEOUT_MS = 30_000L
         // Read safety only. The final upload budget is checked after compression.
-        private const val MAX_SHARED_ITEM_BYTES = 256 * 1024 * 1024
-        private const val MAX_SHARED_TOTAL_BYTES = 256 * 1024 * 1024
+        private const val MAX_SHARED_ITEM_BYTES = 512 * 1024 * 1024
+        private const val MAX_SHARED_TOTAL_BYTES = 512 * 1024 * 1024
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -450,7 +450,7 @@ class MainActivity : FlutterActivity() {
             val mimeType = contentResolver.getType(uri) ?: source.type ?: continue
             if (!mimeType.startsWith("image/") && !mimeType.startsWith("video/")) continue
             val bytes = readBounded(uri, minOf(MAX_SHARED_ITEM_BYTES, MAX_SHARED_TOTAL_BYTES - total))
-                ?: return mapOf("error" to "Could not read the shared media. Select fewer files to edit safely (256 MiB at a time).")
+                ?: return mapOf("error" to "Could not read the shared media. Select fewer files to edit safely (512 MiB at a time).")
             total += bytes.size
             items += mapOf(
                 "bytes" to bytes,

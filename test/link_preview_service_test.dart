@@ -6,6 +6,63 @@ import 'package:deltiecord/services/link_preview_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final privateVideo in [false, true]) {
+    test(
+      'FxTwitter text HTML recovers GIF media, privateVideo=$privateVideo',
+      () async {
+        final video = privateVideo
+            ? 'https://private.example/clip.mp4'
+            : 'https://video.twimg.com/tweet_video/example.mp4';
+        final transport = _FakeTransport({
+          'https://fxtwitter.com/alice/status/123': _response(
+            '<meta property="og:title" content="Alice">'
+            '<meta property="og:image" content="https://pbs.twimg.com/still.jpg">',
+          ),
+          'https://api.fxtwitter.com/status/123': _response(
+            jsonEncode({
+              'tweet': {
+                'text': 'An animation',
+                'author': {'name': 'Alice'},
+                'media': {
+                  'all': [
+                    {'type': 'gif', 'url': video, 'width': 800, 'height': 890},
+                  ],
+                },
+              },
+            }),
+          ),
+          'https://pbs.twimg.com/still.jpg': DirectPreviewResponse(
+            statusCode: 200,
+            contentType: 'image/jpeg',
+            contentLength: 3,
+            body: Stream.value([1, 2, 3]),
+          ),
+          video: DirectPreviewResponse(
+            statusCode: HttpStatus.partialContent,
+            contentType: 'video/mp4',
+            contentLength: 1,
+            contentRange: 'bytes 0-0/4096',
+            body: Stream.value([0]),
+          ),
+        });
+        final fetcher = DirectLinkPreviewFetcher(
+          resolveHost: (host) async => [
+            InternetAddress(
+              host == 'private.example' ? '127.0.0.1' : '93.184.216.34',
+            ),
+          ],
+          transport: transport,
+        );
+        final preview = await fetcher.fetch(
+          Uri.parse('https://fxtwitter.com/alice/status/123'),
+        );
+        expect(preview?.description, 'An animation');
+        expect(preview?.imageBytes, [1, 2, 3]);
+        expect(preview?.videoUrl, privateVideo ? isNull : Uri.parse(video));
+        expect((preview?.width, preview?.height), (800, 890));
+      },
+    );
+  }
   test('text-only FxTwitter posts do not expand the author avatar', () async {
     final transport = _FakeTransport({
       'https://fxtwitter.com/alice/status/123': _response(

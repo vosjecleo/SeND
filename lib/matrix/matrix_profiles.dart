@@ -979,12 +979,16 @@ extension _MatrixProfiles on MatrixBackend {
         }
       } else if (bannerBytes != null) {
         if (!supports(_profileBannerField)) unsupported(_profileBannerField);
-        final mxc = await _matrix.uploadContent(
+        final prepared = await prepareProfileImage(
           bannerBytes,
-          filename: 'profile-banner.png',
-          contentType: 'image/png',
+          ProfileImageRole.banner,
         );
-        unawaited(_recordAssetUpload(mxc, bannerBytes));
+        final mxc = await _matrix.uploadContent(
+          prepared.bytes,
+          filename: 'profile-banner.${prepared.extension}',
+          contentType: prepared.mimeType,
+        );
+        unawaited(_recordAssetUpload(mxc, prepared.bytes));
         try {
           await _matrix.setProfileField(userId, _profileBannerField, {
             _profileBannerField: mxc.toString(),
@@ -1047,12 +1051,16 @@ extension _MatrixProfiles on MatrixBackend {
         if (!supports(_profileVoiceBackgroundField)) {
           unsupported(_profileVoiceBackgroundField);
         }
-        final mxc = await _matrix.uploadContent(
+        final prepared = await prepareProfileImage(
           backgroundBytes,
-          filename: 'voice-background.png',
-          contentType: 'image/png',
+          ProfileImageRole.voiceBackground,
         );
-        unawaited(_recordAssetUpload(mxc, backgroundBytes));
+        final mxc = await _matrix.uploadContent(
+          prepared.bytes,
+          filename: 'voice-background.${prepared.extension}',
+          contentType: prepared.mimeType,
+        );
+        unawaited(_recordAssetUpload(mxc, prepared.bytes));
         await _matrix.setProfileField(userId, _profileVoiceBackgroundField, {
           _profileVoiceBackgroundField: mxc.toString(),
         });

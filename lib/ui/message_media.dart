@@ -81,7 +81,11 @@ class _LinkPreviewCard extends StatelessWidget {
                         backend.resolveLinkPreviewVideo(preview.url, video),
                     thumbnail: preview.imageBytes,
                     aspectRatio: aspectRatio,
-                    loop: shouldLoopLinkPreview(preview.url),
+                    loop: shouldLoopLinkPreview(preview.url, videoUrl: video),
+                    autoplay:
+                        shouldLoopLinkPreview(preview.url, videoUrl: video) &&
+                        backend.preferences.autoplayGifs &&
+                        !backend.preferences.reducedMotion,
                   ),
                 )
               else if (preview.imageBytes case final image?)
@@ -174,6 +178,7 @@ class _LinkVideoPlayer extends StatefulWidget {
     this.thumbnail,
     this.aspectRatio = 16 / 9,
     this.loop = false,
+    this.autoplay = false,
   });
 
   final Uri uri;
@@ -181,12 +186,48 @@ class _LinkVideoPlayer extends StatefulWidget {
   final Uint8List? thumbnail;
   final double aspectRatio;
   final bool loop;
+  final bool autoplay;
 
   @override
   State<_LinkVideoPlayer> createState() => _LinkVideoPlayerState();
 }
 
-class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
+class _LinkVideoPlayerState extends State<_LinkVideoPlayer>
+    with WidgetsBindingObserver {
+  bool _resumeAutoplay = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.autoplay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_toggle());
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(_LinkVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.autoplay && !widget.autoplay) {
+      _resumeAutoplay = false;
+      unawaited(_player?.pause());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!widget.autoplay) return;
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _resumeAutoplay = _resumeAutoplay || (_player?.state.playing ?? false);
+      unawaited(_player?.pause());
+    } else if (state == AppLifecycleState.resumed && _resumeAutoplay) {
+      _resumeAutoplay = false;
+      unawaited(_player?.play());
+    }
+  }
+
   bool _fullscreenOpen = false;
   Future<void> _fullscreen() async {
     final player = _player;
@@ -246,6 +287,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
       _error = null;
     });
     try {
+      if (widget.autoplay) await player.setVolume(0);
       var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
       if (!kIsWeb) {
         await _safePlayback?.close();
@@ -270,6 +312,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _widthSubscription?.cancel();
     _heightSubscription?.cancel();
     _player?.dispose();

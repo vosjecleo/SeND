@@ -12,7 +12,8 @@ import '../services/encoded_image_dimensions.dart';
 /// is not a size guarantee. The network stream is limited before SDK decryption.
 abstract final class BoundedMatrixMedia {
   static const inlineBytes = 16 * 1024 * 1024;
-  static const fileBytes = 64 * 1024 * 1024;
+  // Explicit file downloads, not automatic image previews or browser playback.
+  static const fileBytes = 512 * 1024 * 1024;
   static int _active = 0;
   static final _waiting = Queue<Completer<void>>();
 

@@ -5,10 +5,11 @@ its known limitations at the time. For current issues, see [Known issues](KNOWN_
 
 ## SeND 0.9.42 build 139 (2026-11-09)
 
-Preview and CI candidate, not yet released. Latest and Stable remain unchanged.
+Latest only. Stable remains unchanged; existing accounts, sessions and encryption
+keys are retained.
 
 - Refine DM and profile status sizes and phone-shaped cutouts, keeping member
-  sizes and the offline ring. Use consistent 2:1 profile banners aligned through
+  sizes and the offline ring. Use consistent 680:240 profile banners aligned through
   avatar centres, and continue the profile gradient behind transparent avatars.
 - Resolve new reply previews and acknowledge read markers after timeline rows
   are admitted. Let cached quotes bypass older blocked lookups and recover
@@ -28,9 +29,36 @@ Preview and CI candidate, not yet released. Latest and Stable remain unchanged.
   across video players. Keep scrubbing local until release, serialize queued
   seeks and preserve the chosen position through delayed decoder updates.
   Fullscreen reuses the existing player rather than restarting it at zero.
+- Allow uploads up to 512 MiB per file after compression, with confirmation
+  above 128 MiB. Keep separate batch-memory and homeserver limits, retain drafts
+  when cancelled and mark only files that exceed the per-file allowance.
+  Explicit file downloads accept the larger allowance; automatic preview and
+  browser-playback limits remain unchanged.
+- Add a shared room-details screen with Members, Media, Pins, Threads, Links
+  and Files, plus search, notifications and room settings. Media/files/links
+  reuse existing paginated search. Threads currently lists loaded-history roots.
+- Resize and compress profile/room avatars to a 512-pixel longest edge,
+  banners to 1920, call backgrounds to 1600, activity icons to 256 and stickers
+  to 512. Preserve transparency and animation timing. Enforce chat-image preset
+  limits after editing and even when resizing increases encoded size; explicit
+  Original quality remains unchanged.
+- Recognize Twitter GIF-as-MP4 media and loop it according to GIF autoplay and
+  reduced-motion preferences. Recover missing FxTwitter media through its
+  bounded status API without bypassing preview consent or network validation.
+- Retire stale native video read-ahead transfers when seeking. Previously, two
+  open transfers could fill the local proxy and make the next seek return HTTP
+  503, which the decoder treated as EOF. Keep two active upstream transfers and
+  bounded admission, reject malformed ranges before eviction and cancel streams
+  when playback closes. Live forward/backward seeking now continues playback.
+- Refresh the fresh-host installer with 512 MiB upload limits, custom profiles,
+  MatrixRTC delayed cleanup, current media/push helpers, signed PWA deployment,
+  read-only HTTPS checks and legacy Compose compatibility. Retain the optional
+  12 GiB account allowance and confirmed pruning. Custom native builds can use
+  their own Sunup gateway; official defaults are unchanged.
 - Reject mismatched seek responses while retaining video-network safeguards.
-  The matching PWA server range correction requires a separate deployment;
-  no production service update is part of this preview.
+  The matching PWA range/FxTwitter correction requires deployment of the updated
+  preview bridge, separately from the web archive. Physical iOS screenshot paste,
+  Android seek acceptance and a fresh-host installer run remain device/host checks.
 
 ## SeND 0.9.42 build 138 (2026-11-06)
 

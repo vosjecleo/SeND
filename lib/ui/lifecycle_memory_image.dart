@@ -14,9 +14,16 @@ bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
     state == AppLifecycleState.inactive;
 
 /// GIF providers also serve looping MP4/WebM renditions.
-bool shouldLoopLinkPreview(Uri pageUrl) {
+bool shouldLoopLinkPreview(Uri pageUrl, {Uri? videoUrl}) {
   final host = pageUrl.host.toLowerCase();
-  return host == 'giphy.com' ||
+  // Twitter encodes animated GIFs as MP4s in /tweet_video/, distinct from
+  // normal /ext_tw_video/ and /amplify_video/ clips. Do not loop all posts.
+  final twitterGif =
+      videoUrl?.host.toLowerCase() == 'video.twimg.com' &&
+      videoUrl!.path.startsWith('/tweet_video/') &&
+      videoUrl.path.endsWith('.mp4');
+  return twitterGif ||
+      host == 'giphy.com' ||
       host == 'klipy.com' ||
       host.endsWith('.klipy.com') ||
       host.endsWith('.giphy.com') ||

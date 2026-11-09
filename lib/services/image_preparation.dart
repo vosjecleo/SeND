@@ -5,6 +5,7 @@ import '../models/media_compression.dart';
 import 'encoded_image_dimensions.dart';
 import 'image_animation.dart';
 import 'raw_image.dart';
+import 'profile_image_upload.dart';
 
 class _ImagePreparationJob {
   _ImagePreparationJob(this.name);
@@ -48,9 +49,7 @@ Future<AttachmentDraft> prepareImage(
 ) async {
   if (!draft.mimeType.startsWith('image/') ||
       isRawImageFile(draft.name, draft.mimeType) ||
-      preset == ImageCompressionPreset.original ||
-      draft.imagePrepared ||
-      hasAnimatedImageHeader(draft.bytes)) {
+      preset == ImageCompressionPreset.original) {
     return draft;
   }
   return ImagePreparation.instance.track(draft.name, () async {
@@ -60,11 +59,25 @@ Future<AttachmentDraft> prepareImage(
         'This image is too large to resize safely. Choose original quality.',
       );
     }
+    final edge = preset == ImageCompressionPreset.smaller ? 1280 : 2048;
+    final needsResize = size.width > edge || size.height > edge;
+    if (hasAnimatedImageHeader(draft.bytes)) {
+      if (!needsResize) return draft;
+      final resized = await resizeAnimatedUpload(draft.bytes, size, edge);
+      return draft.copyWith(
+        bytes: resized,
+        name: '${draft.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.png',
+        mimeType: 'image/png',
+        imagePrepared: true,
+      );
+    }
+    if (draft.imagePrepared && !needsResize) return draft;
     final result = await compute(_resize, (
       bytes: draft.bytes,
       small: preset == ImageCompressionPreset.smaller,
     ));
-    if (result == null || result.bytes.length >= draft.bytes.length) {
+    if (result == null ||
+        !needsResize && result.bytes.length >= draft.bytes.length) {
       return draft;
     }
     final extension = result.png ? 'png' : 'jpg';
@@ -96,7 +109,9 @@ Future<AttachmentDraft> prepareImage(
           interpolation: image.Interpolation.average,
         )
       : oriented;
-  final png = resized.hasAlpha;
+  final png =
+      resized.hasAlpha &&
+      resized.any((pixel) => pixel.a < pixel.maxChannelValue);
   return (
     bytes: Uint8List.fromList(
       png

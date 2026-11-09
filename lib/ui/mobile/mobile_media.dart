@@ -1258,7 +1258,11 @@ class MobileLinkPreviewCard extends StatelessWidget {
                   thumbnail: preview.imageBytes,
                   width: preview.width,
                   height: preview.height,
-                  loop: shouldLoopLinkPreview(preview.url),
+                  loop: shouldLoopLinkPreview(preview.url, videoUrl: video),
+                  autoplay:
+                      shouldLoopLinkPreview(preview.url, videoUrl: video) &&
+                      backend.preferences.autoplayGifs &&
+                      !backend.preferences.reducedMotion,
                 ),
               )
             else if (preview.imageBytes case final image?)
@@ -1353,6 +1357,15 @@ class MobileLinkPreviewVideo extends StatefulWidget {
 
 class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
     with WidgetsBindingObserver {
+  @override
+  void didUpdateWidget(MobileLinkPreviewVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.autoplay && !widget.autoplay) {
+      _resumePlaying = false;
+      unawaited(_player?.pause());
+    }
+  }
+
   NativeLinkVideoProxy? _safePlayback;
   Player? _player;
   VideoController? _controller;
@@ -1404,6 +1417,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       }
     });
     try {
+      if (widget.autoplay) await player.setVolume(0);
       var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
       if (!kIsWeb) {
         await _safePlayback?.close();

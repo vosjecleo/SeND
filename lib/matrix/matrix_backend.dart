@@ -22,6 +22,7 @@ import '../services/history_gap_recovery.dart';
 import '../services/history_scope.dart';
 import '../services/server_storage.dart';
 import '../services/image_preparation.dart';
+import '../services/profile_image_upload.dart';
 import '../services/image_animation.dart';
 import '../services/upload_labels.dart';
 import '../services/frame_diagnostics.dart';
@@ -282,11 +283,17 @@ class MatrixBackend extends ChatBackend {
           );
         }
       },
-      upload: (bytes) => client.uploadContent(
-        bytes,
-        filename: 'activity-icon.png',
-        contentType: 'image/png',
-      ),
+      upload: (bytes) async {
+        final prepared = await prepareProfileImage(
+          bytes,
+          ProfileImageRole.activityIcon,
+        );
+        return client.uploadContent(
+          prepared.bytes,
+          filename: 'activity-icon.${prepared.extension}',
+          contentType: prepared.mimeType,
+        );
+      },
       canShare: () => _activityVisibleFor(ownId),
       canView: _activityVisibleFor,
       isForeground: () => _applicationForeground,

@@ -6,6 +6,7 @@ import '../services/native_link_video_proxy.dart';
 import 'dart:async';
 import 'video_playback_status.dart';
 import 'video_playback_overlay.dart';
+import 'large_upload_warning.dart';
 import 'activity_widgets.dart';
 import 'home_room_menu.dart';
 import 'archive_navigation.dart';
@@ -100,6 +101,7 @@ import 'message_spacing.dart';
 import 'timeline_scroll_anchor.dart';
 import 'relative_activity_time.dart';
 import 'room_search_panel.dart';
+import 'room_details_panel.dart';
 import 'room_event_visibility_dialog.dart';
 import 'room_access_dialog.dart';
 import 'media_album.dart';
@@ -361,6 +363,25 @@ class _ChatShellState extends State<ChatShell> {
     });
   }
 
+  void _showRoomDetails() {
+    final room = widget.backend.selectedRoom;
+    if (room == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        child: SizedBox(
+          width: 760,
+          height: 720,
+          child: RoomDetailsPanel(
+            backend: widget.backend,
+            room: room,
+            onDismiss: () => Navigator.pop(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showProfilePanel(RoomMemberSummary member, [Offset? anchor]) {
     if (!_sidePanelAvailable) {
       showMemberProfile(context, widget.backend, member, anchor: anchor);
@@ -505,6 +526,8 @@ class _ChatShellState extends State<ChatShell> {
     try {
       await widget.backend.submitComposerMessage(
         roomId: sendingRoomId,
+        confirmLargeUpload: (files) async =>
+            mounted && await confirmLargeUpload(context, files),
         text: text,
         formattedBody: formatted,
         attachments: attachments,
@@ -520,7 +543,8 @@ class _ChatShellState extends State<ChatShell> {
         ];
       }
       if (error is AttachmentBudgetExceeded) attachments = error.attachments;
-      if (mounted) {
+      if (error is LargeUploadCancelled) attachments = error.attachments;
+      if (mounted && error is! LargeUploadCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1127,6 +1151,8 @@ class _ChatShellState extends State<ChatShell> {
                                                       ),
                                                   onShowMembers:
                                                       _showMembersPanel,
+                                                  onOpenDetails:
+                                                      _showRoomDetails,
                                                   onShowProfile: (request) =>
                                                       _showProfilePopover(
                                                         request.$1,
@@ -1178,7 +1204,7 @@ class _ChatShellState extends State<ChatShell> {
                                             backend: widget.backend,
                                             room: selectedRoom,
                                             onOpenNavigation: _showMembersPanel,
-                                            onOpenDetails: _showMembersPanel,
+                                            onOpenDetails: _showRoomDetails,
                                             onOpenSettings: () =>
                                                 showDeltiecordSettings(
                                                   context,

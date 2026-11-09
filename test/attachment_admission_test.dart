@@ -3,8 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/attachment_admission.dart';
 
+final _largeBytes = Uint8List(attachmentUploadBudget + 1);
 AttachmentDraft draft(int size) => AttachmentDraft(
-  bytes: Uint8List(size),
+  bytes: size > 100 * 1048576
+      ? Uint8List.sublistView(_largeBytes, 0, size)
+      : Uint8List(size),
   name: 'test.mp4',
   mimeType: 'video/mp4',
   spoiler: true,
@@ -26,7 +29,7 @@ void main() {
     },
   );
   test(
-    '64 MiB exact is admitted, over-budget batch is retained and marked',
+    '512 MiB per-file boundary is admitted and only oversized files are marked',
     () async {
       final exact = await prepareAttachmentBatch(
         [draft(attachmentUploadBudget)],
@@ -36,14 +39,17 @@ void main() {
       expect(exact.single.uploadTooLarge, false);
       try {
         await prepareAttachmentBatch(
-          [draft(33 * 1048576), draft(33 * 1048576)],
+          [draft(1), draft(attachmentUploadBudget + 1)],
           const AppPreferences(),
           prepare: (item) async => item,
         );
         fail('oversized batch admitted');
       } on AttachmentBudgetExceeded catch (error) {
         expect(error.attachments.length, 2);
-        expect(error.attachments.every((item) => item.uploadTooLarge), true);
+        expect(error.attachments.map((item) => item.uploadTooLarge), [
+          false,
+          true,
+        ]);
         expect(
           error.toString(),
           contains('Uh-oh! Your attachment is too big.'),
@@ -51,6 +57,23 @@ void main() {
       }
     },
   );
+  test(
+    'upload admission is per file rather than a 512 MiB batch total',
+    () async {
+      final files = await prepareAttachmentBatch(
+        [draft(300 * 1048576), draft(300 * 1048576)],
+        const AppPreferences(),
+        prepare: (file) async => file,
+      );
+      expect(files.length, 2);
+      expect(files.every((file) => !file.uploadTooLarge), true);
+    },
+  );
+  test('large-upload warning is strictly above 128 MiB', () {
+    expect(largeUploads([draft(attachmentWarningThreshold)]), isEmpty);
+    expect(largeUploads([draft(attachmentWarningThreshold + 1)]).length, 1);
+    validateAttachmentSelection([attachmentUploadBudget]);
+  });
   test('read safety and file count remain separate limits', () {
     expect(
       () => validateAttachmentSelection([attachmentReadBudget + 1]),

@@ -50,6 +50,17 @@ def public_addresses(host):
     return answers
 
 
+def is_fx_status_api(url):
+    parsed = validate_url(url)
+    return (parsed.hostname == 'api.fxtwitter.com' and
+            re.fullmatch(r'/status/\d{1,30}', parsed.path) is not None)
+
+
+def accepts_document(url, mime):
+    return (mime in ('text/html', 'application/xhtml+xml') or
+            (mime == 'application/json' and is_fx_status_api(url)))
+
+
 def upstream(url, kind, byte_range):
     for _ in range(5):
         parsed = validate_url(url)
@@ -65,6 +76,8 @@ def upstream(url, kind, byte_range):
             headers = {'Accept-Encoding': 'identity', 'User-Agent': 'SeND/preview',
                        'Accept': {'document': 'text/html,application/xhtml+xml',
                                   'image': 'image/*', 'video': 'video/*'}[kind]}
+            if kind == 'document' and is_fx_status_api(url):
+                headers['Accept'] = 'application/json'
             if byte_range:
                 headers['Range'] = byte_range
             connection.request('GET', (parsed.path or '/') +
@@ -132,7 +145,7 @@ def handle(handler, allowed, client):
         byte_range = range_for_request(query.get('range', [handler.headers.get('Range', '')])[0]) if kind == 'video' else None
         connection, response = upstream(url, kind, byte_range)
         mime = response.getheader('Content-Type', '').split(';')[0].lower()
-        valid_type = (mime in ('text/html', 'application/xhtml+xml') if kind == 'document'
+        valid_type = (accepts_document(url, mime) if kind == 'document'
                       else mime in ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif')
                       if kind == 'image' else mime in ('video/mp4', 'video/webm', 'video/ogg'))
         if response.status not in (200, 206) or not valid_type:

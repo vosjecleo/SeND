@@ -360,6 +360,8 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
     try {
       await widget.backend.submitComposerMessage(
         roomId: widget.roomId,
+        confirmLargeUpload: (files) async =>
+            mounted && await confirmLargeUpload(context, files),
         text: value.plainText.trim(),
         formattedBody: value.html,
         attachments: attachments,
@@ -382,11 +384,15 @@ class _ThreadViewState extends State<ThreadView> with WidgetsBindingObserver {
         }
         _attachments.insertAll(
           0,
-          error is PartialComposerSendFailure ? error.attachments : attachments,
+          error is PartialComposerSendFailure
+              ? error.attachments
+              : error is LargeUploadCancelled
+              ? error.attachments
+              : attachments,
         );
         _editing ??= editing;
         _replying ??= replying;
-        _error = safeErrorMessage(error);
+        _error = error is LargeUploadCancelled ? null : safeErrorMessage(error);
       });
     }
   }

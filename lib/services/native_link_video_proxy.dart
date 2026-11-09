@@ -7,6 +7,23 @@ import 'socks_proxy.dart';
 import 'native_video_player_options.dart';
 import 'package:media_kit/media_kit.dart';
 
+class _VideoTransfer {
+  final cancelled = Completer<void>();
+  final released = Completer<void>();
+  void cancel() {
+    if (!cancelled.isCompleted) cancelled.complete();
+  }
+}
+
+bool _validSeekRange(String value) {
+  final match = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(value);
+  if (match == null) return false;
+  final start = int.tryParse(match[1]!);
+  final end = int.tryParse(match[2]!);
+  if (match[1]!.isEmpty) return end != null && end > 0;
+  return start != null && (match[2]!.isEmpty || end != null && end >= start);
+}
+
 /// Capability URL for a single video. The player never receives an origin URL.
 /// Every seek/reconnect goes through the pinned public-only preview transport.
 class NativeLinkVideoProxy {
@@ -17,7 +34,9 @@ class NativeLinkVideoProxy {
   Uri? _upstream;
   String? _token;
   String? format;
-  int _active = 0;
+  final _transfers = <_VideoTransfer>[];
+  Future<void> _admission = Future.value();
+  int _waiting = 0;
   int _transferred = 0;
   bool _closed = false;
   bool _reserved = false;
@@ -100,6 +119,36 @@ class NativeLinkVideoProxy {
     return null; // Includes HLS/DASH/HTML and renamed playlists.
   }
 
+  Future<_VideoTransfer?> _admit(String? range) async {
+    // Bound both active origins and queued local requests. A seek may leave
+    // old decoder read-ahead connections open, so retire the oldest transfer
+    // instead of reporting a fatal HTTP error to the newest seek.
+    if (_waiting >= 2 || _closed) return null;
+    _waiting++;
+    final previous = _admission;
+    final gate = Completer<void>();
+    _admission = gate.future;
+    try {
+      await previous;
+      if (_closed) return null;
+      if (_transfers.length >= 2) {
+        if (range == null) return null;
+        final oldest = _transfers.first;
+        oldest.cancel();
+        // Release only after its upstream subscription has been cancelled.
+        // New requests never increase the number of live origin transfers.
+        await oldest.released.future;
+      }
+      if (_closed) return null;
+      final transfer = _VideoTransfer();
+      _transfers.add(transfer);
+      return transfer;
+    } finally {
+      _waiting--;
+      gate.complete();
+    }
+  }
+
   Future<void> _serve(HttpRequest request) async {
     if (_closed ||
         request.uri.path != '/media/$_token' ||
@@ -109,20 +158,26 @@ class NativeLinkVideoProxy {
       await request.response.close();
       return;
     }
-    if (_active >= 2) {
+    final range = request.headers.value(HttpHeaders.rangeHeader);
+    if (range != null && !_validSeekRange(range)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      await request.response.close();
+      return;
+    }
+    final transfer = await _admit(range);
+    if (transfer == null) {
       request.response.statusCode = HttpStatus.serviceUnavailable;
       request.response.headers.set(HttpHeaders.retryAfterHeader, '1');
       await request.response.close();
       return;
     }
-    _active++;
     StreamSubscription<List<int>>? subscription;
     try {
-      final range = request.headers.value(HttpHeaders.rangeHeader);
-      if (range != null && !RegExp(r'^bytes=\d*-\d*$').hasMatch(range)) {
-        throw const FormatException('Invalid media range');
-      }
       final upstream = await _fetcher.openVideo(_upstream!, range: range);
+      if (transfer.cancelled.isCompleted || _closed) {
+        await upstream.body.listen((_) {}).cancel();
+        return;
+      }
       request.response.statusCode = upstream.statusCode;
       request.response.headers
         ..set(HttpHeaders.contentTypeHeader, upstream.contentType!)
@@ -150,6 +205,7 @@ class NativeLinkVideoProxy {
           bytes += chunk.length;
           _transferred += chunk.length;
           if (_closed ||
+              transfer.cancelled.isCompleted ||
               bytes > 512 * 1024 * 1024 ||
               _transferred > 1024 * 1024 * 1024) {
             if (!done.isCompleted) {
@@ -177,7 +233,7 @@ class NativeLinkVideoProxy {
             if (!done.isCompleted) done.complete();
           }),
         );
-        await done.future;
+        await Future.any([done.future, transfer.cancelled.future]);
       }
     } catch (_) {
       try {
@@ -186,8 +242,12 @@ class NativeLinkVideoProxy {
         /* Headers sent. */
       }
     } finally {
-      await subscription?.cancel();
-      _active--;
+      try {
+        await subscription?.cancel();
+      } finally {
+        _transfers.remove(transfer);
+        transfer.released.complete();
+      }
       try {
         await request.response.close();
       } catch (_) {
@@ -198,6 +258,9 @@ class NativeLinkVideoProxy {
 
   Future<void> close() async {
     _closed = true;
+    for (final transfer in _transfers) {
+      transfer.cancel();
+    }
     final server = _server;
     _server = null;
     if (_reserved) {

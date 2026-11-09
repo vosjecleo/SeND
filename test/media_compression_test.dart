@@ -76,7 +76,9 @@ void main() {
   test(
     'animated images and original quality are never flattened or reencoded',
     () async {
-      final bytes = Uint8List.fromList('GIF89a synthetic animation'.codeUnits);
+      final frames = image.Image(width: 2, height: 2)..frameDuration = 80;
+      frames.addFrame(image.Image(width: 2, height: 2)..frameDuration = 80);
+      final bytes = Uint8List.fromList(image.encodeGif(frames));
       final gif = AttachmentDraft(
         bytes: bytes,
         name: 'a.gif',
@@ -92,6 +94,32 @@ void main() {
       expect(copied.gifSource, gif.gifSource);
       expect(copied.bytes, bytes);
       expect(copied.spoiler, true);
+    },
+  );
+  test(
+    'edited oversized images cannot bypass Balanced resolution limits',
+    () async {
+      final draft = AttachmentDraft(
+        bytes: Uint8List.fromList(
+          image.encodePng(image.Image(width: 2100, height: 10)),
+        ),
+        name: 'edited.png',
+        mimeType: 'image/png',
+        spoiler: false,
+        imagePrepared: true,
+      );
+      final prepared = await prepareImage(
+        draft,
+        ImageCompressionPreset.balanced,
+      );
+      expect((await readEncodedImageDimensions(prepared.bytes))!.width, 2048);
+      expect(
+        identical(
+          await prepareImage(draft, ImageCompressionPreset.original),
+          draft,
+        ),
+        isTrue,
+      );
     },
   );
   test(
@@ -127,6 +155,32 @@ void main() {
         VideoCompressionPreset.smaller,
       );
       expect(changed.imageCompression, ImageCompressionPreset.smaller);
+    },
+  );
+  test(
+    'large GIF chat uploads are resized without flattening or losing metadata',
+    () async {
+      final first = image.Image(width: 1400, height: 20)..frameDuration = 100;
+      final second = image.Image(width: 1400, height: 20)..frameDuration = 200;
+      first.addFrame(second);
+      final draft = AttachmentDraft(
+        bytes: Uint8List.fromList(image.encodeGif(first)),
+        name: 'animated.gif',
+        mimeType: 'image/gif',
+        spoiler: true,
+        caption: 'caption',
+        gifSource: Uri.parse('https://example.org/original.gif'),
+      );
+      final prepared = await prepareImage(
+        draft,
+        ImageCompressionPreset.smaller,
+      );
+      final decoded = image.decodePng(prepared.bytes)!;
+      expect(decoded.width, 1280);
+      expect(decoded.numFrames, 2);
+      expect(prepared.caption, draft.caption);
+      expect(prepared.spoiler, isTrue);
+      expect(prepared.gifSource, draft.gifSource);
     },
   );
 }

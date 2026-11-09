@@ -2,13 +2,15 @@
 
 The guided installer creates a new Matrix server and the services SeND uses.
 It is for a **fresh, dedicated Linux host**, not an upgrade or migration tool.
-It refuses to overwrite an existing installation directory. Nothing is installed
-on Deltie by running the generator's tests.
+It refuses to overwrite an existing installation directory. Separate check and
+PWA-deployment commands below do not regenerate server configuration.
 
 ## Before starting
 
-Install Python 3.11 or later, Docker Engine and Docker Compose v2 using
+Install Python 3.11 or later and OpenSSL with Ed25519 support. Install Docker
+Engine and Docker Compose using
 [Docker's installation instructions](https://docs.docker.com/engine/install/).
+The Compose plugin is preferred; legacy `docker-compose` 1.29.2 is also supported.
 Use a host with a public IPv4 address. NAT, shared reverse proxies, IPv6-only hosts
 and existing Matrix servers need an operator-reviewed configuration instead.
 
@@ -44,7 +46,10 @@ Have these ready:
   your provider. Register the callback printed by the wizard.
 - Optionally, SMTP credentials for email verification and password resets.
   The wizard uses STARTTLS on port 587 and the contact email as sender.
-- A SeND web release archive and its SHA-256 from the trusted release manifest.
+- A SeND web release archive, its signed `releases.json` and matching
+  `releases.json.sig`. The installer verifies the publisher signature and archive
+  hash. Older releases can use a separately trusted SHA-256 instead, with an
+  explicit warning that a hash alone does not authenticate the publisher.
 
 Blank Telegram/KLIPY credentials leave those integrations unavailable. They do
 not disable Matrix messaging. FFmpeg, Cairo and the pinned TGS conversion tools
@@ -67,8 +72,17 @@ excludes everything. Docker administrators can read container credentials.
 
 The stack includes Synapse/PostgreSQL, Caddy HTTPS, coturn, LiveKit and its Matrix
 authorization service, ntfy, the media helper, and the Web Push gateway. Only
-the edge proxy and RTC ports are published. Registration is closed; the wizard
-offers Synapse's interactive command to create the first administrator. Later:
+the edge proxy and RTC ports are published. Custom profile fields, MatrixRTC
+discovery and delayed membership cleanup are configured. Profile details are
+Matrix profile metadata, not end-to-end encrypted messages.
+
+Synapse and the Matrix HTTPS route allow **512 MiB per uploaded file**. SeND
+checks the prepared file after compression and asks before sending files above
+128 MiB. The per-file limit is separate from account storage allowances,
+selection-memory limits and automatic-preview limits.
+
+Registration is closed; the wizard offers Synapse's interactive command to
+create the first administrator. Later:
 
 ```sh
 cd /opt/send
@@ -88,6 +102,12 @@ sudo docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/
 sudo docker compose up -d --wait --wait-timeout 180
 ```
 
+On legacy Compose, use `docker-compose` instead. Start with `up -d --no-build`
+without `--wait` or `--wait-timeout`, then inspect `ps` and container health.
+The wizard detects this difference automatically and fixes the project name
+explicitly. Keep the generated `.env`: it also sets `send` as the default project
+name for manual commands on both Compose implementations.
+
 If a service still fails, use `docker compose ps` and that service's logs. Share
 only redacted logs, never `docker compose config` output or the private files.
 
@@ -101,9 +121,12 @@ Web Push stores subscriptions and its stable VAPID key in `push-data`. It only
 accepts OpenID proofs from the configured Matrix server. It never receives
 Matrix access tokens or room keys. Message previews, when enabled, are decrypted
 on the receiving device. iOS requires a Home Screen installation and permission.
+The same worker includes Sunup forwarding, a bounded durable delivery queue and
+retries. Preserve `push-data` when updating so subscriptions and pending pushes
+survive. Phone background-data and distributor settings still need user approval.
 
-Last.fm and Steam are client integrations, not homeserver services. Official
-SeND builds retain their existing provider configuration. For custom Last.fm
+Last.fm, Libre.fm and Steam are client integrations, not homeserver services.
+Official SeND builds retain their existing provider configuration. For custom Last.fm
 builds, register your own application, obtain the necessary provider approval,
 and use the build credential mechanism in [BUILDING](../docs/BUILDING.md). Do not
 reuse SeND's private credentials. A client-embedded API secret is extractable.
@@ -111,8 +134,8 @@ reuse SeND's private credentials. A client-embedded API secret is extractable.
 ## Your own endpoints
 
 The PWA already uses same-origin GIF, Telegram and Web Push routes. Official
-native builds still use Deltie's public GIF/Telegram services; hosting a Matrix
-server does not silently redirect native clients to your helpers.
+native builds still use Deltie's public GIF/Telegram services and Sunup gateway;
+hosting a Matrix server does not silently redirect those clients to your helpers.
 
 To use your services for native builds and web link previews, build with the
 generated, non-secret `client-defines.json`. On your build machine:
@@ -126,8 +149,24 @@ to use Deltie for the allowlisted web-preview fallback. They are usable, but not
 fully independent of Deltie. The installer does not rewrite compiled JavaScript
 or build Flutter on the production server. An OIDC identity provider, SMTP
 account, federation policy and provider approvals are not created automatically.
+The defines include your GIF, Telegram, web-preview and Sunup gateway URLs, never
+provider keys. ntfy gateways remain on the distributor endpoint's own origin.
+GIF pagination and bounded video-range/FxTwitter preview handling are included
+in the generated media helper. Image/video editing, compression, search indexing
+and preference encryption run in clients and need no extra server transcoder.
 
 ## Check before inviting users
+
+Run the installer's read-only HTTPS checks from the reviewed source checkout:
+
+```sh
+sudo python3 server/install.py --check /opt/send --require-storage
+```
+
+Omit `--require-storage` if you declined storage setup. These checks use no
+account credentials, send no notifications and make no GIF-provider searches.
+They check discovery, helper routing, the push public key and, when requested,
+storage authentication. They do not prove end-to-end delivery or call connectivity.
 
 ```sh
 cd /opt/send
@@ -157,7 +196,8 @@ does not certify them merely because containers start.
 After initial startup, the wizard offers SeND storage controls and a 12 GiB
 original-upload allowance. This step runs only after Synapse has created its
 database tables. It recreates Synapse, not the other services. Declining leaves
-the installer in `storage/` for later use:
+the installer in `storage/` for later use and leaves the client storage panel
+unavailable:
 
 ```sh
 sudo python3 /opt/send/storage/install_storage.py \
@@ -166,8 +206,10 @@ sudo python3 /opt/send/storage/install_storage.py \
 
 The command above checks without changing anything. Add `--apply` during a
 maintenance window after reviewing the configuration and database backup.
-Existing media is never deleted to meet the allowance. Type/source categorization
-is optional in clients; encrypted files remain Other until labelled. Pruning
+Existing media is never deleted to meet the allowance. New client preferences
+enable type/source categorization; a saved opt-out is preserved. Older
+unclassified uploads appear as Legacy, while new unlabelled uploads appear as
+Other. The server does not decrypt media to determine its type. Pruning
 requires a preview and confirmation and can break shared attachments.
 See [module setup and rollback](README.md#account-storage-and-profile-metadata).
 
@@ -182,22 +224,54 @@ private configuration and push state. Use encrypted backups and test restoration
 on an isolated host. Keep database backups consistent with a supported PostgreSQL
 version; copying a running database volume is not a reliable backup.
 
-Review upstream release notes before changing pinned image versions, then run
-`docker compose pull` and `docker compose up -d --wait`. Rebuild helpers after
-copying reviewed sources, including **hosting_config.py**, into `helpers/`.
+Review upstream release notes before changing pinned image versions. Copy
+reviewed helper sources, including **hosting_config.py**, into `helpers/`, then:
+
+```sh
+cd /opt/send
+sudo docker compose pull postgres synapse caddy livekit jwt turn ntfy
+sudo docker compose build media web-push
+sudo docker compose up -d --no-build --wait --wait-timeout 180
+```
+
+Use the legacy startup procedure above if `--wait` is unavailable. Local helper
+images are built, not pulled from an unconfigured registry.
 Back up before database migrations; changing an image tag back is not always a
 valid database rollback. The wizard never rotates secrets during updates.
 
-For PWA updates, verify the archive against its trusted SHA-256 manifest, then:
+For PWA updates, use the current reviewed checkout and a signed release manifest.
+When updating an older installer bundle, copy the reviewed verifier and public
+trust keys first:
 
 ```sh
-sudo python3 /opt/send/deploy-web.py /path/to/SeND-VERSION+BUILD-web.tar.gz \
-  /opt/send/web VERSION+BUILD
+sudo install -m 600 packaging/sign-release.py /opt/send/verify-release.py
+sudo install -m 600 packaging/release-trust.json /opt/send/release-trust.json
 ```
 
+Then deploy:
+
+```sh
+sudo python3 server/install.py --deploy-web /opt/send \
+  --archive /path/to/SeND-VERSION+BUILD-web.tar.gz \
+  --manifest /path/to/releases.json
+```
+
+The signature defaults to `/path/to/releases.json.sig`; use `--signature` for
+another path. The bundled public trust keys verify the exact signed metadata,
+its expiry and the archive hash before deployment. No publisher private key is
+needed. Refresh the reviewed `verify-release.py` and `release-trust.json` when
+updating the installer bundle; never add an unverified key to bypass an error.
+
+For a pre-signature release only, verify its hash through a separately trusted
+source before using `/opt/send/deploy-web.py ARCHIVE /opt/send/web VERSION+BUILD`.
+Do not fall back to an unsigned hash after a signature failure.
+
+PWA deployment changes only web releases, not containers or server configuration.
 The deployer validates archive contents and atomically switches `web/current`.
 Retained release directories allow rollback by selecting the previous symlink
 target. Keep the web hostname stable to preserve browser sessions and push grants.
+`setup-manifest.json` records the source version, configured limits and bundled
+helper hashes for operator review. It is not a database or configuration backup.
 
 Upstream references: [Synapse](https://element-hq.github.io/synapse/latest/setup/installation.html),
 [LiveKit ports](https://docs.livekit.io/transport/self-hosting/ports-firewall/),

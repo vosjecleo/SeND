@@ -59,12 +59,14 @@ class RoomSearchPanel extends StatefulWidget {
     required this.backend,
     required this.onOpen,
     this.initialSection = RoomSearchSection.messages,
+    this.embedded = false,
     super.key,
   });
 
   final ChatBackend backend;
   final Future<void> Function(String eventId) onOpen;
   final RoomSearchSection initialSection;
+  final bool embedded;
 
   @override
   State<RoomSearchPanel> createState() => _RoomSearchPanelState();
@@ -473,15 +475,16 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
               ],
             ),
           ),
-          TabBar(
-            controller: _tabs,
-            tabs: const [
-              Tab(text: 'Messages'),
-              Tab(text: 'Media'),
-              Tab(text: 'Files'),
-              Tab(text: 'Links'),
-            ],
-          ),
+          if (!widget.embedded)
+            TabBar(
+              controller: _tabs,
+              tabs: const [
+                Tab(text: 'Messages'),
+                Tab(text: 'Media'),
+                Tab(text: 'Files'),
+                Tab(text: 'Links'),
+              ],
+            ),
           if (_searching || _loadingOlder || _navigating)
             const LinearProgressIndicator(minHeight: 2),
           if (_error != null)
@@ -511,6 +514,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                       key: ValueKey(results[index].id),
                       backend: widget.backend,
                       message: results[index],
+                      closeOnOpen: !widget.embedded,
                       onOpen: widget.onOpen,
                     ),
                   )
@@ -529,7 +533,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                           overflow: TextOverflow.ellipsis,
                         ),
                         onTap: () async {
-                          Navigator.pop(context);
+                          if (!widget.embedded) Navigator.pop(context);
                           await widget.onOpen(message.id);
                         },
                       );
@@ -602,12 +606,14 @@ class _MediaResult extends StatefulWidget {
     required this.backend,
     required this.message,
     required this.onOpen,
+    this.closeOnOpen = true,
     super.key,
   });
 
   final ChatBackend backend;
   final ChatMessage message;
   final Future<void> Function(String eventId) onOpen;
+  final bool closeOnOpen;
   @override
   State<_MediaResult> createState() => _MediaResultState();
 }
@@ -720,7 +726,7 @@ class _MediaResultState extends State<_MediaResult>
       if (mounted) setState(_invalidate);
     },
     onLongPress: () async {
-      Navigator.pop(context);
+      if (widget.closeOnOpen) Navigator.pop(context);
       await widget.onOpen(message.id);
     },
     child: ClipRRect(

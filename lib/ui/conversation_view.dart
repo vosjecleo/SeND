@@ -28,6 +28,7 @@ class _Conversation extends StatefulWidget {
     required this.onMentionSelected,
     required this.onMentionSelectionChanged,
     required this.onShowMembers,
+    this.onOpenDetails,
     required this.onShowProfile,
     required this.composerKey,
     super.key,
@@ -59,6 +60,7 @@ class _Conversation extends StatefulWidget {
   final ValueChanged<String> onMentionSelected;
   final ValueChanged<int> onMentionSelectionChanged;
   final VoidCallback onShowMembers;
+  final VoidCallback? onOpenDetails;
   final ValueChanged<(RoomMemberSummary, Offset?)> onShowProfile;
   final GlobalKey<_MessageComposerState> composerKey;
 
@@ -725,45 +727,49 @@ class _ConversationState extends State<_Conversation> {
                             const SizedBox(width: 12),
                           ],
                           Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  room.name,
-                                  key: const ValueKey(
-                                    'conversation-header-name',
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: DeltiecordTypeScale.bigUi,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (room.isDirect)
-                                  TimelineActivityStatus(
-                                    status: room.statusMessage,
-                                    backend: backend,
-                                    userId: room.directUserId,
-                                    presence: room.presence,
-                                    fallback: _ConversationPresence(
-                                      presence: room.presence,
-                                    ),
-                                  )
-                                else if (room.topic.isNotEmpty)
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.onOpenDetails,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    room.topic,
+                                    room.name,
                                     key: const ValueKey(
-                                      'conversation-header-topic',
+                                      'conversation-header-name',
                                     ),
-                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: DeltiecordTypeScale.normal,
-                                      color: context.deltiecord.muted,
+                                    style: const TextStyle(
+                                      fontSize: DeltiecordTypeScale.bigUi,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                              ],
+                                  if (room.isDirect)
+                                    TimelineActivityStatus(
+                                      status: room.statusMessage,
+                                      backend: backend,
+                                      userId: room.directUserId,
+                                      presence: room.presence,
+                                      fallback: _ConversationPresence(
+                                        presence: room.presence,
+                                      ),
+                                    )
+                                  else if (room.topic.isNotEmpty)
+                                    Text(
+                                      room.topic,
+                                      key: const ValueKey(
+                                        'conversation-header-topic',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: DeltiecordTypeScale.normal,
+                                        color: context.deltiecord.muted,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                           IconButton(

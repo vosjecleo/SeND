@@ -1198,7 +1198,23 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         width = dimensions.width;
         height = dimensions.height;
       }
-      totalBytes += item.bytes.length;
+      var bytes = item.bytes;
+      var mime = item.mimeType;
+      if (!canReuse && item.assetType != StickerAssetType.emoji) {
+        final prepared = await prepareProfileImage(
+          bytes,
+          ProfileImageRole.sticker,
+        );
+        bytes = prepared.bytes;
+        mime = prepared.mimeType;
+        if (bytes.length > 5 * 1024 * 1024) {
+          throw StateError('Each sticker must be at most 5 MiB.');
+        }
+        final dimensions = await readEncodedImageDimensions(bytes);
+        width = dimensions?.width;
+        height = dimensions?.height;
+      }
+      totalBytes += bytes.length;
       if (totalBytes > StickerPackDraft.maximumBytes) {
         throw StateError('A sticker pack must be at most 100 MiB in total.');
       }
@@ -1216,14 +1232,14 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
       final uri = canReuse
           ? reused.mxcUri
           : await _matrix.uploadContent(
-              item.bytes,
-              filename: '$shortcode.${_stickerExtension(item.mimeType)}',
-              contentType: item.mimeType,
+              bytes,
+              filename: '$shortcode.${_stickerExtension(mime)}',
+              contentType: mime,
             );
       // Newly uploaded pack media is already in memory. Seed the bounded
       // shared media cache so opening the picker does not immediately fetch
       // every item back from the homeserver.
-      if (!canReuse) _rememberStickerPreview(uri, item.bytes);
+      if (!canReuse) _rememberStickerPreview(uri, bytes);
       images[shortcode] = {
         'body': shortcode,
         'url': uri.toString(),
@@ -1232,8 +1248,8 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
         ],
         'net.deltiecord.asset_type': item.assetType.name,
         'info': {
-          'mimetype': item.mimeType,
-          if (!canReuse) 'size': item.bytes.length,
+          'mimetype': mime,
+          if (!canReuse) 'size': bytes.length,
           'w': ?width,
           'h': ?height,
         },
@@ -1633,28 +1649,35 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     final current = _matrix
         .accountData[MatrixBackend._spaceProfileAccountDataType]
         ?.content;
-    Uri? avatarUri;
-    if (profile.avatarBytes != null) {
-      avatarUri = await _matrix.uploadContent(
-        profile.avatarBytes!,
-        filename: 'space-profile-avatar.png',
-        contentType: 'image/png',
+    final prepared = <ProfileImageRole, PreparedProfileImage>{};
+    Future<Uri?> upload(
+      Uint8List? bytes,
+      String filename,
+      ProfileImageRole role,
+    ) async {
+      if (bytes == null) return null;
+      final image = prepared[role] = await prepareProfileImage(bytes, role);
+      return _matrix.uploadContent(
+        image.bytes,
+        filename: '$filename.${image.extension}',
+        contentType: image.mimeType,
       );
     }
-    Future<Uri?> upload(Uint8List? bytes, String filename) => bytes == null
-        ? Future.value(null)
-        : _matrix.uploadContent(
-            bytes,
-            filename: filename,
-            contentType: 'image/png',
-          );
+
+    final avatarUri = await upload(
+      profile.avatarBytes,
+      'space-profile-avatar',
+      ProfileImageRole.avatar,
+    );
     final bannerUri = await upload(
       profile.bannerBytes,
-      'space-profile-banner.png',
+      'space-profile-banner',
+      ProfileImageRole.banner,
     );
     final voiceBackgroundUri = await upload(
       profile.voiceBackgroundBytes,
-      'space-profile-voice-background.png',
+      'space-profile-voice-background',
+      ProfileImageRole.voiceBackground,
     );
     final globalProfile = await _matrix.getProfileFromUserId(userId);
     final effectiveAvatarUri = avatarUri ?? globalProfile.avatarUrl;
@@ -1739,18 +1762,20 @@ extension _MatrixAdvancedFeatures on MatrixBackend {
     );
     final cacheKey = '${profile.spaceId}|$userId';
     if (profile.avatarBytes != null) {
-      _spaceProfileAvatarBytes[cacheKey] = profile.avatarBytes!;
+      _spaceProfileAvatarBytes[cacheKey] =
+          prepared[ProfileImageRole.avatar]!.bytes;
     } else {
       _spaceProfileAvatarBytes.remove(cacheKey);
     }
     if (profile.bannerBytes != null) {
-      _spaceProfileBannerBytes[cacheKey] = profile.bannerBytes!;
+      _spaceProfileBannerBytes[cacheKey] =
+          prepared[ProfileImageRole.banner]!.bytes;
     } else {
       _spaceProfileBannerBytes.remove(cacheKey);
     }
     if (profile.voiceBackgroundBytes != null) {
       _spaceProfileVoiceBackgroundBytes[cacheKey] =
-          profile.voiceBackgroundBytes!;
+          prepared[ProfileImageRole.voiceBackground]!.bytes;
     } else {
       _spaceProfileVoiceBackgroundBytes.remove(cacheKey);
     }

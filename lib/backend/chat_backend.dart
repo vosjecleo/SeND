@@ -183,6 +183,7 @@ abstract class ChatBackend extends ChangeNotifier {
     ChatMessage? reply,
     String? editMessageId,
     ThreadSession? thread,
+    Future<bool> Function(List<AttachmentDraft>)? confirmLargeUpload,
   }) async {
     final target = thread?.sendTarget;
     if (thread != null && thread.roomId != roomId) {
@@ -277,6 +278,12 @@ abstract class ChatBackend extends ChangeNotifier {
               _notifyOutgoing();
             },
           );
+          final large = admission.largeUploads(prepared);
+          if (large.isNotEmpty &&
+              confirmLargeUpload != null &&
+              !await confirmLargeUpload(large)) {
+            throw admission.LargeUploadCancelled(prepared);
+          }
           for (var index = 0; index < prepared.length; index++) {
             items[index].draft = prepared[index].copyWith(
               gallery: attachments[index].gallery,

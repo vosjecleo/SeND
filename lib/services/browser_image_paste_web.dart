@@ -45,7 +45,7 @@ void Function() listenBrowserImagePaste({
     if (files.length > 20 ||
         files.fold<int>(0, (total, file) => total + file.size) >
             attachmentReadBudget) {
-      onError('Paste up to 20 images (256 MiB to edit safely).');
+      onError('Paste up to 20 images (512 MiB to edit safely).');
       return;
     }
     () async {
