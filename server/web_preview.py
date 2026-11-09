@@ -99,6 +99,25 @@ def range_for_request(value):
     return f'bytes={start}-{end}'
 
 
+def validate_video_range(requested, status, content_range, length):
+    wanted = re.fullmatch(r'bytes=(\d+)-(\d+)', requested or '')
+    if not wanted:
+        raise ValueError('Invalid requested range')
+    if status == 200:
+        if int(wanted[1]) != 0 or content_range:
+            raise ValueError('Upstream ignored seek range')
+        return
+    actual = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+)', content_range or '')
+    if status != 206 or not actual:
+        raise ValueError('Invalid upstream range')
+    start, end, total = map(int, actual.groups())
+    if not (start == int(wanted[1]) <= end <= int(wanted[2]) and
+            end < total <= 512 * 1024 * 1024):
+        raise ValueError('Upstream seek range mismatch')
+    if length >= 0 and length != end - start + 1:
+        raise ValueError('Upstream range length mismatch')
+
+
 def handle(handler, allowed, client):
     if not allowed(client, 120, 'web-preview') or not SLOTS.acquire(blocking=False):
         handler._json({'error': 'Preview service busy; try again shortly'}, 429)
@@ -122,7 +141,10 @@ def handle(handler, allowed, client):
         if int(response.getheader('Content-Length', '-1')) > limit:
             raise ValueError('Preview exceeds size limit')
         content_range = response.getheader('Content-Range')
-        if response.status == 206:
+        if kind == 'video':
+            validate_video_range(byte_range, response.status, content_range,
+                                 int(response.getheader('Content-Length', '-1')))
+        elif response.status == 206:
             match = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+)', content_range or '')
             if not match or not (0 <= int(match[1]) <= int(match[2]) < int(match[3]) <= 512 * 1024 * 1024):
                 raise ValueError('Invalid upstream range')
@@ -137,6 +159,8 @@ def handle(handler, allowed, client):
                 raise ValueError('Preview timed out')
         if len(body) > limit:
             raise ValueError('Preview exceeds size limit')
+        if kind == 'video' and response.status == 206:
+            validate_video_range(byte_range, response.status, content_range, len(body))
         handler.send_response(response.status)
         handler.send_header('Content-Type', mime)
         handler.send_header('Content-Length', str(len(body)))
@@ -149,8 +173,10 @@ def handle(handler, allowed, client):
         handler.send_header('Cache-Control', 'public, max-age=300')
         if content_range:
             handler.send_header('Content-Range', content_range)
-        if kind == 'video':
+        if kind == 'video' and response.status == 206:
             handler.send_header('Accept-Ranges', 'bytes')
+        if kind == 'video':
+            handler.send_header('Vary', 'Range')
         handler.end_headers()
         handler.wfile.write(body)
     except Exception:

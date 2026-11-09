@@ -21,10 +21,11 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
           ),
           child: const Text(
             'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
-            '• Smaller round status indicators with wider outlines\n\n'
-            '• Offline ring kept; mobile phone indicator unchanged\n\n'
-            '• Reply avatars now appear before the name and quoted text\n\n'
-            '• Reply previews update without sending a message or reloading',
+            '• Refined profile banners, avatars and status indicators\n\n'
+            '• Faster reply previews and read-receipt updates\n\n'
+            '• Improved image pasting and media previews\n\n'
+            '• Video time displays, ten-second skips and smoother seeking\n\n'
+            '• Fixes for channels appearing in Home after leaving a server',
           ),
         ),
       ),

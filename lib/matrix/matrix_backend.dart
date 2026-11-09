@@ -2951,6 +2951,12 @@ class MatrixBackend extends ChatBackend {
       _attachmentBytesCache['$eventId:${thumbnail ? 'thumbnail' : 'original'}'];
 
   @override
+  Future<Uint8List?> loadAttachmentPreview(
+    String messageId, {
+    bool Function()? isCurrent,
+  }) => _loadAttachmentPreview(messageId, requestCurrent: isCurrent);
+
+  @override
   Future<MediaPlaybackSource?> getMediaPlaybackSource(String messageId) =>
       _getMediaPlaybackSource(messageId);
 

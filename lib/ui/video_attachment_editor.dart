@@ -7,6 +7,8 @@ import '../models/chat_models.dart';
 import '../models/media_compression.dart';
 import '../models/video_edit.dart';
 import '../services/video_optimizer.dart';
+import '../services/video_seek_controller.dart';
+import 'video_playback_overlay.dart';
 import 'media_edit_canvas.dart';
 import 'media_editor_layout.dart';
 
@@ -28,6 +30,18 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
   Player? _player;
   VideoController? _controller;
   StreamSubscription<Duration>? _position;
+  StreamSubscription<Duration>? _durationChanges;
+  VideoSeekController? _seek;
+  void _skip(int seconds) {
+    final seek = _seek;
+    if (seek == null || _duration <= 0) return;
+    final target = (seek.position.inMilliseconds + seconds * 1000).clamp(
+      _range.start.round(),
+      math.max(_range.start.round(), _range.end.round() - 1),
+    );
+    unawaited(seek.seekTo(Duration(milliseconds: target.toInt())));
+  }
+
   RangeValues _range = const RangeValues(0, 1);
   Duration _playhead = Duration.zero;
   int _duration = 0, _turns = 0;
@@ -67,12 +81,26 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
       });
       final player = Player();
       _player = player;
+      _seek = VideoSeekController(
+        seek: player.seek,
+        initialDuration: Duration(milliseconds: _duration),
+      );
       _controller = VideoController(player);
       _position = player.stream.position.listen((position) {
+        _seek?.update(position: position);
         if (mounted) setState(() => _playhead = position);
         if (position.inMilliseconds > _range.end && _range.end > 0) {
           player.pause();
           player.seek(Duration(milliseconds: _range.start.round()));
+        }
+      });
+      _durationChanges = player.stream.duration.listen((duration) {
+        _seek?.update(duration: duration);
+        if (mounted && _duration <= 0 && duration > Duration.zero) {
+          setState(() {
+            _duration = duration.inMilliseconds;
+            _range = RangeValues(0, _duration.toDouble());
+          });
         }
       });
       final source = await Media.memory(widget.draft.bytes);
@@ -93,6 +121,8 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
   @override
   void dispose() {
     _position?.cancel();
+    _durationChanges?.cancel();
+    _seek?.dispose();
     _player?.dispose();
     super.dispose();
   }
@@ -102,10 +132,7 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
     (_probed.videoHeight ?? 9).toDouble(),
   );
   Size get _display => _turns.isOdd ? Size(_size.height, _size.width) : _size;
-  String _time(num ms) {
-    final seconds = (ms / 1000).floor();
-    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-  }
+  String _time(num ms) => videoTimeLabel(Duration(milliseconds: ms.round()));
 
   Future<void> _save() async {
     final plan = VideoEditPlan(
@@ -294,27 +321,32 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.zero,
-                        child: MediaEditCanvas(
-                          sourceSize: _size,
-                          turns: _turns,
-                          crop: _crop,
-                          onCrop: (v) => setState(() => _crop = v),
-                          cropMode: _cropMode && !_busy,
-                          locked: _locked,
-                          ratio: _ratio,
-                          child: _controller != null
-                              ? Video(
-                                  controller: _controller!,
-                                  controls: NoVideoControls,
-                                )
-                              : _probed.videoThumbnail != null
-                              ? Image.memory(
-                                  _probed.videoThumbnail!,
-                                  fit: BoxFit.contain,
-                                )
-                              : const Center(
-                                  child: Icon(Icons.movie_outlined, size: 72),
-                                ),
+                        child: VideoSkipGesture(
+                          enabled: _controller != null && !_cropMode && !_busy,
+                          onBack: () => _skip(-10),
+                          onForward: () => _skip(10),
+                          child: MediaEditCanvas(
+                            sourceSize: _size,
+                            turns: _turns,
+                            crop: _crop,
+                            onCrop: (v) => setState(() => _crop = v),
+                            cropMode: _cropMode && !_busy,
+                            locked: _locked,
+                            ratio: _ratio,
+                            child: _controller != null
+                                ? Video(
+                                    controller: _controller!,
+                                    controls: NoVideoControls,
+                                  )
+                                : _probed.videoThumbnail != null
+                                ? Image.memory(
+                                    _probed.videoThumbnail!,
+                                    fit: BoxFit.contain,
+                                  )
+                                : const Center(
+                                    child: Icon(Icons.movie_outlined, size: 72),
+                                  ),
+                          ),
                         ),
                       ),
                     ),

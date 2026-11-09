@@ -5,6 +5,32 @@ import web_preview as preview
 
 
 class PreviewTests(unittest.TestCase):
+    def test_video_seek_range_matches_request_and_body(self):
+        preview.validate_video_range('bytes=16-31', 206, 'bytes 16-31/32', 16)
+        preview.validate_video_range('bytes=0-31', 200, None, 32)
+        for status, value, length in [(206, 'bytes 0-31/32', 32),
+                                      (206, 'bytes 16-31/32', 15),
+                                      (206, 'bytes 16-32/32', 17),
+                                      (200, None, 32)]:
+            with self.subTest(status=status, value=value, length=length):
+                with self.assertRaises(ValueError):
+                    preview.validate_video_range('bytes=16-31', status, value, length)
+
+    def test_video_handler_rejects_wrong_start_before_reading_or_sending(self):
+        response = Mock(status=206)
+        response.getheader.side_effect = lambda name, default=None: {
+            'Content-Type': 'video/mp4', 'Content-Length': '32',
+            'Content-Range': 'bytes 0-31/32'}.get(name, default)
+        connection = Mock()
+        handler = Mock(path='/api/servers/preview?url=https%3A%2F%2Fvideo.twimg.com%2Fa.mp4&kind=video')
+        handler.headers = {'Range': 'bytes=16-31'}
+        with patch.object(preview, 'upstream', return_value=(connection, response)):
+            preview.handle(handler, lambda *args: True, 'client')
+        handler._json.assert_called_once()
+        handler.send_response.assert_not_called()
+        response.read.assert_not_called()
+        connection.close.assert_called_once()
+
     def test_url_allowlist(self):
         for url in ('http://i.imgur.com/a.png', 'https://localhost/a',
                     'https://imgur.com.evil.test/a', 'https://u:p@imgur.com/a',

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 class _Transport implements DirectPreviewTransport {
   int requests = 0;
   bool redirectToPrivate = false;
+  bool ignoresRanges = false;
   @override
   Future<DirectPreviewResponse> get(
     Uri url,
@@ -24,16 +25,57 @@ class _Transport implements DirectPreviewTransport {
     }
     final bytes = [0, 0, 0, 32, ...'ftypisom'.codeUnits, ...List.filled(20, 0)];
     return DirectPreviewResponse(
-      statusCode: 206,
+      statusCode: ignoresRanges ? 200 : 206,
       body: Stream.value(bytes),
       contentType: 'video/mp4',
       contentLength: bytes.length,
-      contentRange: 'bytes 0-31/32',
+      contentRange: ignoresRanges ? null : 'bytes 0-31/32',
     );
   }
 }
 
 void main() {
+  test('a non-range origin is not advertised as seekable', () async {
+    final proxy = NativeLinkVideoProxy(
+      fetcher: DirectLinkPreviewFetcher(
+        resolveHost: (_) async => [InternetAddress('93.184.216.34')],
+        transport: _Transport()..ignoresRanges = true,
+      ),
+    );
+    addTearDown(proxy.close);
+    final local = await proxy.open(Uri.parse('https://video.test/movie'));
+    final client = HttpClient();
+    addTearDown(() => client.close(force: true));
+    final response = await (await client.getUrl(local)).close();
+    expect(response.statusCode, 200);
+    expect(response.headers.value(HttpHeaders.acceptRangesHeader), isNull);
+    await response.drain<void>();
+    final seek = await client.getUrl(local);
+    seek.headers.set(HttpHeaders.rangeHeader, 'bytes=16-31');
+    final failed = await seek.close();
+    expect(failed.statusCode, 502);
+    await failed.drain<void>();
+  });
+  test(
+    'wrong-start seek responses are rejected rather than restarting video',
+    () async {
+      final proxy = NativeLinkVideoProxy(
+        fetcher: DirectLinkPreviewFetcher(
+          resolveHost: (_) async => [InternetAddress('93.184.216.34')],
+          transport: _Transport(),
+        ),
+      );
+      addTearDown(proxy.close);
+      final local = await proxy.open(Uri.parse('https://video.test/movie'));
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final request = await client.getUrl(local);
+      request.headers.set(HttpHeaders.rangeHeader, 'bytes=16-31');
+      final response = await request.close();
+      expect(response.statusCode, 502);
+      await response.drain<void>();
+    },
+  );
   test(
     'playback re-resolution cannot connect privately after public probe',
     () async {

@@ -119,7 +119,11 @@ abstract final class BoundedMatrixMedia {
     bool crop = true,
     bool animated = true,
     int maximumBytes = inlineBytes,
+    bool Function()? isCurrent,
   }) => run(() async {
+    if (isCurrent?.call() == false) {
+      throw StateError('Media request was cancelled.');
+    }
     final uri = width == null
         ? await mxc.getDownloadUri(client)
         : await mxc.getThumbnailUri(
@@ -129,7 +133,12 @@ abstract final class BoundedMatrixMedia {
             method: crop ? ThumbnailMethod.crop : ThumbnailMethod.scale,
             animated: animated,
           );
-    final bytes = await read(client, uri, maximumBytes: maximumBytes);
+    final bytes = await read(
+      client,
+      uri,
+      maximumBytes: maximumBytes,
+      isCurrent: isCurrent,
+    );
     await checkImage(bytes);
     return bytes;
   });

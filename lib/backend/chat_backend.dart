@@ -62,6 +62,15 @@ abstract class ChatBackend extends ChangeNotifier {
     bool thumbnail = false,
   }) => null;
 
+  /// Bounded grid preview only. Never falls back to downloading an original.
+  Future<Uint8List?> loadAttachmentPreview(
+    String messageId, {
+    bool Function()? isCurrent,
+  }) async => isCurrent?.call() == false
+      ? null
+      : cachedAttachmentPreview(messageId, thumbnail: true) ??
+            cachedAttachmentPreview(messageId);
+
   void _retainDelivered(QueuedMessage item) {
     _outgoing.remove(item.id);
     if (item.cancelled || _outgoingDisposed) return;

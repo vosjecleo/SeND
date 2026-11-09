@@ -21,6 +21,7 @@ class NativeLinkVideoProxy {
   int _transferred = 0;
   bool _closed = false;
   bool _reserved = false;
+  bool _supportsRanges = false;
   static int _instances = 0;
 
   Future<Uri> open(Uri upstream) async {
@@ -43,6 +44,7 @@ class NativeLinkVideoProxy {
     }
     // Sniff through the same validated connection path, not the native player.
     final probe = await _fetcher.openVideo(upstream, range: 'bytes=0-31');
+    _supportsRanges = probe.statusCode == HttpStatus.partialContent;
     final prefix = BytesBuilder(copy: false);
     await for (final chunk in probe.body.timeout(const Duration(seconds: 10))) {
       prefix.add(chunk.take(32 - prefix.length).toList());
@@ -102,9 +104,14 @@ class NativeLinkVideoProxy {
     if (_closed ||
         request.uri.path != '/media/$_token' ||
         request.uri.hasQuery ||
-        !['GET', 'HEAD'].contains(request.method) ||
-        _active >= 2) {
+        !['GET', 'HEAD'].contains(request.method)) {
       request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+    if (_active >= 2) {
+      request.response.statusCode = HttpStatus.serviceUnavailable;
+      request.response.headers.set(HttpHeaders.retryAfterHeader, '1');
       await request.response.close();
       return;
     }
@@ -119,8 +126,10 @@ class NativeLinkVideoProxy {
       request.response.statusCode = upstream.statusCode;
       request.response.headers
         ..set(HttpHeaders.contentTypeHeader, upstream.contentType!)
-        ..set(HttpHeaders.acceptRangesHeader, 'bytes')
         ..set(HttpHeaders.cacheControlHeader, 'no-store');
+      if (_supportsRanges || upstream.statusCode == HttpStatus.partialContent) {
+        request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      }
       if (upstream.contentRange != null) {
         request.response.headers.set(
           HttpHeaders.contentRangeHeader,

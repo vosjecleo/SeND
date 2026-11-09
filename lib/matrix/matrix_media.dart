@@ -1,6 +1,78 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  Future<Uint8List?> _loadAttachmentPreview(
+    String messageId, {
+    bool Function()? requestCurrent,
+  }) async {
+    if (requestCurrent?.call() == false) return null;
+    final lease = _sessionScope.capture();
+    final client = _client;
+    final generation = _attachmentCacheGeneration;
+    final event = await _resolveAttachmentEvent(messageId);
+    if (event == null ||
+        !event.hasAttachment ||
+        event.redacted ||
+        !lease.isCurrent ||
+        !identical(client, _client) ||
+        !identical(event.room.client, client) ||
+        generation != _attachmentCacheGeneration ||
+        requestCurrent?.call() == false) {
+      return null;
+    }
+    bool current() =>
+        lease.isCurrent &&
+        identical(client, _client) &&
+        generation == _attachmentCacheGeneration &&
+        requestCurrent?.call() != false;
+    final cached =
+        _attachmentBytesCache['${event.eventId}:thumbnail'] ??
+        _attachmentBytesCache['${event.eventId}:grid-preview'] ??
+        (event.messageType == MessageTypes.Image
+            ? _attachmentBytesCache['${event.eventId}:original']
+            : null);
+    if (cached != null) {
+      await BoundedMatrixMedia.checkImage(cached);
+      return current() ? cached : null;
+    }
+    Uint8List? bytes;
+    if (event.hasThumbnail) {
+      final file = await BoundedMatrixMedia.attachment(
+        event,
+        thumbnail: true,
+        maximumBytes: 2 * 1024 * 1024,
+        isCurrent: current,
+      );
+      bytes = file.bytes;
+    } else if (event.messageType == MessageTypes.Image &&
+        !event.content.containsKey('file')) {
+      final uri = Uri.tryParse(event.content['url'] as String? ?? '');
+      if (uri?.isScheme('mxc') == true) {
+        // Only clear media can be thumbnailed by the homeserver. Encrypted
+        // originals are never fetched just to populate a browsing grid.
+        bytes = await BoundedMatrixMedia.image(
+          event.room.client,
+          uri!,
+          width: 256,
+          height: 256,
+          crop: false,
+          animated: false,
+          maximumBytes: 2 * 1024 * 1024,
+          isCurrent: current,
+        );
+      }
+    }
+    if (bytes == null || !current()) return null;
+    final dimensions = await readEncodedImageDimensions(
+      bytes,
+      maximumPixels: 8000000,
+      maximumFramePixels: 32000000,
+    );
+    if (dimensions == null || !current()) return null;
+    _cacheMediaBytes('${event.eventId}:grid-preview', bytes);
+    return bytes;
+  }
+
   Future<Uint8List> _loadSavedGifPreview(SavedGifReference reference) async {
     final client = _matrix;
     final lease = _sessionScope.capture();

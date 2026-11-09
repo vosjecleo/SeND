@@ -422,6 +422,12 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     );
     final busy = _navigating || _searching || _loadingOlder;
     final media = _tabs.index == RoomSearchSection.media.index;
+    final room = widget.backend.selectedRoom;
+    final prefix = room?.isDirect == true ? '@' : '#';
+    final name = room?.name.trim().replaceFirst(RegExp(r'^[@#]'), '');
+    final searchHint = name == null || name.isEmpty
+        ? 'Search this room'
+        : 'Search $prefix$name';
     return SafeArea(
       child: Column(
         children: [
@@ -430,10 +436,10 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
             child: TextField(
               controller: _query,
               autofocus: widget.initialSection == RoomSearchSection.messages,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search this room',
-                suffixIcon: Icon(Icons.tune),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: searchHint,
+                suffixIcon: const Icon(Icons.tune),
               ),
               onChanged: _queryChanged,
               onSubmitted: (_) => _search(),
@@ -606,51 +612,101 @@ class _MediaResult extends StatefulWidget {
   State<_MediaResult> createState() => _MediaResultState();
 }
 
-class _MediaResultState extends State<_MediaResult> {
+class _MediaResultState extends State<_MediaResult>
+    with WidgetsBindingObserver {
   ChatBackend get backend => widget.backend;
   ChatMessage get message => widget.message;
   Future<Uint8List?>? _pending;
+  Timer? _retry;
+  int _generation = 0, _retries = 0;
+  Uint8List? _cached;
+  Uint8List? _peek() =>
+      backend.cachedAttachmentPreview(message.id, thumbnail: true) ??
+      backend.cachedAttachmentPreview(message.id);
+  @override
+  void initState() {
+    super.initState();
+    _cached = _peek();
+    backend.addListener(_cacheChanged);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _cacheChanged() {
+    final bytes = _peek();
+    if (bytes != null && !identical(bytes, _cached) && mounted) {
+      _cached = bytes;
+      setState(_invalidate);
+    }
+  }
+
+  void _invalidate() {
+    _generation++;
+    _retry?.cancel();
+    _pending = null;
+    _retries = 0;
+  }
+
+  Object? _metadata(ChatMessage value) {
+    final a = value.attachment;
+    return (
+      a?.sourceEventId,
+      a?.hasThumbnail,
+      a?.thumbnailSize,
+      a?.thumbnailWidth,
+      a?.thumbnailHeight,
+      a?.size,
+      a?.width,
+      a?.height,
+      a?.encrypted,
+    );
+  }
+
+  @override
+  void dispose() {
+    backend.removeListener(_cacheChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _retry?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) setState(_invalidate);
+  }
+
   @override
   void didUpdateWidget(_MediaResult oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.backend != backend) {
+      oldWidget.backend.removeListener(_cacheChanged);
+      backend.addListener(_cacheChanged);
+    }
     if (oldWidget.backend != backend ||
         oldWidget.message.id != message.id ||
-        oldWidget.message.attachment?.sourceEventId !=
-            message.attachment?.sourceEventId ||
-        oldWidget.message.attachment?.hasThumbnail !=
-            message.attachment?.hasThumbnail) {
-      _pending = null;
+        _metadata(oldWidget.message) != _metadata(message)) {
+      _cached = _peek();
+      _invalidate();
     }
   }
 
   Future<Uint8List?> _thumbnail() async {
-    final attachment = message.attachment;
-    if (attachment == null) return null;
-    // Browsing never fetches an original merely to produce a grid preview.
-    if (!attachment.hasThumbnail) return null;
-    final useThumbnail = attachment.hasThumbnail;
-    final size = useThumbnail ? attachment.thumbnailSize : attachment.size;
-    final width = useThumbnail ? attachment.thumbnailWidth : attachment.width;
-    final height = useThumbnail
-        ? attachment.thumbnailHeight
-        : attachment.height;
-    if (size == null ||
-        size <= 0 ||
-        size > 2 * 1024 * 1024 ||
-        width == null ||
-        height == null ||
-        width <= 0 ||
-        height <= 0 ||
-        width > 4096 ||
-        height > 4096 ||
-        width * height > 8000000) {
-      return null;
+    final generation = _generation;
+    try {
+      return await backend.loadAttachmentPreview(
+        message.id,
+        isCurrent: () => mounted && generation == _generation,
+      );
+    } catch (_) {
+      if (mounted && generation == _generation && _retries < 2) {
+        final delay = ++_retries;
+        _retry = Timer(Duration(seconds: delay * 2), () {
+          if (mounted && generation == _generation) {
+            setState(() => _pending = null);
+          }
+        });
+      }
+      rethrow;
     }
-    final bytes = await backend.downloadAttachment(
-      message.id,
-      thumbnail: useThumbnail,
-    );
-    return bytes.length <= 2 * 1024 * 1024 ? bytes : null;
   }
 
   @override
@@ -661,6 +717,7 @@ class _MediaResultState extends State<_MediaResult> {
         builder: (_) =>
             MobileMediaGallery(backend: backend, initialMessage: message),
       );
+      if (mounted) setState(_invalidate);
     },
     onLongPress: () async {
       Navigator.pop(context);
@@ -683,11 +740,17 @@ class _MediaResultState extends State<_MediaResult> {
               );
             }
             return Center(
-              child: Icon(
-                message.attachment?.kind == AttachmentKind.video
-                    ? Icons.play_circle_outline
-                    : Icons.image_outlined,
-                size: 38,
+              child: IconButton(
+                tooltip: snapshot.hasError ? 'Retry preview' : 'Open media',
+                onPressed: snapshot.hasError
+                    ? () => setState(_invalidate)
+                    : null,
+                icon: Icon(
+                  message.attachment?.kind == AttachmentKind.video
+                      ? Icons.play_circle_outline
+                      : Icons.image_outlined,
+                  size: 38,
+                ),
               ),
             );
           },

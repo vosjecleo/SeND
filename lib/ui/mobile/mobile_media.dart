@@ -2,6 +2,7 @@ import '../audio_attachment_player.dart';
 import '../../services/socks_proxy.dart';
 import '../../services/native_link_video_proxy.dart';
 import '../video_playback_status.dart';
+import '../video_playback_overlay.dart';
 import 'dart:async';
 import '../../services/spoiler_reveals.dart';
 import '../gif_favourite_button.dart';
@@ -1135,50 +1136,13 @@ class _MobilePlayerState extends State<_MobilePlayer>
           color: Colors.black,
           child: _fullscreenOpen
               ? const SizedBox.expand()
-              : GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onDoubleTap: () => showFullscreen(),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Video(
-                        controller: _video!,
-                        controls: NoVideoControls,
-                        fit: BoxFit.contain,
-                      ),
-                      VideoPlaybackStatus(
-                        playing: player.stream.playing,
-                        completed: player.stream.completed,
-                        initialPlaying: player.state.playing,
-                        initialCompleted: player.state.completed,
-                        builder: (context, playing) {
-                          if (playing) {
-                            return const SizedBox.shrink();
-                          }
-                          return Center(
-                            child: IconButton.filled(
-                              key: const ValueKey('mobile-media-play'),
-                              tooltip: 'Play video',
-                              onPressed: () => toggleVideoPlayback(player),
-                              icon: const _PlayGlyph(),
-                            ),
-                          );
-                        },
-                      ),
-                      Positioned(
-                        right: 6,
-                        bottom: 6,
-                        child: IconButton(
-                          tooltip: 'Fullscreen',
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black54,
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: () => showFullscreen(),
-                          icon: const Icon(Icons.fullscreen),
-                        ),
-                      ),
-                    ],
+              : VideoPlaybackOverlay(
+                  player: player,
+                  onFullscreen: () => showFullscreen(),
+                  child: Video(
+                    controller: _video!,
+                    controls: NoVideoControls,
+                    fit: BoxFit.contain,
                   ),
                 ),
         ),
@@ -1194,7 +1158,6 @@ class _MobileFullscreenVideo extends StatelessWidget {
     required this.onClose,
     this.onActions,
   });
-
   final Player player;
   final VideoController controller;
   final VoidCallback onClose;
@@ -1204,77 +1167,21 @@ class _MobileFullscreenVideo extends StatelessWidget {
   Widget build(BuildContext context) => Stack(
     children: [
       Positioned.fill(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => toggleVideoPlayback(player),
-          child: Video(
-            controller: controller,
-            controls: NoVideoControls,
-            fit: BoxFit.contain,
+        child: SafeArea(
+          top: false,
+          child: VideoPlaybackOverlay(
+            player: player,
+            child: Video(
+              controller: controller,
+              controls: NoVideoControls,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
-      ),
-      Positioned(
-        left: 16,
-        right: 16,
-        bottom: MediaQuery.paddingOf(context).bottom + 18,
-        child: _MobileVideoControls(player: player),
       ),
       _fullscreenCloseButton(context, onClose: onClose),
       if (onActions != null) _fullscreenActionsButton(context, onActions!),
     ],
-  );
-}
-
-class _MobileVideoControls extends StatelessWidget {
-  const _MobileVideoControls({required this.player});
-
-  final Player player;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Colors.black54,
-      borderRadius: DeltiecordCorners.borderRadius,
-    ),
-    child: Row(
-      children: [
-        VideoPlaybackStatus(
-          playing: player.stream.playing,
-          completed: player.stream.completed,
-          initialPlaying: player.state.playing,
-          initialCompleted: player.state.completed,
-          builder: (context, playing) => IconButton(
-            color: Colors.white,
-            onPressed: () => toggleVideoPlayback(player),
-            icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<Duration>(
-            stream: player.stream.position,
-            initialData: player.state.position,
-            builder: (context, positionSnapshot) => StreamBuilder<Duration>(
-              stream: player.stream.duration,
-              initialData: player.state.duration,
-              builder: (context, durationSnapshot) {
-                final duration = durationSnapshot.data ?? Duration.zero;
-                final position = positionSnapshot.data ?? Duration.zero;
-                final maximum = max(1, duration.inMilliseconds).toDouble();
-                return Slider(
-                  value: min(position.inMilliseconds.toDouble(), maximum),
-                  max: maximum,
-                  onChanged: duration == Duration.zero
-                      ? null
-                      : (value) =>
-                            player.seek(Duration(milliseconds: value.round())),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    ),
   );
 }
 
@@ -1429,7 +1336,6 @@ class MobileLinkPreviewVideo extends StatefulWidget {
     this.height,
     this.autoplay = false,
     this.loop = false,
-    this.onDoubleTap,
     super.key,
   });
 
@@ -1440,7 +1346,6 @@ class MobileLinkPreviewVideo extends StatefulWidget {
   final int? height;
   final bool autoplay;
   final bool loop;
-  final VoidCallback? onDoubleTap;
 
   @override
   State<MobileLinkPreviewVideo> createState() => _MobileLinkPreviewVideoState();
@@ -1622,10 +1527,15 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       child: _fullscreenOpen
           ? const ColoredBox(color: Colors.black)
           : player != null && controller != null
-          ? Video(
-              controller: controller,
-              controls: NoVideoControls,
-              fit: BoxFit.contain,
+          ? VideoPlaybackOverlay(
+              player: player,
+              onToggle: _play,
+              onFullscreen: _showFullscreen,
+              child: Video(
+                controller: controller,
+                controls: NoVideoControls,
+                fit: BoxFit.contain,
+              ),
             )
           : Stack(
               fit: StackFit.expand,
@@ -1664,45 +1574,8 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
     );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: _play,
-      onDoubleTap: widget.onDoubleTap ?? _showFullscreen,
-      child: Stack(
-        children: [
-          surface,
-          if (player != null && !_fullscreenOpen)
-            Positioned.fill(
-              child: VideoPlaybackStatus(
-                playing: player.stream.playing,
-                completed: player.stream.completed,
-                initialPlaying: player.state.playing,
-                initialCompleted: player.state.completed,
-                builder: (context, playing) => playing
-                    ? const SizedBox.shrink()
-                    : Center(
-                        child: IconButton.filled(
-                          tooltip: 'Play embedded video',
-                          onPressed: _play,
-                          icon: const _PlayGlyph(),
-                        ),
-                      ),
-              ),
-            ),
-          if (player != null && !_fullscreenOpen)
-            Positioned(
-              right: 6,
-              bottom: 6,
-              child: IconButton(
-                tooltip: 'Fullscreen',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black54,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: _showFullscreen,
-                icon: const Icon(Icons.fullscreen),
-              ),
-            ),
-        ],
-      ),
+      onTap: player == null ? _play : null,
+      child: surface,
     );
   }
 }

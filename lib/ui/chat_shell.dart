@@ -5,6 +5,7 @@ import '../services/socks_proxy.dart';
 import '../services/native_link_video_proxy.dart';
 import 'dart:async';
 import 'video_playback_status.dart';
+import 'video_playback_overlay.dart';
 import 'activity_widgets.dart';
 import 'home_room_menu.dart';
 import 'archive_navigation.dart';

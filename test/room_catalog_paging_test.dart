@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'package:image/image.dart' as image;
+import 'package:deltiecord/ui/lifecycle_memory_image.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/ui/room_search_panel.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
@@ -71,6 +73,45 @@ class _Catalog extends FakeBackend {
   }
 }
 
+class _PreviewCatalog extends _Catalog {
+  bool missingThumbnail = false, failPreview = false;
+  int previews = 0;
+  Uint8List? cached;
+  final png = image.encodePng(image.Image(width: 2, height: 2));
+  @override
+  List<ChatMessage> all(String kind) => [
+    ChatMessage(
+      id: 'preview',
+      pending: false,
+      sender: 'Alice',
+      body: '',
+      timestamp: DateTime(2026),
+      attachment: ChatAttachment(
+        kind: AttachmentKind.image,
+        name: 'photo.png',
+        mimeType: 'image/png',
+        size: 100,
+        encrypted: true,
+        spoiler: false,
+        hasThumbnail: !missingThumbnail,
+      ),
+    ),
+  ];
+  @override
+  Future<Uint8List?> loadAttachmentPreview(
+    String id, {
+    bool Function()? isCurrent,
+  }) async {
+    previews++;
+    if (failPreview) throw StateError('Temporary thumbnail failure');
+    return cached ?? (missingThumbnail ? null : png);
+  }
+
+  @override
+  Uint8List? cachedAttachmentPreview(String id, {bool thumbnail = false}) =>
+      thumbnail ? null : cached;
+}
+
 void main() {
   Future<void> show(
     WidgetTester tester,
@@ -92,6 +133,73 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'previews without optional size metadata render without original downloads',
+    (tester) async {
+      final backend = _PreviewCatalog();
+      await show(tester, backend, RoomSearchSection.media);
+      expect(find.byType(LifecycleMemoryImage), findsOneWidget);
+      expect(backend.downloads, 0);
+      expect(backend.previews, 1);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'opening an original repairs a previously empty preview from cache',
+    (tester) async {
+      final backend = _PreviewCatalog()..missingThumbnail = true;
+      await show(tester, backend, RoomSearchSection.media);
+      expect(find.byType(LifecycleMemoryImage), findsNothing);
+      backend.cached = backend.png;
+      backend.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byType(LifecycleMemoryImage), findsOneWidget);
+      expect(backend.downloads, 0);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'failed previews have bounded retries and an explicit retry action',
+    (tester) async {
+      final backend = _PreviewCatalog()..failPreview = true;
+      await show(tester, backend, RoomSearchSection.media);
+      expect(backend.previews, 1);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      expect(backend.previews, 3);
+      await tester.pump(const Duration(seconds: 30));
+      expect(backend.previews, 3);
+      backend.failPreview = false;
+      await tester.tap(find.byTooltip('Retry preview'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LifecycleMemoryImage), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  for (final direct in [false, true]) {
+    testWidgets('search hint identifies its ${direct ? 'DM' : 'channel'}', (
+      tester,
+    ) async {
+      final backend = _Catalog()
+        ..currentRoom = RoomSummary(
+          id: '!r:test',
+          name: direct ? '@Alice' : '#General',
+          lastMessage: '',
+          unreadCount: 0,
+          isDirect: direct,
+          usesChannelIcon: !direct,
+        );
+      await show(tester, backend, RoomSearchSection.media);
+      expect(
+        find.text(direct ? 'Search @Alice' : 'Search #General'),
+        findsOneWidget,
+      );
+    });
   }
 
   testWidgets(

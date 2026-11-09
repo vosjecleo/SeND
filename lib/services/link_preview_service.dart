@@ -14,6 +14,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/chat_models.dart';
 import '../version.dart';
 import 'bounded_http.dart';
+import 'video_byte_range.dart';
 import 'public_network_address.dart';
 
 const _maximumPreviewDocumentBytes = 1024 * 1024;
@@ -429,7 +430,12 @@ class DirectLinkPreviewFetcher {
         current = current.resolveUri(response.location!);
         continue;
       }
-      if (response.statusCode != 200 && response.statusCode != 206 ||
+      if (!matchesVideoByteRange(
+            requested: range,
+            status: response.statusCode,
+            contentRange: response.contentRange,
+            contentLength: response.contentLength,
+          ) ||
           !(response.contentType?.startsWith('video/') == true ||
               response.contentType == 'application/octet-stream') ||
           (_responseResourceSize(response) ?? _maximumPreviewVideoBytes + 1) >

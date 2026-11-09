@@ -133,3 +133,154 @@ banner/center alignment, unchanged member badge sizing, text/image paste and
 room-switch protection. Validation results are recorded separately in task
 logs. No commit, push, package build, version bump or deployment was requested.
 Previously staged production push-gateway hardening remains a separate task.
+
+Media grid and video controls investigation, 2026-11-08
+
+Report: many Media search tiles show image placeholders. YouTube videos can
+restart when the playback bar is tapped, and lack elapsed/total time displays.
+Requested: double-tap left/right to skip backward/forward ten seconds on all
+seekable video players, plus elapsed and total duration on all playback controls.
+This includes inline/fullscreen, uploaded media and embeds, native and PWA.
+Live RTC streams are not seekable recordings. Implementation is not authorized
+by this investigation request; no playback behavior changed here.
+
+Media tile findings (lib/ui/room_search_panel.dart):
+- _thumbnail refuses media without a separate thumbnail. It also rejects a
+  thumbnail if any size/dimension metadata is missing, or it exceeds the bounded
+  preview limits (2 MiB, 4096px per axis, eight million pixels).
+- A legitimate image can lack a thumbnail: the Matrix SDK discards a generated
+  thumbnail when it is larger than the original; GIF/legacy/other-client uploads
+  can also omit thumbnails. The current grid does not use an already-cached
+  original or request an independent server-generated preview as a fallback.
+- _pending retains null/error results. didUpdateWidget only invalidates it for
+  backend/event/source-event/hasThumbnail changes, not corrected thumbnail
+  dimensions or size. Temporary download/decryption failures therefore look
+  like permanent placeholders until the tile is recreated.
+- The FutureBuilder shows the same placeholder for loading, unavailable and
+  failed previews, so the screenshot alone does not distinguish these causes.
+  Asked whether tapping an affected tile opens its full image successfully.
+- Do not solve this by downloading every original while browsing. Preserve
+  bounded preview memory/network use and encrypted-media guarantees. Server-side
+  thumbnail generation cannot decrypt legacy encrypted originals.
+
+Video findings:
+- _CompactVideoControls and _MobileVideoControls have sliders and play controls
+  but no elapsed/total Text widgets. Several mobile inline players have no seek
+  bar at all. This is missing implementation, not just slow duration metadata.
+- Multiple double-tap handlers currently open fullscreen. Desktop link fullscreen
+  creates a fresh _LinkVideoPlayer with autoplay, without transferring playback
+  position. Mobile fullscreen generally reuses its existing player. A mistaken
+  fullscreen gesture is therefore one possible desktop restart path.
+- Mobile fullscreen Slider seeks directly in onChanged, using reported player
+  position as its thumb value. It has no local drag position or seek-on-release
+  handling. Repeated seeks and delayed position updates are plausible sources
+  of scrubber snapping and cancelled requests. Desktop compact controls already
+  hold local drag state and seek on release.
+- NativeLinkVideoProxy forwards Range but advertises Accept-Ranges even when
+  the upstream returns a full response; neither it nor openVideo verifies that
+  a 206 Content-Range starts where the requested range starts. A synthetic probe
+  confirmed that bytes=16-31 can receive bytes 0-31/32 unchanged. This establishes
+  an unchecked response path, NOT that the reported YouTube server does this.
+- That proxy rejects requests beyond two simultaneous active transfers with
+  404. Overlapping seek/reconnect requests can hit this cap. Do not relax the
+  SSRF/redirect/container safeguards when changing seek behavior.
+- The existing YouTube path already resolves expiring playback URLs at start;
+  there is no mid-play refresh of the proxy origin. Expiry is a secondary
+  candidate if seeking only fails later in a long session.
+- Asked for an affected YouTube URL, platform and inline/fullscreen distinction
+  before attributing the actual restart to one of these candidates.
+
+Validation: six synthetic/native tests passed, including existing catalog
+pagination/security checks and the mismatched-range probe. Probe source is
+ignored .dart_tool/video_range_probe_test.dart; log is
+.migration/media-report-investigation.log. No actual YouTube seek reproduction,
+app fix, commit, push, build or deployment has occurred for this new report.
+
+Follow-up with supplied video and media confirmation, 2026-11-08
+
+The user supplied https://youtu.be/4Gm736MpMwQ and confirmed that tapping blank
+Media tiles opens the full images successfully, but never repairs the previews.
+That strongly supports the thumbnail-only admission/cache path rather than
+unavailable original media. Successful full-image downloads are cached under
+the original key; the grid neither reads that cache as a preview fallback nor
+invalidates its cached null/error after returning from fullscreen.
+
+Live bounded investigation on Deltie: this video's selected muxed stream uses
+the ANDROID client and is 489458220 bytes. A nonzero HTTP Range request returned
+206 with the correct Content-Range; a URL range query returned 200 without a
+Content-Range. Therefore blindly changing every YouTube request to query ranges
+would be inappropriate. The SDK deliberately chooses headers for ANDROID and
+query ranges for other clients, which remains relevant to other resolved URLs.
+
+A headless native Linux MediaKit player was then opened through the actual
+NativeLinkVideoProxy and existing restricted-parser options. Its duration was
+10709391ms; seeks to 3569797ms and 7139594ms both reached those positions. Output
+was muted/null, buffering limited to 1MiB, and the player/proxy were disposed.
+This does not reproduce the reported reset on Android/iOS or exercise the UI
+slider. It lowers the likelihood of a consistent file/range failure for this
+specific URL, while keeping slider request races, request overlap, fullscreen
+reinitialization and platform-specific behavior as candidates.
+
+The requested room-search hint is implemented locally: "Search this #General"
+or "Search this @Alice", using the current room name without doubled prefixes.
+Four catalog widget tests pass, covering both labels and existing pagination/
+no-original-download behavior. Live header-range and native seek probes pass
+in ignored .dart_tool/youtube_seek_probe_test.dart; results are in
+.migration/youtube-example-investigation.log and
+.migration/youtube-native-seek-investigation.log. No media-grid or video-control
+fix, double-tap feature, commit, push, build or deployment was done in this step.
+
+Video/grid implementation authorized and completed locally, 2026-11-08
+
+Room-search hints are now "Search #General" / "Search @Alice", without "this".
+
+The grid now asks the backend for a bounded preview rather than requiring every
+optional thumbnail metadata field in the UI. Existing thumbnails are checked
+against their actual bytes/dimensions; missing thumbnails for clear MXC images
+can use a 256px homeserver thumbnail. Already-viewed/cached image originals can
+repair an empty tile. Returning from fullscreen refreshes the tile, and cache
+changes update it while open. Temporary failures retry at most twice, then offer
+an explicit Retry preview action; resume and changed metadata allow a fresh try.
+Requests are invalidated when their tile/context is replaced, with existing
+account/cache lifetime guards and bounded media concurrency preserved.
+
+No original is downloaded solely for browsing. Legacy encrypted images without
+an uploaded thumbnail may still lack an initial preview until viewed/cached;
+the homeserver cannot decrypt them to generate one. Thumbnail reads remain
+limited to 2MiB and bounded image dimensions; cached originals retain existing
+safe-image checks and memory limits. Media catalog pagination remains unchanged.
+
+Inline, fullscreen and embedded videos now share VideoPlaybackOverlay and its
+seek controller. Controls show elapsed/total time, including hour-long videos.
+Double taps on the video surface skip backward/forward ten seconds; slider and
+button hit areas are separate from this gesture. Scrubbing changes a local thumb
+and seeks only on release; queued seeks are serialized/coalesced and the chosen
+position remains visible until acknowledged or timed out. Stale EOF status does
+not turn Play after a pending seek into an unwanted replay from zero.
+
+Desktop inline/link fullscreen now reuses the same player and video controller,
+detaching the inline output before attaching fullscreen, instead of creating a
+fresh autoplaying player at zero. Mobile retains its existing shared-player
+navigation. Editor double-tap seeking respects trim bounds, stays in unrotated
+screen coordinates and is disabled during crop manipulation. Editor time labels
+use the same hour-aware formatting. Live RTC streams remain non-seekable.
+
+Native range validation rejects a wrong-start/truncated/ignored nonzero range
+instead of feeding it to the decoder. Native overload remains capped, returning
+503 with Retry-After rather than a misleading missing-file response. Range
+support is advertised only after a valid partial response. Local server code
+for PWA previews now checks requested offsets, response/body lengths, truthful
+range support and Vary: Range. DNS pinning, provider restrictions, redirect and
+playlist/reference protections, transfer caps and Matrix E2EE are unchanged.
+
+Validation: analysis clean; 57 broader native checks passed with one existing
+platform skip, followed by a 48-pass final UI/gallery/search/quote run and a
+15-pass Chrome run. All 77 server tests passed. The supplied YouTube link still
+reports 10709391ms and reaches 3569797ms / 7139594ms through the updated actual
+Linux player/proxy. These checks do not establish the original Android/iOS UI
+reset's exact cause. Physical phone/PWA preview confirmation remains required.
+Logs are .migration/video-preview-*.log and .migration/youtube-after-seek-fixes.log.
+
+No commit, push, package build, version change or production deployment here.
+The PWA range correction requires deployment of server/web_preview.py; no live
+service was restarted. This is separate from the older staged push hardening.

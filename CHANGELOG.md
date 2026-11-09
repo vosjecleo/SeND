@@ -3,6 +3,35 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 139 (2026-11-09)
+
+Preview and CI candidate, not yet released. Latest and Stable remain unchanged.
+
+- Refine DM and profile status sizes and phone-shaped cutouts, keeping member
+  sizes and the offline ring. Use consistent 2:1 profile banners aligned through
+  avatar centres, and continue the profile gradient behind transparent avatars.
+- Resolve new reply previews and acknowledge read markers after timeline rows
+  are admitted. Let cached quotes bypass older blocked lookups and recover
+  missing keys for out-of-window originals without restoring an entire backup.
+  Preserve timeline gaps, loaded history, scroll anchors and receipt privacy.
+- Keep successfully left channels out of navigation while membership sync
+  catches up, preventing them appearing in Home after their server disappears.
+  Failed leaves remain retryable.
+- Use one image/text Paste action, including image-only screenshot clipboards,
+  and accept browser clipboard files with missing MIME metadata. Keep room-switch
+  guards and ordinary text paste. Physical iOS confirmation is still needed.
+- Name the conversation in search hints. Recover media-grid previews from
+  cached images, accept incomplete optional thumbnail metadata safely and retry
+  transient failures a bounded number of times. Browsing does not download
+  originals; encrypted legacy media without thumbnails may need opening first.
+- Share elapsed/total time displays and ten-second left/right double-tap seeks
+  across video players. Keep scrubbing local until release, serialize queued
+  seeks and preserve the chosen position through delayed decoder updates.
+  Fullscreen reuses the existing player rather than restarting it at zero.
+- Reject mismatched seek responses while retaining video-network safeguards.
+  The matching PWA server range correction requires a separate deployment;
+  no production service update is part of this preview.
+
 ## SeND 0.9.42 build 138 (2026-11-06)
 
 - Shrink circular status indicators slightly without changing their avatar

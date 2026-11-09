@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:image/image.dart' as image;
+import 'package:deltiecord/models/chat_models.dart' show AttachmentDraft;
 import 'package:deltiecord/matrix/matrix_backend.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
@@ -148,6 +150,45 @@ void main() {
   setUp(() {
     addTearDown(installBackendBrowserFixture());
   });
+  test(
+    'encrypted media grid reuses viewed originals but never downloads a missing preview',
+    () async {
+      final client = _Client();
+      final room = _Room(client);
+      room.events.add(
+        Event.fromJson({
+          'event_id': r'$photo',
+          'sender': '@friend:test',
+          'origin_server_ts': 1,
+          'type': EventTypes.Message,
+          'content': {
+            'msgtype': MessageTypes.Image,
+            'body': 'photo.png',
+            'info': {'mimetype': 'image/png', 'size': 100, 'w': 2, 'h': 2},
+            'file': {'url': 'mxc://test/encrypted-original'},
+          },
+        }, room),
+      );
+      client.rooms = [room];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.selectRoom(room.id);
+      // A network fallback would fail: no HTTP/download/decryption fixture is
+      // provided. Browsing encrypted legacy media must instead return no preview.
+      expect(await backend.loadAttachmentPreview(r'$photo'), isNull);
+      final png = image.encodePng(image.Image(width: 2, height: 2));
+      backend.cacheOutgoingAttachment(
+        r'$photo',
+        AttachmentDraft(
+          bytes: png,
+          name: 'photo.png',
+          mimeType: 'image/png',
+          spoiler: false,
+        ),
+      );
+      expect(await backend.loadAttachmentPreview(r'$photo'), png);
+    },
+  );
   Future<void> deliver(_Client client, _Room room, Event event) async {
     client.onTimelineEvent.add(event);
     // Give the pre-admission SDK callback time to finish. The sync callback

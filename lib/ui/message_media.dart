@@ -48,48 +48,6 @@ class _LinkPreviewCard extends StatelessWidget {
   final LinkPreview preview;
   final ChatBackend backend;
 
-  Future<void> _showVideoFullscreen(BuildContext context, Uri video) =>
-      showDialog<void>(
-        context: context,
-        barrierColor: Colors.black,
-        builder: (dialogContext) => Dialog.fullscreen(
-          backgroundColor: Colors.black,
-          child: Stack(
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(dialogContext).width,
-                    maxHeight: MediaQuery.sizeOf(dialogContext).height,
-                  ),
-                  child: _LinkVideoPlayer(
-                    uri: video,
-                    resolveUri: () =>
-                        backend.resolveLinkPreviewVideo(preview.url, video),
-                    thumbnail: preview.imageBytes,
-                    aspectRatio: mediaAspectRatio(
-                      preview.width,
-                      preview.height,
-                    ),
-                    autoplay: true,
-                    loop: shouldLoopLinkPreview(preview.url),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 18,
-                top: 18,
-                child: IconButton.filled(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.pop(dialogContext),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final video = preview.videoUrl;
@@ -124,7 +82,6 @@ class _LinkPreviewCard extends StatelessWidget {
                     thumbnail: preview.imageBytes,
                     aspectRatio: aspectRatio,
                     loop: shouldLoopLinkPreview(preview.url),
-                    onDoubleTap: () => _showVideoFullscreen(context, video),
                   ),
                 )
               else if (preview.imageBytes case final image?)
@@ -216,24 +173,37 @@ class _LinkVideoPlayer extends StatefulWidget {
     this.resolveUri,
     this.thumbnail,
     this.aspectRatio = 16 / 9,
-    this.autoplay = false,
     this.loop = false,
-    this.onDoubleTap,
   });
 
   final Uri uri;
   final Future<Uri> Function()? resolveUri;
   final Uint8List? thumbnail;
   final double aspectRatio;
-  final bool autoplay;
   final bool loop;
-  final VoidCallback? onDoubleTap;
 
   @override
   State<_LinkVideoPlayer> createState() => _LinkVideoPlayerState();
 }
 
 class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
+  bool _fullscreenOpen = false;
+  Future<void> _fullscreen() async {
+    final player = _player;
+    final controller = _controller;
+    if (player == null || controller == null || !_opened || _fullscreenOpen) {
+      return;
+    }
+    setState(() => _fullscreenOpen = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    try {
+      await showVideoPlayerFullscreen(context, player, controller);
+    } finally {
+      if (mounted) setState(() => _fullscreenOpen = false);
+    }
+  }
+
   NativeLinkVideoProxy? _safePlayback;
   Player? _player;
   VideoController? _controller;
@@ -244,12 +214,6 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
   bool _opened = false;
   bool _opening = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.autoplay) unawaited(_toggle());
-  }
 
   Future<void> _toggle() async {
     final existing = _player;
@@ -322,7 +286,9 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
         : widget.aspectRatio;
     final surface = AspectRatio(
       aspectRatio: naturalRatio.clamp(0.25, 4.0).toDouble(),
-      child: player == null || controller == null
+      child: _fullscreenOpen
+          ? const ColoredBox(color: Colors.black)
+          : player == null || controller == null
           ? _VideoPoster(
               onPlay: _toggle,
               thumbnail: widget.thumbnail == null
@@ -337,6 +303,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
               opened: _opened,
               loading: _opening,
               onToggle: _toggle,
+              onFullscreen: _fullscreen,
               thumbnail: widget.thumbnail == null
                   ? null
                   : Image.memory(widget.thumbnail!, fit: BoxFit.cover),
@@ -346,7 +313,6 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: player == null ? _toggle : null,
-      onDoubleTap: widget.onDoubleTap,
       child: surface,
     );
   }
@@ -426,212 +392,46 @@ class _DeltiecordVideoSurface extends StatelessWidget {
     this.loading = false,
     this.onFullscreen,
   });
-
   final Player player;
   final VideoController controller;
-  final bool opened;
+  final bool opened, loading;
   final Future<void> Function() onToggle;
   final String playTooltip;
   final Widget? thumbnail;
-  final bool loading;
   final VoidCallback? onFullscreen;
-
-  ButtonStyle _playButtonStyle(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-    final foreground =
-        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
-    return IconButton.styleFrom(
-      backgroundColor: accent,
-      foregroundColor: foreground,
-      disabledBackgroundColor: accent.withValues(alpha: 0.75),
-      disabledForegroundColor: foreground.withValues(alpha: 0.75),
-    );
-  }
 
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: DeltiecordCorners.borderRadius,
     child: ColoredBox(
       color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (!opened && thumbnail != null) thumbnail!,
-          if (opened)
-            Video(
-              controller: controller,
-              fit: BoxFit.contain,
-              controls: NoVideoControls,
-            ),
-          VideoPlaybackStatus(
-            playing: player.stream.playing,
-            completed: player.stream.completed,
-            initialPlaying: player.state.playing,
-            initialCompleted: player.state.completed,
-            builder: (context, playing) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (!playing)
-                    Center(
-                      child: IconButton.filled(
-                        tooltip: playTooltip,
-                        onPressed: loading ? null : onToggle,
-                        style: _playButtonStyle(context),
-                        icon: loading
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.play_arrow),
-                      ),
-                    ),
-                  if (opened)
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: _CompactVideoControls(
-                        player: player,
-                        playing: playing,
-                        onToggle: onToggle,
-                        onFullscreen: onFullscreen,
-                      ),
-                    ),
-                  StreamBuilder<bool>(
-                    stream: player.stream.buffering,
-                    initialData: player.state.buffering,
-                    builder: (context, snapshot) =>
-                        snapshot.data == true && playing
-                        ? const Center(
-                            child: SizedBox.square(
-                              dimension: 28,
-                              child: CircularProgressIndicator(strokeWidth: 3),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _CompactVideoControls extends StatefulWidget {
-  const _CompactVideoControls({
-    required this.player,
-    required this.playing,
-    required this.onToggle,
-    this.onFullscreen,
-  });
-
-  final Player player;
-  final bool playing;
-  final Future<void> Function() onToggle;
-  final VoidCallback? onFullscreen;
-
-  @override
-  State<_CompactVideoControls> createState() => _CompactVideoControlsState();
-}
-
-class _CompactVideoControlsState extends State<_CompactVideoControls> {
-  double? _dragMilliseconds;
-  int _seekGeneration = 0;
-
-  Future<void> _commitSeek(double value) async {
-    final generation = ++_seekGeneration;
-    setState(() => _dragMilliseconds = value);
-    try {
-      await widget.player.seek(Duration(milliseconds: value.round()));
-    } catch (_) {
-      // A cancelled range during a second seek is harmless; the player keeps
-      // its prior position and remains usable for another attempt.
-    } finally {
-      if (mounted && generation == _seekGeneration) {
-        setState(() => _dragMilliseconds = null);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 34,
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    color: const Color(0xaa000000),
-    child: Row(
-      children: [
-        SizedBox.square(
-          dimension: 30,
-          child: IconButton(
-            tooltip: widget.playing ? 'Pause' : 'Play',
-            padding: EdgeInsets.zero,
-            color: Colors.white,
-            onPressed: widget.onToggle,
-            icon: Icon(
-              widget.playing ? Icons.pause : Icons.play_arrow,
-              size: 20,
-            ),
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<Duration>(
-            stream: widget.player.stream.duration,
-            initialData: widget.player.state.duration,
-            builder: (context, durationSnapshot) => StreamBuilder<Duration>(
-              stream: widget.player.stream.position,
-              initialData: widget.player.state.position,
-              builder: (context, positionSnapshot) {
-                final duration = durationSnapshot.data ?? Duration.zero;
-                final position = positionSnapshot.data ?? Duration.zero;
-                final maximum = max(1, duration.inMilliseconds).toDouble();
-                return SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 4,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 8,
+      child: opened
+          ? VideoPlaybackOverlay(
+              player: player,
+              onToggle: onToggle,
+              onFullscreen: onFullscreen,
+              child: Video(
+                controller: controller,
+                fit: BoxFit.contain,
+                controls: NoVideoControls,
+              ),
+            )
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                _VideoPoster(
+                  onPlay: onToggle,
+                  thumbnail: thumbnail,
+                  tooltip: playTooltip,
+                ),
+                if (loading)
+                  const IgnorePointer(
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                  child: Slider(
-                    value: (_dragMilliseconds ?? position.inMilliseconds)
-                        .clamp(0, maximum.toInt())
-                        .toDouble(),
-                    max: maximum,
-                    onChangeStart: duration == Duration.zero
-                        ? null
-                        : (value) => setState(() => _dragMilliseconds = value),
-                    onChanged: duration == Duration.zero
-                        ? null
-                        : (value) => setState(() => _dragMilliseconds = value),
-                    onChangeEnd: duration == Duration.zero
-                        ? null
-                        : (value) => unawaited(_commitSeek(value)),
-                  ),
-                );
-              },
+              ],
             ),
-          ),
-        ),
-        if (widget.onFullscreen != null)
-          SizedBox.square(
-            dimension: 30,
-            child: IconButton(
-              tooltip: 'View fullscreen',
-              padding: EdgeInsets.zero,
-              color: Colors.white,
-              onPressed: widget.onFullscreen,
-              icon: const Icon(Icons.fullscreen, size: 20),
-            ),
-          ),
-      ],
     ),
   );
 }
@@ -1156,6 +956,7 @@ class _InlineVideo extends StatefulWidget {
 }
 
 class _InlineVideoState extends State<_InlineVideo> {
+  bool _fullscreenOpen = false;
   File? _downloadedVideo;
   bool _tryingDownloadedVideo = false;
   StreamSubscription<String>? _errorSubscription;
@@ -1335,8 +1136,22 @@ class _InlineVideoState extends State<_InlineVideo> {
     }
   }
 
-  void _showFullscreen() {
-    widget.onFullscreen();
+  Future<void> _showFullscreen() async {
+    final player = _player;
+    final controller = _controller;
+    if (player == null || controller == null || !_opened) {
+      widget.onFullscreen();
+      return;
+    }
+    if (_fullscreenOpen) return;
+    setState(() => _fullscreenOpen = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    try {
+      await showVideoPlayerFullscreen(context, player, controller);
+    } finally {
+      if (mounted) setState(() => _fullscreenOpen = false);
+    }
   }
 
   @override
@@ -1399,10 +1214,11 @@ class _InlineVideoState extends State<_InlineVideo> {
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onDoubleTap: _showFullscreen,
               onSecondaryTapDown: (details) =>
                   widget.onContextMenu(details.globalPosition, _showFullscreen),
-              child: player == null || controller == null || _error != null
+              child: _fullscreenOpen
+                  ? const ColoredBox(color: Colors.black)
+                  : player == null || controller == null || _error != null
                   ? _VideoPoster(
                       onPlay: _play,
                       thumbnail: thumbnail,
