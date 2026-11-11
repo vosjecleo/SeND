@@ -148,6 +148,10 @@ jobs:
           set -euo pipefail
           version="${{ steps.release.outputs.version }}"
           build="${{ steps.release.outputs.build }}"
+          title_suffix=''
+          if grep -Fq "## SeND ${version} build ${build} - Hotfix (" CHANGELOG.md; then
+            title_suffix=' - Hotfix'
+          fi
           scope='desktop, Android, and Web/PWA'
           if [[ '${{ steps.release.outputs.web_only }}' == true ]]; then
             scope='Web/PWA-only (native packages remain on their previous release)'
@@ -180,7 +184,7 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "SeND ${version} build ${build}" \
+            --title "SeND ${version} build ${build}${title_suffix}" \
             --notes-file release-notes.md \
             --latest \
             --verify-tag

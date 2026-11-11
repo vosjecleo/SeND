@@ -144,8 +144,9 @@ void main() {
         false,
       );
       expect(prefs.videoCompression, VideoCompressionPreset.balanced);
-      expect(VideoCompressionPreset.smaller.maximumBytes, 12 * 1024 * 1024);
-      expect(VideoCompressionPreset.balanced.maximumBytes, 24 * 1024 * 1024);
+      expect(VideoCompressionPreset.smaller.targetBitrate, 1500000);
+      expect(VideoCompressionPreset.balanced.targetBitrate, 4000000);
+      expect(maximumPreparedVideoBytes, 512 * 1024 * 1024);
       final changed = prefs.copyWith(
         videoCompression: VideoCompressionPreset.smaller,
         imageCompression: ImageCompressionPreset.smaller,

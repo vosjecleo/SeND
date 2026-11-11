@@ -2,6 +2,8 @@ import {Input, Output, BlobSource, BufferSource, StreamTarget, Mp4OutputFormat,
   MP4, QTFF, WEBM, Conversion, Quality, canEncodeVideo} from 'mediabunny';
 
 const MiB = 1048576;
+// A shared browser-memory guard, not a quality-preset/file-upload limit.
+export const maximumEncodedBytes = 128 * MiB;
 class ExportError extends Error {}
 const fail = (message) => { throw new ExportError(message); };
 
@@ -10,7 +12,8 @@ function boundedTarget(maximum) {
   let bytes = new Uint8Array(Math.min(MiB, maximum)), length = 0;
   const target = new StreamTarget(new WritableStream({write({data, position}) {
     const end = position + data.length;
-    if (!Number.isSafeInteger(end) || position < 0 || end > maximum) fail('The result exceeds the selected size limit.');
+    if (!Number.isSafeInteger(end) || position < 0) fail('Invalid encoded video output.');
+    if (end > maximum) fail('Browser video export is limited to 128 MiB to protect memory. Trim the video, choose Smaller quality or use the native app.');
     if (end > bytes.length) {
       const grown = new Uint8Array(Math.min(maximum, Math.max(end, bytes.length * 2)));
       grown.set(bytes); bytes = grown;
@@ -33,11 +36,8 @@ export function editPlan(options, sourceWidth, sourceHeight, duration) {
   const small = options.preset === 'smaller', edge = small ? 1280 : 1920;
   const scale = options.optimize === false ? 1 : Math.min(1, edge / Math.max(crop.width, crop.height));
   const outputWidth = Math.max(2, Math.floor(crop.width * scale / 2) * 2), outputHeight = Math.max(2, Math.floor(crop.height * scale / 2) * 2);
-  const maximum = options.optimize === false ? 128 * MiB : (small ? 12 : 24) * MiB;
-  const budget = Math.floor(((small ? 10 : 20) * MiB * 8) / (end - start) - 192000);
-  if (options.optimize !== false && budget < 250000) fail('Too long for this size limit. Trim the video or choose Original.');
-  return {start, end, crop, turns, width: outputWidth, height: outputHeight, maximum,
-    bitrate: options.optimize === false ? 8000000 : Math.min(small ? 1500000 : 4000000, budget)};
+  return {start, end, crop, turns, width: outputWidth, height: outputHeight, maximum: maximumEncodedBytes,
+    bitrate: options.optimize === false ? 8000000 : small ? 1500000 : 4000000};
 }
 
 export async function convertVideo(blob, options, report = () => {}) {

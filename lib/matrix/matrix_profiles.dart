@@ -32,6 +32,86 @@ class _ProfileCacheEntry {
 /// Custom fields are written only when advertised by `m.profile_fields`; a
 /// server without that capability continues to expose an ordinary profile.
 extension _MatrixProfiles on MatrixBackend {
+  PresenceReconciler get _presenceReader {
+    final client = _matrix;
+    if (_presenceReconciler != null &&
+        identical(_presenceClient, client) &&
+        _presenceLease?.isCurrent == true) {
+      return _presenceReconciler!;
+    }
+    _presenceReconciler?.dispose();
+    _presenceClient = client;
+    final lease = _presenceLease = _sessionScope.capture();
+    return _presenceReconciler = PresenceReconciler(
+      fetch: (id) async =>
+          CachedPresence.fromPresenceResponse(await client.getPresence(id), id),
+      // ignore: deprecated_member_use
+      read: (id) => client.presences[id],
+      publish: (id, value) {
+        if (!lease.isCurrent || !identical(client, _client)) return;
+        // All synchronous DM/member/profile views read this shared SDK map.
+        // Do not race the SDK's own database writer with a fallback REST read.
+        // ignore: deprecated_member_use
+        final previous = client.presences[id];
+        // ignore: deprecated_member_use
+        client.presences[id] = value;
+        final cached = _profileCache[id];
+        final oldProfile = cached?.profile;
+        if (cached != null) {
+          cached.profile = _copyProfile(
+            cached.profile,
+            presence: _matrixPresenceFor(id, cached.profile.presence),
+            statusMessage: _normalizedProfileStatus(value.statusMsg),
+            replaceStatusMessage: true,
+          );
+          cached.statusFetchedAt = DateTime.now();
+        }
+        if (previous?.presence != value.presence ||
+            previous?.statusMsg != value.statusMsg ||
+            oldProfile?.presence != cached?.profile.presence ||
+            oldProfile?.statusMessage != cached?.profile.statusMessage) {
+          _profileRevision++;
+          _notifyBackendListeners();
+        }
+      },
+    );
+  }
+
+  Future<void> _refreshVisiblePresence() async {
+    final client = _client;
+    if (client == null ||
+        !client.isLogged() ||
+        !_applicationForeground ||
+        _connectionStatus != ConnectionStatus.online) {
+      return;
+    }
+    final users = <String>{
+      for (final watch in _profileWatchers.entries)
+        if (watch.key.startsWith('@') &&
+            watch.value.values.any((w) => w.visible()))
+          watch.key,
+    };
+    if (_conversationVisible && _timeline != null) {
+      users.addAll(
+        _timeline!.events
+            .where((e) => e.type == EventTypes.Message)
+            .take(20)
+            .map((e) => e.senderId),
+      );
+      if (_spaceForRoom(_timeline!.room) == null) {
+        users.addAll(
+          _timeline!.room.getParticipants().take(32).map((u) => u.id),
+        );
+      }
+    }
+    final reader = _presenceReader;
+    try {
+      await Future.wait(users.map((id) => reader.refresh(id)));
+    } catch (_) {
+      // Presence reconciliation must not interrupt conversations or rendering.
+    }
+  }
+
   Future<UserProfileSummary> _getUserProfile(
     String userId, {
     bool refresh = false,
@@ -49,10 +129,10 @@ extension _MatrixProfiles on MatrixBackend {
         cached.metadataFetchedAt,
         now,
       );
-      final refreshStatus =
-          ProfileRefreshPolicy.statusIsStale(cached.statusFetchedAt, now) &&
-          // ignore: deprecated_member_use
-          _matrix.presences[userId] == null;
+      final refreshStatus = ProfileRefreshPolicy.statusIsStale(
+        cached.statusFetchedAt,
+        now,
+      );
       if (refreshMetadata || refreshStatus) {
         // Cached content is returned immediately. Optional metadata hydrates
         // behind it and is available to every subsequent profile reference.
@@ -73,6 +153,7 @@ extension _MatrixProfiles on MatrixBackend {
       refreshMetadata: true,
       refreshStatus: true,
       refreshMedia: refresh || cached == null,
+      forcePresence: refresh,
     ).then(_profileWithSpaceOverride);
   }
 
@@ -129,6 +210,7 @@ extension _MatrixProfiles on MatrixBackend {
     required bool refreshStatus,
     required bool refreshMedia,
     ProfileInformation? metadata,
+    bool forcePresence = false,
   }) async {
     final cached = _profileCache[userId];
     final pending = _profileRequests[userId];
@@ -148,6 +230,7 @@ extension _MatrixProfiles on MatrixBackend {
           (updated == null ||
               ProfileRefreshPolicy.statusIsStale(updated.statusFetchedAt, now));
       if (metadata == null &&
+          !forcePresence &&
           !refreshMedia &&
           !stillNeedsMetadata &&
           !stillNeedsStatus) {
@@ -163,6 +246,7 @@ extension _MatrixProfiles on MatrixBackend {
           refreshStatus: refreshStatus,
           refreshMedia: refreshMedia,
           metadata: metadata,
+          forcePresence: forcePresence,
         ).onError((error, stackTrace) {
           if (cached != null) {
             final attemptedAt = DateTime.now();
@@ -187,19 +271,22 @@ extension _MatrixProfiles on MatrixBackend {
     required bool refreshStatus,
     required bool refreshMedia,
     ProfileInformation? metadata,
+    bool forcePresence = false,
   }) async {
+    final lease = _sessionScope.capture();
     final client = _client;
     final previous = _profileCache[userId];
     final needsProfileResponse =
         previous == null || refreshMetadata || refreshMedia;
-    final presenceRequest = () async {
-      if (previous != null && !refreshStatus) return null;
-      try {
-        return await _matrix.fetchCurrentPresence(userId);
-      } catch (_) {
-        return null;
-      }
-    }();
+    if (_applicationForeground && (previous == null || refreshStatus)) {
+      // Presence publishes independently. Do not hold profile text or avatar
+      // loading behind an additional endpoint, especially on slow connections.
+      unawaited(
+        _presenceReader
+            .refresh(userId, force: forcePresence)
+            .catchError((Object _) => null),
+      );
+    }
     final capabilityRequest = needsProfileResponse
         ? _profileCapability()
         : Future<ProfileFieldsCapability?>.value();
@@ -209,7 +296,8 @@ extension _MatrixProfiles on MatrixBackend {
             ? await _matrix.getUserProfile(userId, maxCacheAge: Duration.zero)
             : null);
 
-    final presence = await presenceRequest;
+    // ignore: deprecated_member_use
+    final presence = client?.presences[userId];
 
     final old = previous?.profile;
     final avatarUri = remoteProfile == null
@@ -244,7 +332,9 @@ extension _MatrixProfiles on MatrixBackend {
         ? null
         : old?.voiceBackgroundBytes;
     final capability = await capabilityRequest;
-    if (!identical(client, _client)) throw StateError('Session changed.');
+    if (!lease.isCurrent || !identical(client, _client)) {
+      throw StateError('Session changed.');
+    }
     final properties = remoteProfile?.additionalProperties;
     final colorValue = properties?[_profileColorField];
     final now = DateTime.now();
@@ -510,6 +600,7 @@ extension _MatrixProfiles on MatrixBackend {
     UserProfileSummary profile, {
     UserPresence? presence,
     String? statusMessage,
+    bool replaceStatusMessage = false,
   }) => UserProfileSummary(
     userId: profile.userId,
     displayName: profile.displayName,
@@ -521,7 +612,9 @@ extension _MatrixProfiles on MatrixBackend {
     timezone: profile.timezone,
     // Some homeservers omit status_msg on otherwise valid presence updates.
     // Absence means "unchanged", not "clear the cached profile status".
-    statusMessage: statusMessage ?? profile.statusMessage,
+    statusMessage: replaceStatusMessage
+        ? statusMessage
+        : statusMessage ?? profile.statusMessage,
     profileColor: profile.profileColor,
     profileColorSecondary: profile.profileColorSecondary,
     voiceColor: profile.voiceColor,
@@ -533,15 +626,21 @@ extension _MatrixProfiles on MatrixBackend {
   void _startProfileRefreshTimer() {
     _startActivities();
     _profileRefreshTimer?.cancel();
-    _profileRefreshTimer = Timer.periodic(
-      ProfileRefreshPolicy.statusInterval,
-      (_) => unawaited(_refreshActiveProfileCache()),
-    );
+    _profileRefreshTimer = Timer.periodic(ProfileRefreshPolicy.statusInterval, (
+      _,
+    ) {
+      unawaited(_refreshVisiblePresence());
+      unawaited(_refreshActiveProfileCache());
+    });
   }
 
   void _stopProfileRefreshTimer() {
     _profileRefreshTimer?.cancel();
     _profileRefreshTimer = null;
+    _presenceReconciler?.dispose();
+    _presenceReconciler = null;
+    _presenceClient = null;
+    _presenceLease = null;
   }
 
   Future<void> _refreshActiveProfileCache() async {
@@ -621,14 +720,10 @@ extension _MatrixProfiles on MatrixBackend {
         try {
           final cached = _profileCache[userId];
           final refreshMetadata = true;
-          final refreshStatus =
-              ProfileRefreshPolicy.statusIsStale(
-                cached?.statusFetchedAt ??
-                    DateTime.fromMillisecondsSinceEpoch(0),
-                now,
-              ) &&
-              // ignore: deprecated_member_use
-              _matrix.presences[userId] == null;
+          final refreshStatus = ProfileRefreshPolicy.statusIsStale(
+            cached?.statusFetchedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+            now,
+          );
           final profile = await _refreshProfileCache(
             userId,
             refreshMetadata: refreshMetadata,

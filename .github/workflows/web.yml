@@ -63,6 +63,7 @@ jobs:
           set -euo pipefail
           npm ci --prefix tool/browser-tests --ignore-scripts
           npm ci --prefix tool/web-video --ignore-scripts
+          npm test --prefix tool/web-video
           npm run build --prefix tool/web-video
           git diff --exit-code -- web/web-video
           python3 tool/serve_web.py >/tmp/deltiecord-preview.log 2>&1 &

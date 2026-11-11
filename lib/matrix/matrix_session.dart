@@ -113,6 +113,9 @@ extension _MatrixSession on MatrixBackend {
           _roleProfileSignature = roleSignature;
           _profileRevision++;
         }
+        for (final event in update.presence ?? <Presence>[]) {
+          _presenceReconciler?.observeSync(event.senderId);
+        }
         _applySyncedProfilePresence();
         _activities?.visibilityChanged(refresh: false);
         _loadSettings();
@@ -156,6 +159,8 @@ extension _MatrixSession on MatrixBackend {
         if (previousStatus != _connectionStatus) _notifyBackendListeners();
         if (_connectionStatus == ConnectionStatus.online &&
             previousStatus != ConnectionStatus.online) {
+          _presenceReconciler?.invalidate();
+          unawaited(_refreshVisiblePresence());
           _retryPendingReplies();
           unawaited(_retryOfflineSends());
           unawaited(_sendDueScheduledMessages());

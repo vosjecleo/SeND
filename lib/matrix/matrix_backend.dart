@@ -35,6 +35,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import '../services/platform_io.dart';
 import '../services/presence_policy.dart';
+import '../services/presence_reconciler.dart';
 import '../services/room_read_marker.dart';
 import '../services/browser_lifecycle.dart' as browser;
 import '../services/browser_media.dart';
@@ -826,6 +827,9 @@ class MatrixBackend extends ChatBackend {
   Future<void>? _recoveryInFlight;
   String? _recoveryStage;
   bool _profileRefreshRunning = false;
+  PresenceReconciler? _presenceReconciler;
+  Client? _presenceClient;
+  SessionLease? _presenceLease;
   final LinkedHashMap<String, _ProfileCacheEntry> _profileCache =
       LinkedHashMap();
   final Map<String, Future<UserProfileSummary>> _profileRequests = {};
@@ -837,6 +841,9 @@ class MatrixBackend extends ChatBackend {
   Future<void> refreshVisibleAvatar(String id) async {
     final client = _client;
     if (client == null || !_applicationForeground) return;
+    if (id.startsWith('@') && client.isLogged()) {
+      unawaited(_presenceReader.refresh(id));
+    }
     final room =
         client.getRoomById(id) ??
         _homeRooms.where((r) => r.directChatMatrixID == id).firstOrNull;
@@ -1967,6 +1974,10 @@ class MatrixBackend extends ChatBackend {
     }
     final previousPresence = _effectiveClientPresence;
     _applicationForeground = foreground;
+    _presenceReconciler?.invalidate();
+    if (foreground) {
+      unawaited(_refreshVisiblePresence());
+    }
     if (foreground) _retryPendingReplies();
     unawaited(_mobilePresence?.refresh());
     if (foreground) unawaited(_tickHistoryGaps());
@@ -2006,7 +2017,10 @@ class MatrixBackend extends ChatBackend {
     if (kIsWeb && _client?.isLogged() == true) {
       unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
     }
-    if (_applicationForeground) unawaited(_refreshTimelineAfterResume());
+    if (_applicationForeground) {
+      unawaited(_refreshVisiblePresence());
+      unawaited(_refreshTimelineAfterResume());
+    }
     _notifyBackendListeners();
   }
 
@@ -2018,6 +2032,7 @@ class MatrixBackend extends ChatBackend {
     final changed = _conversationVisible != visible;
     _conversationVisible = visible;
     if (changed && _applicationForeground && _client?.isLogged() == true) {
+      unawaited(_refreshVisiblePresence());
       unawaited(
         Future<void>.delayed(
           Duration.zero,

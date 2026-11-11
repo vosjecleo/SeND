@@ -3,6 +3,28 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.42 build 140 - Hotfix (2026-11-11)
+
+- Repair contacts remaining Online indefinitely after a missed presence update.
+  Read the homeserver's presence endpoint rather than treating SDK/database
+  cache entries as fresh. Keep immediate sync updates, reconcile visible contacts
+  at most once a minute and refresh after resume/reconnect. Presence reads do not
+  reload profile images or delay profile rendering.
+- Bound and coalesce presence requests. Reject late responses after newer sync
+  updates, account changes or disposal; stop queued work in the background.
+  Network errors retain last-known presence with backoff, unsupported endpoints
+  remain compatible, and explicit loss of presence visibility hides stale status.
+- Remove the hidden 12/24 MiB video-preset ceilings and the duration-based size
+  rejections on Android, desktop and PWA. Smaller now targets 1.5 Mbps and
+  Balanced 4 Mbps without reducing bitrate merely because the clip is longer.
+  Keep the 512 MiB file allowance and native pre-allocation guard. Browser export
+  retains its separate 128 MiB memory guard with a browser-specific explanation;
+  input, decoded-resolution, duration and cancellation safeguards remain.
+- Rebuild the browser video worker and add its bitrate-policy tests to web CI.
+
+Latest only; Stable is unchanged. No database migration or homeserver update is
+required. Existing accounts, sessions and encryption keys are retained.
+
 ## SeND 0.9.42 build 139 (2026-11-09)
 
 Latest only. Stable remains unchanged; existing accounts, sessions and encryption

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/models/video_edit.dart';
+import 'package:deltiecord/models/media_compression.dart';
 import 'package:deltiecord/services/video_preparation_android.dart';
 
 void main() {
@@ -115,6 +116,94 @@ void main() {
       throwsA(isA<PlatformException>()),
     );
   });
+  for (final preset in VideoCompressionPreset.values) {
+    test(
+      '${preset.name} accepts encoded output above its old preset ceiling',
+      () async {
+        final length =
+            (preset == VideoCompressionPreset.smaller ? 13 : 25) * 1024 * 1024;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'probe') {
+            return {'width': 720, 'height': 1280, 'duration': 5000};
+          }
+          if (call.method == 'optimize') {
+            expect(call.arguments['bitrate'], preset.targetBitrate);
+            final file = await File(
+              call.arguments['output'] as String,
+            ).open(mode: FileMode.write);
+            await file.truncate(length);
+            await file.close();
+          }
+          return null;
+        });
+        final result = await prepareAndroidVideo(
+          draft,
+          optimize: true,
+          preset: preset,
+          progress: (_) {},
+          canceled: () => false,
+        );
+        expect(result.bytes.length, length);
+        expect(result.caption, draft.caption);
+        expect(result.spoiler, true);
+      },
+    );
+    test('${preset.name} retains its Mbps target for a long clip', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'probe') {
+          return {'width': 720, 'height': 1280, 'duration': 1800000};
+        }
+        if (call.method == 'optimize') {
+          expect(call.arguments['bitrate'], preset.targetBitrate);
+          await File(
+            call.arguments['output'] as String,
+          ).writeAsBytes([6, 7, 8]);
+        }
+        return null;
+      });
+      final result = await prepareAndroidVideo(
+        draft,
+        optimize: true,
+        preset: preset,
+        progress: (_) {},
+        canceled: () => false,
+      );
+      expect(result.bytes, [6, 7, 8]);
+    });
+  }
+  test(
+    'an encoded result above 512 MiB is rejected before allocating its bytes',
+    () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'probe') {
+          return {'width': 720, 'height': 1280, 'duration': 5000};
+        }
+        if (call.method == 'optimize') {
+          final file = await File(
+            call.arguments['output'] as String,
+          ).open(mode: FileMode.write);
+          await file.truncate(maximumPreparedVideoBytes + 1);
+          await file.close();
+        }
+        return null;
+      });
+      await expectLater(
+        prepareAndroidVideo(
+          draft,
+          optimize: true,
+          progress: (_) {},
+          canceled: () => false,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'limit',
+            contains('512 MiB'),
+          ),
+        ),
+      );
+    },
+  );
   test('missing metadata cannot silently discard requested edits', () async {
     messenger.setMockMethodCallHandler(channel, (_) async => null);
     await expectLater(

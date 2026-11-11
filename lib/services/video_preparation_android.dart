@@ -41,20 +41,13 @@ Future<AttachmentDraft> prepareAndroidVideo(
     var bytes = draft.bytes;
     if (optimize || edit?.hasChanges == true) {
       final duration = (metadata['duration'] as num?)?.toDouble() ?? 0;
-      if (duration <= 0) {
+      if (!duration.isFinite || duration <= 0) {
         throw StateError(
           'Could not read video duration. Choose original quality to send it unchanged.',
         );
       }
-      final clipDuration =
-          edit?.durationMs(duration.round()) ?? duration.round();
-      final bitrate = (preset.targetBytes * 8 / (clipDuration / 1000) - 192000)
-          .floor();
-      if (optimize && bitrate < 250000) {
-        throw StateError(
-          'This clip is too long for the optimized size limit. Trim it or choose original quality.',
-        );
-      }
+      // Validate edits without squeezing longer clips into a fixed byte budget.
+      edit?.durationMs(duration.round());
       polling = Timer.periodic(const Duration(milliseconds: 300), (_) async {
         if (pollingBusy) return;
         pollingBusy = true;
@@ -76,17 +69,15 @@ Future<AttachmentDraft> prepareAndroidVideo(
             'output': output.path,
             'width': metadata['width'],
             'height': metadata['height'],
-            'bitrate': optimize
-                ? bitrate.clamp(250000, preset.maximumBitrate)
-                : 8000000,
+            'bitrate': optimize ? preset.targetBitrate : 8000000,
             if (edit != null) 'edit': edit.toMap(),
             'resize': optimize,
           })
           .timeout(const Duration(minutes: 10));
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (optimize && await output.length() > preset.maximumBytes) {
+      if (await output.length() > maximumPreparedVideoBytes) {
         throw StateError(
-          'The optimized clip is still too large. Trim it or choose original quality.',
+          'The encoded video exceeds 512 MiB. Choose Smaller quality or trim the clip.',
         );
       }
       bytes = await output.readAsBytes();

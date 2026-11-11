@@ -152,20 +152,8 @@ Future<AttachmentDraft> optimizeVideo(
         ? duration
         : edit.durationMs((duration * 1000).round()) / 1000;
     if (encode) {
-      final audio = streams.any((s) => s['codec_type'] == 'audio');
-      // Reserve muxing/bitrate variance headroom below the web viewer's 25 MiB
-      // verified-download limit. Do not force unusable quality on long clips.
-      final budget =
-          (preset.targetBytes * 8 / clipDuration - (audio ? 128000 : 0))
-              .floor();
-      if (optimize && budget < 250000) {
-        throw StateError(
-          'This video is too long for the selected size limit. Trim it or choose original quality.',
-        );
-      }
-      final bitrate = optimize
-          ? budget.clamp(250000, preset.maximumBitrate)
-          : 8000000;
+      // Duration changes the output size, not the selected video quality.
+      final bitrate = optimize ? preset.targetBitrate : 8000000;
       final filters = <String>[
         if (edit?.hasChanges == true)
           'scale=max(2\\,trunc(iw*sar/2)*2):ih,setsar=1',
@@ -234,9 +222,9 @@ Future<AttachmentDraft> optimizeVideo(
         duration: clipDuration,
       );
       if (canceled()) throw StateError('Video preparation canceled.');
-      if (optimize && await output.length() > preset.maximumBytes) {
+      if (await output.length() > maximumPreparedVideoBytes) {
         throw StateError(
-          'The optimized video still exceeds the selected size limit. The original was not sent; choose original quality or trim the clip.',
+          'The encoded video exceeds 512 MiB. Choose Smaller quality or trim the clip.',
         );
       }
     }

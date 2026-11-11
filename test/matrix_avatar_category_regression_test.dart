@@ -113,10 +113,8 @@ class _Client extends Client {
     updated: DateTime.now(),
   );
   @override
-  Future<CachedPresence> fetchCurrentPresence(
-    String userId, {
-    bool fetchOnlyFromCached = false,
-  }) async => throw StateError('No presence');
+  Future<GetPresenceResponse> getPresence(String userId) async =>
+      throw StateError('No presence');
   @override
   Future<Capabilities> getCapabilities() async =>
       throw StateError('No capabilities');
