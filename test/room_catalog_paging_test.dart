@@ -24,7 +24,7 @@ class _Catalog extends FakeBackend {
   final loaded = <String, List<ChatMessage>>{}, calls = <String, int>{};
   int downloads = 0;
   List<ChatMessage> all(String kind) => List.generate(
-    kind == 'media' ? 25 : 2,
+    kind == 'media' ? 125 : 2,
     (i) => ChatMessage(
       id: '$kind-$i',
       sender: 'Alice',
@@ -60,7 +60,7 @@ class _Catalog extends FakeBackend {
     calls[kind] = (calls[kind] ?? 0) + 1;
     return loaded[kind] = all(
       kind,
-    ).take((loaded[kind]?.length ?? 0) + 10).toList();
+    ).take((loaded[kind]?.length ?? 0) + 50).toList();
   }
 
   @override
@@ -203,26 +203,29 @@ void main() {
   }
 
   testWidgets(
-    'media stays at ten items per explicit page and never fetches originals',
+    'media shows 50 items per explicit page and never fetches originals',
     (tester) async {
       final backend = _Catalog();
       await show(tester, backend, RoomSearchSection.media);
       expect(backend.calls['media'], 1);
-      expect(find.text('1–10 · 10 loaded'), findsOneWidget);
+      expect(find.text('1–50 · 50 loaded'), findsOneWidget);
       await tester.drag(find.byType(GridView), const Offset(0, -400));
       await tester.pumpAndSettle();
       expect(backend.calls['media'], 1);
       expect(backend.downloads, 0);
       await tester.tap(find.byTooltip('Next page'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Page 2 of'), findsOneWidget);
+      expect(find.text('Page 2'), findsOneWidget);
+      expect(find.text('51–100 · 100 loaded'), findsOneWidget);
       expect(find.byKey(const ValueKey('media-0')), findsNothing);
-      await tester.tap(find.textContaining('Page 2 of'));
+      await tester.tap(find.text('Page 2'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, '3');
       await tester.tap(find.text('Go'));
       await tester.pumpAndSettle();
-      expect(find.text('21–25 · 25 loaded'), findsOneWidget);
+      expect(find.text('Page 3 of 3'), findsOneWidget);
+      expect(find.text('101–125 · 125 loaded'), findsOneWidget);
+      expect(backend.calls['media'], 3);
       expect(backend.downloads, 0);
     },
   );
