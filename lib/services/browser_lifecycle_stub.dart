@@ -11,7 +11,7 @@ void setBrowserPushLease(String key) {}
 Stream<Map<String, String>> get browserNotificationClicks =>
     const Stream.empty();
 void configureBrowserPresence(String? json) {}
-Future<void> publishBrowserPresence() async {}
+Future<bool> publishBrowserPresence() async => false;
 bool get browserApplicationVisible => true;
 Stream<bool> get browserVisibilityChanges => const Stream.empty();
 bool? get browserKeyboardVisible => null;

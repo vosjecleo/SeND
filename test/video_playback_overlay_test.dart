@@ -5,6 +5,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:deltiecord/ui/video_playback_overlay.dart';
 
 class _Streams extends Fake implements PlayerStream {
+  final playingEvents = StreamController<bool>.broadcast();
   final positions = StreamController<Duration>.broadcast();
   final durations = StreamController<Duration>.broadcast();
   @override
@@ -12,7 +13,7 @@ class _Streams extends Fake implements PlayerStream {
   @override
   Stream<Duration> get duration => durations.stream;
   @override
-  Stream<bool> get playing => const Stream.empty();
+  Stream<bool> get playing => playingEvents.stream;
   @override
   Stream<bool> get completed => const Stream.empty();
   @override
@@ -25,6 +26,7 @@ class _Player extends Fake implements Player {
   int toggles = 0;
   int plays = 0;
   bool completed = false;
+  bool playing = true;
   Duration videoDuration = const Duration(seconds: 120);
   @override
   PlayerStream get stream => events;
@@ -32,7 +34,7 @@ class _Player extends Fake implements Player {
   PlayerState get state => PlayerState(
     position: const Duration(seconds: 30),
     duration: videoDuration,
-    playing: true,
+    playing: playing,
     completed: completed,
   );
   @override
@@ -44,6 +46,7 @@ class _Player extends Fake implements Player {
   Future<void> close() async {
     await events.positions.close();
     await events.durations.close();
+    await events.playingEvents.close();
   }
 }
 
@@ -52,6 +55,7 @@ void main() {
     WidgetTester tester,
     _Player player, {
     VoidCallback? fullscreen,
+    bool alwaysShowControls = true,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -61,6 +65,7 @@ void main() {
               width: 340,
               height: 220,
               child: VideoPlaybackOverlay(
+                alwaysShowControls: alwaysShowControls,
                 player: player,
                 onFullscreen: fullscreen,
                 child: const ColoredBox(color: Colors.black),
@@ -71,6 +76,29 @@ void main() {
       ),
     );
   }
+
+  testWidgets(
+    'inline bars hide while playing, reappear paused, and remain in fullscreen',
+    (tester) async {
+      final player = _Player();
+      addTearDown(player.close);
+      await show(tester, player, alwaysShowControls: false);
+      expect(find.byType(Slider), findsNothing);
+      player.playing = false;
+      player.events.playingEvents.add(false);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(Slider), findsOneWidget);
+      player.playing = true;
+      player.events.playingEvents.add(true);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(Slider), findsNothing);
+      await show(tester, player, alwaysShowControls: true);
+      expect(find.byType(Slider), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'shared player shows time and double taps seek in either direction',

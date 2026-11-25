@@ -224,6 +224,21 @@ for artifact in "${artifacts[@]}"; do
     "$base_url/$artifact" -o "$temporary/$artifact"
 done
 (cd "$temporary" && sha256sum --check --strict SHA256SUMS)
+# Verify the complete GitHub distribution first. Deltie hosts installable APKs only.
+mirror_artifacts=()
+for artifact in "${artifacts[@]}"; do
+  [[ "$artifact" == *.aab ]] || mirror_artifacts+=("$artifact")
+done
+artifacts=("${mirror_artifacts[@]}")
+# The signed public list must describe exactly the files Deltie serves.
+# The complete GitHub list and every input artifact were verified above.
+(
+  cd "$temporary"
+  sha256sum -- "${artifacts[@]}" > SHA256SUMS
+  python3 "$repo_root/packaging/sign-release.py" SHA256SUMS SHA256SUMS.sig
+  python3 "$repo_root/packaging/sign-release.py" SHA256SUMS SHA256SUMS.sig --verify
+  sha256sum --check --strict SHA256SUMS
+)
 
 current_manifest="$temporary/current-releases.json"
 curl --fail --silent --show-error --location --connect-timeout 15 --max-time 60 --retry 3 --proto '=https' --tlsv1.2 \
@@ -255,7 +270,7 @@ asset_json() {
 
 android_assets='[]' linux_assets='[]' windows_assets='[]'
 if ! $web_only; then
-  android_assets="$(asset_json "SeND-${release_id}-android*")"
+  android_assets="$(asset_json "SeND-${release_id}-android*.apk")"
   linux_assets="$(asset_json "SeND-${release_id}-linux-*")"
   windows_assets="$(asset_json "SeND-${release_id}-windows-*")"
 fi

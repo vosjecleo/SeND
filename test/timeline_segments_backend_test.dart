@@ -4,6 +4,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
 import 'support/timeline_segment_fixture.dart';
 
+class _MissingRecentRoom extends SegmentRoom {
+  _MissingRecentRoom(super.client);
+  @override
+  Future<Timeline> getTimeline({
+    void Function(int)? onChange,
+    void Function(int)? onRemove,
+    void Function(int)? onInsert,
+    void Function()? onNewEvent,
+    void Function()? onUpdate,
+    String? eventContextId,
+    int? limit = Room.defaultHistoryCount,
+  }) async {
+    final timeline = await super.getTimeline(
+      onUpdate: onUpdate,
+      eventContextId: eventContextId,
+      limit: limit,
+    );
+    if (eventContextId == null) {
+      timeline.events.removeWhere((event) => event.eventId == r'$event5');
+    }
+    return timeline;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late SegmentDatabase db;
@@ -19,6 +43,36 @@ void main() {
   });
   tearDown(() => backend.dispose());
   Set<String> ids() => backend.messages.map((m) => m.id).toSet();
+
+  test(
+    'a missing recent original recovered through context survives Present',
+    () async {
+      room = _MissingRecentRoom(client)..contextHead = 0;
+      client.rooms = [room];
+      await backend.selectRoom(room.id);
+      expect(ids(), isNot(contains(r'$event5')));
+      await backend.jumpToEvent(r'$event5');
+      expect(ids(), contains(r'$event5'));
+      expect(backend.atTimelinePresent, true);
+      await backend.jumpToPresent();
+      expect(ids(), containsAll(room.range(0, 30).map((e) => e.eventId)));
+      expect(backend.atTimelinePresent, true);
+    },
+  );
+
+  test(
+    'a recent reply context rejoins the live range despite a future token',
+    () async {
+      await backend.selectRoom(room.id);
+      room.contextHead = -5;
+      await backend.jumpToEvent(r'$event-5');
+      expect(ids(), containsAll([r'$event-5', r'$event0', r'$event29']));
+      expect(backend.atTimelinePresent, true);
+      await backend.jumpToPresent();
+      expect(ids(), containsAll([r'$event-5', r'$event0', r'$event29']));
+      expect(backend.atTimelinePresent, true);
+    },
+  );
 
   test('a stale DB page cannot advance the fresh Present cursor', () async {
     final delayed = Completer<List<Event>>();

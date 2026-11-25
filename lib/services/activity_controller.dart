@@ -59,6 +59,7 @@ class ActivityController extends ChangeNotifier {
   final _historyWatch = <String>{};
   final _fetched = <String, DateTime>{};
   final _observedOnline = <String, bool>{};
+  final _mobileRetry = <String, DateTime>{};
   final _records = <String, Map<String, Object?>>{};
   final _icons = <String, Uri>{};
   Map<String, Object?>? _local;
@@ -112,24 +113,32 @@ class ActivityController extends ChangeNotifier {
 
   void _observe(String id) {
     final online = _visible(id);
-    if (_observedOnline[id] != online) _fetched.remove(id);
+    if (_observedOnline[id] != online) {
+      _fetched.remove(id);
+      _mobileRetry.remove(id);
+    }
     _observedOnline[id] = online;
     _seen[id] = DateTime.now();
     if (_seen.length > 64) _seen.remove(_seen.keys.first);
-    if (_foreground &&
-        !_fetched.containsKey(id) &&
-        !_reading &&
-        !_dead &&
-        _initialRead == null) {
-      final remaining = _readAfter.difference(DateTime.now());
-      _initialRead = Timer(
-        remaining.isNegative ? const Duration(milliseconds: 150) : remaining,
-        () {
-          _initialRead = null;
-          unawaited(_readTick());
-        },
-      );
+    if (_foreground && !_fetched.containsKey(id) && !_reading) {
+      _scheduleRead();
     }
+  }
+
+  void _scheduleRead() {
+    if (_dead || !_foreground || _initialRead != null) return;
+    final remaining = _readAfter.difference(DateTime.now());
+    // Registration can happen during build; check viewport bounds after layout.
+    _initialRead = Timer(
+      remaining > const Duration(milliseconds: 150)
+          ? remaining
+          : const Duration(milliseconds: 150),
+      () async {
+        _initialRead = null;
+        if (_reading) await _readDone?.future;
+        if (!_dead) unawaited(_readTick());
+      },
+    );
   }
 
   UserActivities _combined(String id) {
@@ -174,6 +183,7 @@ class ActivityController extends ChangeNotifier {
 
   VoidCallback watchUser(String id, bool Function() isVisible) {
     (_watchers[id] ??= {}).add(isVisible);
+    _scheduleRead();
     return () {
       final watchers = _watchers[id];
       watchers?.remove(isVisible);
@@ -228,6 +238,7 @@ class ActivityController extends ChangeNotifier {
     for (final entry in _records.entries) {
       if (!_visible(entry.key)) {
         if (_observedOnline[entry.key] != false) _fetched.remove(entry.key);
+        _mobileRetry.remove(entry.key);
         _observedOnline[entry.key] = false;
         entry.value.removeWhere(
           (key, _) => !key.startsWith(lastFmHistoryPrefix),
@@ -568,6 +579,7 @@ class ActivityController extends ChangeNotifier {
                 !now.isBefore(_readAfter) &&
                 (_readRetry[id] == null || !now.isBefore(_readRetry[id]!)) &&
                 (_fetched[id] == null ||
+                    (_mobileRetry[id]?.isAfter(now) == false) ||
                     now.difference(_fetched[id]!) >= readInterval),
           )
           .toList();
@@ -589,6 +601,8 @@ class ActivityController extends ChangeNotifier {
           return;
         }
         if (!_visible(id) && !_historyWatch.contains(id)) return;
+        final firstRead = !_fetched.containsKey(id);
+        _mobileRetry.remove(id);
         try {
           final response = await read(id).timeout(const Duration(seconds: 8));
           _fetched[id] = DateTime.now();
@@ -603,6 +617,12 @@ class ActivityController extends ChangeNotifier {
               _records[id]!.removeWhere(
                 (key, _) => !key.startsWith(lastFmHistoryPrefix),
               );
+            } else if (firstRead &&
+                id != userId &&
+                !_combined(id).mobileOnline) {
+              // Matrix Online can arrive before the phone writes its profile
+              // field. Retry once, then return to the ordinary polling cadence.
+              _mobileRetry[id] = DateTime.now().add(const Duration(seconds: 5));
             }
           }
         } on ActivityServiceError catch (error) {
@@ -636,6 +656,7 @@ class ActivityController extends ChangeNotifier {
       _fetched.removeWhere((id, _) => !_seen.containsKey(id));
       _observedOnline.removeWhere((id, _) => !_seen.containsKey(id));
       _readRetry.removeWhere((id, _) => !_seen.containsKey(id));
+      _mobileRetry.removeWhere((id, _) => !_seen.containsKey(id));
     } finally {
       _reading = false;
       _readDone?.complete();

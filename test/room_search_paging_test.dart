@@ -48,19 +48,100 @@ class _CompleteSearch extends _SearchBackend {
   }
 }
 
+class _MediaBackend extends _SearchBackend {
+  final rows = <ChatMessage>[];
+  bool complete = false;
+  bool supplyMore = false;
+  @override
+  bool canLoadMoreCatalog(String roomId, String kind) => !complete;
+  @override
+  List<ChatMessage> catalogMessagesForRoom(String roomId, String kind) => rows;
+  @override
+  Future<List<ChatMessage>> loadMoreCatalog(String roomId, String kind) async {
+    calls++;
+    if (rows.length == 50) rows.add(media(50, 500));
+    if (supplyMore) {
+      rows.addAll(List.generate(53, (i) => media(51 + i, -i)));
+      complete = true;
+    }
+    return List.of(rows);
+  }
+
+  static ChatMessage media(int index, int seconds) => ChatMessage(
+    id: 'photo-$index',
+    sender: 'Alice',
+    body: '',
+    timestamp: DateTime(2026).add(Duration(seconds: seconds)),
+    pending: false,
+    attachment: const ChatAttachment(
+      kind: AttachmentKind.image,
+      name: 'Photo',
+      mimeType: 'image/png',
+      size: 100,
+      encrypted: false,
+      spoiler: false,
+    ),
+  );
+}
+
 void main() {
-  Future<void> show(WidgetTester tester, _SearchBackend backend) async {
+  Future<void> show(
+    WidgetTester tester,
+    _SearchBackend backend, {
+    RoomSearchSection section = RoomSearchSection.messages,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(
           extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
         ),
         home: Scaffold(
-          body: RoomSearchPanel(backend: backend, onOpen: (_) async {}),
+          body: RoomSearchPanel(
+            backend: backend,
+            onOpen: (_) async {},
+            initialSection: section,
+          ),
         ),
       ),
     );
   }
+
+  testWidgets(
+    'Media uses 50 stable rows and waits before opening an incomplete page',
+    (tester) async {
+      final backend = _MediaBackend()
+        ..rows.addAll(
+          List.generate(50, (i) => _MediaBackend.media(i, 100 - i)),
+        );
+      await show(tester, backend, section: RoomSearchSection.media);
+      await tester.pumpAndSettle();
+      expect(find.text('Page 1'), findsOneWidget);
+      expect(find.text('1–50 · 50 loaded'), findsOneWidget);
+      expect(find.byKey(const ValueKey('photo-0')), findsOneWidget);
+      await tester.tap(find.byTooltip('Next page'));
+      await tester.pumpAndSettle();
+      expect(backend.calls, 4);
+      expect(find.text('Page 1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('photo-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('photo-50')), findsNothing);
+      backend.supplyMore = true;
+      await tester.tap(find.byTooltip('Next page'));
+      await tester.pumpAndSettle();
+      expect(find.text('Page 2 of 3'), findsOneWidget);
+      expect(find.text('51–100 · 104 loaded'), findsOneWidget);
+      expect(find.byKey(const ValueKey('photo-50')), findsOneWidget);
+      await tester.tap(find.byTooltip('Previous page'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('photo-0')), findsOneWidget);
+      expect(backend.calls, 5);
+      await tester.tap(find.byTooltip('Next page'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('photo-50')), findsOneWidget);
+      await tester.tap(find.byTooltip('Next page'));
+      await tester.pumpAndSettle();
+      expect(find.text('101–104 · 104 loaded'), findsOneWidget);
+    },
+  );
 
   testWidgets('query continues past three empty history pages', (tester) async {
     final backend = _SearchBackend();

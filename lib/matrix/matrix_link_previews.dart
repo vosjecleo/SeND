@@ -276,6 +276,21 @@ extension _MatrixLinkPreviews on MatrixBackend {
       }
     }
 
+    if (result?.videoUrl == null &&
+        requestUrl.host == 'fxtwitter.com' &&
+        client.homeserver?.origin == 'https://matrix.deltie.net' &&
+        _preferences.improveTwitterLinks) {
+      final fetched = await _directPreviewFetcher.fetchRelayedFxGif(
+        requestUrl,
+        allowUrl: (uri) => LinkPreviewNetworkPolicy.isTrustedProviderUrl(
+          uri,
+          removed: _preferences.trustedPreviewDomainsRemoved,
+        ),
+      );
+      if (fetched != null && current()) {
+        result = _previewAtOriginalUrl(fetched, original);
+      }
+    }
     result ??= LinkPreview(
       url: original,
       title: original.host,

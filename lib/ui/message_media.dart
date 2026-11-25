@@ -287,6 +287,7 @@ class _LinkVideoPlayerState extends State<_LinkVideoPlayer>
       _error = null;
     });
     try {
+      await configureVideoAudio(player);
       if (widget.autoplay) await player.setVolume(0);
       var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
       if (!kIsWeb) {
@@ -1080,6 +1081,7 @@ class _InlineVideoState extends State<_InlineVideo> {
           _playbackFailed();
         }
       });
+      await configureVideoAudio(player);
       await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: true,
@@ -1136,6 +1138,7 @@ class _InlineVideoState extends State<_InlineVideo> {
         return;
       }
       _downloadedVideo = file;
+      await configureVideoAudio(player);
       await player.open(Media(file.path), play: true);
       if (!mounted) return;
       setState(() => _opened = true);
@@ -1661,6 +1664,7 @@ class _LightboxVideoState extends State<_LightboxVideo> {
   Future<void> _open() async {
     try {
       // Create the video output before opening the source, including fullscreen.
+      await configureVideoAudio(_player);
       await _controller.platform.future;
       final source = await widget.backend.getMediaPlaybackSource(
         widget.messageId,

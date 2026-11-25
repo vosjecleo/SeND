@@ -1,5 +1,6 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/models/user_activity.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,7 +9,46 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
+class _IslandBackend extends FakeBackend {
+  UserActivity? activity;
+  UserPresence presence = UserPresence.online;
+  @override
+  String get userId => '@self:test';
+  @override
+  String get profileStatusMessage => 'Custom status';
+  @override
+  UserPresence get profilePresence => presence;
+  @override
+  UserActivity? activityFor(String id) => id == userId ? activity : null;
+}
+
 void main() {
+  testWidgets('desktop island follows DM activity and status priority', (
+    tester,
+  ) async {
+    final backend = _IslandBackend()..currentStatus = SessionStatus.signedIn;
+    addTearDown(backend.dispose);
+    await tester.pumpWidget(DeltiecordApp(backend: backend));
+    final island = find.byKey(const Key('current-user-island'));
+    Finder subtitle(String text) =>
+        find.descendant(of: island, matching: find.text(text));
+    expect(subtitle('Custom status'), findsOneWidget);
+    backend.activity = UserActivity(
+      kind: ActivityKind.game,
+      name: 'Test Game',
+      expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+    );
+    backend.notifyListeners();
+    await tester.pump();
+    expect(subtitle('Playing Test Game'), findsOneWidget);
+    expect(subtitle('Custom status'), findsNothing);
+    backend.presence = UserPresence.offline;
+    backend.notifyListeners();
+    await tester.pump();
+    expect(subtitle('Playing Test Game'), findsNothing);
+    expect(subtitle('Custom status'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('shows joined rooms and opens a timeline', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn

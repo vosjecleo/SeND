@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 export '../models/markup_stroke.dart';
 import '../models/markup_stroke.dart';
+import 'editor_captions.dart';
 
 Rect cropForAspect(Rect crop, Size size, double ratio) {
   final normalized = ratio * size.height / size.width;
@@ -37,7 +38,9 @@ class MediaEditCanvas extends StatefulWidget {
     required this.onCrop,
     this.cropMode = false,
     this.drawMode = false,
-    this.locked = true,
+    this.locked = false,
+    this.captions = const [],
+    this.onPlace,
     this.ratio,
     this.strokes = const [],
     this.onStroke,
@@ -51,6 +54,8 @@ class MediaEditCanvas extends StatefulWidget {
   final int turns;
   final Rect crop;
   final ValueChanged<Rect> onCrop;
+  final List<EditorCaption> captions;
+  final ValueChanged<Offset>? onPlace;
   final bool cropMode, drawMode, locked;
   final double? ratio;
   final List<MarkupStroke> strokes;
@@ -63,6 +68,48 @@ class MediaEditCanvas extends StatefulWidget {
 }
 
 class _MediaEditCanvasState extends State<MediaEditCanvas> {
+  double _zoom = 1, _baseZoom = 1;
+  Offset _shift = Offset.zero,
+      _baseShift = Offset.zero,
+      _baseFocus = Offset.zero;
+  final _viewport = GlobalKey();
+  Offset _focus(Offset global) {
+    final box = _viewport.currentContext!.findRenderObject()! as RenderBox;
+    return box.globalToLocal(global) - box.size.center(Offset.zero);
+  }
+
+  void _magnify(
+    double zoom,
+    Offset oldFocus,
+    Offset newFocus,
+    double previous,
+    Offset shift,
+  ) {
+    final next = zoom.clamp(1.0, 5.0);
+    final translated = newFocus - (oldFocus - shift) * (next / previous);
+    final limit =
+        Offset(_paintSize.width, _paintSize.height) * ((next - 1) / 2);
+    setState(() {
+      _zoom = next;
+      _shift = Offset(
+        translated.dx.clamp(-limit.dx, limit.dx),
+        translated.dy.clamp(-limit.dy, limit.dy),
+      );
+    });
+  }
+
+  bool _pinched = false, _editing = false;
+  final _pointers = <int>{};
+  Offset _editPosition(Offset global) =>
+      (_focus(global) - _shift) / _zoom +
+      Offset(_paintSize.width / 2 + 28, _paintSize.height / 2 + 28);
+
+  bool _canEditAt(Offset point) {
+    final image = const Offset(28, 28) & _paintSize;
+    if (widget.onPlace != null || widget.drawMode) return image.contains(point);
+    return widget.cropMode && image.inflate(28).contains(point);
+  }
+
   Rect _startCrop = const Rect.fromLTWH(0, 0, 1, 1);
   Offset _start = Offset.zero, _anchor = Offset.zero;
   String _handle = 'move';
@@ -73,6 +120,10 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
   );
   void _startDrag(DragStartDetails details) {
     final point = _point(details.localPosition);
+    if (widget.onPlace != null) {
+      widget.onPlace!(point);
+      return;
+    }
     if (widget.drawMode) {
       widget.onStroke?.call(point, widget.brushWidth / _paintSize.shortestSide);
       return;
@@ -112,6 +163,10 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
 
   void _drag(DragUpdateDetails details) {
     final p = _point(details.localPosition);
+    if (widget.onPlace != null) {
+      widget.onPlace!(p);
+      return;
+    }
     if (widget.drawMode) {
       widget.onDrawPoint?.call(p);
       return;
@@ -180,38 +235,119 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
         ),
       ).destination;
       _paintSize = fitted;
-      return Center(
-        child: SizedBox(
-          width: fitted.width + 56,
-          height: fitted.height + 56,
+      return ClipRect(
+        key: _viewport,
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (event) {
+            if (_pointers.isEmpty) _pinched = false;
+            _pointers.add(event.pointer);
+            if (_pointers.length > 1) _pinched = true;
+          },
+          onPointerUp: (event) => _pointers.remove(event.pointer),
+          onPointerCancel: (event) => _pointers.remove(event.pointer),
+          onPointerPanZoomStart: (_) => _pinched = true,
+          onPointerSignal: (signal) {
+            if (signal is PointerScrollEvent) {
+              GestureBinding.instance.pointerSignalResolver.register(signal, (
+                _,
+              ) {
+                final focus = _focus(signal.position);
+                _magnify(
+                  _zoom * math.exp(-signal.scrollDelta.dy * .002),
+                  focus,
+                  focus,
+                  _zoom,
+                  _shift,
+                );
+              });
+            }
+          },
           child: GestureDetector(
-            dragStartBehavior: DragStartBehavior.down,
-            key: const ValueKey('media-editor-canvas'),
             behavior: HitTestBehavior.opaque,
-            onPanStart: widget.cropMode || widget.drawMode ? _startDrag : null,
-            onPanUpdate: widget.cropMode || widget.drawMode ? _drag : null,
-            onTapUp: widget.drawMode
-                ? (details) => widget.onStroke?.call(
-                    _point(details.localPosition),
-                    widget.brushWidth / fitted.shortestSide,
-                  )
+            dragStartBehavior: DragStartBehavior.down,
+            onScaleStart: (d) {
+              _baseZoom = _zoom;
+              _baseFocus = _focus(d.focalPoint);
+              _baseShift = _shift;
+              _pinched = _pinched || d.pointerCount > 1;
+              final point = _editPosition(d.focalPoint);
+              _editing = !_pinched && _canEditAt(point);
+              if (_editing) {
+                _startDrag(
+                  DragStartDetails(
+                    localPosition: point,
+                    globalPosition: d.focalPoint,
+                  ),
+                );
+              }
+            },
+            onScaleUpdate: (d) {
+              if (d.pointerCount > 1) {
+                _pinched = true;
+                _magnify(
+                  _baseZoom * d.scale,
+                  _baseFocus,
+                  _focus(d.focalPoint),
+                  _baseZoom,
+                  _baseShift,
+                );
+              } else if (!_pinched && _editing) {
+                _drag(
+                  DragUpdateDetails(
+                    localPosition: _editPosition(d.focalPoint),
+                    globalPosition: d.focalPoint,
+                  ),
+                );
+              }
+            },
+            onTapUp: widget.onPlace != null || widget.drawMode
+                ? (d) {
+                    final point = _editPosition(d.globalPosition);
+                    if (_pinched || !_canEditAt(point)) return;
+                    if (widget.onPlace != null) {
+                      widget.onPlace!(_point(point));
+                    } else {
+                      widget.onStroke?.call(
+                        _point(point),
+                        widget.brushWidth / fitted.shortestSide,
+                      );
+                    }
+                  }
                 : null,
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  RotatedBox(quarterTurns: widget.turns, child: widget.child),
-                  IgnorePointer(
-                    child: CustomPaint(
-                      painter: _EditOverlay(
-                        widget.crop,
-                        widget.cropMode,
-                        widget.strokes,
+            child: Center(
+              child: Transform.translate(
+                offset: _shift,
+                child: Transform.scale(
+                  scale: _zoom,
+                  child: SizedBox(
+                    key: const ValueKey('media-editor-canvas'),
+                    width: fitted.width + 56,
+                    height: fitted.height + 56,
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          RotatedBox(
+                            quarterTurns: widget.turns,
+                            child: widget.child,
+                          ),
+                          IgnorePointer(
+                            child: CustomPaint(
+                              painter: _EditOverlay(
+                                widget.crop,
+                                widget.cropMode,
+                                widget.strokes,
+                                widget.captions,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -222,13 +358,15 @@ class _MediaEditCanvasState extends State<MediaEditCanvas> {
 }
 
 class _EditOverlay extends CustomPainter {
-  _EditOverlay(this.crop, this.handles, this.strokes);
+  _EditOverlay(this.crop, this.handles, this.strokes, this.captions);
+  final List<EditorCaption> captions;
   final Rect crop;
   final bool handles;
   final List<MarkupStroke> strokes;
   @override
   void paint(Canvas canvas, Size size) {
     paintMarkupStrokes(canvas, size, strokes);
+    paintCaptions(canvas, size, captions);
     final r = Rect.fromLTWH(
       crop.left * size.width,
       crop.top * size.height,

@@ -114,6 +114,16 @@ internal class VideoPreparationBridge(private val context: Context, messenger: B
                                     (1-2*(top+cropHeight)).toFloat(), (1-2*top).toFloat()))
                             }
                             effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
+                            (edit["overlay"] as? ByteArray)?.let { png ->
+                                val bitmap = requireNotNull(android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size))
+                                effects.add(androidx.media3.effect.OverlayEffect(listOf(object : androidx.media3.effect.CanvasOverlay(true) {
+                                    val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                                    override fun onDraw(canvas: android.graphics.Canvas, presentationTimeUs: Long) {
+                                        canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+                                        canvas.drawBitmap(bitmap, null, android.graphics.Rect(0,0,canvas.width,canvas.height), paint)
+                                    }
+                                })))
+                            }
                             val item = EditedMediaItem.Builder(media.build())
                                 .setRemoveAudio(edit["muted"] == true)
                                 .setFrameRate(30)

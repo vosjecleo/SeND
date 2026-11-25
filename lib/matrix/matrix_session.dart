@@ -56,12 +56,16 @@ extension _MatrixSession on MatrixBackend {
       _client?.dispose();
       _ownProfileHydrated = false;
       _client = await createMatrixClient();
+      _bindPresenceUpdates();
       _configureClientPresence();
       _settingsHydrated = false;
       _roomHeroUsersLoaded.clear();
       _profileFieldsCapability = null;
       _profileFieldsCapabilityLoaded = false;
+      var hadSync = _matrix.prevBatch != null;
       _syncSubscription = _matrix.onSync.stream.listen((update) {
+        final liveSync = hadSync;
+        hadSync = true;
         _pendingRoomLeaves.removeWhere(
           (id) => _matrix.getRoomById(id)?.membership != Membership.join,
         );
@@ -117,6 +121,17 @@ extension _MatrixSession on MatrixBackend {
           _presenceReconciler?.observeSync(event.senderId);
         }
         _applySyncedProfilePresence();
+        if (_applicationForeground) {
+          final activeSenders = presenceActivitySenders(
+            update,
+            liveSync: liveSync,
+          );
+          for (final id in activeSenders.take(32)) {
+            if (id != _matrix.userID) {
+              unawaited(_presenceReader.observeActivity(id));
+            }
+          }
+        }
         _activities?.visibilityChanged(refresh: false);
         _loadSettings();
         if (_stickerPackSourcesChanged()) unawaited(_refreshStickerPacks());
@@ -160,7 +175,7 @@ extension _MatrixSession on MatrixBackend {
         if (_connectionStatus == ConnectionStatus.online &&
             previousStatus != ConnectionStatus.online) {
           _presenceReconciler?.invalidate();
-          unawaited(_refreshVisiblePresence());
+          unawaited(_refreshVisiblePresence(force: true));
           _retryPendingReplies();
           unawaited(_retryOfflineSends());
           unawaited(_sendDueScheduledMessages());
@@ -1130,14 +1145,28 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<Uint8List?> _notificationAvatarFor(Room room, Event event) async {
-    final identity = notificationAvatarRoom(room);
+    final bytes = await _notificationAvatarSource(room, event);
+    if (bytes == null) return null;
+    try {
+      return await imageGridPreview(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _notificationAvatarSource(Room room, Event event) async {
+    final client = _client;
+    if (client == null || !identical(room.client, client)) return null;
+    final identity = await hydratedNotificationAvatarRoom(room);
+    if (!identical(client, _client)) return null;
     if (identity != null) {
       final cached = _avatarBytes[identity.id];
       if (cached != null) return cached;
       final uri = identity.avatar;
       if (uri == null || !uri.isScheme('mxc')) return null;
       try {
-        return await _avatarMedia(uri, AvatarMediaPool.rowDimension);
+        final bytes = await _avatarMedia(uri, AvatarMediaPool.rowDimension);
+        return bytes;
       } catch (_) {
         return null;
       }
@@ -1203,13 +1232,27 @@ extension _MatrixSession on MatrixBackend {
     final client = _matrix;
     if (!client.isLogged()) return;
     final room = client.getRoomById(target.roomId);
-    if (room?.membership == Membership.invite) {
+    if (room == null ||
+        (room.membership != Membership.join &&
+            room.membership != Membership.invite)) {
+      return;
+    }
+    // A notification is explicit navigation, even when this room is selected
+    // behind Settings/a dialog. Hide it until the UI has exposed the target.
+    setConversationVisible(false);
+    _notificationNavigationRevision++;
+    final navigationRevision = _notificationNavigationRevision;
+    _notifyBackendListeners();
+    if (room.membership == Membership.invite) {
       await _notifications.clearRoom(target.roomId);
+      if (!identical(client, _client) ||
+          navigationRevision != _notificationNavigationRevision) {
+        return;
+      }
       _inboxRequestRevision++;
       _notifyBackendListeners();
       return;
     }
-    if (room == null || room.membership != Membership.join) return;
     try {
       setArchiveOpen(false);
       if (room.isSpace) {
@@ -1224,7 +1267,9 @@ extension _MatrixSession on MatrixBackend {
       // _selectSpace here and race two close/open operations.
       _selectedSpaceId = parent?.id;
       await _selectRoom(target.roomId);
-      if (_selectedRoomId != target.roomId || !identical(client, _client)) {
+      if (_selectedRoomId != target.roomId ||
+          !identical(client, _client) ||
+          navigationRevision != _notificationNavigationRevision) {
         return;
       }
       try {
@@ -1232,7 +1277,9 @@ extension _MatrixSession on MatrixBackend {
       } catch (_) {
         /* Cached parent links may still be sufficient. */
       }
-      if (_selectedRoomId != target.roomId || !identical(client, _client)) {
+      if (_selectedRoomId != target.roomId ||
+          !identical(client, _client) ||
+          navigationRevision != _notificationNavigationRevision) {
         return;
       }
       final loadedIdentity = notificationAvatarRoom(room);
@@ -1246,9 +1293,22 @@ extension _MatrixSession on MatrixBackend {
         _notifyBackendListeners();
       }
       if (target.eventId.isEmpty) return;
-      final event = await room.getEventById(target.eventId);
+      var event = await room.getEventById(target.eventId);
+      if (event?.type == EventTypes.Encrypted && client.encryption != null) {
+        try {
+          event = await client.encryption!.decryptRoomEvent(event!);
+        } catch (_) {}
+      }
+      if (_selectedRoomId != target.roomId ||
+          !identical(client, _client) ||
+          navigationRevision != _notificationNavigationRevision) {
+        return;
+      }
       final rootId = event?.relationshipType == RelationshipTypes.thread
           ? event?.relationshipEventId
+          : _presentationFor(room) == RoomPresentation.forum &&
+                ForumPost.fromJson(event?.content[forumPostKey]) != null
+          ? event!.eventId
           : null;
       if (rootId != null) {
         _threadNavigationRequest = (
@@ -1261,6 +1321,10 @@ extension _MatrixSession on MatrixBackend {
         await _jumpToEvent(target.eventId);
       }
     } catch (exception) {
+      if (!identical(client, _client) ||
+          navigationRevision != _notificationNavigationRevision) {
+        return;
+      }
       _error = _friendlyError(exception);
       _notifyBackendListeners();
     }
@@ -1787,6 +1851,7 @@ extension _MatrixSession on MatrixBackend {
 
   Future<void> _refreshDesktopPresence() async {
     if (_desktopPresencePublishing || _client == null) return;
+    final lease = _sessionScope.capture();
     final client = _matrix;
     final userId = _matrix.userID;
     // The activity watcher can fire before the own profile has restored the
@@ -1801,17 +1866,33 @@ extension _MatrixSession on MatrixBackend {
       _desktopPresencePublishing = true;
       try {
         if (kIsWeb) {
-          await browser.publishBrowserPresence();
+          if (!await browser.publishBrowserPresence()) return;
         } else {
           await client
               .setPresence(userId, presence, statusMsg: _profileStatusMessage)
               .timeout(const Duration(seconds: 10));
         }
+        if (lease.isCurrent &&
+            identical(client, _client) &&
+            presence == _effectiveClientPresence) {
+          // Our successful publication is newer than any in-flight fallback
+          // read. Do not leave the local island Offline until the sync echo.
+          final published = CachedPresence(
+            presence,
+            0,
+            _profileStatusMessage,
+            presence == PresenceType.online,
+            userId,
+          );
+          _presenceReconciler?.observeSync(userId);
+          _publishPresenceValue(userId, published, source: 'published');
+        }
       } catch (_) {
         // The next transition/heartbeat retries without interrupting input.
       } finally {
         _desktopPresencePublishing = false;
-        if (identical(client, _client) &&
+        if (lease.isCurrent &&
+            identical(client, _client) &&
             (idle != _desktopIdle ||
                 mode != _presenceMode ||
                 share != _preferences.sharePresence ||

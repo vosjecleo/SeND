@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'server_storage_selection.dart';
 import '../backend/chat_backend.dart';
 import '../services/server_storage.dart';
 
@@ -10,9 +12,7 @@ const _storageKinds = {
   'legacy': ('Legacy', Colors.grey),
   'other': ('Other', Colors.blueGrey),
 };
-String storageSize(num bytes) => bytes >= 1073741824
-    ? '${(bytes / 1073741824).toStringAsFixed(2)} GiB'
-    : '${(bytes / 1048576).toStringAsFixed(1)} MiB';
+String storageSize(num bytes) => formatServerStorageBytes(bytes);
 
 class _StorageSegment extends StatefulWidget {
   const _StorageSegment({
@@ -144,7 +144,13 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
   String? _error, _notice;
   bool _busy = false;
   String _kind = 'videos', _source = 'all';
-  int _days = 180;
+  final _days = TextEditingController(text: '180');
+  @override
+  void dispose() {
+    _days.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -180,6 +186,11 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
   }
 
   Future<void> _prune() async {
+    final days = int.tryParse(_days.text);
+    if (days == null || days < 0 || days > 36500) {
+      setState(() => _error = 'Enter a number of days between 0 and 36500.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -188,7 +199,7 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
     try {
       final preview = await widget.backend.serverStorage('prune-preview', {
         'before': DateTime.now()
-            .subtract(Duration(days: _days))
+            .subtract(Duration(days: days))
             .millisecondsSinceEpoch,
         'kind': _kind,
         if (_source != 'all') 'source': _source,
@@ -205,31 +216,24 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
         return;
       }
       setState(() => _busy = false);
-      final approved = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          scrollable: true,
-          title: Text('Delete ${files.length} uploads?'),
-          content: Text(
-            'Delete ${storageSize(preview['bytes'] as num)} from your homeserver? Shared attachments will stop working; messages stay. This can\'t be undone, and copies elsewhere may remain.',
+      final selected = await Navigator.of(context).push<List<String>>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => ServerStorageSelection(
+            backend: widget.backend,
+            files: files
+                .map((f) => Map<String, dynamic>.from(f as Map))
+                .toList(),
+            selectiveDeletion: preview['selection_version'] == 1,
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete uploads'),
-            ),
-          ],
         ),
       );
-      if (approved != true || !mounted) return;
+      if (selected == null || selected.isEmpty || !mounted) return;
       setState(() => _busy = true);
       final result = await widget.backend.serverStorage('prune', {
         'token': preview['token'],
         'confirm': true,
+        if (preview['selection_version'] == 1) 'media_ids': selected,
       });
       if (mounted) {
         _notice = result['dry_run'] == true
@@ -411,14 +415,15 @@ class _ServerStorageSettingsState extends State<ServerStorageSettings> {
                   }),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _days,
-            decoration: const InputDecoration(labelText: 'Older than'),
-            items: [
-              for (final days in [30, 90, 180, 365])
-                DropdownMenuItem(value: days, child: Text('$days days')),
-            ],
-            onChanged: _busy ? null : (v) => setState(() => _days = v!),
+          TextField(
+            controller: _days,
+            enabled: !_busy,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Older than',
+              suffixText: 'days',
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(

@@ -4,6 +4,12 @@
 #include <sys/prctl.h>
 
 int main(int argc, char** argv) {
+  // XWayland's idle counter cannot see input directed to native Wayland
+  // clients. Prefer the compositor's session-wide signal, with X11 fallback.
+  // Respect a backend explicitly selected by the user.
+  if (g_getenv("WAYLAND_DISPLAY") && !g_getenv("GDK_BACKEND")) {
+    gdk_set_allowed_backends("wayland,x11");
+  }
   // Keep desktop integration on the reverse-DNS application id while making
   // process monitors display the human-readable application name.
   g_set_prgname("SeND");

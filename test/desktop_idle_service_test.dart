@@ -26,4 +26,42 @@ void main() {
     messenger.setMockMethodCallHandler(channel, (_) async => null);
     expect(await DesktopIdleService.elapsed(), isNull);
   });
+  test(
+    'unfocused game uses session input, not time away from the chat window',
+    () {
+      const longAbsence = Duration(minutes: 30);
+      expect(
+        DesktopIdleService.idleFrom(
+          sessionIdle: const Duration(seconds: 3),
+          windowIdle: longAbsence,
+          windowFocused: false,
+        ),
+        isFalse,
+      );
+      expect(
+        DesktopIdleService.idleFrom(
+          sessionIdle: longAbsence,
+          windowIdle: Duration.zero,
+          windowFocused: false,
+        ),
+        isTrue,
+      );
+      expect(
+        DesktopIdleService.idleFrom(
+          sessionIdle: null,
+          windowIdle: longAbsence,
+          windowFocused: false,
+        ),
+        isNull,
+      );
+      expect(
+        DesktopIdleService.idleFrom(
+          sessionIdle: null,
+          windowIdle: longAbsence,
+          windowFocused: true,
+        ),
+        isTrue,
+      );
+    },
+  );
 }

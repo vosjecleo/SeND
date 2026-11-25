@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/image_grid_preview.dart';
 import 'space_follow_controller.dart';
 import '../models/rtc_connectivity.dart';
 import '../services/rtc_audio_controls.dart';
@@ -560,7 +561,9 @@ class MatrixBackend extends ChatBackend {
        _deviceAppearanceStore =
            deviceAppearanceStore ?? DeviceAppearanceStore(),
        _devicePreferencesStore =
-           devicePreferencesStore ?? DevicePreferencesStore();
+           devicePreferencesStore ?? DevicePreferencesStore() {
+    _bindPresenceUpdates();
+  }
 
   final ChatNotificationSink _notifications;
   String? _notificationError;
@@ -724,6 +727,16 @@ class MatrixBackend extends ChatBackend {
     ).call(action, body);
   }
 
+  @override
+  Future<ChatMessage?> serverStorageAttachment(Map<String, dynamic> file) =>
+      _serverStorageAttachment(file);
+
+  @override
+  Future<Map<String, ChatMessage>> serverStorageAttachments(
+    List<Map<String, dynamic>> files, {
+    required bool Function() isCurrent,
+  }) => _serverStorageAttachments(files, isCurrent: isCurrent);
+
   Future<void> _recordAssetUpload(Uri uri, Uint8List bytes) async {
     if (!_preferences.shareUploadCategories) return;
     try {
@@ -749,6 +762,9 @@ class MatrixBackend extends ChatBackend {
     notifyListeners();
   }, enabled: kIsWeb);
   int _inboxRequestRevision = 0;
+  int _notificationNavigationRevision = 0;
+  @override
+  int get notificationNavigationRevision => _notificationNavigationRevision;
   @override
   int get inboxRequestRevision => _inboxRequestRevision;
   @override
@@ -766,6 +782,10 @@ class MatrixBackend extends ChatBackend {
   final _settingsEchoGuard = SettingsEchoGuard();
   String? _typingRoomId;
   StreamSubscription<Object?>? _syncSubscription;
+  StreamSubscription<CachedPresence>? _presenceSubscription;
+  Client? _presenceSubscriptionClient;
+  SessionLease? _presenceSubscriptionLease;
+  CoalescedCallback? _presenceUiUpdates;
   StreamSubscription<Object?>? _loginSubscription;
   StreamSubscription<Object?>? _syncStatusSubscription;
   StreamSubscription<NotificationTarget>? _notificationSubscription;
@@ -842,12 +862,16 @@ class MatrixBackend extends ChatBackend {
     final client = _client;
     if (client == null || !_applicationForeground) return;
     if (id.startsWith('@') && client.isLogged()) {
-      unawaited(_presenceReader.refresh(id));
+      unawaited(_presenceReader.observeActivity(id));
     }
     final room =
         client.getRoomById(id) ??
         _homeRooms.where((r) => r.directChatMatrixID == id).firstOrNull;
     if (room == null) return;
+    final peer = room.isDirectChat ? room.directChatMatrixID : null;
+    if (!id.startsWith('@') && peer != null && client.isLogged()) {
+      unawaited(_presenceReader.observeActivity(peer));
+    }
     try {
       await room.postLoad();
       if (!room.isSpace && !_roomHeroUsersLoaded.contains(room.id)) {
@@ -1329,7 +1353,15 @@ class MatrixBackend extends ChatBackend {
   }
 
   @override
-  UserPresence get profilePresence => _profilePresence;
+  UserPresence get profilePresence {
+    final id = _client?.userID;
+    final value = id == null
+        ? _profilePresence
+        : _matrixPresenceFor(id, _profilePresence);
+    _tracePresence('own-ui-read', value);
+    return value;
+  }
+
   @override
   String? get profileStatusMessage => _profileStatusMessage;
   @override
@@ -1976,7 +2008,7 @@ class MatrixBackend extends ChatBackend {
     _applicationForeground = foreground;
     _presenceReconciler?.invalidate();
     if (foreground) {
-      unawaited(_refreshVisiblePresence());
+      unawaited(_refreshVisiblePresence(force: true));
     }
     if (foreground) _retryPendingReplies();
     unawaited(_mobilePresence?.refresh());
@@ -2018,7 +2050,7 @@ class MatrixBackend extends ChatBackend {
       unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
     }
     if (_applicationForeground) {
-      unawaited(_refreshVisiblePresence());
+      unawaited(_refreshVisiblePresence(force: true));
       unawaited(_refreshTimelineAfterResume());
     }
     _notifyBackendListeners();

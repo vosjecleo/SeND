@@ -154,6 +154,9 @@ Future<AttachmentDraft> optimizeVideo(
     if (encode) {
       // Duration changes the output size, not the selected video quality.
       final bitrate = optimize ? preset.targetBitrate : 8000000;
+      final overlay = edit?.overlay;
+      final overlayFile = File('${directory.path}/text.png');
+      if (overlay != null) await overlayFile.writeAsBytes(overlay);
       final filters = <String>[
         if (edit?.hasChanges == true)
           'scale=max(2\\,trunc(iw*sar/2)*2):ih,setsar=1',
@@ -179,18 +182,23 @@ Future<AttachmentDraft> optimizeVideo(
           'file,pipe',
           '-i',
           input.path,
+          if (overlay != null) ...[
+            '-i',
+            overlayFile.path,
+            '-filter_complex',
+            '[0:v:0]${filters.join(',')}[base];[1:v][base]scale2ref=w=iw:h=ih[ink][video];[video][ink]overlay[out]',
+          ],
           if ((edit?.startMs ?? 0) > 0) ...['-ss', '${edit!.startMs / 1000}'],
           if (edit != null) ...['-t', '$clipDuration'],
           '-map',
-          '0:v:0',
+          overlay == null ? '0:v:0' : '[out]',
           '-map',
           '0:a:0?',
           '-map_metadata',
           '-1',
           '-map_chapters',
           '-1',
-          '-vf',
-          filters.join(','),
+          if (overlay == null) ...['-vf', filters.join(',')],
           if (edit?.muted == true) '-an',
           '-c:v',
           'libx264',

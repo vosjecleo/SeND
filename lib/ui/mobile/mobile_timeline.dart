@@ -557,6 +557,7 @@ class _MobileTimelineViewState extends State<MobileTimelineView> {
       ),
     );
     _restoringScrollAnchor = false;
+    _handleScroll();
   }
 
   Future<void> _returnToPresent() async {

@@ -14,6 +14,11 @@ from collections import OrderedDict, deque
 ROOT = '/_synapse/client/send/v1'
 KINDS = frozenset(('images', 'videos', 'gifs', 'audio', 'other'))
 DISPLAY_KINDS = KINDS | {'legacy'}
+MEDIA_KIND_SQL = ("COALESCE(l.kind,CASE WHEN m.media_type='image/gif' THEN 'gifs' "
+                  "WHEN SUBSTR(m.media_type,1,6)='image/' THEN 'images' WHEN SUBSTR(m.media_type,1,6)='video/' "
+                  "THEN 'videos' WHEN SUBSTR(m.media_type,1,6)='audio/' THEN 'audio' "
+                  "WHEN COALESCE(m.created_ts,0)<(SELECT classification_since FROM send_storage_policy WHERE id=1) "
+                  "THEN 'legacy' ELSE 'other' END)")
 SOURCES = frozenset(('upload', 'klipy', 'asset'))
 MEDIA_ID = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
 
@@ -85,11 +90,7 @@ class Storage:
 
     async def usage(self, owner):
         def query(txn):
-            txn.execute("SELECT COALESCE(l.kind,CASE WHEN m.media_type='image/gif' THEN 'gifs' "
-                        "WHEN SUBSTR(m.media_type,1,6)='image/' THEN 'images' WHEN SUBSTR(m.media_type,1,6)='video/' "
-                        "THEN 'videos' WHEN SUBSTR(m.media_type,1,6)='audio/' THEN 'audio' "
-                        "WHEN COALESCE(m.created_ts,0)<(SELECT classification_since FROM send_storage_policy WHERE id=1) "
-                        "THEN 'legacy' ELSE 'other' END),"
+            txn.execute(f"SELECT {MEDIA_KIND_SQL},"
                         'COALESCE(SUM(m.media_length),0),COUNT(*) FROM local_media_repository m '
                         'LEFT JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
                         'WHERE m.user_id=? AND m.media_length IS NOT NULL AND m.url_cache IS NULL GROUP BY 1', (owner,))
@@ -105,7 +106,7 @@ class Storage:
                 'remaining_bytes': max(0, quota - used), 'categories': categories,
                 'message_bytes': None, 'accounting': 'original_uploads',
                 'notes': 'Messages, server-generated previews, thumbnails and backups are separate.',
-                'features': {'legacy_pruning': True}}
+                'features': {'legacy_pruning': True, 'selective_pruning': True}}
 
     async def label(self, owner, items):
         if not isinstance(items, list) or not 1 <= len(items) <= 100:
@@ -140,6 +141,7 @@ class Storage:
             raise ValueError('Invalid media filter.')
         if kind == 'legacy' and source is not None:
             raise ValueError('Legacy uploads have no recorded source. Choose all uploads.')
+        offset = 0
         def query(txn):
             # Legacy is never folded into the default/all selection. It requires
             # an explicit request and still uses owner/protection checks.
@@ -153,26 +155,44 @@ class Storage:
                             "AND COALESCE(m.media_type,'') NOT LIKE 'image/%' "
                             "AND COALESCE(m.media_type,'') NOT LIKE 'video/%' "
                             "AND COALESCE(m.media_type,'') NOT LIKE 'audio/%' "
-                            'ORDER BY m.media_length DESC,m.media_id LIMIT 100', (owner, before))
+                            'ORDER BY m.media_length DESC,m.media_id LIMIT 100 OFFSET ?', (owner, before, offset))
                 return [{'media_id': row[0], 'bytes': row[1], 'created_ts': row[2], 'kind': row[3], 'source': row[4]}
                         for row in txn.fetchall()]
-            sql = ('SELECT m.media_id,m.media_length,m.created_ts,l.kind,l.source '
-                   'FROM local_media_repository m JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
+            sql = (f'SELECT m.media_id,m.media_length,m.created_ts,{MEDIA_KIND_SQL},l.source '
+                   'FROM local_media_repository m LEFT JOIN send_storage_labels l ON l.media_id=m.media_id AND l.owner=m.user_id '
                    "WHERE m.user_id=? AND m.created_ts<? AND m.media_length IS NOT NULL AND m.url_cache IS NULL "
-                   "AND l.protected=FALSE AND l.source<>'asset' AND m.quarantined_by IS NULL ")
+                   "AND COALESCE(l.protected,FALSE)=FALSE AND COALESCE(l.source,'')<>'asset' AND m.quarantined_by IS NULL "
+                   f"AND {MEDIA_KIND_SQL}<>'legacy' ")
             args = [owner, before]
             if kind:
-                sql += 'AND l.kind=? '
+                sql += f'AND {MEDIA_KIND_SQL}=? '
                 args.append(kind)
             if source:
                 sql += 'AND l.source=? '
                 args.append(source)
-            txn.execute(sql + 'ORDER BY m.media_length DESC,m.media_id LIMIT 100', args)
+            txn.execute(sql + 'ORDER BY m.media_length DESC,m.media_id LIMIT 100 OFFSET ?', [*args, offset])
             return [{'media_id': row[0], 'bytes': row[1], 'created_ts': row[2], 'kind': row[3], 'source': row[4]}
                     for row in txn.fetchall()]
-        rows = await self.run('send_storage_files', query)
-        safe = await self.protected([row['media_id'] for row in rows])
-        return [row for row in rows if row['media_id'] not in safe]
+        result = []
+        while len(result) < 100:
+            rows = await self.run('send_storage_files', query)
+            safe = await self.protected([row['media_id'] for row in rows])
+            seen = {row['media_id'] for row in result}
+            result.extend(row for row in rows if row['media_id'] not in safe and row['media_id'] not in seen)
+            offset += len(rows)
+            if len(rows) < 100:
+                break
+        result = result[:100]
+        # The authenticated client can fetch previews from its own media API.
+        # Encryption descriptors remain exclusively on the client.
+        def metadata(txn):
+            for row in result:
+                txn.execute('SELECT media_type FROM local_media_repository WHERE media_id=? AND user_id=?', (row['media_id'], owner))
+                value = txn.fetchone()
+                row['mimetype'] = value[0] if value else None
+                row['mxc'] = f"mxc://{self.server_name}/{row['media_id']}"
+        await self.run('send_storage_file_metadata', metadata)
+        return result
 
     async def preview(self, owner, before, kind=None, source=None):
         rows = await self.files(owner, before, kind, source)
@@ -186,19 +206,31 @@ class Storage:
             txn.execute('INSERT INTO send_storage_prune_jobs VALUES (?,?,?,?)',
                         (digest, owner, json.dumps([r['media_id'] for r in rows]), self.now() + 600000))
         await self.run('send_storage_preview', save)
-        return {'token': token, 'files': rows, 'bytes': sum(r['bytes'] for r in rows), 'limit': 100}
+        return {'token': token, 'files': rows, 'bytes': sum(r['bytes'] for r in rows), 'limit': 100, 'selection_version': 1}
 
-    async def prune(self, owner, token, dry_run=False):
+    async def prune(self, owner, token, dry_run=False, media_ids=None):
         if not isinstance(token, str) or not 32 <= len(token) <= 128:
             raise ValueError('Invalid deletion preview.')
         digest = hashlib.sha256(token.encode()).hexdigest()
+        if media_ids is not None and (not isinstance(media_ids, list) or not 1 <= len(media_ids) <= 100 or
+                any(not isinstance(value, str) or not MEDIA_ID.fullmatch(value) for value in media_ids) or
+                len(set(media_ids)) != len(media_ids)):
+            raise ValueError('Select between 1 and 100 distinct uploads.')
         def consume(txn):
+            if media_ids is not None:
+                txn.execute('SELECT media_ids FROM send_storage_prune_jobs WHERE token_hash=? AND owner=? AND expires>?',
+                            (digest, owner, self.now()))
+                saved = txn.fetchone()
+                if saved is None or not set(media_ids).issubset(json.loads(saved[0])):
+                    raise ValueError('Selection does not belong to this deletion preview.')
             txn.execute('DELETE FROM send_storage_prune_jobs WHERE token_hash=? AND owner=? AND expires>? RETURNING media_ids',
                         (digest, owner, self.now()))
             row = txn.fetchone()
             if row is None:
                 raise ValueError('Deletion preview expired or was already used.')
             ids = json.loads(row[0])
+            if media_ids is not None:
+                ids = [value for value in ids if value in media_ids]
             result = []
             for media_id in ids:
                 txn.execute('SELECT m.user_id,l.protected FROM local_media_repository m '
@@ -322,7 +354,7 @@ class SendStorage:
                     elif action == 'prune-preview' and request.method == b'POST':
                         value = await module.storage.preview(owner, body.get('before'), body.get('kind'), body.get('source'))
                     elif action == 'prune' and request.method == b'POST' and body.get('confirm') is True:
-                        value = await module.storage.prune(owner, body.get('token'),dry_run=config.get('dry_run_pruning') is True)
+                        value = await module.storage.prune(owner, body.get('token'),dry_run=config.get('dry_run_pruning') is True, media_ids=body.get('media_ids'))
                     elif action == 'profiles' and request.method == b'POST':
                         users = body.get('users')
                         if not isinstance(users, list) or not 1 <= len(users) <= 32 or any(not isinstance(u, str) or not UserID.is_valid(u) for u in users):

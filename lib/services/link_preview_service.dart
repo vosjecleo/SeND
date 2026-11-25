@@ -252,6 +252,7 @@ class DirectLinkPreviewFetcher {
     Uri url,
     String accept, {
     Map<String, String> headers = const {},
+    bool relay = false,
   }) async {
     if (kIsWeb) {
       final kind = accept.startsWith('image/')
@@ -285,6 +286,18 @@ class DirectLinkPreviewFetcher {
     }
     if (SocksProxy.blockDirectTraffic) {
       throw StateError('Direct previews are blocked by your proxy settings.');
+    }
+    if (relay || isWebPreviewProxyUrl(url)) {
+      final kind = accept.startsWith('image/')
+          ? 'image'
+          : accept.startsWith('video/')
+          ? 'video'
+          : 'document';
+      url = webPreviewProxyUrl(
+        url,
+        kind: kind,
+        range: headers[HttpHeaders.rangeHeader],
+      );
     }
     final addresses = await _resolveHost(url.host).timeout(requestTimeout);
     if (addresses.isEmpty ||
@@ -438,7 +451,9 @@ class DirectLinkPreviewFetcher {
       );
       if (_isRedirect(response.statusCode)) {
         await _cancelBody(response.body);
-        if (response.location == null || redirects == _maximumRedirects) {
+        if (isWebPreviewProxyUrl(initialUrl) ||
+            response.location == null ||
+            redirects == _maximumRedirects) {
           throw const HttpException('Invalid video redirect.');
         }
         current = current.resolveUri(response.location!);
@@ -562,6 +577,7 @@ class DirectLinkPreviewFetcher {
   Future<_DocumentMetadata?> _fxTwitterMedia(
     Uri url, {
     bool Function(Uri uri)? allowUrl,
+    bool relay = false,
   }) async {
     if (url.host.toLowerCase() != 'fxtwitter.com') return null;
     final parts = url.pathSegments;
@@ -574,7 +590,7 @@ class DirectLinkPreviewFetcher {
     final api = Uri.https('api.fxtwitter.com', '/status/${parts[status + 1]}');
     if (allowUrl != null && !allowUrl(api)) return null;
     try {
-      final response = await _request(api, 'application/json');
+      final response = await _request(api, 'application/json', relay: relay);
       if (response.statusCode != 200 ||
           response.contentLength > maximumDocumentBytes) {
         await _cancelBody(response.body);
@@ -616,9 +632,67 @@ class DirectLinkPreviewFetcher {
     }
   }
 
+  /// Resolve GIF-only X posts through Deltie's allowlisted preview relay.
+  /// Only accept the provider's canonical tweet-video and poster URLs.
+  Future<LinkPreview?> fetchRelayedFxGif(
+    Uri url, {
+    bool Function(Uri)? allowUrl,
+  }) async {
+    if (SocksProxy.blockDirectTraffic) return null;
+    final media = await _fxTwitterMedia(url, relay: true, allowUrl: allowUrl);
+    final clip = media?.videoUrl;
+    if (clip == null ||
+        clip.scheme != 'https' ||
+        clip.authority != 'video.twimg.com' ||
+        !RegExp(r'^/tweet_video/[\w-]+\.mp4$').hasMatch(clip.path) ||
+        allowUrl?.call(clip) == false) {
+      return null;
+    }
+    final relay = webPreviewProxyUrl(clip);
+    try {
+      if (await _validateVideo(
+            relay,
+            allowUrl: isWebPreviewProxyUrl,
+            maximumBytes: 8 * 1024 * 1024,
+          ) ==
+          null) {
+        return null;
+      }
+    } on Exception {
+      return null;
+    }
+    Uint8List? poster;
+    final image = media?.imageUrl;
+    if (image != null &&
+        image.scheme == 'https' &&
+        image.authority == 'pbs.twimg.com' &&
+        image.path.startsWith('/tweet_video_thumb/') &&
+        allowUrl?.call(image) != false) {
+      try {
+        poster = await _fetchImage(
+          webPreviewProxyUrl(image, kind: 'image'),
+          allowUrl: isWebPreviewProxyUrl,
+        );
+      } on Exception {
+        // The clip is usable even when the poster is unavailable.
+      }
+    }
+    return LinkPreview(
+      url: url,
+      siteName: 'FxTwitter',
+      title: media?.title,
+      description: media?.description,
+      width: media?.width,
+      height: media?.height,
+      imageBytes: poster,
+      videoUrl: relay,
+    );
+  }
+
   Future<Uri?> _validateVideo(
     Uri url, {
     bool Function(Uri uri)? allowUrl,
+    int maximumBytes = _maximumPreviewVideoBytes,
   }) async {
     var current = url;
     for (var redirects = 0; redirects <= _maximumRedirects; redirects++) {
@@ -655,7 +729,7 @@ class DirectLinkPreviewFetcher {
           acceptableType &&
           totalSize != null &&
           totalSize > 0 &&
-          totalSize <= _maximumPreviewVideoBytes;
+          totalSize <= maximumBytes;
       await _cancelBody(response.body);
       return valid ? current : null;
     }

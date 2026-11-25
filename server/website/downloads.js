@@ -14,7 +14,6 @@ const formats = [
   ['-android-arm64-v8a.apk', 'Android ARM64 (most phones)'],
   ['-android-armeabi-v7a.apk', 'Android ARMv7 (older phones)'],
   ['-android-x86_64.apk', 'Android x86-64'],
-  ['-android.aab', 'Android App Bundle (distribution only)'],
 ];
 function addDownloads(body, title, files) {
   if (!Array.isArray(files) || !files.length) return;

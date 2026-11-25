@@ -62,7 +62,7 @@ abstract class ChatBackend extends ChangeNotifier {
     bool thumbnail = false,
   }) => null;
 
-  /// Bounded grid preview only. Never falls back to downloading an original.
+  /// Bounded grid preview. Missing image thumbnails may be made on demand.
   Future<Uint8List?> loadAttachmentPreview(
     String messageId, {
     bool Function()? isCurrent,
@@ -70,6 +70,23 @@ abstract class ChatBackend extends ChangeNotifier {
       ? null
       : cachedAttachmentPreview(messageId, thumbnail: true) ??
             cachedAttachmentPreview(messageId);
+
+  Future<ChatMessage?> serverStorageAttachment(
+    Map<String, dynamic> file,
+  ) async => null;
+
+  Future<Map<String, ChatMessage>> serverStorageAttachments(
+    List<Map<String, dynamic>> files, {
+    required bool Function() isCurrent,
+  }) async {
+    final result = <String, ChatMessage>{};
+    for (final file in files) {
+      if (!isCurrent()) return {};
+      final message = await serverStorageAttachment(file);
+      if (message != null) result[file['media_id'] as String] = message;
+    }
+    return isCurrent() ? result : {};
+  }
 
   void _retainDelivered(QueuedMessage item) {
     _outgoing.remove(item.id);
@@ -549,6 +566,7 @@ abstract class ChatBackend extends ChangeNotifier {
 
   /// Incremented when a notification requests the invitation inbox.
   int get inboxRequestRevision => 0;
+  int get notificationNavigationRevision => 0;
   ({String roomId, String rootId, int revision})? get threadNavigationRequest =>
       null;
   List<StickerPackSummary> get stickerPacks => const [];

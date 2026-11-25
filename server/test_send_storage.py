@@ -155,6 +155,36 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.store.prune('@a:example.org', preview['token'])
         self.assertEqual(self.deleted, [])
+
+    async def test_selection_is_a_subset_of_its_owner_bound_preview(self):
+        await self.label()
+        self.add('second', '@a:example.org', 20)
+        await self.label('second')
+        preview = await self.store.preview('@a:example.org', 100)
+        for selection in [[], ['other'], ['mine', 'mine'], 'mine']:
+            with self.assertRaises(ValueError):
+                await self.store.prune('@a:example.org', preview['token'], media_ids=selection)
+        result = await self.store.prune('@a:example.org', preview['token'], media_ids=['second'])
+        self.assertEqual(result['deleted'], 1)
+        self.assertEqual(self.deleted, ['second'])
+        self.assertIsNotNone(self.db.execute("SELECT media_id FROM local_media_repository WHERE media_id='mine'").fetchone())
+
+    async def test_legacy_preview_searches_past_protected_first_page(self):
+        for index in range(100):
+            media_id = f'protected-{index}'
+            self.add(media_id, '@a:example.org', 1000)
+            self.protected.add(media_id)
+        preview = await self.store.preview('@a:example.org', 100, 'legacy')
+        self.assertEqual([row['media_id'] for row in preview['files']], ['mine'])
+        self.assertEqual(preview['selection_version'], 1)
+        self.assertEqual(preview['files'][0]['mxc'], 'mxc://example.org/mine')
+
+    async def test_unlabelled_clear_images_counted_in_usage_are_prunable_but_assets_stay_protected(self):
+        self.add('old-photo', '@a:example.org', 20, 'image/png')
+        preview = await self.store.preview('@a:example.org', 100, 'images')
+        self.assertEqual([row['media_id'] for row in preview['files']], ['old-photo'])
+        self.protected.add('old-photo')
+        self.assertEqual((await self.store.preview('@a:example.org', 100, 'images'))['files'], [])
     async def test_klipy_filter_does_not_select_other_uploads(self):
         await self.label(kind='gifs', source='klipy')
         self.add('upload', '@a:example.org', 90)

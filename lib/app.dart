@@ -53,17 +53,40 @@ class _DeltiecordAppState extends State<DeltiecordApp>
   Object? _configuration;
   ThemeData? _cachedTheme;
   String? _desktopTitle;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  int _notificationRevision = 0;
+
+  void _notificationNavigationChanged() {
+    final revision = backend.notificationNavigationRevision;
+    if (_notificationRevision == revision) return;
+    _notificationRevision = revision;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _notificationRevision = backend.notificationNavigationRevision;
+    backend.addListener(_notificationNavigationChanged);
     _publishForeground(WidgetsBinding.instance.lifecycleState);
+  }
+
+  @override
+  void didUpdateWidget(covariant DeltiecordApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.backend, backend)) {
+      oldWidget.backend.removeListener(_notificationNavigationChanged);
+      _notificationRevision = backend.notificationNavigationRevision;
+      backend.addListener(_notificationNavigationChanged);
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    backend.removeListener(_notificationNavigationChanged);
     super.dispose();
   }
 
@@ -439,6 +462,7 @@ class _DeltiecordAppState extends State<DeltiecordApp>
           );
         }
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           title: 'SeND',
           debugShowCheckedModeBanner: false,
           // Apply appearance atomically on every platform, even while another
@@ -553,6 +577,8 @@ class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
   Timer? _idleTimer;
   final Stopwatch _sinceInput = Stopwatch()..start();
   bool _samplingIdle = false;
+  bool _viewFocused = true;
+  int _inputGeneration = 0;
 
   @override
   void initState() {
@@ -574,6 +600,7 @@ class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
   }
 
   void _activity() {
+    _inputGeneration++;
     _sinceInput.reset();
     widget.backend.setDesktopIdle(false);
   }
@@ -581,16 +608,30 @@ class _DesktopActivityReporterState extends State<_DesktopActivityReporter>
   Future<void> _sampleIdle() async {
     if (_samplingIdle) return;
     _samplingIdle = true;
+    final generation = _inputGeneration;
     try {
       final global = await DesktopIdleService.elapsed();
-      if (mounted) {
-        widget.backend.setDesktopIdle(
-          (global ?? _sinceInput.elapsed) >= DesktopIdleService.timeout,
-        );
-      }
+      if (!mounted || generation != _inputGeneration) return;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      final idle = DesktopIdleService.idleFrom(
+        sessionIdle: global,
+        windowIdle: _sinceInput.elapsed,
+        windowFocused:
+            _viewFocused &&
+            (lifecycle == null || lifecycle == AppLifecycleState.resumed),
+      );
+      if (idle != null) widget.backend.setDesktopIdle(idle);
     } finally {
       _samplingIdle = false;
     }
+  }
+
+  @override
+  void didChangeViewFocus(ViewFocusEvent event) {
+    final focused = event.state == ViewFocusState.focused;
+    if (focused && !_viewFocused) _sinceInput.reset();
+    _viewFocused = focused;
+    if (focused) unawaited(_sampleIdle());
   }
 
   @override

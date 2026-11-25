@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'editor_captions.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -7,6 +9,7 @@ import '../models/chat_models.dart';
 import '../models/media_compression.dart';
 import '../models/video_edit.dart';
 import '../services/video_optimizer.dart';
+import '../services/native_video_player_options.dart';
 import '../services/video_seek_controller.dart';
 import 'video_playback_overlay.dart';
 import 'media_edit_canvas.dart';
@@ -48,7 +51,7 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
   bool _busy = false,
       _loading = true,
       _muted = false,
-      _locked = true,
+      _locked = false,
       _cropMode = false;
   Rect _crop = _full;
   double? _ratio;
@@ -59,6 +62,8 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
       : 'original';
   late bool _spoiler = widget.draft.spoiler;
   int _section = 0;
+  final _captions = <EditorCaption>[];
+  int _caption = -1;
   void _select(int value) => setState(() {
     _section = value;
     _cropMode = value == 1;
@@ -105,6 +110,8 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
       });
       final source = await Media.memory(widget.draft.bytes);
       if (!mounted) return;
+      await configureVideoAudio(player);
+      if (!mounted) return;
       await player.open(source, play: false);
     } catch (_) {
       if (mounted) {
@@ -135,7 +142,25 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
   String _time(num ms) => videoTimeLabel(Duration(milliseconds: ms.round()));
 
   Future<void> _save() async {
+    if (_busy) return;
+    Uint8List? overlay;
+    if (_captions.isNotEmpty) {
+      setState(() => _busy = true);
+      try {
+        overlay = await captionBitmap(_display, _crop, _captions);
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _error = 'Could not add the text. Try again.';
+          });
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
     final plan = VideoEditPlan(
+      overlay: overlay,
       startMs: _range.start.round(),
       endMs: _duration > 0 && _range.end.round() < _duration
           ? _range.end.round()
@@ -155,6 +180,7 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
       return;
     }
     if (!videoOptimizationSupported) {
+      _busy = false;
       setState(
         () => _error =
             'Video export is unavailable in this browser. Cancel to keep the original or use the native app.',
@@ -243,6 +269,9 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
         onRotate: () => setState(() {
           _turns = (_turns + 1) % 4;
           _crop = rotateCrop(_crop);
+          for (final caption in _captions) {
+            caption.rotateClockwise();
+          }
           if (_ratio != null) _ratio = 1 / _ratio!;
         }),
         onReset: () => setState(() => _crop = _full),
@@ -263,6 +292,11 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
           ),
         ],
       ),
+    ),
+    MediaEditorTool(
+      'Text',
+      Icons.title,
+      CaptionTools(_captions, _caption, (i) => setState(() => _caption = i)),
     ),
     MediaEditorTool(
       'Quality',
@@ -329,6 +363,12 @@ class _VideoAttachmentEditorState extends State<VideoAttachmentEditor> {
                             sourceSize: _size,
                             turns: _turns,
                             crop: _crop,
+                            captions: _captions,
+                            onPlace: _section == 3 && _caption >= 0 && !_busy
+                                ? (p) => setState(
+                                    () => _captions[_caption].position = p,
+                                  )
+                                : null,
                             onCrop: (v) => setState(() => _crop = v),
                             cropMode: _cropMode && !_busy,
                             locked: _locked,

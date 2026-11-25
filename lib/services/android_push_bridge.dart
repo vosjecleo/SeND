@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'image_grid_preview.dart';
 import 'platform_io.dart';
 
 import 'package:flutter/foundation.dart';
@@ -208,7 +209,7 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
 
   final pool = avatarPool ?? AvatarMediaPool();
   Uint8List? avatar;
-  final identity = notificationAvatarRoom(room);
+  final identity = await hydratedNotificationAvatarRoom(room);
   final avatarUri = identity == null ? sender.avatarUrl : identity.avatar;
   if (avatarUri != null && avatarUri.isScheme('mxc')) {
     try {
@@ -216,15 +217,25 @@ Future<Map<String, Object?>?> resolveAndroidPushNotification(
         avatarUri,
         AvatarMediaPool.rowDimension,
         () async {
-          return BoundedMatrixMedia.image(
-            client,
-            avatarUri,
-            width: AvatarMediaPool.rowDimension,
-            height: AvatarMediaPool.rowDimension,
-            animated: false,
-          );
+          try {
+            return await BoundedMatrixMedia.image(
+              client,
+              avatarUri,
+              width: AvatarMediaPool.rowDimension,
+              height: AvatarMediaPool.rowDimension,
+              animated: false,
+            );
+          } catch (_) {
+            final bytes = await BoundedMatrixMedia.image(
+              client,
+              avatarUri,
+              maximumBytes: pool.maximumEntryBytes,
+            );
+            return imageGridPreview(bytes);
+          }
         },
       );
+      if (avatar != null) avatar = await imageGridPreview(avatar);
     } catch (_) {
       avatar = null;
     }

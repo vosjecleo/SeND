@@ -5,9 +5,31 @@ import 'package:deltiecord/ui/json_theme.dart';
 import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:deltiecord/services/web_preview_proxy.dart';
 import 'package:image/image.dart' as img;
 
 void main() {
+  test('relayed Twitter GIFs keep their looping behavior', () {
+    final page = Uri.parse('https://x.com/example/status/123');
+    expect(
+      shouldLoopLinkPreview(
+        page,
+        videoUrl: webPreviewProxyUrl(
+          Uri.parse('https://video.twimg.com/tweet_video/example.mp4'),
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldLoopLinkPreview(
+        page,
+        videoUrl: webPreviewProxyUrl(
+          Uri.parse('https://video.twimg.com/ext_tw_video/example.mp4'),
+        ),
+      ),
+      isFalse,
+    );
+  });
   test(
     'APNG profile images are recognized, ordinary and truncated PNG are not',
     () {

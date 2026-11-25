@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
+import 'package:image/image.dart' as image;
+import 'package:deltiecord/services/image_grid_preview.dart';
+import 'package:deltiecord/services/encoded_image_dimensions.dart';
 import 'package:deltiecord/services/notification_avatar.dart';
 
 class _Database implements MatrixSdkDatabase {
@@ -15,6 +18,22 @@ class _Room extends Room {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'large cached server icons become small static Android notification bitmaps',
+    () async {
+      final original = image.encodePng(
+        image.Image(width: 700, height: 700),
+        level: 0,
+      );
+      expect(original.length, greaterThan(1024 * 1024));
+      final preview = await imageGridPreview(original);
+      expect(preview.length, lessThan(1024 * 1024));
+      final dimensions = await readEncodedImageDimensions(preview);
+      expect(dimensions!.width, 256);
+      expect(dimensions.height, 256);
+    },
+  );
   test(
     'server identity wins; standalone groups retain their icon and DMs use sender',
     () {

@@ -541,6 +541,11 @@ extension _MatrixMessages on MatrixBackend {
       }
       final before = records.length;
       for (final event in page.$1) {
+        if (kind == 'media' &&
+            event.messageType != MessageTypes.Image &&
+            event.messageType != MessageTypes.Video) {
+          continue;
+        }
         final message = _searchResultFromEvent(event);
         if (catalogMatches(message, kind)) {
           records[event.eventId] = message;

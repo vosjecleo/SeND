@@ -28,8 +28,9 @@ external JSBoolean? _keyboardVisible();
 external JSFunction? get _keyboardGeometryFunction;
 
 void configureBrowserPresence(String? json) => _configurePresence(json?.toJS);
-Future<void> publishBrowserPresence() async {
-  await _publishPresence().toDart;
+Future<bool> publishBrowserPresence() async {
+  final result = await _publishPresence().toDart;
+  return result?.dartify() == true;
 }
 
 bool? get browserKeyboardVisible => _keyboardVisible()?.toDart;

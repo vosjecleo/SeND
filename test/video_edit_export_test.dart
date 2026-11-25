@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:image/image.dart' as image;
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/models/video_edit.dart';
 import 'package:deltiecord/services/video_optimizer_native.dart';
@@ -47,7 +48,11 @@ void main() {
             caption: 'caption',
           ),
           optimize: false,
-          edit: const VideoEditPlan(
+          edit: VideoEditPlan(
+            overlay: image.encodePng(
+              image.Image(width: 32, height: 96)
+                ..clear(image.ColorRgb8(255, 0, 0)),
+            ),
             startMs: 500,
             endMs: 1500,
             turns: 1,
@@ -65,6 +70,23 @@ void main() {
         expect(result.spoiler, true);
         final output = File('${directory.path}/output.mp4');
         await output.writeAsBytes(result.bytes);
+        final decoded = await Process.run('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          output.path,
+          '-frames:v',
+          '1',
+          '-pix_fmt',
+          'rgb24',
+          '-f',
+          'rawvideo',
+          'pipe:1',
+        ], stdoutEncoding: null);
+        expect(decoded.exitCode, 0);
+        final rgb = decoded.stdout as List<int>;
+        expect(rgb[0], greaterThan(240));
+        expect(rgb[1], lessThan(12));
         final info = await Process.run('ffprobe', [
           '-v',
           'error',

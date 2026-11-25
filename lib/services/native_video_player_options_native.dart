@@ -1,4 +1,19 @@
+import 'dart:io';
+
 import 'package:media_kit/media_kit.dart';
+
+/// Preview-only A/B for Android video sound. This leaves the media unchanged
+/// and does not touch the shared audio routing used by calls.
+Future<void> configureVideoAudio(Player player) async {
+  const preferAudioTrack = bool.fromEnvironment(
+    'SEND_ANDROID_AUDIOTRACK',
+    defaultValue: bool.fromEnvironment('SEND_PREVIEW'),
+  );
+  if (!Platform.isAndroid || !preferAudioTrack) return;
+  final native = player.platform;
+  if (native is! NativePlayer) return;
+  await native.setProperty('ao', 'audiotrack,opensles');
+}
 
 Future<void> openRestrictedNativeVideo(Player player, Uri local) async {
   if (local.scheme != 'http' ||

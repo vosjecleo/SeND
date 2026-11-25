@@ -42,7 +42,7 @@ export function editPlan(options, sourceWidth, sourceHeight, duration) {
 
 export async function convertVideo(blob, options, report = () => {}) {
   if (!(blob instanceof Blob) || !blob.size || blob.size > 256 * MiB) fail('Over 256 MiB. Choose Original or use the native app.');
-  let input, conversion, remuxInput, remux;
+  let input, conversion, remuxInput, remux, ink;
   try {
     input = new Input({source: new BlobSource(blob), formats: [MP4, QTFF, WEBM]});
     const track = await input.getPrimaryVideoTrack();
@@ -51,10 +51,14 @@ export async function convertVideo(blob, options, report = () => {}) {
     const plan = editPlan(options, await track.getDisplayWidth(), await track.getDisplayHeight(), await input.computeDuration());
     if (!await canEncodeVideo('avc', {width: plan.width, height: plan.height, bitrate: plan.bitrate})) fail('This browser can\'t encode the video. Choose Original.');
     const encoded = boundedTarget(plan.maximum);
+    if (options.edit?.overlay) ink = await createImageBitmap(new Blob([new Uint8Array(options.edit.overlay)], {type:'image/png'}));
+    const surface = ink && new OffscreenCanvas(plan.width, plan.height);
+    const ctx = surface && surface.getContext('2d');
     const output = new Output({format: new Mp4OutputFormat({fastStart: false}), target: encoded.target});
     conversion = await Conversion.init({input, output, tracks: 'primary',
       ...(plan.start > 0 || options.edit?.endMs != null ? {trim: {start: plan.start, end: plan.end}} : {}),
       video: {codec: 'avc', width: plan.width, height: plan.height, fit: 'fill', rotate: plan.turns * 90,
+        ...(ink ? {process(sample) { sample.draw(ctx,0,0,plan.width,plan.height); ctx.drawImage(ink,0,0,plan.width,plan.height); return surface; }} : {}),
         crop: plan.crop, allowTransformationMetadata: false, frameRate: 30, quality: new Quality({bitrate: plan.bitrate}),
         keyFrameInterval: 2, forceTranscode: true},
       audio: options.edit?.muted ? {discard: true} : {codec: 'aac'},
@@ -77,6 +81,7 @@ export async function convertVideo(blob, options, report = () => {}) {
     await conversion?.cancel().catch(() => {});
     await remux?.cancel().catch(() => {});
     input?.dispose(); remuxInput?.dispose();
+    ink?.close();
   }
 }
 

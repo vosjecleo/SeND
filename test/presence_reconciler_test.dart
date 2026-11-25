@@ -46,6 +46,100 @@ class Fixture {
 }
 
 void main() {
+  test('only live public read receipts trigger presence recovery', () {
+    final update = SyncUpdate(
+      nextBatch: 'receipt',
+      rooms: RoomsUpdate(
+        join: {
+          '!room:test': JoinedRoomUpdate(
+            ephemeral: [
+              BasicEvent(
+                type: 'm.receipt',
+                content: {
+                  r'$message': {
+                    'm.read': {
+                      '@reader:test': {'ts': 1},
+                    },
+                    'm.read.private': {
+                      '@private:test': {'ts': 1},
+                    },
+                  },
+                  r'$malformed': {'m.read': 'invalid'},
+                  r'$invalid': null,
+                },
+              ),
+            ],
+          ),
+        },
+      ),
+    );
+    expect(presenceActivitySenders(update, liveSync: true), {'@reader:test'});
+    expect(presenceActivitySenders(update, liveSync: false), isEmpty);
+  });
+  test(
+    'typing triggers checks, history does not, malformed typing is ignored',
+    () {
+      SyncUpdate update({
+        bool limited = false,
+        Object? users = const ['@typing:test'],
+      }) => SyncUpdate(
+        nextBatch: 'next',
+        rooms: RoomsUpdate(
+          join: {
+            '!room:test': JoinedRoomUpdate(
+              ephemeral: [
+                BasicEvent(type: 'm.typing', content: {'user_ids': users}),
+              ],
+              timeline: TimelineUpdate(
+                limited: limited,
+                events: [
+                  MatrixEvent.fromJson({
+                    'type': 'm.room.encrypted',
+                    'sender': '@sender:test',
+                    'content': <String, Object?>{},
+                    'event_id': r'$event',
+                    'origin_server_ts': 1,
+                  }),
+                ],
+              ),
+            ),
+          },
+        ),
+      );
+      expect(presenceActivitySenders(update(), liveSync: true), {
+        '@typing:test',
+        '@sender:test',
+      });
+      expect(presenceActivitySenders(update(), liveSync: false), {
+        '@typing:test',
+      });
+      expect(presenceActivitySenders(update(limited: true), liveSync: true), {
+        '@typing:test',
+      });
+      expect(
+        presenceActivitySenders(update(users: 'invalid'), liveSync: false),
+        isEmpty,
+      );
+    },
+  );
+  test(
+    'live typing/message activity bypasses freshness without inferring Online',
+    () async {
+      final f = Fixture();
+      addTearDown(f.reader.dispose);
+      await f.reader.refresh('peer');
+      f.handler = (id) async => value(id, PresenceType.online);
+      await f.reader.observeActivity('peer');
+      expect(f.cache['peer']!.presence, PresenceType.online);
+      expect(f.requests, ['peer', 'peer']);
+      await f.reader.observeActivity('peer');
+      expect(f.requests.length, 2);
+      f.time = f.time.add(const Duration(seconds: 5));
+      f.handler = (id) async => value(id, PresenceType.offline);
+      await f.reader.observeActivity('peer');
+      expect(f.cache['peer']!.presence, PresenceType.offline);
+    },
+  );
   test(
     'a stale SDK value is repaired, then fresh checks are throttled',
     () async {

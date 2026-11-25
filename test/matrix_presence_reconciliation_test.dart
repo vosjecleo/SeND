@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
 import 'package:deltiecord/matrix/matrix_backend.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'support/backend_browser_fixture_stub.dart'
+    if (dart.library.js_interop) 'support/backend_browser_fixture_web.dart';
 
 class _Database implements MatrixSdkDatabase {
   @override
@@ -44,9 +46,193 @@ class _Client extends Client {
       throw StateError('No custom fields');
 }
 
+class _OwnClient extends _Client {
+  bool failWrites = true;
+  @override
+  String get userID => '@self:example.org';
+  @override
+  Future<void> setPresence(
+    String userId,
+    PresenceType presence, {
+    String? statusMsg,
+  }) async {
+    if (failWrites) throw StateError('Presence publication unavailable');
+  }
+}
+
+class _LoggedClient extends _Client {
+  @override
+  bool isLogged() => true;
+}
+
+class _MobileBackend extends MatrixBackend {
+  _MobileBackend({required super.client});
+  @override
+  bool get supportsActivityDetection => false;
+}
+
+class _DirectRoom extends Room {
+  _DirectRoom(Client client) : super(id: '!dm:example.org', client: client) {
+    setState(
+      Event.fromJson({
+        'event_id': r'$member',
+        'type': 'm.room.member',
+        'state_key': '@peer:example.org',
+        'sender': '@peer:example.org',
+        'origin_server_ts': 1,
+        'content': {'membership': 'join', 'displayname': 'Peer'},
+      }, this),
+    );
+  }
+  @override
+  bool get isDirectChat => true;
+  @override
+  String get directChatMatrixID => '@peer:example.org';
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => addTearDown(installBackendBrowserFixture()));
   const peer = '@peer:example.org';
+  test(
+    'a presence burst updates state immediately and sends one UI notification',
+    () async {
+      final client = _Client();
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      var updates = 0;
+      backend.addListener(() => updates++);
+      for (var index = 0; index < 20; index++) {
+        final id = '@peer$index:example.org';
+        final value = CachedPresence(PresenceType.online, 0, null, true, id);
+        // ignore: deprecated_member_use
+        client.presences[id] = value;
+        client.onPresenceChanged.add(value);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(updates, 1);
+      expect(client.presenceReads, 0);
+    },
+  );
+  test(
+    'a newly visible DM refreshes Offline before any typing or message',
+    () async {
+      final client = _LoggedClient();
+      client.rooms = [_DirectRoom(client)];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.getUserProfile(peer);
+      await Future<void>.delayed(Duration.zero);
+      final reads = client.presenceReads;
+      client.serverState = PresenceType.online;
+      await backend.refreshVisibleAvatar('!dm:example.org');
+      await Future<void>.delayed(Duration.zero);
+      expect(client.presenceReads, reads + 1);
+      expect(backend.rooms.single.presence, UserPresence.online);
+    },
+  );
+  test(
+    'SDK presence alone immediately updates DM and cached profile before full sync',
+    () async {
+      final client = _Client();
+      client.rooms = [_DirectRoom(client)];
+      final backend = MatrixBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.getUserProfile(peer);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(backend.rooms.single.presence, UserPresence.offline);
+      final reads = client.presenceReads;
+      var updates = 0;
+      backend.addListener(() => updates++);
+      final value = CachedPresence(PresenceType.online, 0, null, true, peer);
+      // The SDK's documented ordering: cache write, presence stream, then later
+      // account/device processing and the final onSync event (not emitted here).
+      // ignore: deprecated_member_use
+      client.presences[peer] = value;
+      client.onPresenceChanged.add(value);
+      // Both native presence bursts and the web backend publish within one
+      // frame; they do not wait for a completed sync or a network request.
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(updates, greaterThan(0));
+      expect(backend.rooms.single.presence, UserPresence.online);
+      expect(
+        (await backend.getUserProfile(peer)).presence,
+        UserPresence.online,
+      );
+      expect(client.presenceReads, reads);
+    },
+  );
+  test(
+    'own island reads SDK presence without waiting for profile hydration',
+    () async {
+      final client = _OwnClient();
+      final backend = _MobileBackend(client: client);
+      addTearDown(backend.dispose);
+      final value = CachedPresence(
+        PresenceType.online,
+        0,
+        null,
+        true,
+        client.userID,
+      );
+      // ignore: deprecated_member_use
+      client.presences[client.userID] = value;
+      client.onPresenceChanged.add(value);
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profilePresence, UserPresence.online);
+      expect(client.profileReads, 0);
+      expect(client.presenceReads, 0);
+    },
+  );
+  test(
+    'disposed backend ignores later presence events from the previous client',
+    () async {
+      final client = _Client();
+      final backend = MatrixBackend(client: client);
+      var updates = 0;
+      backend.addListener(() => updates++);
+      backend.dispose();
+      final before = updates;
+      final value = CachedPresence(PresenceType.online, 0, null, true, peer);
+      client.onPresenceChanged.add(value);
+      await Future<void>.delayed(Duration.zero);
+      expect(updates, before);
+    },
+  );
+  test(
+    'a successful own publication updates Online without waiting for its sync echo',
+    () async {
+      addTearDown(installBackendBrowserFixture(publicationSucceeded: true));
+      final client = _OwnClient()
+        ..failWrites = false
+        ..gate = Completer<GetPresenceResponse>();
+      final backend = _MobileBackend(client: client);
+      addTearDown(backend.dispose);
+      // The native test host is Linux; model a foreground, non-idle phone.
+      backend.setDesktopIdle(false);
+      await backend.refreshProfile();
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profilePresence, UserPresence.online);
+      client.gate!.complete(
+        GetPresenceResponse(presence: PresenceType.offline),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profilePresence, UserPresence.online);
+    },
+  );
+  test(
+    'async own presence updates the island without a second profile refresh',
+    () async {
+      final client = _OwnClient()..gate = Completer<GetPresenceResponse>();
+      final backend = _MobileBackend(client: client);
+      addTearDown(backend.dispose);
+      await backend.refreshProfile();
+      expect(backend.profilePresence, UserPresence.offline);
+      client.gate!.complete(GetPresenceResponse(presence: PresenceType.online));
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profilePresence, UserPresence.online);
+    },
+  );
   test(
     'a cached Online contact is reconciled with server Offline, and vice versa',
     () async {

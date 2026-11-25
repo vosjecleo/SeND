@@ -1,1 +1,3 @@
-void Function() installBackendBrowserFixture() => () {};
+void Function() installBackendBrowserFixture({
+  bool publicationSucceeded = false,
+}) => () {};

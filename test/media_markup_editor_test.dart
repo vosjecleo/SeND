@@ -2,9 +2,11 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/image_markup.dart';
+import 'package:deltiecord/ui/editor_captions.dart';
 import 'package:deltiecord/ui/attachment_image_editor.dart';
 import 'package:deltiecord/ui/media_edit_canvas.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
@@ -13,6 +15,38 @@ void main() {
   final pixels = image.Image(width: 64, height: 32, numChannels: 4)
     ..clear(image.ColorRgba8(255, 255, 255, 255));
   final png = Uint8List.fromList(image.encodePng(pixels));
+  test(
+    'eraser reveals the original pixels and caption bands are baked in',
+    () async {
+      final result = await renderMarkedImage(
+        bytes: png,
+        turns: 0,
+        crop: [0, 0, 1, 1],
+        strokes: [
+          {
+            'color': 0xffff0000,
+            'width': .3,
+            'points': <List<double>>[
+              [.1, .25],
+              [.9, .25],
+            ],
+          },
+          {
+            'color': 0,
+            'width': .4,
+            'points': <List<double>>[
+              [.5, .25],
+            ],
+          },
+        ],
+        captions: [EditorCaption('Hello', true, const Offset(.5, .75))],
+      );
+      final output = image.decodePng(result)!;
+      expect(output.getPixel(32, 8).g, greaterThan(245));
+      expect(output.getPixel(16, 8).g, lessThan(10));
+      expect(output.getPixel(2, 24).r, lessThan(180));
+    },
+  );
   test(
     'markup is exported into the cropped pixels, not just shown as an overlay',
     () async {
@@ -158,6 +192,50 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(AlertDialog), findsNothing);
         expect(find.text('Edit image'), findsOneWidget);
+        expect(
+          tester
+              .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, 'Lock aspect ratio'),
+              )
+              .value,
+          isFalse,
+        );
+        if (width == 400) {
+          await tester.tap(find.byTooltip('Text'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Add text'));
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextFormField), 'Hello');
+          await tester.tap(find.text('Free text'));
+          await tester.pump();
+          final ink = find.byTooltip('Text colour: Blue');
+          await tester.ensureVisible(ink);
+          await tester.tap(ink);
+          await tester.pump();
+          final outline = find.byTooltip('Outline colour: Red');
+          await tester.ensureVisible(outline);
+          await tester.tap(outline);
+          await tester.pump();
+          await tester.tap(find.text('Done'));
+          await tester.pumpAndSettle();
+          expect(find.widgetWithText(InputChip, 'Hello'), findsOneWidget);
+          final captions = tester
+              .widget<MediaEditCanvas>(find.byType(MediaEditCanvas))
+              .captions;
+          expect(captions.single.textColor, const Color(0xff40c4ff));
+          expect(captions.single.outlineColor, const Color(0xffff5252));
+          final surface = find.byKey(const ValueKey('media-editor-canvas'));
+          final center = tester.getCenter(surface),
+              before = tester.getRect(surface);
+          await tester.sendEventToBinding(
+            PointerScrollEvent(
+              position: center,
+              scrollDelta: const Offset(0, -150),
+            ),
+          );
+          await tester.pump();
+          expect(tester.getRect(surface).width, greaterThan(before.width));
+        }
         await tester.tap(
           width < 850 ? find.byTooltip('Markup') : find.text('Markup'),
         );

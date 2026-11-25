@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class VideoEditPlan {
   const VideoEditPlan({
     this.startMs = 0,
@@ -8,12 +10,15 @@ class VideoEditPlan {
     this.top = 0,
     this.width = 1,
     this.height = 1,
+    this.overlay,
   });
   final int startMs, turns;
   final int? endMs;
   final bool muted;
+  final Uint8List? overlay;
   final double left, top, width, height;
   bool get hasChanges =>
+      overlay != null ||
       startMs != 0 ||
       endMs != null ||
       turns % 4 != 0 ||
@@ -40,6 +45,7 @@ class VideoEditPlan {
 
   Map<String, Object?> toMap() => {
     'startMs': startMs,
+    if (overlay != null) 'overlay': overlay,
     if (endMs != null) 'endMs': endMs,
     'turns': turns % 4,
     'muted': muted,

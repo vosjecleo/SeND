@@ -16,8 +16,9 @@ import tempfile
 import time
 
 SOURCE = Path(__file__).resolve().parent
-# Unmodified preview modules that this installer can upgrade explicitly.
+# Unmodified released modules that this installer can upgrade explicitly.
 KNOWN_PREVIEW_MODULES = {
+    '9f684a77a85ff03d6f24f06cc3b1e52147fd2515ab91dc4112d3cd1589c6090a',  # released build 140
     '8cd6bda88ca6a1dd42af46a3cb9a37f2a3fbb0d21c3f42016f46a59919bd938b',  # released build 133
     'e4fef96f16849c6f65e4044823e34ae42609516472d31af479956e7a6152be0a',
     '2386eba3271f0a84c37d0d117e59b38a76764d65fb6bdffd5043776c8087b78c',
@@ -83,7 +84,7 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--preview-user', action='append', default=[], help='Limit API access to this account; disable new quota enforcement and make pruning a dry run')
     parser.add_argument('--activate', action='store_true', help='Activate a previously installed preview for all users')
-    parser.add_argument('--upgrade', action='store_true', help='Replace a recognized unmodified preview module; keep a rollback copy')
+    parser.add_argument('--upgrade', action='store_true', help='Replace a recognized unmodified storage module; keep a rollback copy')
     parser.add_argument('--rollback', type=Path)
     args = parser.parse_args()
     if any(not user.startswith('@') or ':' not in user or len(user)>255 for user in args.preview_user):
@@ -118,7 +119,7 @@ def main():
         parser.error('Expected regular configuration/module files, without symlinks.')
     if module.exists() and module.read_bytes() != (SOURCE / 'send_storage.py').read_bytes():
         if not args.upgrade or hashlib.sha256(module.read_bytes()).hexdigest() not in KNOWN_PREVIEW_MODULES:
-            parser.error('An existing storage adapter differs from this bundle. Use --upgrade only for a recognized preview, or review local changes manually.')
+            parser.error('An existing storage adapter differs from this bundle. Use --upgrade only for a recognized release, or review local changes manually.')
     if hs.parent != data and not any(Path(m.get('Source', '')).resolve() == hs.resolve()
                                     and m.get('Destination') in ('/config/homeserver.yaml','/data/homeserver.yaml') for m in mounts):
         parser.error('The configuration is not mounted by this Synapse container.')

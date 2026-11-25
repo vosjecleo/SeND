@@ -1,6 +1,176 @@
 part of 'matrix_backend.dart';
 
 extension _MatrixMedia on MatrixBackend {
+  Uri? _storageMediaUri(Map<String, dynamic> file) {
+    final id = file['media_id'];
+    final raw = file['mxc'];
+    final mxc = raw is String ? Uri.tryParse(raw) : null;
+    if (id is! String ||
+        !RegExp(r'^[A-Za-z0-9_-]{1,255}$').hasMatch(id) ||
+        mxc == null ||
+        mxc.scheme != 'mxc' ||
+        mxc.pathSegments.length != 1 ||
+        mxc.pathSegments.single != id ||
+        mxc.host.isEmpty ||
+        mxc.userInfo.isNotEmpty ||
+        mxc.hasQuery ||
+        mxc.hasFragment) {
+      return null;
+    }
+    return mxc;
+  }
+
+  String? _storageEventMediaUrl(Event event) =>
+      event.redacted ||
+          !event.hasAttachment ||
+          (event.messageType != MessageTypes.Image &&
+              event.messageType != MessageTypes.Video)
+      ? null
+      : event.content
+                .tryGetMap<String, Object?>('file')
+                ?.tryGet<String>('url') ??
+            event.content.tryGet<String>('url');
+
+  Future<Map<String, ChatMessage>> _serverStorageAttachments(
+    List<Map<String, dynamic>> files, {
+    required bool Function() isCurrent,
+  }) async {
+    final client = _client;
+    if (client == null || !isCurrent()) return {};
+    final lease = _sessionScope.capture();
+    bool current() =>
+        isCurrent() && lease.isCurrent && identical(client, _client);
+    final pending = <String, Map<String, dynamic>>{
+      for (final file in files.take(100))
+        if (_storageMediaUri(file) case final uri?) uri.toString(): file,
+    };
+    final result = <String, ChatMessage>{};
+    void match(Event event) {
+      if (!identical(event.room.client, client) ||
+          event.room.membership != Membership.join) {
+        return;
+      }
+      final file = pending.remove(_storageEventMediaUrl(event));
+      if (file != null) {
+        result[file['media_id'] as String] = _searchResultFromEvent(event);
+      }
+    }
+
+    for (final event in List<Event>.of(_attachmentEvents.values)) {
+      match(event);
+    }
+    // One bounded scan per selection screen, not one per tile. Use only the
+    // local timeline and local keys; the search does not fetch room history
+    // from the homeserver or request missing encryption keys.
+    final rooms = _joinedRooms.where((room) => !room.isSpace).toList()
+      ..sort((a, b) {
+        if (a.id == _selectedRoomId) return b.id == _selectedRoomId ? 0 : -1;
+        if (b.id == _selectedRoomId) return 1;
+        return (b.lastEvent?.originServerTs.millisecondsSinceEpoch ?? 0)
+            .compareTo(a.lastEvent?.originServerTs.millisecondsSinceEpoch ?? 0);
+      });
+    final encryption = client.encryption;
+    final exhausted = <String>{};
+    final checkedKeys = <(String, String)>{};
+    var decryptions = 0;
+    for (var offset = 0; offset < 128 && pending.isNotEmpty; offset += 32) {
+      for (final room in rooms.take(32)) {
+        if (!current()) return {};
+        if (pending.isEmpty) break;
+        if (exhausted.contains(room.id)) continue;
+        try {
+          final events = await client.database.getEventList(
+            room,
+            start: offset,
+            limit: 32,
+          );
+          if (!current()) return {};
+          if (events.length < 32) exhausted.add(room.id);
+          for (var event in events.take(32)) {
+            if (!current()) return {};
+            if (pending.isEmpty) break;
+            if (event.senderId != client.userID || event.redacted) continue;
+            if (event.type == EventTypes.Encrypted &&
+                encryption != null &&
+                decryptions < 256) {
+              decryptions++;
+              try {
+                final session = event.parsedRoomEncryptedContent.sessionId;
+                if (session == null) continue;
+                final keys = encryption.keyManager;
+                if (keys.getInboundGroupSession(room.id, session)?.isValid !=
+                        true &&
+                    checkedKeys.add((room.id, session))) {
+                  await keys.loadInboundGroupSession(room.id, session);
+                }
+                if (!current()) return {};
+                event = encryption.decryptRoomEventSync(event);
+              } catch (_) {
+                continue;
+              }
+            }
+            match(event);
+          }
+        } catch (_) {
+          exhausted.add(room.id);
+        }
+      }
+    }
+    if (!current()) return {};
+    for (final file in pending.values) {
+      final message = _storageClearAttachment(file, _storageMediaUri(file)!);
+      if (message != null) result[file['media_id'] as String] = message;
+    }
+    return result;
+  }
+
+  Future<ChatMessage?> _serverStorageAttachment(
+    Map<String, dynamic> file,
+  ) async {
+    final mxc = _storageMediaUri(file);
+    if (mxc == null || _client == null) return null;
+    for (final event in List<Event>.of(_attachmentEvents.values)) {
+      if (identical(event.room.client, _client) &&
+          event.room.membership == Membership.join &&
+          _storageEventMediaUrl(event) == mxc.toString()) {
+        return _searchResultFromEvent(event);
+      }
+    }
+    return _storageClearAttachment(file, mxc);
+  }
+
+  ChatMessage? _storageClearAttachment(Map<String, dynamic> file, Uri mxc) {
+    final id = mxc.pathSegments.single;
+    final mime = file['mimetype'] as String? ?? '';
+    if (!mime.startsWith('image/') && !mime.startsWith('video/')) return null;
+    // An encrypted blob cannot be viewed without its message's descriptor.
+    final room = Room(id: '!storage-preview:local', client: _matrix);
+    final event = Event.fromJson({
+      'event_id': 'storage:$id',
+      'sender': _matrix.userID,
+      'origin_server_ts': file['created_ts'] ?? 0,
+      'type': EventTypes.Message,
+      'content': {
+        'msgtype': mime.startsWith('video/')
+            ? MessageTypes.Video
+            : MessageTypes.Image,
+        'body': 'Upload',
+        'url': mxc.toString(),
+        'info': {'mimetype': mime, 'size': file['bytes']},
+      },
+    }, room);
+    return ChatMessage(
+      id: event.eventId,
+      sender: 'Upload',
+      body: '',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(
+        file['created_ts'] as int? ?? 0,
+      ),
+      pending: false,
+      attachment: _attachmentFor(event),
+    );
+  }
+
   Future<Uint8List?> _loadAttachmentPreview(
     String messageId, {
     bool Function()? requestCurrent,
@@ -37,30 +207,50 @@ extension _MatrixMedia on MatrixBackend {
     }
     Uint8List? bytes;
     if (event.hasThumbnail) {
-      final file = await BoundedMatrixMedia.attachment(
-        event,
-        thumbnail: true,
-        maximumBytes: 2 * 1024 * 1024,
-        isCurrent: current,
-      );
-      bytes = file.bytes;
-    } else if (event.messageType == MessageTypes.Image &&
-        !event.content.containsKey('file')) {
-      final uri = Uri.tryParse(event.content['url'] as String? ?? '');
-      if (uri?.isScheme('mxc') == true) {
-        // Only clear media can be thumbnailed by the homeserver. Encrypted
-        // originals are never fetched just to populate a browsing grid.
-        bytes = await BoundedMatrixMedia.image(
-          event.room.client,
-          uri!,
-          width: 256,
-          height: 256,
-          crop: false,
-          animated: false,
+      try {
+        final file = await BoundedMatrixMedia.attachment(
+          event,
+          thumbnail: true,
           maximumBytes: 2 * 1024 * 1024,
           isCurrent: current,
         );
+        bytes = file.bytes;
+      } catch (_) {
+        if (!current()) return null;
       }
+    }
+    if (bytes == null &&
+        event.messageType == MessageTypes.Image &&
+        !event.content.containsKey('file')) {
+      final uri = Uri.tryParse(event.content['url'] as String? ?? '');
+      if (uri?.isScheme('mxc') == true) {
+        // Prefer the small server thumbnail where encryption permits it.
+        try {
+          bytes = await BoundedMatrixMedia.image(
+            event.room.client,
+            uri!,
+            width: 256,
+            height: 256,
+            crop: false,
+            animated: false,
+            maximumBytes: 2 * 1024 * 1024,
+            isCurrent: current,
+          );
+        } catch (_) {
+          if (!current()) return null;
+        }
+      }
+    }
+    if (bytes == null && event.messageType == MessageTypes.Image && current()) {
+      // Legacy encrypted images often have no thumbnail at all. Browsing a
+      // visible tile may fetch a bounded original, not history indexing.
+      final file = await BoundedMatrixMedia.attachment(
+        event,
+        maximumBytes: BoundedMatrixMedia.inlineBytes,
+        isCurrent: current,
+      );
+      if (!current()) return null;
+      bytes = await BoundedMatrixMedia.run(() => imageGridPreview(file.bytes));
     }
     if (bytes == null || !current()) return null;
     final dimensions = await readEncodedImageDimensions(

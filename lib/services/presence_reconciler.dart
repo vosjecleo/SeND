@@ -2,8 +2,52 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:matrix/matrix.dart';
 
+/// Only live sync activity prompts a privacy-aware server check. Initial and
+/// limited history batches are not evidence that their senders are active now.
+Set<String> presenceActivitySenders(
+  SyncUpdate update, {
+  required bool liveSync,
+}) {
+  final senders = <String>{};
+  for (final room in update.rooms?.join?.values ?? <JoinedRoomUpdate>[]) {
+    for (final event in room.ephemeral ?? <BasicEvent>[]) {
+      final users = event.content['user_ids'];
+      if (event.type == 'm.typing' && users is List) {
+        senders.addAll(users.whereType<String>());
+      }
+      if (liveSync && event.type == 'm.receipt') {
+        for (final receipt in event.content.values) {
+          if (receipt is! Map) continue;
+          final readers = receipt['m.read'];
+          if (readers is Map) senders.addAll(readers.keys.whereType<String>());
+        }
+      }
+      if (liveSync && event.type == 'm.receipt') {
+        for (final receipt in event.content.values) {
+          if (receipt is! Map) continue;
+          final readers = receipt['m.read'];
+          if (readers is Map) senders.addAll(readers.keys.whereType<String>());
+        }
+      }
+    }
+    if (liveSync && room.timeline?.limited != true) {
+      senders.addAll(
+        (room.timeline?.events ?? <MatrixEvent>[])
+            .where(
+              (e) =>
+                  e.type == EventTypes.Message ||
+                  e.type == EventTypes.Encrypted,
+            )
+            .map((e) => e.senderId),
+      );
+    }
+  }
+  return senders;
+}
+
 class _PresenceCheck {
   DateTime? checkedAt, retryAt;
+  DateTime? activityCheckedAt;
   Object revision = Object();
 }
 
@@ -65,6 +109,21 @@ class PresenceReconciler {
       entry.value.complete(_closed ? null : read(entry.key));
     }
     _pending.clear();
+  }
+
+  /// Activity is a reason to ask the server, not evidence of Online: invisible
+  /// users and delayed sends must retain the server's privacy-aware answer.
+  Future<CachedPresence?> observeActivity(String id) {
+    if (_closed) return Future.value(null);
+    final check = _check(id);
+    final time = now();
+    if (check.activityCheckedAt != null &&
+        time.difference(check.activityCheckedAt!) <
+            const Duration(seconds: 5)) {
+      return Future.value(read(id));
+    }
+    check.activityCheckedAt = time;
+    return refresh(id, force: true);
   }
 
   Future<CachedPresence?> refresh(String id, {bool force = false}) {

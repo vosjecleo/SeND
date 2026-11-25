@@ -3,9 +3,73 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:deltiecord/services/link_preview_service.dart';
+import 'package:deltiecord/services/web_preview_proxy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'relayed Fx GIF resolves and seeks without contacting the origin',
+    () async {
+      final api = Uri.parse('https://api.fxtwitter.com/status/123');
+      final clip = Uri.parse(
+        'https://video.twimg.com/tweet_video/gif_example.mp4',
+      );
+      final relay = webPreviewProxyUrl(clip);
+      DirectPreviewResponse bytes(String range, int length) =>
+          DirectPreviewResponse(
+            statusCode: 206,
+            contentType: 'video/mp4',
+            contentLength: length,
+            contentRange: range,
+            body: Stream.value(List.filled(length, 0)),
+          );
+      final transport = _FakeTransport({
+        webPreviewProxyUrl(api, kind: 'document').toString(): _response(
+          jsonEncode({
+            'tweet': {
+              'author': {'name': 'Alice'},
+              'text': '',
+              'media': {
+                'all': [
+                  {
+                    'type': 'gif',
+                    'url': clip.toString(),
+                    'width': 430,
+                    'height': 512,
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+        webPreviewProxyUrl(clip, range: 'bytes=0-0').toString(): bytes(
+          'bytes 0-0/100',
+          1,
+        ),
+        webPreviewProxyUrl(clip, range: 'bytes=10-19').toString(): bytes(
+          'bytes 10-19/100',
+          10,
+        ),
+      });
+      final fetcher = DirectLinkPreviewFetcher(
+        resolveHost: (host) async {
+          expect(host, relay.host);
+          return [InternetAddress('93.184.216.34')];
+        },
+        transport: transport,
+      );
+      final result = await fetcher.fetchRelayedFxGif(
+        Uri.parse('https://fxtwitter.com/alice/status/123?a=share&s=19'),
+      );
+      expect(result?.videoUrl, relay);
+      expect((result?.width, result?.height), (430, 512));
+      expect(
+        (await fetcher.openVideo(relay, range: 'bytes=10-19')).contentLength,
+        10,
+      );
+      expect(webPreviewProxyUrl(relay), relay);
+    },
+  );
   for (final privateVideo in [false, true]) {
     test(
       'FxTwitter text HTML recovers GIF media, privateVideo=$privateVideo',

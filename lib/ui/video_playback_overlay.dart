@@ -106,12 +106,14 @@ class VideoPlaybackOverlay extends StatefulWidget {
     required this.child,
     this.onToggle,
     this.onFullscreen,
+    this.alwaysShowControls = false,
     super.key,
   });
   final Player player;
   final Widget child;
   final Future<void> Function()? onToggle;
   final VoidCallback? onFullscreen;
+  final bool alwaysShowControls;
   @override
   State<VideoPlaybackOverlay> createState() => _VideoPlaybackOverlayState();
 }
@@ -119,6 +121,7 @@ class VideoPlaybackOverlay extends StatefulWidget {
 class _VideoPlaybackOverlayState extends State<VideoPlaybackOverlay> {
   late VideoSeekController _seek;
   StreamSubscription<Duration>? _position, _duration;
+  StreamSubscription<bool>? _playing, _completed;
   double? _drag;
   void _bind() {
     _seek = VideoSeekController(
@@ -132,6 +135,12 @@ class _VideoPlaybackOverlayState extends State<VideoPlaybackOverlay> {
     _duration = widget.player.stream.duration.listen(
       (value) => _seek.update(duration: value),
     );
+    _playing = widget.player.stream.playing.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _completed = widget.player.stream.completed.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -146,6 +155,10 @@ class _VideoPlaybackOverlayState extends State<VideoPlaybackOverlay> {
     if (!identical(old.player, widget.player)) {
       _position?.cancel();
       _duration?.cancel();
+      _playing?.cancel();
+      _completed?.cancel();
+      _playing?.cancel();
+      _completed?.cancel();
       _seek.dispose();
       _drag = null;
       _bind();
@@ -156,6 +169,10 @@ class _VideoPlaybackOverlayState extends State<VideoPlaybackOverlay> {
   void dispose() {
     _position?.cancel();
     _duration?.cancel();
+    _playing?.cancel();
+    _completed?.cancel();
+    _playing?.cancel();
+    _completed?.cancel();
     _seek.dispose();
     super.dispose();
   }
@@ -228,107 +245,110 @@ class _VideoPlaybackOverlayState extends State<VideoPlaybackOverlay> {
               ),
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ColoredBox(
-              color: Colors.black54,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 22,
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 2,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 5,
-                        ),
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 10,
-                        ),
-                      ),
-                      child: Slider(
-                        key: const ValueKey('video-seek-slider'),
-                        value: position,
-                        max: maximum,
-                        onChangeStart: !_seek.canSeek
-                            ? null
-                            : (value) => setState(() => _drag = value),
-                        onChanged: !_seek.canSeek
-                            ? null
-                            : (value) => setState(() => _drag = value),
-                        onChangeEnd: !_seek.canSeek
-                            ? null
-                            : (value) {
-                                unawaited(
-                                  _seek.seekTo(
-                                    Duration(milliseconds: value.round()),
-                                  ),
-                                );
-                                setState(() => _drag = null);
-                              },
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    height: 32,
-                    child: Row(
-                      children: [
-                        VideoPlaybackStatus(
-                          playing: widget.player.stream.playing,
-                          completed: widget.player.stream.completed,
-                          initialPlaying: widget.player.state.playing,
-                          initialCompleted: widget.player.state.completed,
-                          builder: (context, playing) => IconButton(
-                            tooltip: playing ? 'Pause' : 'Play',
-                            color: Colors.white,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 32,
-                            ),
-                            onPressed: _toggle,
-                            icon: Icon(
-                              playing ? Icons.pause : Icons.play_arrow,
-                              size: 20,
-                            ),
+          if (widget.alwaysShowControls ||
+              !widget.player.state.playing ||
+              widget.player.state.completed)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ColoredBox(
+                color: Colors.black54,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 22,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 2,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 5,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 10,
                           ),
                         ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '${videoTimeLabel(Duration(milliseconds: position.round()))} / ${_seek.canSeek ? videoTimeLabel(_seek.duration) : '--:--'}',
-                                key: const ValueKey('video-time-label'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
+                        child: Slider(
+                          key: const ValueKey('video-seek-slider'),
+                          value: position,
+                          max: maximum,
+                          onChangeStart: !_seek.canSeek
+                              ? null
+                              : (value) => setState(() => _drag = value),
+                          onChanged: !_seek.canSeek
+                              ? null
+                              : (value) => setState(() => _drag = value),
+                          onChangeEnd: !_seek.canSeek
+                              ? null
+                              : (value) {
+                                  unawaited(
+                                    _seek.seekTo(
+                                      Duration(milliseconds: value.round()),
+                                    ),
+                                  );
+                                  setState(() => _drag = null);
+                                },
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 32,
+                      child: Row(
+                        children: [
+                          VideoPlaybackStatus(
+                            playing: widget.player.stream.playing,
+                            completed: widget.player.stream.completed,
+                            initialPlaying: widget.player.state.playing,
+                            initialCompleted: widget.player.state.completed,
+                            builder: (context, playing) => IconButton(
+                              tooltip: playing ? 'Pause' : 'Play',
+                              color: Colors.white,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(
+                                width: 32,
+                              ),
+                              onPressed: _toggle,
+                              icon: Icon(
+                                playing ? Icons.pause : Icons.play_arrow,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '${videoTimeLabel(Duration(milliseconds: position.round()))} / ${_seek.canSeek ? videoTimeLabel(_seek.duration) : '--:--'}',
+                                  key: const ValueKey('video-time-label'),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        if (widget.onFullscreen != null)
-                          IconButton(
-                            tooltip: 'Fullscreen',
-                            color: Colors.white,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 32,
+                          if (widget.onFullscreen != null)
+                            IconButton(
+                              tooltip: 'Fullscreen',
+                              color: Colors.white,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(
+                                width: 32,
+                              ),
+                              onPressed: widget.onFullscreen,
+                              icon: const Icon(Icons.fullscreen, size: 20),
                             ),
-                            onPressed: widget.onFullscreen,
-                            icon: const Icon(Icons.fullscreen, size: 20),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       );
     },
@@ -350,6 +370,7 @@ Future<void> showVideoPlayerFullscreen(
           child: SafeArea(
             top: false,
             child: VideoPlaybackOverlay(
+              alwaysShowControls: true,
               player: player,
               child: Video(
                 controller: controller,

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../services/image_animation.dart';
+import '../services/web_preview_proxy.dart';
 export '../services/image_animation.dart' show hasAnimatedImageHeader;
 
 bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
@@ -16,12 +17,15 @@ bool imageLifecycleVisible(AppLifecycleState? state, {bool browser = kIsWeb}) =>
 /// GIF providers also serve looping MP4/WebM renditions.
 bool shouldLoopLinkPreview(Uri pageUrl, {Uri? videoUrl}) {
   final host = pageUrl.host.toLowerCase();
+  final source = videoUrl != null && isWebPreviewProxyUrl(videoUrl)
+      ? Uri.tryParse(videoUrl.queryParameters['url'] ?? '')
+      : videoUrl;
   // Twitter encodes animated GIFs as MP4s in /tweet_video/, distinct from
   // normal /ext_tw_video/ and /amplify_video/ clips. Do not loop all posts.
   final twitterGif =
-      videoUrl?.host.toLowerCase() == 'video.twimg.com' &&
-      videoUrl!.path.startsWith('/tweet_video/') &&
-      videoUrl.path.endsWith('.mp4');
+      source?.host.toLowerCase() == 'video.twimg.com' &&
+      source!.path.startsWith('/tweet_video/') &&
+      source.path.endsWith('.mp4');
   return twitterGif ||
       host == 'giphy.com' ||
       host == 'klipy.com' ||

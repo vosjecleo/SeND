@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/models/user_activity.dart';
 import 'package:deltiecord/services/activity_controller.dart';
 import 'package:deltiecord/services/activity_source.dart';
 import 'package:deltiecord/ui/activity_widgets.dart';
@@ -28,6 +29,77 @@ class _Backend extends FakeBackend {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test(
+    'visible phone gets one early lookup when its device field arrives late',
+    () async {
+      var reads = 0;
+      final arrived = Completer<void>();
+      final controller = ActivityController(
+        userId: '@self:test',
+        source: _Source(),
+        read: (_) async => ++reads == 1
+            ? null
+            : {
+                'devices': {
+                  mobilePresenceField('phone'): {
+                    'version': 1,
+                    'mobile': true,
+                    'expires_at': DateTime.now()
+                        .add(const Duration(minutes: 2))
+                        .millisecondsSinceEpoch,
+                  },
+                },
+              },
+        write: (_) async {},
+        upload: (_) async => Uri.parse('mxc://test/icon'),
+        canShare: () => false,
+        pollInterval: const Duration(milliseconds: 100),
+      );
+      addTearDown(controller.close);
+      controller.watchUser(
+        '@phone:test',
+        () => false,
+      ); // The Home row is hidden.
+      controller.watchUser(
+        '@phone:test',
+        () => true,
+      ); // The chat header is visible.
+      controller.addListener(() {
+        if (!arrived.isCompleted &&
+            controller.activitiesFor('@phone:test').mobileOnline) {
+          arrived.complete();
+        }
+      });
+      await controller.start();
+      expect(reads, 1);
+      expect(controller.activitiesFor('@phone:test').mobileOnline, isFalse);
+      await arrived.future.timeout(const Duration(seconds: 8));
+      expect(reads, 2);
+    },
+  );
+
+  testWidgets('timeline header watches activity without opening a profile', (
+    tester,
+  ) async {
+    final backend = _Backend();
+    addTearDown(backend.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelineActivityStatus(
+            backend: backend,
+            userId: '@phone:test',
+            presence: UserPresence.online,
+            fallback: const Text('Online'),
+          ),
+        ),
+      ),
+    );
+    expect(backend.watching['@phone:test']!(), isTrue);
+    await tester.pumpWidget(const SizedBox());
+    expect(backend.watching, isEmpty);
+  });
 
   test(
     'visible online users keep polling with no activity or profile clicks',

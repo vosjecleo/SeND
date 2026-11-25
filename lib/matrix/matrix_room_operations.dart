@@ -624,6 +624,10 @@ extension _MatrixRoomOperations on MatrixBackend {
       if (!_isCurrentTimeline(timeline, generation)) return;
       await _hydrateTimelineMetadata(timeline);
       if (!_isCurrentTimeline(timeline, generation)) return;
+      // A context token alone does not mean we are behind Present. Reconcile
+      // against retained ranges only when shared event order proves continuity.
+      final segment = _timelineSegments.forTimeline(timeline);
+      if (segment != null) _timelineSegments.reconcile(segment);
     } catch (exception) {
       if (_isCurrentSelection(room.id, generation)) {
         if (previousSegment != null &&

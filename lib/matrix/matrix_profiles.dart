@@ -32,6 +32,81 @@ class _ProfileCacheEntry {
 /// Custom fields are written only when advertised by `m.profile_fields`; a
 /// server without that capability continues to expose an ordinary profile.
 extension _MatrixProfiles on MatrixBackend {
+  void _tracePresence(String stage, [Enum? state]) {
+    if (!const bool.fromEnvironment('SEND_PRESENCE_DIAGNOSTICS')) return;
+    developer.Timeline.instantSync(
+      'SeND presence',
+      arguments: {'stage': stage, if (state != null) 'state': state.name},
+    );
+  }
+
+  void _bindPresenceUpdates() {
+    final client = _client;
+    if (client == null ||
+        (identical(client, _presenceSubscriptionClient) &&
+            _presenceSubscriptionLease?.isCurrent == true)) {
+      return;
+    }
+    _presenceSubscription?.cancel();
+    _presenceSubscriptionClient = client;
+    final lease = _presenceSubscriptionLease = _sessionScope.capture();
+    _presenceSubscription = client.onPresenceChanged.stream.listen((value) {
+      if (!lease.isCurrent || !identical(client, _client)) return;
+      // The SDK writes the map before emitting. Do not replay an older queued
+      // event over a more recent SDK or server-read value.
+      // ignore: deprecated_member_use
+      if (!identical(client.presences[value.userid], value)) return;
+      _presenceReader.observeSync(value.userid);
+      _publishPresenceValue(
+        value.userid,
+        value,
+        source: 'sdk',
+        replaceStatus: false,
+      );
+    });
+  }
+
+  void _publishPresenceValue(
+    String id,
+    CachedPresence value, {
+    required String source,
+    bool replaceStatus = true,
+  }) {
+    // This SDK map is the common source for room lists, headers and profiles.
+    // Never write the SDK's database from this independent fallback path.
+    // ignore: deprecated_member_use
+    final previous = _matrix.presences[id];
+    final oldProfile = _profileCache[id]?.profile;
+    // ignore: deprecated_member_use
+    _matrix.presences[id] = value;
+    final cached = _profileCache[id];
+    if (cached != null) {
+      cached.profile = _copyProfile(
+        cached.profile,
+        presence: _matrixPresenceFor(id, cached.profile.presence),
+        statusMessage: _normalizedProfileStatus(value.statusMsg),
+        replaceStatusMessage: replaceStatus,
+      );
+      cached.statusFetchedAt = DateTime.now();
+      if (id == _matrix.userID) _applyOwnProfileSummary(cached.profile);
+    }
+    _tracePresence(source, value.presence);
+    if (source == 'server-read' &&
+        previous?.presence == value.presence &&
+        previous?.statusMsg == value.statusMsg &&
+        oldProfile?.presence == cached?.profile.presence &&
+        oldProfile?.statusMessage == cached?.profile.statusMessage) {
+      return;
+    }
+    _profileRevision++;
+    // Preserve the immediate data update, but publish at most once per frame
+    // for a presence-only burst. Web already has this global coalescing.
+    (_presenceUiUpdates ??= CoalescedCallback(() {
+      _tracePresence('ui-request');
+      _notifyBackendListeners();
+    }, enabled: !kIsWeb)).request();
+  }
+
   PresenceReconciler get _presenceReader {
     final client = _matrix;
     if (_presenceReconciler != null &&
@@ -49,35 +124,12 @@ extension _MatrixProfiles on MatrixBackend {
       read: (id) => client.presences[id],
       publish: (id, value) {
         if (!lease.isCurrent || !identical(client, _client)) return;
-        // All synchronous DM/member/profile views read this shared SDK map.
-        // Do not race the SDK's own database writer with a fallback REST read.
-        // ignore: deprecated_member_use
-        final previous = client.presences[id];
-        // ignore: deprecated_member_use
-        client.presences[id] = value;
-        final cached = _profileCache[id];
-        final oldProfile = cached?.profile;
-        if (cached != null) {
-          cached.profile = _copyProfile(
-            cached.profile,
-            presence: _matrixPresenceFor(id, cached.profile.presence),
-            statusMessage: _normalizedProfileStatus(value.statusMsg),
-            replaceStatusMessage: true,
-          );
-          cached.statusFetchedAt = DateTime.now();
-        }
-        if (previous?.presence != value.presence ||
-            previous?.statusMsg != value.statusMsg ||
-            oldProfile?.presence != cached?.profile.presence ||
-            oldProfile?.statusMessage != cached?.profile.statusMessage) {
-          _profileRevision++;
-          _notifyBackendListeners();
-        }
+        _publishPresenceValue(id, value, source: 'server-read');
       },
     );
   }
 
-  Future<void> _refreshVisiblePresence() async {
+  Future<void> _refreshVisiblePresence({bool force = false}) async {
     final client = _client;
     if (client == null ||
         !client.isLogged() ||
@@ -85,12 +137,19 @@ extension _MatrixProfiles on MatrixBackend {
         _connectionStatus != ConnectionStatus.online) {
       return;
     }
-    final users = <String>{
-      for (final watch in _profileWatchers.entries)
-        if (watch.key.startsWith('@') &&
-            watch.value.values.any((w) => w.visible()))
-          watch.key,
-    };
+    final users = <String>{?client.userID};
+    for (final watch in _profileWatchers.entries) {
+      if (!watch.value.values.any((w) => w.visible())) continue;
+      if (watch.key.startsWith('@')) {
+        users.add(watch.key);
+      } else {
+        final room = client.getRoomById(watch.key);
+        final peer = room?.isDirectChat == true
+            ? room?.directChatMatrixID
+            : null;
+        if (peer != null) users.add(peer);
+      }
+    }
     if (_conversationVisible && _timeline != null) {
       users.addAll(
         _timeline!.events
@@ -106,7 +165,7 @@ extension _MatrixProfiles on MatrixBackend {
     }
     final reader = _presenceReader;
     try {
-      await Future.wait(users.map((id) => reader.refresh(id)));
+      await Future.wait(users.map((id) => reader.refresh(id, force: force)));
     } catch (_) {
       // Presence reconciliation must not interrupt conversations or rendering.
     }
@@ -563,6 +622,11 @@ extension _MatrixProfiles on MatrixBackend {
 
   UserPresence _matrixPresenceFor(String userId, UserPresence fallback) {
     if (userId == _client?.userID &&
+        (!_preferences.sharePresence ||
+            _presenceMode == PresenceMode.invisible)) {
+      return UserPresence.offline;
+    }
+    if (userId == _client?.userID &&
         supportsActivityDetection &&
         _ownProfileHydrated) {
       if (!_preferences.sharePresence ||
@@ -624,6 +688,8 @@ extension _MatrixProfiles on MatrixBackend {
   );
 
   void _startProfileRefreshTimer() {
+    _bindPresenceUpdates();
+    unawaited(_refreshVisiblePresence(force: true));
     _startActivities();
     _profileRefreshTimer?.cancel();
     _profileRefreshTimer = Timer.periodic(ProfileRefreshPolicy.statusInterval, (
@@ -635,6 +701,12 @@ extension _MatrixProfiles on MatrixBackend {
   }
 
   void _stopProfileRefreshTimer() {
+    _presenceUiUpdates?.dispose();
+    _presenceUiUpdates = null;
+    _presenceSubscription?.cancel();
+    _presenceSubscription = null;
+    _presenceSubscriptionClient = null;
+    _presenceSubscriptionLease = null;
     _profileRefreshTimer?.cancel();
     _profileRefreshTimer = null;
     _presenceReconciler?.dispose();
@@ -764,6 +836,11 @@ extension _MatrixProfiles on MatrixBackend {
     for (final entry in _profileCache.values) {
       final old = entry.profile;
       final updated = _profileWithSyncedPresence(old);
+      if (updated.userId == _matrix.userID &&
+          (_profilePresence != updated.presence ||
+              _profileStatusMessage != updated.statusMessage)) {
+        _applyOwnProfileSummary(updated);
+      }
       if (updated.presence == old.presence &&
           updated.statusMessage == old.statusMessage) {
         continue;
@@ -775,7 +852,6 @@ extension _MatrixProfiles on MatrixBackend {
       if (updated.statusMessage != old.statusMessage) {
         entry.statusFetchedAt = now;
       }
-      if (updated.userId == _matrix.userID) _applyOwnProfileSummary(updated);
     }
     if (changed) _profileRevision++;
   }

@@ -99,7 +99,8 @@ void QueryGnome() {
 gint64 desktop_idle_milliseconds() {
   GdkDisplay* display = gdk_display_get_default();
   if (!display) return -1;
-  if (GDK_IS_X11_DISPLAY(display)) {
+  if (GDK_IS_X11_DISPLAY(display) && !g_getenv("WAYLAND_DISPLAY") &&
+      g_strcmp0(g_getenv("XDG_SESSION_TYPE"), "wayland") != 0) {
     // Dynamic loading keeps minimal/AppImage hosts without libXss launchable.
     static void* library = dlopen("libXss.so.1", RTLD_LAZY | RTLD_LOCAL);
     using Query = Status (*)(Display*, Drawable, XScreenSaverInfo*);

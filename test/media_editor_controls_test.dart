@@ -4,6 +4,7 @@ import 'package:deltiecord/models/media_compression.dart';
 import 'package:deltiecord/ui/attachment_image_editor.dart';
 import 'package:deltiecord/ui/media_edit_canvas.dart';
 import 'package:deltiecord/ui/media_editor_layout.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
@@ -150,6 +151,56 @@ void main() {
       },
     );
   }
+  testWidgets('preview background accepts zoom but never draws', (
+    tester,
+  ) async {
+    var strokes = 0, points = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 320,
+            height: 320,
+            child: MediaEditCanvas(
+              sourceSize: const Size(400, 100),
+              turns: 0,
+              crop: const Rect.fromLTWH(0, 0, 1, 1),
+              onCrop: (_) {},
+              drawMode: true,
+              onStroke: (_, _) => strokes++,
+              onDrawPoint: (_) => points++,
+              child: const ColoredBox(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+    final surface = find.byKey(const ValueKey('media-editor-canvas'));
+    final before = tester.getRect(surface);
+    final grey = before.topCenter - const Offset(0, 30);
+    final ink = await tester.startGesture(before.center, pointer: 1);
+    final background = await tester.startGesture(grey, pointer: 2);
+    await background.moveBy(const Offset(0, -23));
+    await ink.moveBy(const Offset(0, 20));
+    await background.moveBy(const Offset(0, -12));
+    await tester.pump();
+    expect(tester.getRect(surface).width, greaterThan(before.width));
+    await background.up();
+    await ink.moveBy(const Offset(30, 0));
+    await ink.up();
+    await tester.pump();
+    expect(strokes, 0);
+    expect(points, 0);
+    final zoomed = tester.getRect(surface);
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: grey, scrollDelta: const Offset(0, -120)),
+    );
+    await tester.pump();
+    expect(tester.getRect(surface).width, greaterThan(zoomed.width));
+    await tester.tapAt(tester.getCenter(surface));
+    expect(strokes, 1);
+  });
+
   testWidgets('crop corners accept drags outside the image boundary', (
     tester,
   ) async {

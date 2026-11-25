@@ -9,7 +9,7 @@
   let presenceRequest;
   let pageHidden = false;
   const publishPresence = () => {
-    if (!presenceConfiguration) return Promise.resolve();
+    if (!presenceConfiguration) return Promise.resolve(false);
     presenceRequest?.abort();
     const controller = new AbortController();
     presenceRequest = controller;
@@ -19,7 +19,7 @@
       method: 'PUT', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
       body: JSON.stringify({presence: value, ...(typeof status === 'string' ? {status_msg: status} : {})}),
       keepalive: true, cache: 'no-store', signal: controller.signal,
-    }).catch(() => {});
+    }).then(response => response.ok === true).catch(() => false);
   };
   window.sendConfigurePresence = json => {
     if (!json) {

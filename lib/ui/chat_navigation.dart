@@ -1368,13 +1368,12 @@ class _CurrentUserPanel extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
-                          if (backend.profileStatusMessage case final status?)
-                            Text(
-                              status,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: context.deltiecord.muted),
-                            ),
+                          ActivityStatus(
+                            backend: backend,
+                            userId: backend.userId,
+                            presence: backend.profilePresence,
+                            status: backend.profileStatusMessage,
+                          ),
                         ],
                       ),
                     ),

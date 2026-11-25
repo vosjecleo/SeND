@@ -151,7 +151,7 @@ void main() {
     addTearDown(installBackendBrowserFixture());
   });
   test(
-    'encrypted media grid reuses viewed originals but never downloads a missing preview',
+    'encrypted media grid rejects an invalid descriptor and can reuse a viewed original',
     () async {
       final client = _Client();
       final room = _Room(client);
@@ -173,9 +173,12 @@ void main() {
       final backend = MatrixBackend(client: client);
       addTearDown(backend.dispose);
       await backend.selectRoom(room.id);
-      // A network fallback would fail: no HTTP/download/decryption fixture is
-      // provided. Browsing encrypted legacy media must instead return no preview.
-      expect(await backend.loadAttachmentPreview(r'$photo'), isNull);
+      // This deliberately incomplete descriptor cannot be decrypted. The grid
+      // must expose a retryable failure rather than accepting unverified bytes.
+      await expectLater(
+        backend.loadAttachmentPreview(r'$photo'),
+        throwsA(anything),
+      );
       final png = image.encodePng(image.Image(width: 2, height: 2));
       backend.cacheOutgoingAttachment(
         r'$photo',

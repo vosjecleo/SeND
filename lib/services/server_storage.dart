@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+String formatServerStorageBytes(num bytes) => bytes >= 1073741824
+    ? '${(bytes / 1073741824).toStringAsFixed(2)} GiB'
+    : '${(bytes / 1048576).toStringAsFixed(1)} MiB';
+
 Map<String, dynamic> normalizeServerStorageUsage(Map<String, dynamic> raw) {
   int number(Object? value) {
     if (value is! num ||

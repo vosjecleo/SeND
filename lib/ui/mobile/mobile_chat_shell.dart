@@ -39,6 +39,7 @@ class _MobileChatShellState extends State<MobileChatShell>
     with WidgetsBindingObserver {
   bool _navigationVisible = true;
   int _threadRevision = 0;
+  int _notificationRevision = 0;
   bool _detailsVisible = false;
   bool _voiceChatVisible = false;
   final Map<String, ({String text, List<CustomEmojiTextSpan> emojis})> _drafts =
@@ -149,7 +150,11 @@ class _MobileChatShellState extends State<MobileChatShell>
     final spaceId = backend.selectedSpaceId;
     final roomChanged = roomId != _lastRoomId;
     final spaceChanged = spaceId != _lastSpaceId;
-    if (!roomChanged && !spaceChanged) return;
+    final notificationChanged =
+        _notificationRevision != backend.notificationNavigationRevision;
+    _notificationRevision = backend.notificationNavigationRevision;
+    if (!roomChanged && !spaceChanged && !notificationChanged) return;
+    if (notificationChanged) _reportedConversationVisible = null;
     _dismissNavigationKeyboard();
     _lastRoomId = roomId;
     _lastSpaceId = spaceId;
@@ -159,7 +164,8 @@ class _MobileChatShellState extends State<MobileChatShell>
         _navigationDragProgress = null;
         _detailsVisible = false;
       }
-      if ((roomChanged || spaceChanged) && roomId != null) {
+      if ((roomChanged || spaceChanged || notificationChanged) &&
+          roomId != null) {
         _navigationVisible = false;
         _detailsVisible = false;
         _voiceChatVisible = false;

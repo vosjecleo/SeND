@@ -3,6 +3,36 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.43 build 141 (2026-11-25)
+
+- Add editable caption bars and free text to photos and videos, with separate
+  text and outline colours. Start cropping unlocked, add a markup eraser,
+  and allow pinch or scroll zoom anywhere in the preview without drawing.
+- Show 50 items per Media page, keep viewed pages in order as older results
+  load, and show the page total once known. Recover missing image thumbnails
+  on demand without downloading full videos.
+- Let users enter an age cutoff and review individual uploads before pruning.
+  Reuse chat thumbnails and locally available attachment metadata. Selective
+  deletion requires the updated storage module; encrypted previews still
+  require the local message and its keys.
+- Update presence as soon as Matrix delivers it. Use typing, messages and
+  public read receipts to prompt bounded recovery checks without guessing that
+  someone is Online. Refresh phone badges from visible chat headers.
+- Give the desktop user island the same status and activity subtitle as DMs.
+  Prefer Wayland session idle reporting on Linux and avoid treating time away
+  from SeND's own window as proof of inactivity.
+- Open notification targets over Settings and forum posts, use server avatars
+  for forum notifications, and retain recovered replies across proven timeline
+  overlap. Keep real history gaps separate.
+- Recover X GIF clips through Deltie's preview relay for Deltie accounts when
+  the ordinary preview lacks the clip. Keep GIF autoplay and reduced-motion
+  preferences, and hide inline playback controls while videos are playing.
+- Mirror installable Android APKs on Deltie, with a signed checksum list that
+  matches the mirrored files. Android App Bundles remain on GitHub.
+
+Latest only; Stable is unchanged. The Android AudioTrack experiment remains
+preview-only. No client database migration is required.
+
 ## SeND 0.9.42 build 140 - Hotfix (2026-11-11)
 
 - Repair contacts remaining Online indefinitely after a missed presence update.

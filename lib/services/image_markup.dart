@@ -4,6 +4,7 @@ import '../models/markup_stroke.dart';
 import 'dart:ui' as ui;
 import 'package:image/image.dart' as image;
 import 'encoded_image_dimensions.dart';
+import '../ui/editor_captions.dart';
 
 /// Use Flutter's compositor for indexed GIFs, preserving palette/transparency.
 /// Only one decoded frame is retained; exported animations stay animated PNGs.
@@ -13,6 +14,7 @@ Future<Uint8List> renderMarkedImage({
   required List<double> crop,
   required List<Map<String, Object?>> strokes,
   bool jpeg = false,
+  List<EditorCaption> captions = const [],
   bool Function()? canceled,
 }) async {
   final size = await readEncodedImageDimensions(
@@ -81,6 +83,11 @@ Future<Uint8List> renderMarkedImage({
                   ui.Offset(p[0], p[1]),
               ]),
           ],
+        );
+        paintCaptions(
+          canvas,
+          ui.Size(rotatedWidth.toDouble(), rotatedHeight.toDouble()),
+          captions,
         );
         final picture = recorder.endRecording();
         final composed = await picture.toImage(rotatedWidth, rotatedHeight);

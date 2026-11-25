@@ -126,38 +126,43 @@ class TimelineActivityStatus extends StatelessWidget {
   final Widget fallback;
   final String? status;
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: backend,
-    builder: (context, _) {
-      final activity = userId == null || presence == UserPresence.offline
-          ? null
-          : backend.activityFor(userId!);
-      final customStatus = presence == UserPresence.offline
-          ? ''
-          : status?.trim() ?? '';
-      if (activity == null && customStatus.isEmpty) return fallback;
-      final color = context.deltiecord.muted;
-      return Row(
-        key: const ValueKey('timeline-activity-status'),
-        children: [
-          if (activity != null) ...[
-            Icon(activityIcon(activity.kind), size: 14, color: color),
-            const SizedBox(width: 4),
-          ],
-          Expanded(
-            child: Text(
-              activity?.name ?? customStatus,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: DeltiecordTypeScale.small,
+  Widget build(BuildContext context) => ActivityWatch(
+    backend: backend,
+    userId: userId,
+    presence: presence,
+    child: ListenableBuilder(
+      listenable: backend,
+      builder: (context, _) {
+        final activity = userId == null || presence == UserPresence.offline
+            ? null
+            : backend.activityFor(userId!);
+        final customStatus = presence == UserPresence.offline
+            ? ''
+            : status?.trim() ?? '';
+        if (activity == null && customStatus.isEmpty) return fallback;
+        final color = context.deltiecord.muted;
+        return Row(
+          key: const ValueKey('timeline-activity-status'),
+          children: [
+            if (activity != null) ...[
+              Icon(activityIcon(activity.kind), size: 14, color: color),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                activity?.name ?? customStatus,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: DeltiecordTypeScale.small,
+                ),
               ),
             ),
-          ),
-        ],
-      );
-    },
+          ],
+        );
+      },
+    ),
   );
 }
 

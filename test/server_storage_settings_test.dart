@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_backend.dart';
 
 class _StorageBackend extends FakeBackend {
-  _StorageBackend({this.quota = 12 * 1024 * 1024 * 1024});
+  _StorageBackend({this.quota = 12 * 1024 * 1024 * 1024, this.fileCount = 1});
   final int quota;
+  final int fileCount;
+  Map<String, Object?>? previewBody, pruneBody;
   final calls = <String>[];
   @override
   Future<Map<String, dynamic>> serverStorage(
@@ -14,6 +16,8 @@ class _StorageBackend extends FakeBackend {
     Map<String, Object?>? body,
   ]) async {
     calls.add(action);
+    if (action == 'prune-preview') previewBody = body;
+    if (action == 'prune') pruneBody = body;
     return switch (action) {
       'usage' => {
         'used_bytes': 1048576,
@@ -25,10 +29,12 @@ class _StorageBackend extends FakeBackend {
       },
       'prune-preview' => {
         'files': [
-          {'media_id': 'synthetic'},
+          for (var i = 0; i < fileCount; i++)
+            {'media_id': 'synthetic-$i', 'bytes': 1048576},
         ],
         'bytes': 1048576,
         'token': 'synthetic-ticket-not-a-real-capability',
+        'selection_version': 1,
       },
       'prune' => {'deleted': 1},
       _ => throw StateError('Unexpected action'),
@@ -37,6 +43,47 @@ class _StorageBackend extends FakeBackend {
 }
 
 void main() {
+  testWidgets('custom age and deselection send only the approved upload IDs', (
+    tester,
+  ) async {
+    final backend = _StorageBackend(fileCount: 2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ServerStorageSettings(backend: backend),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final days = find.byType(TextField);
+    await tester.ensureVisible(days);
+    await tester.enterText(days, '17');
+    final started = DateTime.now();
+    final button = find.text('Preview files to delete');
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 selected'), findsOneWidget);
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 selected'), findsOneWidget);
+    await tester.tap(find.text('Delete selected'));
+    await tester.pumpAndSettle();
+    expect(backend.calls.contains('prune'), false);
+    await tester.tap(find.text('Delete uploads'));
+    await tester.pumpAndSettle();
+    expect(backend.pruneBody!['media_ids'], ['synthetic-1']);
+    final before = DateTime.fromMillisecondsSinceEpoch(
+      backend.previewBody!['before'] as int,
+    );
+    expect(
+      started.difference(before).inMilliseconds,
+      closeTo(const Duration(days: 17).inMilliseconds, 2000),
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'desktop category hover highlights one segment and follows the cursor',
     (tester) async {
@@ -116,6 +163,10 @@ void main() {
       await tester.ensureVisible(button);
       await tester.tap(button);
       await tester.pumpAndSettle();
+      expect(find.text('1 selected · 1.0 MiB'), findsOneWidget);
+      expect(backend.calls, ['usage', 'prune-preview']);
+      await tester.tap(find.text('Delete selected'));
+      await tester.pumpAndSettle();
       expect(find.text('Delete 1 uploads?'), findsOneWidget);
       expect(backend.calls, ['usage', 'prune-preview']);
       expect(find.textContaining("can't be undone"), findsOneWidget);
@@ -124,7 +175,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(backend.calls.contains('prune'), false);
-      await tester.tap(button);
+      await tester.tap(find.text('Delete selected'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete uploads'));
       await tester.pumpAndSettle();

@@ -89,7 +89,16 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   int _page = 0, _lastTab = 0;
   bool _navigating = false;
   bool _reloadTabAfterRequest = false;
-  static const _pageSize = 10;
+  bool get _isMedia => _tabs.index == RoomSearchSection.media.index;
+  int get _pageSize => _isMedia ? 50 : 10;
+  final _mediaOrder = <String>[];
+  List<ChatMessage>? _mediaNavigationSnapshot;
+
+  void _resetMediaPaging() {
+    _mediaOrder.clear();
+    _mediaNavigationSnapshot = null;
+  }
+
   final _catalogResults = <int, List<ChatMessage>>{};
   String? get _kind => switch (_tabs.index) {
     1 => 'media',
@@ -130,6 +139,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     _queryGeneration++;
     _debounce?.cancel();
     _page = 0;
+    _resetMediaPaging();
     _serverResults = const [];
     _searchStopped = false;
     if (_loadingOlder || _navigating) _reloadTabAfterRequest = true;
@@ -143,8 +153,10 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
 
   void _queryChanged(String value) {
     _page = 0;
+    _resetMediaPaging();
     _searchStopped = false;
     _queryGeneration++;
+    if (value.trim().isEmpty) _serverResults = const [];
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _search);
     setState(() {});
@@ -159,6 +171,13 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
         _searching = false;
         _error = null;
       });
+      if (_kind != null) {
+        if (_loadingOlder || _navigating) {
+          _reloadTabAfterRequest = true;
+        } else {
+          await _goPage(0);
+        }
+      }
       return;
     }
     setState(() {
@@ -219,24 +238,29 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
       _paginationPasses++;
       if (_query.text.trim().isNotEmpty) await _search();
     } catch (_) {
-      if (mounted) {
+      if (mounted && generation == _queryGeneration) {
         setState(() => _error = 'Could not load older messages. Try again.');
       }
     } finally {
       if (mounted) setState(() => _loadingOlder = false);
-      if (_reloadTabAfterRequest && mounted) {
-        _reloadTabAfterRequest = false;
-        Future<void>.delayed(Duration.zero, () {
-          if (mounted) {
-            if (_query.text.trim().isNotEmpty) {
-              _search();
-            } else if (_kind != null) {
-              _goPage(0);
-            }
-          }
-        });
-      }
+      _resumeCatalogRequest();
     }
+  }
+
+  void _resumeCatalogRequest() {
+    if (!_reloadTabAfterRequest || !mounted || _navigating || _loadingOlder) {
+      return;
+    }
+    _reloadTabAfterRequest = false;
+    final generation = _queryGeneration;
+    Future<void>.delayed(Duration.zero, () {
+      if (!mounted || generation != _queryGeneration) return;
+      if (_query.text.trim().isNotEmpty) {
+        _search();
+      } else if (_kind != null) {
+        _goPage(0);
+      }
+    });
   }
 
   void _addFilter(String filter) {
@@ -295,33 +319,62 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
   Future<void> _goPage(int page) async {
     if (_navigating || _loadingOlder || page < 0) return;
     final generation = _queryGeneration;
+    final media = _isMedia;
+    final pageSize = _pageSize;
+    final target = (page + 1) * pageSize;
     setState(() {
       _navigating = true;
       _error = null;
+      if (media) {
+        final visible = _results;
+        _mediaNavigationSnapshot = visible;
+        // Keep the rows the user has already seen as an ordered prefix.
+        // Older queries may return events with timestamps inside that prefix.
+        _rememberMedia(visible.take((_page + 1) * pageSize));
+      }
     });
     try {
       // Metadata is fetched only for an explicit page action, never as a side
       // effect of scrolling. Bound each action when matching media is sparse.
       for (
         var pass = 0;
-        pass < 4 && _results.length < (page + 1) * _pageSize && _canLoadOlder;
+        pass < 4 && _results.length < target && _canLoadOlder && _error == null;
         pass++
       ) {
         if (!mounted || generation != _queryGeneration) return;
         await _loadOlder();
       }
       if (!mounted || generation != _queryGeneration) return;
-      if (page == 0 || page * _pageSize < _results.length) {
+      final rows = _results;
+      final complete = rows.length >= target || !_canLoadOlder;
+      if (page == 0 ||
+          (page * pageSize < rows.length &&
+              (!media || complete || page <= _page))) {
+        if (media) _rememberMedia(rows.take(target));
         setState(() => _page = page);
         if (_resultsScroll.hasClients) _resultsScroll.jumpTo(0);
-      } else if (_canLoadOlder) {
+      } else if (_canLoadOlder && _error == null) {
         setState(
-          () => _error =
-              'More history is needed to reach page ${page + 1}. Try Next or choose a loaded page.',
+          () => _error = media
+              ? 'Not enough media loaded for page ${page + 1}. Tap Next to check older messages.'
+              : 'More history is needed to reach page ${page + 1}. Try Next or choose a loaded page.',
         );
       }
     } finally {
-      if (mounted) setState(() => _navigating = false);
+      if (mounted) {
+        setState(() {
+          _navigating = false;
+          _mediaNavigationSnapshot = null;
+        });
+        _resumeCatalogRequest();
+      }
+    }
+  }
+
+  void _rememberMedia(Iterable<ChatMessage> rows) {
+    final known = _mediaOrder.toSet();
+    for (final row in rows) {
+      if (known.add(row.id)) _mediaOrder.add(row.id);
     }
   }
 
@@ -376,33 +429,42 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
     };
     final query = _query.text.trim();
     final section = RoomSearchSection.values[_tabs.index];
-    final results = byId.values.where((message) {
-      if (query.isNotEmpty &&
-          !matchesMessageSearch(
-            body: message.body,
-            formattedBody: message.formattedBody,
-            sender: message.sender,
-            senderId: message.senderId,
-            roomName: widget.backend.selectedRoom?.name,
-            timestamp: message.timestamp,
-            attachment: message.attachment,
-            query: query,
-          )) {
-        return false;
-      }
-      return switch (section) {
-        RoomSearchSection.messages => true,
-        RoomSearchSection.media =>
-          message.attachment?.kind == AttachmentKind.image ||
-              message.attachment?.kind == AttachmentKind.video,
-        RoomSearchSection.files =>
-          message.attachment != null &&
-              message.attachment?.kind != AttachmentKind.image &&
-              message.attachment?.kind != AttachmentKind.video,
-        RoomSearchSection.links => catalogMatches(message, 'link'),
-      };
-    }).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return results;
+    final results =
+        byId.values.where((message) {
+          if (query.isNotEmpty &&
+              !matchesMessageSearch(
+                body: message.body,
+                formattedBody: message.formattedBody,
+                sender: message.sender,
+                senderId: message.senderId,
+                roomName: widget.backend.selectedRoom?.name,
+                timestamp: message.timestamp,
+                attachment: message.attachment,
+                query: query,
+              )) {
+            return false;
+          }
+          return switch (section) {
+            RoomSearchSection.messages => true,
+            RoomSearchSection.media =>
+              message.attachment?.kind == AttachmentKind.image ||
+                  message.attachment?.kind == AttachmentKind.video,
+            RoomSearchSection.files =>
+              message.attachment != null &&
+                  message.attachment?.kind != AttachmentKind.image &&
+                  message.attachment?.kind != AttachmentKind.video,
+            RoomSearchSection.links => catalogMatches(message, 'link'),
+          };
+        }).toList()..sort((a, b) {
+          final order = b.timestamp.compareTo(a.timestamp);
+          return order == 0 ? a.id.compareTo(b.id) : order;
+        });
+    if (!_isMedia || _mediaOrder.isEmpty) return results;
+    final remaining = {for (final result in results) result.id: result};
+    return [
+      for (final id in _mediaOrder) ?remaining.remove(id),
+      ...remaining.values,
+    ];
   }
 
   @override
@@ -416,7 +478,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
 
   @override
   Widget build(BuildContext context) {
-    final all = _results;
+    final all = _mediaNavigationSnapshot ?? _results;
     final results = all.skip(_page * _pageSize).take(_pageSize).toList();
     final pageCount = ((all.length + _pageSize - 1) ~/ _pageSize).clamp(
       1,
@@ -572,7 +634,9 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
                     TextButton(
                       onPressed: busy ? null : _jumpPage,
                       child: Text(
-                        'Page ${_page + 1} of $pageCount${_canLoadOlder ? '+' : ''}',
+                        media && _canLoadOlder
+                            ? 'Page ${_page + 1}'
+                            : 'Page ${_page + 1} of $pageCount${_canLoadOlder ? '+' : ''}',
                       ),
                     ),
                     IconButton(
@@ -593,7 +657,7 @@ class _RoomSearchPanelState extends State<RoomSearchPanel>
           if (_canLoadOlder)
             const Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Text('+ More history remains.'),
+              child: Text('More history remains.'),
             ),
         ],
       ),

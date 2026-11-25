@@ -1,5 +1,21 @@
 import 'package:matrix/matrix.dart';
 
+/// Resolve cached room state before choosing the notification's identity.
+Future<Room?> hydratedNotificationAvatarRoom(Room room) async {
+  try {
+    await room.postLoad().timeout(const Duration(seconds: 5));
+  } catch (_) {}
+  final identity = notificationAvatarRoom(room);
+  if (identity != null &&
+      identity.avatar == null &&
+      !identical(identity, room)) {
+    try {
+      await identity.postLoad().timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+  return identity;
+}
+
 /// A server notification belongs to its Space, not the latest sender.
 /// A standalone group uses its own icon. Only DMs use a sender's picture.
 Room? notificationAvatarRoom(Room room) {

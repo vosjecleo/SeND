@@ -1,5 +1,7 @@
 import 'package:media_kit/media_kit.dart';
 
+Future<void> configureVideoAudio(Player player) async {}
+
 Future<void> openRestrictedNativeVideo(Player player, Uri local) =>
     Future.error(
       UnsupportedError('Native playback is unavailable in browsers.'),

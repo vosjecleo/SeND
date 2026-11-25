@@ -36,6 +36,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../services/native_video_player_options.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -290,8 +291,17 @@ class _ChatShellState extends State<ChatShell> {
 
   int _inboxRevision = 0;
   int _threadRevision = 0;
+  int _notificationRevision = 0;
 
   void _handleBackendRoomChange() {
+    if (_notificationRevision !=
+        widget.backend.notificationNavigationRevision) {
+      _notificationRevision = widget.backend.notificationNavigationRevision;
+      setState(() {
+        _threadRootId = null;
+        _voiceChatVisible = false;
+      });
+    }
     final request = widget.backend.threadNavigationRequest;
     if (request != null && request.revision != _threadRevision) {
       _threadRevision = request.revision;

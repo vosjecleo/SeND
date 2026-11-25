@@ -10,6 +10,7 @@ import 'lifecycle_memory_image.dart' show LifecycleMemoryImage;
 import 'media_edit_canvas.dart';
 import 'media_editor_layout.dart';
 import 'video_attachment_editor.dart';
+import 'editor_captions.dart';
 
 Future<AttachmentDraft?> showAttachmentImageEditor(
   BuildContext context,
@@ -57,7 +58,9 @@ class _ImageEditorState extends State<_ImageEditor> {
   Rect _crop = _full;
   int _turns = 0, _color = 0xffff5252;
   double _brush = 5;
-  bool _locked = true,
+  final _captions = <EditorCaption>[];
+  int _caption = -1;
+  bool _locked = false,
       _cropMode = false,
       _drawMode = false,
       _highlighter = false,
@@ -116,6 +119,9 @@ class _ImageEditorState extends State<_ImageEditor> {
   void _rotate() => setState(() {
     _turns = (_turns + 1) % 4;
     _crop = rotateCrop(_crop);
+    for (final caption in _captions) {
+      caption.rotateClockwise();
+    }
     if (_ratio != null) _ratio = 1 / _ratio!;
     for (final stroke in _strokes) {
       for (var i = 0; i < stroke.points.length; i++) {
@@ -133,7 +139,10 @@ class _ImageEditorState extends State<_ImageEditor> {
     });
     try {
       var draft = widget.draft.copyWith(spoiler: _spoiler);
-      if (_turns != 0 || _crop != _full || _strokes.isNotEmpty) {
+      if (_turns != 0 ||
+          _crop != _full ||
+          _strokes.isNotEmpty ||
+          _captions.isNotEmpty) {
         final jpeg =
             draft.mimeType == 'image/jpeg' &&
             !hasAnimatedImageHeader(draft.bytes);
@@ -152,6 +161,7 @@ class _ImageEditorState extends State<_ImageEditor> {
               },
           ],
           jpeg: jpeg,
+          captions: _captions,
           canceled: () => !mounted,
         );
         draft = draft.copyWith(
@@ -268,6 +278,19 @@ class _ImageEditorState extends State<_ImageEditor> {
                     ),
                   ),
                 ),
+              Expanded(
+                child: IconButton(
+                  tooltip: 'Eraser',
+                  isSelected: _color == 0,
+                  onPressed: () => setState(() => _color = 0),
+                  icon: CustomPaint(
+                    size: const Size.square(24),
+                    painter: _EraserIcon(
+                      Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           Row(
@@ -284,6 +307,18 @@ class _ImageEditorState extends State<_ImageEditor> {
             ],
           ),
         ],
+      ),
+    ),
+    MediaEditorTool(
+      'Text',
+      Icons.title,
+      CaptionTools(
+        _captions,
+        _caption,
+        (i) => setState(() {
+          _caption = i;
+          _changed();
+        }),
       ),
     ),
     MediaEditorTool(
@@ -409,6 +444,13 @@ class _ImageEditorState extends State<_ImageEditor> {
                           locked: _locked,
                           ratio: _ratio,
                           strokes: _strokes,
+                          captions: _captions,
+                          onPlace: _section == 2 && _caption >= 0
+                              ? (p) => setState(() {
+                                  _captions[_caption].position = p;
+                                  _changed();
+                                })
+                              : null,
                           brushColor: _color,
                           brushWidth: _brush,
                           onCrop: (v) => setState(() {
@@ -418,8 +460,12 @@ class _ImageEditorState extends State<_ImageEditor> {
                           onStroke: (p, w) => setState(() {
                             _strokes.add(
                               MarkupStroke(
-                                (_color & 0x00ffffff) |
-                                    (_highlighter ? 0x88000000 : 0xff000000),
+                                _color == 0
+                                    ? 0
+                                    : (_color & 0x00ffffff) |
+                                          (_highlighter
+                                              ? 0x88000000
+                                              : 0xff000000),
                                 w,
                                 [p],
                               ),
@@ -465,4 +511,32 @@ class _ImageEditorState extends State<_ImageEditor> {
       ),
     ),
   );
+}
+
+class _EraserIcon extends CustomPainter {
+  const _EraserIcon(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outline = Paint()
+      ..color = color
+      ..strokeWidth = 1.8
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(
+      Path()
+        ..moveTo(3, 15)
+        ..lineTo(14, 4)
+        ..lineTo(21, 11)
+        ..lineTo(11, 21)
+        ..lineTo(9, 21)
+        ..close(),
+      outline,
+    );
+    canvas.drawLine(const Offset(8, 10), const Offset(15, 17), outline);
+    canvas.drawLine(const Offset(10, 21), const Offset(22, 21), outline);
+  }
+
+  @override
+  bool shouldRepaint(_EraserIcon old) => old.color != color;
 }

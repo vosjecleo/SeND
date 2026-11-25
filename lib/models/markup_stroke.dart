@@ -13,9 +13,12 @@ void paintMarkupStrokes(
   Size size,
   Iterable<MarkupStroke> strokes,
 ) {
+  if (strokes.isEmpty) return;
+  canvas.saveLayer(Offset.zero & size, Paint());
   for (final stroke in strokes) {
     final paint = Paint()
       ..color = Color(stroke.color)
+      ..blendMode = stroke.color == 0 ? BlendMode.clear : BlendMode.srcOver
       ..strokeWidth = stroke.width * size.shortestSide
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
@@ -27,7 +30,9 @@ void paintMarkupStrokes(
       canvas.drawCircle(
         points.first,
         paint.strokeWidth / 2,
-        Paint()..color = paint.color,
+        Paint()
+          ..color = paint.color
+          ..blendMode = paint.blendMode,
       );
     } else if (points.isNotEmpty) {
       final path = Path()..moveTo(points.first.dx, points.first.dy);
@@ -37,4 +42,5 @@ void paintMarkupStrokes(
       canvas.drawPath(path, paint);
     }
   }
+  canvas.restore();
 }

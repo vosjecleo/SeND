@@ -95,6 +95,17 @@ test('invalid presence configuration clears the previous session', async () => {
   await b.window.sendPublishPresence();
   assert.equal(b.requests.length, 0);
 });
+test('presence publication acknowledges only successful HTTP responses', async () => {
+  const b = browser();
+  assert.equal(await b.window.sendPublishPresence(), false);
+  b.window.sendConfigurePresence(JSON.stringify({homeserver: 'https://matrix.example.org',
+    userId: '@test:example.org', token: 'test-token', presence: 'online'}));
+  assert.equal(await b.window.sendPublishPresence(), true);
+  b.context.fetch = async () => ({ok: false, status: 500});
+  assert.equal(await b.window.sendPublishPresence(), false);
+  b.context.fetch = async () => {throw new Error('network unavailable');};
+  assert.equal(await b.window.sendPublishPresence(), false);
+});
 test('pagehide clears foreground lease even before visibility changes', () => {
   const b = browser(); b.window.deltiePushLease('capability');
   assert.equal(JSON.parse(b.requests.at(-1).body).visible, true);

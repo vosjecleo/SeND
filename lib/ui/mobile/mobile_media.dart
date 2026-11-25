@@ -1,6 +1,7 @@
 import '../audio_attachment_player.dart';
 import '../../services/socks_proxy.dart';
 import '../../services/native_link_video_proxy.dart';
+import '../../services/native_video_player_options.dart';
 import '../video_playback_status.dart';
 import '../video_playback_overlay.dart';
 import 'dart:async';
@@ -435,10 +436,12 @@ class MobileMediaGallery extends StatefulWidget {
   const MobileMediaGallery({
     required this.backend,
     required this.initialMessage,
+    this.isolated = false,
     super.key,
   });
   final ChatBackend backend;
   final ChatMessage initialMessage;
+  final bool isolated;
   @override
   State<MobileMediaGallery> createState() => _MobileMediaGalleryState();
 }
@@ -565,11 +568,13 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
   @override
   void initState() {
     super.initState();
-    _roomId =
-        widget.backend.roomIdForMessage(widget.initialMessage.id) ??
-        widget.backend.selectedRoom?.id;
+    _roomId = widget.isolated
+        ? null
+        : widget.backend.roomIdForMessage(widget.initialMessage.id) ??
+              widget.backend.selectedRoom?.id;
     final candidates = {
-      for (final m in widget.backend.messages) m.id: m,
+      if (!widget.isolated)
+        for (final m in widget.backend.messages) m.id: m,
       if (_roomId != null)
         for (final m in widget.backend.mediaMessagesForRoom(_roomId)) m.id: m,
       widget.initialMessage.id: widget.initialMessage,
@@ -661,6 +666,7 @@ class _MobileMediaGalleryState extends State<MobileMediaGallery> {
                 return index == _index
                     ? Center(
                         child: _MobilePlayer(
+                          fullscreenSurface: true,
                           key: ValueKey(m.id),
                           backend: widget.backend,
                           message: m,
@@ -871,10 +877,12 @@ class _MobilePlayer extends StatefulWidget {
   const _MobilePlayer({
     required this.backend,
     required this.message,
+    this.fullscreenSurface = false,
     super.key,
   });
   final ChatBackend backend;
   final ChatMessage message;
+  final bool fullscreenSurface;
 
   @override
   State<_MobilePlayer> createState() => _MobilePlayerState();
@@ -947,6 +955,7 @@ class _MobilePlayerState extends State<_MobilePlayer>
           setState(() => _naturalHeight = value);
         }
       });
+      await configureVideoAudio(player);
       await player.open(
         Media(source.uri.toString(), httpHeaders: source.headers),
         play: play,
@@ -1137,6 +1146,7 @@ class _MobilePlayerState extends State<_MobilePlayer>
           child: _fullscreenOpen
               ? const SizedBox.expand()
               : VideoPlaybackOverlay(
+                  alwaysShowControls: widget.fullscreenSurface,
                   player: player,
                   onFullscreen: () => showFullscreen(),
                   child: Video(
@@ -1170,6 +1180,7 @@ class _MobileFullscreenVideo extends StatelessWidget {
         child: SafeArea(
           top: false,
           child: VideoPlaybackOverlay(
+            alwaysShowControls: true,
             player: player,
             child: Video(
               controller: controller,
@@ -1417,6 +1428,7 @@ class _MobileLinkPreviewVideoState extends State<MobileLinkPreviewVideo>
       }
     });
     try {
+      await configureVideoAudio(player);
       if (widget.autoplay) await player.setVolume(0);
       var uri = await (widget.resolveUri?.call() ?? Future.value(widget.uri));
       if (!kIsWeb) {
