@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-namespace send {
+namespace send_desktop {
 
 constexpr int64_t kDesktopIdleTimeoutMillis = 600000;
 
@@ -54,6 +54,6 @@ class ControllerIdleClock {
   int64_t last_activity_ = -1;
 };
 
-}  // namespace send
+}  // namespace send_desktop
 
 #endif  // SEND_DESKTOP_CONTROLLER_IDLE_H_

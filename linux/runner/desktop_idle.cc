@@ -16,7 +16,7 @@
 #include "ext-idle-notify-v1-client-protocol.h"
 
 namespace {
-constexpr gint64 kIdleTimeout = send::kDesktopIdleTimeoutMillis;
+constexpr gint64 kIdleTimeout = send_desktop::kDesktopIdleTimeoutMillis;
 ext_idle_notifier_v1* notifier = nullptr;
 ext_idle_notification_v1* notification = nullptr;
 wl_seat* seat = nullptr;
@@ -28,11 +28,11 @@ uint32_t seat_name = 0;
 // devices or request additional permissions if a controller is inaccessible.
 struct Joystick {
   int fd = -1;
-  std::array<send::ControllerAxis, 256> axes{};
+  std::array<send_desktop::ControllerAxis, 256> axes{};
   std::array<bool, 256> buttons{};
 };
 std::array<Joystick, 32> joysticks;
-send::ControllerIdleClock controller_idle;
+send_desktop::ControllerIdleClock controller_idle;
 guint joystick_timer = 0;
 gint64 next_joystick_open = 0;
 

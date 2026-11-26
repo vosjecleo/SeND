@@ -81,8 +81,12 @@ jobs:
           node tool/protected_web_storage_test.mjs
           flutter test --no-pub --platform chrome test/release_signatures_test.dart
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+            # FFmpeg comes from Ubuntu. Unrelated runner image feeds must not
+            # prevent fetching the browser fixture dependency.
+            apt_sources=(-o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources
+                         -o Dir::Etc::sourceparts=-)
+            sudo apt-get "${apt_sources[@]}" -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+            sudo apt-get "${apt_sources[@]}" install -y --no-install-recommends ffmpeg
           fi
           mkdir -p .dart_tool/webcodecs
           ffmpeg -v error -f lavfi -i testsrc2=size=160x96:rate=30:duration=2 \

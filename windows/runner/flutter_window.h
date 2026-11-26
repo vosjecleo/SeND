@@ -33,10 +33,10 @@ class FlutterWindow : public Win32Window {
     bool connected = false;
     int64_t retry_at = 0;
     uint16_t buttons = 0;
-    std::array<send::ControllerAxis, 6> axes{};
+    std::array<send_desktop::ControllerAxis, 6> axes{};
   };
   std::array<ControllerState, 4> controllers_{};
-  send::ControllerIdleClock controller_idle_;
+  send_desktop::ControllerIdleClock controller_idle_;
   UINT_PTR controller_timer_ = 0;
 
   // The project to run.

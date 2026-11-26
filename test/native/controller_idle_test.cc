@@ -1,9 +1,15 @@
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#endif
+
 #include "../../desktop/controller_idle.h"
 
 #include <cassert>
 
 int main() {
-  send::ControllerAxis stick;
+  send_desktop::ControllerAxis stick;
   assert(!stick.Moved(0, 8000, 4096));
   assert(!stick.Moved(3200, 8000, 4096));  // Center drift.
   assert(!stick.Moved(7900, 8000, 4096));
@@ -13,14 +19,14 @@ int main() {
   assert(stick.Moved(0, 8000, 4096));  // Return to center.
   assert(!stick.Moved(500, 8000, 4096));
 
-  send::ControllerAxis trigger;
+  send_desktop::ControllerAxis trigger;
   trigger.Baseline(-32767);  // Some Linux triggers rest at the negative end.
   assert(!trigger.Moved(-32650, 8000, 4096));
   assert(trigger.Moved(-16000, 8000, 4096));
   assert(!trigger.Moved(-16020, 8000, 4096));
 
-  send::ControllerIdleClock clock;
-  const auto limit = send::kDesktopIdleTimeoutMillis;
+  send_desktop::ControllerIdleClock clock;
+  const auto limit = send_desktop::kDesktopIdleTimeoutMillis;
   assert(clock.Merge(limit, 1000) == limit);
   assert(clock.Merge(-1, 1000) == -1);
   clock.RecordInput(1000);
