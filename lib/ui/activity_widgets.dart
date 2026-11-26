@@ -47,6 +47,8 @@ class ActivityWatch extends StatefulWidget {
 class _ActivityWatchState extends State<ActivityWatch> {
   VoidCallback? _stopWatching;
   bool _enabled = false;
+  bool _wasVisible = false, _checkingVisibility = false;
+  ScrollPosition? _scroll;
 
   @override
   void initState() {
@@ -58,6 +60,13 @@ class _ActivityWatchState extends State<ActivityWatch> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _enabled = TickerMode.valuesOf(context).enabled;
+    final scroll = Scrollable.maybeOf(context)?.position;
+    if (!identical(scroll, _scroll)) {
+      _scroll?.removeListener(_checkExposure);
+      _scroll = scroll;
+      scroll?.addListener(_checkExposure);
+    }
+    _checkExposure();
   }
 
   @override
@@ -67,8 +76,10 @@ class _ActivityWatchState extends State<ActivityWatch> {
         oldWidget.userId != widget.userId ||
         oldWidget.presence != widget.presence) {
       _stopWatching?.call();
+      _wasVisible = false;
       _subscribe();
     }
+    _checkExposure();
   }
 
   void _subscribe() {
@@ -78,11 +89,29 @@ class _ActivityWatchState extends State<ActivityWatch> {
         : null;
   }
 
+  void _checkExposure() {
+    if (_checkingVisibility || !mounted) return;
+    _checkingVisibility = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkingVisibility = false;
+      if (!mounted) return;
+      final visible = _isVisible();
+      final id = widget.userId;
+      if (visible && !_wasVisible && id != null) {
+        widget.backend.refreshVisibleActivity(id);
+      }
+      _wasVisible = visible;
+    });
+  }
+
   bool _isVisible() {
     if (!mounted || !_enabled) return false;
     final box = context.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return false;
     final bounds = box.localToGlobal(Offset.zero) & box.size;
+    if (!bounds.overlaps(Offset.zero & MediaQuery.sizeOf(context))) {
+      return false;
+    }
     final viewport = RenderAbstractViewport.maybeOf(box);
     if (viewport is RenderBox && (viewport as RenderBox).hasSize) {
       final viewportBox = viewport as RenderBox;
@@ -90,11 +119,12 @@ class _ActivityWatchState extends State<ActivityWatch> {
         viewportBox.localToGlobal(Offset.zero) & viewportBox.size,
       );
     }
-    return bounds.overlaps(Offset.zero & MediaQuery.sizeOf(context));
+    return true;
   }
 
   @override
   void dispose() {
+    _scroll?.removeListener(_checkExposure);
     _stopWatching?.call();
     super.dispose();
   }
@@ -192,7 +222,7 @@ class ActivityStatus extends StatelessWidget {
       !room.usesChannelIcon &&
       room.presence != UserPresence.offline &&
       (room.directUserId != null
-              ? backend.activityFor(room.directUserId!)?.label ??
+              ? backend.activityFor(room.directUserId!)?.name ??
                     room.statusMessage?.trim() ??
                     ''
               : room.statusMessage?.trim() ?? '')
@@ -203,17 +233,27 @@ class ActivityStatus extends StatelessWidget {
     required this.userId,
     required this.presence,
     this.status,
+    this.preferStatus = false,
+    this.fallback = '',
+    this.reserveLine = false,
     super.key,
   });
   final ChatBackend backend;
   final String? userId, status;
+  final bool preferStatus;
+  final bool reserveLine;
+  final String fallback;
   final UserPresence presence;
   @override
   Widget build(BuildContext context) {
-    if (presence == UserPresence.offline) return const SizedBox.shrink();
-    final activity = userId == null ? null : backend.activityFor(userId!);
-    final text = activity?.label ?? status?.trim() ?? '';
-    if (text.isEmpty) return const SizedBox.shrink();
+    final visible = presence != UserPresence.offline;
+    final custom = visible ? status?.trim() ?? '' : '';
+    final activity =
+        !visible || userId == null || (preferStatus && custom.isNotEmpty)
+        ? null
+        : backend.activityFor(userId!);
+    final text = activity?.name ?? (custom.isNotEmpty ? custom : fallback);
+    if (text.isEmpty && !reserveLine) return const SizedBox.shrink();
     final color = context.deltiecord.muted;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
@@ -225,7 +265,7 @@ class ActivityStatus extends StatelessWidget {
           ],
           Expanded(
             child: Text(
-              text,
+              text.isEmpty ? '\u00a0' : text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: color, fontSize: 13),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_activity.dart';
 import 'activity_candidate.dart';
+import 'activity_discovery.dart';
 import 'activity_source.dart';
 import 'activity_service_error.dart';
 import 'lastfm_activity.dart';
@@ -30,6 +31,8 @@ class ActivityController extends ChangeNotifier {
     this.pollInterval = const Duration(seconds: 5),
     this.heartbeat = const Duration(seconds: 55),
     this.readInterval = const Duration(seconds: 40),
+    this.visibleReadInterval = const Duration(seconds: 20),
+    this.exposureFreshness = const Duration(seconds: 5),
     Duration readStartDelay = Duration.zero,
   }) : _source = source ?? DesktopActivitySource(),
        _lastFm = lastFm ?? LastFmActivitySource(),
@@ -53,9 +56,11 @@ class ActivityController extends ChangeNotifier {
   bool get _listeningApproved => settings.useLibreFm || publicLastFmApproved;
   final DesktopActivitySource _source;
   final FlutterSecureStorage _storage;
-  final Duration pollInterval, heartbeat, readInterval;
+  final Duration pollInterval, heartbeat, readInterval, visibleReadInterval;
+  final Duration exposureFreshness;
   final _seen = <String, DateTime>{};
   final _watchers = <String, Set<bool Function()>>{};
+  final _visibleWatchIds = <String>{};
   final _historyWatch = <String>{};
   final _fetched = <String, DateTime>{};
   final _observedOnline = <String, bool>{};
@@ -118,6 +123,7 @@ class ActivityController extends ChangeNotifier {
       _mobileRetry.remove(id);
     }
     _observedOnline[id] = online;
+    _seen.remove(id);
     _seen[id] = DateTime.now();
     if (_seen.length > 64) _seen.remove(_seen.keys.first);
     if (_foreground && !_fetched.containsKey(id) && !_reading) {
@@ -161,6 +167,20 @@ class ActivityController extends ChangeNotifier {
   }
 
   UserActivity? activityFor(String id) => activitiesFor(id).primary;
+
+  OnlineDevices onlineDevicesFor(String id) {
+    final records = _records[id];
+    if (records == null) return const OnlineDevices();
+    if (id != userId) return OnlineDevices.fromRecords(records);
+    // This device's live state is available directly. Its previously fetched
+    // record must not keep it Online when it goes Away or changes privacy.
+    return OnlineDevices.fromRecords(
+      {...records}
+        ..remove(mobilePresenceField(deviceId))
+        ..remove(desktopPresenceField(deviceId)),
+    );
+  }
+
   final _historyWatchers = <String, int>{};
   VoidCallback watchHistory(String id) {
     final last = _fetched[id];
@@ -189,6 +209,7 @@ class ActivityController extends ChangeNotifier {
       watchers?.remove(isVisible);
       if (watchers?.isEmpty == true) {
         _watchers.remove(id);
+        _visibleWatchIds.remove(id);
         _seen.remove(id);
       }
     };
@@ -196,6 +217,30 @@ class ActivityController extends ChangeNotifier {
 
   bool _watchedVisible(String id) =>
       _watchers[id]?.any((visible) => visible()) ?? false;
+
+  void _expireExposedSample(String id) {
+    final last = _fetched[id];
+    if (last != null && DateTime.now().difference(last) >= exposureFreshness) {
+      _fetched.remove(id);
+    }
+  }
+
+  void refreshVisibleUser(String id) {
+    if (_dead || !_foreground || !_visible(id)) return;
+    _expireExposedSample(id);
+    _observe(id);
+    _scheduleRead();
+  }
+
+  void refreshVisibleUsers() {
+    _visibleWatchIds.clear();
+    _scheduleRead();
+  }
+
+  Duration _readCadence(String id) =>
+      visibleReadInterval < readInterval && _watchedVisible(id)
+      ? visibleReadInterval
+      : readInterval;
   LastFmTrack? lastFmRecentFor(String id) {
     _historyWatch.add(id);
     _observe(id);
@@ -246,6 +291,7 @@ class ActivityController extends ChangeNotifier {
       }
     }
     if (!_foreground) {
+      _visibleWatchIds.clear();
       _lastFm.suspend();
       _libreFm.suspend();
     }
@@ -258,7 +304,7 @@ class ActivityController extends ChangeNotifier {
           ? settings.detect
           : _foreground &&
                 (settings.detect || settings.listeningUser.isNotEmpty)) &&
-      (settings.rules[c.id]?.allowed ?? (c.kind != null));
+      allowsActivitySharing(c, settings.rules[c.id]);
 
   Future<UserActivity> _materialize(
     ActivityCandidate chosen,
@@ -266,8 +312,8 @@ class ActivityController extends ChangeNotifier {
     DateTime now,
   ) async {
     final rule = settings.rules[chosen.id];
-    final name = (rule?.name ?? chosen.name).trim();
-    final kind = rule?.kind ?? chosen.kind!;
+    final name = sharedActivityName(chosen, rule);
+    final kind = sharedActivityKind(chosen, rule)!;
     Uri? icon;
     if (chosen.iconBytes != null) {
       final digest = sha256.convert(chosen.iconBytes!).toString();
@@ -328,7 +374,7 @@ class ActivityController extends ChangeNotifier {
               !candidates.any(
                 (c) =>
                     _eligible(c) &&
-                    (settings.rules[c.id]?.kind ?? c.kind) ==
+                    sharedActivityKind(c, settings.rules[c.id]) ==
                         ActivityKind.music,
               ))) {
         final requestedUser = settings.listeningUser;
@@ -394,11 +440,14 @@ class ActivityController extends ChangeNotifier {
           : <ActivityCandidate>[];
       final program = eligible
           .where(
-            (c) => (settings.rules[c.id]?.kind ?? c.kind) != ActivityKind.music,
+            (c) =>
+                sharedActivityKind(c, settings.rules[c.id]) !=
+                ActivityKind.music,
           )
           .firstOrNull;
       final musicCandidates = eligible.where(
-        (c) => (settings.rules[c.id]?.kind ?? c.kind) == ActivityKind.music,
+        (c) =>
+            sharedActivityKind(c, settings.rules[c.id]) == ActivityKind.music,
       );
       final music =
           musicCandidates.where((c) => c.lastFmUrl == null).firstOrNull ??
@@ -411,8 +460,8 @@ class ActivityController extends ChangeNotifier {
               for (final c in chosen)
                 [
                   c.id,
-                  (settings.rules[c.id]?.kind ?? c.kind)?.name,
-                  settings.rules[c.id]?.name ?? c.name,
+                  sharedActivityKind(c, settings.rules[c.id])?.name,
+                  sharedActivityName(c, settings.rules[c.id]),
                   c.details,
                   c.iconBytes == null
                       ? ''
@@ -564,7 +613,12 @@ class ActivityController extends ChangeNotifier {
           _observe(id);
         }
         for (final id in _watchers.keys) {
-          if (_visible(id) && _watchedVisible(id)) _observe(id);
+          if (_visible(id) && _watchedVisible(id)) {
+            if (_visibleWatchIds.add(id)) _expireExposedSample(id);
+            _observe(id);
+          } else {
+            _visibleWatchIds.remove(id);
+          }
         }
       }
       _historyWatch.removeWhere((id) => !_seen.containsKey(id));
@@ -580,7 +634,7 @@ class ActivityController extends ChangeNotifier {
                 (_readRetry[id] == null || !now.isBefore(_readRetry[id]!)) &&
                 (_fetched[id] == null ||
                     (_mobileRetry[id]?.isAfter(now) == false) ||
-                    now.difference(_fetched[id]!) >= readInterval),
+                    now.difference(_fetched[id]!) >= _readCadence(id)),
           )
           .toList();
       users.sort((a, b) {
@@ -641,16 +695,12 @@ class ActivityController extends ChangeNotifier {
         } catch (_) {
           _readRetry[id] = DateTime.now().add(const Duration(seconds: 10));
         }
-        final signature = _uiSignature();
-        if (!_dead && _lastUi != signature) {
-          _lastUi = signature;
-          notifyListeners();
-        }
       }
 
       for (var i = 0; i < users.length && i < 8; i += 4) {
         if (_dead || !_foreground || DateTime.now().isBefore(_readAfter)) break;
         await Future.wait(users.skip(i).take(4).map(fetch));
+        _notifyReadChanges();
       }
       _records.removeWhere((id, _) => !_seen.containsKey(id));
       _fetched.removeWhere((id, _) => !_seen.containsKey(id));
@@ -660,11 +710,7 @@ class ActivityController extends ChangeNotifier {
     } finally {
       _reading = false;
       _readDone?.complete();
-      final signature = _uiSignature();
-      if (!_dead && _lastUi != signature) {
-        _lastUi = signature;
-        notifyListeners();
-      }
+      _notifyReadChanges();
     }
   }
 
@@ -686,15 +732,29 @@ class ActivityController extends ChangeNotifier {
     dispose();
   }
 
+  void _notifyReadChanges() {
+    if (_dead) return;
+    final signature = _uiSignature();
+    if (_lastUi == signature) return;
+    _lastUi = signature;
+    notifyListeners();
+  }
+
+  List<Object?> _profileUiSignature(String id) {
+    final profile = _combined(id);
+    return [
+      id,
+      profile.live.map((activity) => activity.toJson()).toList(),
+      profile.recent?.toJson(),
+      profile.mobileOnline,
+      profile.desktopOnline,
+    ];
+  }
+
   String _uiSignature() => jsonEncode([
     warning,
     candidates.map((c) => [c.id, c.name, c.kind?.name, c.details]).toList(),
-    for (final id in {..._seen.keys, userId})
-      [
-        id,
-        _combined(id).live.map((a) => a.toJson()).toList(),
-        _combined(id).recent?.toJson(),
-        _combined(id).mobileOnline,
-      ],
+    for (final id in ({..._seen.keys, userId}.toList()..sort()))
+      _profileUiSignature(id),
   ]);
 }

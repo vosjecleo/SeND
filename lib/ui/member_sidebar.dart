@@ -297,14 +297,13 @@ class _MemberSidebarTile extends StatelessWidget {
             ],
           ],
         ),
-        subtitle: member.presence == UserPresence.offline
-            ? null
-            : ActivityStatus(
-                backend: backend,
-                userId: member.userId,
-                presence: member.presence,
-                status: member.statusMessage,
-              ),
+        subtitle: ActivityStatus(
+          backend: backend,
+          userId: member.userId,
+          presence: member.presence,
+          status: member.statusMessage,
+          reserveLine: true,
+        ),
         onTap: () => onSelected(member),
         onLongPress: () => showMemberManagement(context, backend, member),
       ),

@@ -149,12 +149,35 @@ double _readPlatformFontScale(Map<String, dynamic>? content) {
 /// See CREDITS.md for project links and license information.
 class MatrixBackend extends ChatBackend {
   ActivityController? _activities;
+  bool? _activitySurfaceVisible;
+  bool get _mayRefreshActivity =>
+      _activitySurfaceVisible ?? _applicationForeground;
+  final _activityInterests = <Object, (String, bool Function())>{};
+  final _activityWatchStops = <Object, void Function()>{};
   MobilePresencePublisher? _mobilePresence;
   @override
-  bool mobileOnlineFor(String userId) =>
-      userId == _client?.userID && _isMobilePlatform
-      ? (_mobilePresence?.active ?? false)
-      : (_activities?.activitiesFor(userId).mobileOnline ?? false);
+  bool mobileOnlineFor(String userId) {
+    // Keep the existing bounded lookup active wherever a badge is visible.
+    _activities?.activitiesFor(userId);
+    return _onlineDevicesFor(userId).prefersPhone;
+  }
+
+  OnlineDevices _onlineDevicesFor(String userId) {
+    final remote =
+        _activities?.onlineDevicesFor(userId) ?? const OnlineDevices();
+    if (userId != _client?.userID) return remote;
+    return OnlineDevices(
+      mobile:
+          remote.mobile ||
+          (_isMobilePlatform && (_mobilePresence?.active ?? false)),
+      desktop:
+          remote.desktop ||
+          (!_isMobilePlatform &&
+              _ownProfileHydrated &&
+              _effectiveClientPresence == PresenceType.online),
+    );
+  }
+
   @override
   ActivitySettings get activitySettings =>
       _activities?.settings ?? const ActivitySettings();
@@ -172,7 +195,40 @@ class MatrixBackend extends ChatBackend {
   void Function() watchActivity(
     String userId, {
     required bool Function() isVisible,
-  }) => _activities?.watchUser(userId, isVisible) ?? () {};
+  }) {
+    final key = Object();
+    _activityInterests[key] = (userId, isVisible);
+    if (_activities case final controller?) {
+      _activityWatchStops[key] = controller.watchUser(userId, isVisible);
+    }
+    return () {
+      _activityInterests.remove(key);
+      _activityWatchStops.remove(key)?.call();
+    };
+  }
+
+  @override
+  void refreshVisibleActivity(String userId) {
+    if (!_mayRefreshActivity || _client?.isLogged() != true) return;
+    if (!_activityVisibleFor(userId)) {
+      unawaited(_presenceReader.observeActivity(userId));
+    }
+    _activities?.refreshVisibleUser(userId);
+  }
+
+  @override
+  void setActivitySurfaceVisible(bool visible) {
+    final previous = _mayRefreshActivity;
+    _activitySurfaceVisible = visible;
+    if (visible == previous) return;
+    if (visible) {
+      _activities?.refreshVisibleUsers();
+      unawaited(_refreshVisiblePresence());
+    } else {
+      _activities?.visibilityChanged(refresh: false);
+    }
+  }
+
   @override
   List<UserActivity> activitiesFor(String userId) =>
       _activities?.activitiesFor(userId).live ?? const [];
@@ -248,6 +304,7 @@ class MatrixBackend extends ChatBackend {
                 if (entry.key == activityProfileField ||
                     entry.key.startsWith(activityDevicePrefix) ||
                     entry.key.startsWith(mobilePresencePrefix) ||
+                    entry.key.startsWith(desktopPresencePrefix) ||
                     entry.key.startsWith(lastFmHistoryPrefix))
                   entry.key: entry.value,
             },
@@ -298,46 +355,58 @@ class MatrixBackend extends ChatBackend {
       },
       canShare: () => _activityVisibleFor(ownId),
       canView: _activityVisibleFor,
-      isForeground: () => _applicationForeground,
+      isForeground: () => _mayRefreshActivity,
     );
     _activities = controller;
-    controller.addListener(_notifyBackendListeners);
-    unawaited(controller.start());
-    if (_isMobilePlatform) {
-      final field = mobilePresenceField(client.deviceID!);
-      final publisher = MobilePresencePublisher(
-        enabled: () =>
-            identical(client, _client) &&
-            _settingsHydrated &&
-            _devicePreferencesLoaded &&
-            _ownProfileHydrated &&
-            _applicationForeground &&
-            _preferences.sharePresence &&
-            _preferences.shareMobilePresence &&
-            _presenceMode == PresenceMode.online &&
-            _effectiveClientPresence == PresenceType.online,
-        write: (record) async {
-          try {
-            if (record == null) {
-              await client.deleteProfileField(ownId, field);
-            } else {
-              await client.setProfileField(ownId, field, {field: record});
-            }
-          } on MatrixException catch (error) {
-            if (record == null && error.errcode == 'M_NOT_FOUND') return;
-            throw ActivityServiceError(
-              error.errcode,
-              retryAfter: error.retryAfterMs == null
-                  ? null
-                  : Duration(milliseconds: error.retryAfterMs!),
-            );
-          }
-        },
-      );
-      _mobilePresence = publisher;
-      publisher.addListener(_notifyBackendListeners);
-      publisher.start();
+    for (final entry in _activityInterests.entries) {
+      final (id, visible) = entry.value;
+      _activityWatchStops[entry.key] = controller.watchUser(id, visible);
     }
+    controller.addListener(_onActivityChanged);
+    unawaited(controller.start());
+    final mobile = _isMobilePlatform;
+    final field = mobile
+        ? mobilePresenceField(client.deviceID!)
+        : desktopPresenceField(client.deviceID!);
+    final publisher = MobilePresencePublisher(
+      mobile: mobile,
+      enabled: () =>
+          identical(client, _client) &&
+          _settingsHydrated &&
+          _devicePreferencesLoaded &&
+          _ownProfileHydrated &&
+          (!mobile || _applicationForeground) &&
+          _preferences.sharePresence &&
+          (!mobile ||
+              (_preferences.shareMobilePresence &&
+                  _presenceMode == PresenceMode.online)) &&
+          _effectiveClientPresence == PresenceType.online,
+      write: (record) async {
+        try {
+          if (record == null) {
+            await client.deleteProfileField(ownId, field);
+          } else {
+            await client.setProfileField(ownId, field, {field: record});
+          }
+        } on MatrixException catch (error) {
+          if (record == null && error.errcode == 'M_NOT_FOUND') return;
+          throw ActivityServiceError(
+            error.errcode,
+            retryAfter: error.retryAfterMs == null
+                ? null
+                : Duration(milliseconds: error.retryAfterMs!),
+          );
+        }
+      },
+    );
+    _mobilePresence = publisher;
+    publisher.addListener(_notifyBackendListeners);
+    publisher.start();
+  }
+
+  void _onActivityChanged() {
+    _applySyncedProfilePresence();
+    _notifyBackendListeners();
   }
 
   Future<void> _stopActivities({bool clear = false}) async {
@@ -349,8 +418,12 @@ class MatrixBackend extends ChatBackend {
     }
     final controller = _activities;
     _activities = null;
+    for (final stop in _activityWatchStops.values) {
+      stop();
+    }
+    _activityWatchStops.clear();
     if (controller == null) return;
-    controller.removeListener(_notifyBackendListeners);
+    controller.removeListener(_onActivityChanged);
     await controller.close(clear: clear);
   }
 
@@ -1556,8 +1629,6 @@ class MatrixBackend extends ChatBackend {
         .map((user) {
           // The SDK's synchronous cache is required while building this getter;
           // network refreshes arrive through sync and notify the UI separately.
-          // ignore: deprecated_member_use
-          final presence = _matrix.presences[user.id]?.presence;
           return RoomMemberSummary(
             userId: user.id,
             // ignore: deprecated_member_use
@@ -1567,11 +1638,7 @@ class MatrixBackend extends ChatBackend {
             avatarBytes:
                 _senderAvatarBytes['${room.id}|${user.id}'] ??
                 _senderAvatarBytes[user.id],
-            presence: switch (presence) {
-              PresenceType.online => UserPresence.online,
-              PresenceType.unavailable => UserPresence.away,
-              _ => UserPresence.offline,
-            },
+            presence: _matrixPresenceFor(user.id, UserPresence.offline),
             powerLevel: user.powerLevel.level,
             membership: user.membership.name,
             canKick:

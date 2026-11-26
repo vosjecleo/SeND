@@ -1,6 +1,7 @@
 import 'package:deltiecord/app.dart';
 import 'package:deltiecord/ui/mobile/mobile_widgets.dart';
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/models/user_activity.dart';
 import 'package:deltiecord/ui/deltiecord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +10,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
+class _IslandBackend extends FakeBackend {
+  String? customStatus;
+  UserActivity? activity;
+  UserPresence presence = UserPresence.online;
+  @override
+  String get userId => '@self:test';
+  @override
+  String? get profileStatusMessage => customStatus;
+  @override
+  UserPresence get profilePresence => presence;
+  @override
+  UserActivity? activityFor(String id) => id == userId ? activity : null;
+}
+
 void main() {
+  testWidgets(
+    'mobile island uses status, activity, then presence as fallback',
+    (tester) async {
+      final backend = _IslandBackend()..currentStatus = SessionStatus.signedIn;
+      addTearDown(backend.dispose);
+      await pumpMobile(tester, backend);
+      final island = find.byKey(const ValueKey('mobile-user-island'));
+      Finder text(String label) =>
+          find.descendant(of: island, matching: find.text(label));
+      expect(text('Online'), findsOneWidget);
+      backend.activity = UserActivity(
+        kind: ActivityKind.music,
+        name: 'Song',
+        expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+      );
+      backend.notifyListeners();
+      await tester.pump();
+      expect(text('Song'), findsOneWidget);
+      expect(text('Listening to Song'), findsNothing);
+      expect(text('Online'), findsNothing);
+      backend.customStatus = 'Working';
+      backend.notifyListeners();
+      await tester.pump();
+      expect(text('Working'), findsOneWidget);
+      expect(text('Song'), findsNothing);
+      backend.presence = UserPresence.away;
+      backend.notifyListeners();
+      await tester.pump();
+      expect(text('Working'), findsOneWidget);
+      expect(text('Away'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('mobile DM hold opens the compact Home menu', (tester) async {
     final backend = FakeBackend()
       ..currentStatus = SessionStatus.signedIn

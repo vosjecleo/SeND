@@ -20,10 +20,11 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Text(
-            'SeND $deltiecordVersion, build $deltiecordBuildNumber - Hotfix\n\n'
-            '• Fixed contacts getting stuck showing Online\n\n'
-            '• Removed hidden video-compression size limits\n\n'
-            '• Smaller targets 1.5 Mbps; Balanced targets 4 Mbps',
+            'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
+            '• More reliable activity updates and phone status badges\n\n'
+            '• Better Windows game detection, including Minecraft\n\n'
+            '• Controller input counts toward staying Online\n\n'
+            '• Mobile member lists now group admins and online members',
           ),
         ),
       ),

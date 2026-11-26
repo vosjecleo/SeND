@@ -1,4 +1,6 @@
 import 'package:deltiecord/models/chat_models.dart';
+import 'package:deltiecord/app.dart';
+import 'dart:ui' show ViewFocusEvent, ViewFocusState, ViewFocusDirection;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,6 +8,34 @@ import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
 void main() {
+  testWidgets(
+    'an unfocused visible surface still refreshes activity but not receipts',
+    (tester) async {
+      final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+      await tester.pumpWidget(
+        DeltiecordApp(backend: backend, platformOverride: TargetPlatform.linux),
+      );
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      (tester.state(find.byType(ApplicationLifecycle))
+              as WidgetsBindingObserver)
+          .didChangeViewFocus(
+            ViewFocusEvent(
+              viewId: tester.view.viewId,
+              state: ViewFocusState.unfocused,
+              direction: ViewFocusDirection.forward,
+            ),
+          );
+      await tester.pump();
+      expect(backend.applicationForegroundStates.last, isFalse);
+      expect(backend.activitySurfaceStates.last, isTrue);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      expect(backend.activitySurfaceStates.last, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      backend.dispose();
+    },
+  );
   testWidgets('read receipts require a foreground visible conversation', (
     tester,
   ) async {

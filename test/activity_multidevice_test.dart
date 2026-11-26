@@ -14,6 +14,41 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'legacy Spotify as a game never hides or duplicates the actual music card',
+    () {
+      final expiry = DateTime.now().add(const Duration(minutes: 2));
+      Map<String, Object?> record(String name, ActivityKind kind) =>
+          UserActivity(
+            kind: kind,
+            name: name,
+            expiresAt: expiry,
+            lastFmUrl: kind == ActivityKind.music ? recentTrack.url : null,
+          ).toJson();
+      final bogus = record('Spotify', ActivityKind.game);
+      final track = record('Actual track', ActivityKind.music);
+      for (final published in [
+        bogus,
+        {
+          ...bogus,
+          'slots': {'program': bogus, 'music': track},
+        },
+      ]) {
+        final records = {'old-client': published, 'lastfm-client': track};
+        final selected = UserActivities.fromRecords(records);
+        expect(selected.program, isNull);
+        expect(selected.primary?.name, 'Actual track');
+        expect(selected.live, hasLength(1));
+        expect(
+          UserActivities.fromRecords({
+            ...records,
+            'game-client': record('An actual game', ActivityKind.game),
+          }).program?.name,
+          'An actual game',
+        );
+      }
+    },
+  );
+  test(
     'phone status is read independently of game/music sharing and drops offline',
     () async {
       var online = true;

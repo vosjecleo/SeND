@@ -788,6 +788,7 @@ class _ReadReceiptLifecycleState extends State<ApplicationLifecycle>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.backend != widget.backend) {
       oldWidget.backend.setApplicationForeground(false);
+      oldWidget.backend.setActivitySurfaceVisible(false);
       _publish(WidgetsBinding.instance.lifecycleState);
     }
   }
@@ -836,16 +837,27 @@ class _ReadReceiptLifecycleState extends State<ApplicationLifecycle>
     _syncBackend();
   }
 
-  void _syncBackend() => widget.backend.setApplicationForeground(
-    kIsWeb
+  void _syncBackend() {
+    final foreground = kIsWeb
         ? browser.browserApplicationVisible
-        : applicationIsForeground(_lifecycleState, viewFocused: _viewFocused),
-  );
+        : applicationIsForeground(_lifecycleState, viewFocused: _viewFocused);
+    widget.backend.setActivitySurfaceVisible(
+      kIsWeb
+          ? foreground
+          : applicationIsForeground(
+              _lifecycleState,
+              viewFocused: true,
+              browser: true,
+            ),
+    );
+    widget.backend.setApplicationForeground(foreground);
+  }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.backend.setApplicationForeground(false);
+    widget.backend.setActivitySurfaceVisible(false);
     _browserVisibility?.cancel();
     super.dispose();
   }

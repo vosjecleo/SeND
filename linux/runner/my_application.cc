@@ -270,6 +270,7 @@ static void my_application_startup(GApplication* application) {
 
 // Implements GApplication::shutdown.
 static void my_application_shutdown(GApplication* application) {
+  stop_desktop_controller_monitor();
   MyApplication* self = MY_APPLICATION(application);
   save_window_state(self);
 

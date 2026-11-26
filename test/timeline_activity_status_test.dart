@@ -41,48 +41,47 @@ void main() {
     expect(find.text('Away'), findsNothing);
     expect(find.byKey(const ValueKey('header-presence-away')), findsNothing);
   });
-  testWidgets(
-    'timeline replaces presence with icon and bare name; list wording unchanged',
-    (tester) async {
-      final backend = PlayingBackend();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(
-            extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
-          ),
-          home: Scaffold(
-            body: SizedBox(
-              width: 200,
-              child: Column(
-                children: [
-                  TimelineActivityStatus(
-                    backend: backend,
-                    userId: '@peer:test',
-                    presence: UserPresence.online,
-                    fallback: const Text('Online'),
-                  ),
-                  ActivityStatus(
-                    backend: backend,
-                    userId: '@peer:test',
-                    presence: UserPresence.online,
-                  ),
-                ],
-              ),
+  testWidgets('timeline and DM row share the icon and bare activity name', (
+    tester,
+  ) async {
+    final backend = PlayingBackend();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+        ),
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: Column(
+              children: [
+                TimelineActivityStatus(
+                  backend: backend,
+                  userId: '@peer:test',
+                  presence: UserPresence.online,
+                  fallback: const Text('Online'),
+                ),
+                ActivityStatus(
+                  backend: backend,
+                  userId: '@peer:test',
+                  presence: UserPresence.online,
+                ),
+              ],
             ),
           ),
         ),
-      );
-      expect(find.text('Online'), findsNothing);
-      expect(find.text('Counter-Strike: Source'), findsOneWidget);
-      expect(find.text('Playing Counter-Strike: Source'), findsOneWidget);
-      expect(find.byIcon(Icons.sports_esports_outlined), findsNWidgets(2));
-      expect(tester.takeException(), isNull);
-      backend.activity = null;
-      backend.notifyListeners();
-      await tester.pump();
-      expect(find.text('Online'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    expect(find.text('Online'), findsNothing);
+    expect(find.text('Counter-Strike: Source'), findsNWidgets(2));
+    expect(find.text('Playing Counter-Strike: Source'), findsNothing);
+    expect(find.byIcon(Icons.sports_esports_outlined), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+    backend.activity = null;
+    backend.notifyListeners();
+    await tester.pump();
+    expect(find.text('Online'), findsOneWidget);
+  });
   testWidgets('offline timeline never displays cached live activity', (
     tester,
   ) async {

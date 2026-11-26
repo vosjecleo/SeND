@@ -1824,6 +1824,7 @@ extension _MatrixSession on MatrixBackend {
     if (Platform.isAndroid || _desktopIdle == idle) return;
     _desktopIdle = idle;
     _configureClientPresence();
+    unawaited(_mobilePresence?.refresh());
     if (_ownProfileHydrated) {
       _profilePresence =
           !_preferences.sharePresence || _presenceMode == PresenceMode.invisible

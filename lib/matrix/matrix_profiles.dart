@@ -133,7 +133,7 @@ extension _MatrixProfiles on MatrixBackend {
     final client = _client;
     if (client == null ||
         !client.isLogged() ||
-        !_applicationForeground ||
+        !_mayRefreshActivity ||
         _connectionStatus != ConnectionStatus.online) {
       return;
     }
@@ -629,19 +629,19 @@ extension _MatrixProfiles on MatrixBackend {
     if (userId == _client?.userID &&
         supportsActivityDetection &&
         _ownProfileHydrated) {
-      if (!_preferences.sharePresence ||
-          _presenceMode == PresenceMode.invisible) {
-        return UserPresence.offline;
-      }
-      return _presenceMode == PresenceMode.idle ||
-              (_presenceMode == PresenceMode.online && _desktopIdle)
-          ? UserPresence.away
-          : UserPresence.online;
+      final away =
+          _presenceMode == PresenceMode.idle ||
+          (_presenceMode == PresenceMode.online && _desktopIdle);
+      return _onlineDevicesFor(
+        userId,
+      ).resolve(away ? UserPresence.away : UserPresence.online);
     }
     // ignore: deprecated_member_use
     return switch (_matrix.presences[userId]?.presence) {
       PresenceType.online => UserPresence.online,
-      PresenceType.unavailable => UserPresence.away,
+      PresenceType.unavailable => _onlineDevicesFor(
+        userId,
+      ).resolve(UserPresence.away),
       PresenceType.offline => UserPresence.offline,
       _ => fallback,
     };

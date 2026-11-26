@@ -1,10 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../backend/chat_backend.dart';
+import '../models/chat_models.dart';
 import '../models/user_activity.dart';
 import '../services/activity_candidate.dart';
+import '../services/activity_discovery.dart';
 import '../services/lastfm_auth.dart';
 import 'lastfm_connect_dialog.dart';
+
+String activitySharingHint(
+  ActivityCandidate item,
+  ActivitySettings settings, {
+  required bool presenceVisible,
+}) {
+  final rule = settings.rules[item.id];
+  if (!settings.detect) return 'App detection is off';
+  if (!item.running) return 'Not running';
+  if (isSpotifyCandidate(item) && !item.mediaSession) {
+    return 'Shares music playback only';
+  }
+  if (rule?.allowed == false) return 'Sharing is off for this app';
+  if (sharedActivityKind(item, rule) == null) {
+    return 'Not recognized. Tap to choose how to share.';
+  }
+  if (!allowsActivitySharing(item, rule)) {
+    return 'Not shared by default';
+  }
+  if (!settings.share) return 'Activity sharing is off on this device';
+  if (!presenceVisible) {
+    return 'Sharing is paused while your presence is hidden';
+  }
+  final kind = sharedActivityKind(item, rule)!;
+  return switch (kind) {
+    ActivityKind.game => 'Game · Allowed to share',
+    ActivityKind.music => 'Music · Allowed to share',
+    ActivityKind.application => 'App · Allowed to share',
+  };
+}
 
 class ActivitySettingsPanel extends StatefulWidget {
   const ActivitySettingsPanel({required this.backend, super.key});
@@ -326,7 +358,9 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
         if (settings.detect && candidates.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('No matching apps found. Add one below.'),
+            child: Text(
+              'No apps detected. Open the game or add its executable.',
+            ),
           ),
         for (final item
             in backend.supportsActivityDetection
@@ -338,17 +372,26 @@ class _ActivitySettingsPanelState extends State<ActivitySettingsPanel> {
                 ? const Icon(Icons.apps)
                 : Image.memory(item.iconBytes!, width: 32, height: 32),
             title: Text(
-              settings.rules[item.id]?.name ?? item.name,
+              sharedActivityName(item, settings.rules[item.id]),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              '${settings.rules[item.id]?.kind.name ?? item.kind?.name ?? "Unclassified — not shared"}${item.running ? "" : " · not running"}',
+              activitySharingHint(
+                item,
+                settings,
+                presenceVisible:
+                    backend.preferences.sharePresence &&
+                    backend.presenceMode != PresenceMode.invisible,
+              ),
             ),
-            onTap: _saving ? null : () => edit(item.id, item.name),
+            onTap: _saving || isSpotifyCandidate(item)
+                ? null
+                : () => edit(item.id, item.name),
             trailing: Switch(
-              value: settings.rules[item.id]?.allowed ?? (item.kind != null),
-              onChanged: _saving
+              value: allowsActivitySharing(item, settings.rules[item.id]),
+              onChanged:
+                  _saving || (isSpotifyCandidate(item) && !item.mediaSession)
                   ? null
                   : (v) {
                       if (v &&

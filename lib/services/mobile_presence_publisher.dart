@@ -8,10 +8,12 @@ class MobilePresencePublisher extends ChangeNotifier {
   MobilePresencePublisher({
     required this.write,
     required this.enabled,
+    this.mobile = true,
     DateTime Function()? now,
   }) : now = now ?? DateTime.now;
   final Future<void> Function(Map<String, Object?>?) write;
   final bool Function() enabled;
+  final bool mobile;
   final DateTime Function() now;
   Timer? _timer;
   Future<void>? _operation;
@@ -55,7 +57,7 @@ class MobilePresencePublisher extends ChangeNotifier {
         desired
             ? {
                 'version': 1,
-                'mobile': true,
+                if (mobile) 'mobile': true else 'desktop': true,
                 'expires_at': time
                     .add(const Duration(minutes: 2))
                     .millisecondsSinceEpoch,

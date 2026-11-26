@@ -9,10 +9,13 @@ bool showsMobilePresence(
   BuildContext context,
   String? userId,
   UserPresence presence,
-) =>
-    presence == UserPresence.online &&
-    userId != null &&
-    (ActivityScope.of(context)?.mobileOnlineFor(userId) ?? false);
+) {
+  if (presence == UserPresence.offline || userId == null) return false;
+  // An Away summary can still have an Online device whose record has not been
+  // loaded yet. Interested surfaces should fetch it before choosing a badge.
+  final phone = ActivityScope.of(context)?.mobileOnlineFor(userId) ?? false;
+  return presence == UserPresence.online && phone;
+}
 
 class AvatarPresence extends StatelessWidget {
   const AvatarPresence({

@@ -235,75 +235,134 @@ class _RoomDetailsPanelState extends State<RoomDetailsPanel> {
         final offline = (a.presence == UserPresence.offline ? 1 : 0).compareTo(
           b.presence == UserPresence.offline ? 1 : 0,
         );
-        return offline != 0
-            ? offline
-            : a.displayName.toLowerCase().compareTo(
-                b.displayName.toLowerCase(),
-              );
+        if (offline != 0) return offline;
+        final name = a.displayName.toLowerCase().compareTo(
+          b.displayName.toLowerCase(),
+        );
+        return name == 0 ? a.userId.compareTo(b.userId) : name;
       });
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (backend.canInviteToRoom(widget.room.id))
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.person_add_outlined),
-              title: const Text('Invite members'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () =>
-                  showInviteMember(context, backend, roomId: widget.room.id),
-            ),
+    final groups = {
+      'Moderators': members.where((member) => member.powerLevel >= 50),
+      'Online': members.where(
+        (member) =>
+            member.powerLevel < 50 && member.presence != UserPresence.offline,
+      ),
+      'Offline': members.where(
+        (member) =>
+            member.powerLevel < 50 && member.presence == UserPresence.offline,
+      ),
+    };
+    final rows = <Widget>[
+      if (backend.canInviteToRoom(widget.room.id))
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.person_add_outlined),
+            title: const Text('Invite members'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                showInviteMember(context, backend, roomId: widget.room.id),
           ),
-        for (final online in [true, false]) ...[
+        ),
+      for (final group in groups.entries)
+        if (group.value.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              '${online ? 'Online' : 'Offline'} — ${members.where((m) => (m.presence != UserPresence.offline) == online).length}',
-            ),
+            key: ValueKey(group.key),
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
+            child: Text('${group.key} — ${group.value.length}'),
           ),
-          for (final member in members.where(
-            (m) => (m.presence != UserPresence.offline) == online,
-          ))
-            ListTile(
-              leading: MobileAvatar(
-                size: 36,
+          for (final member in group.value)
+            _DetailsMember(
+              key: ValueKey(member.userId),
+              backend: backend,
+              member: member,
+            ),
+        ],
+    ];
+    final indices = {for (var i = 0; i < rows.length; i++) rows[i].key: i};
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        12,
+        6,
+        12,
+        12 + MediaQuery.paddingOf(context).bottom,
+      ),
+      itemCount: rows.length,
+      findChildIndexCallback: (key) => indices[key],
+      itemBuilder: (_, index) => rows[index],
+    );
+  }
+}
+
+class _DetailsMember extends StatelessWidget {
+  const _DetailsMember({
+    required this.backend,
+    required this.member,
+    super.key,
+  });
+  final ChatBackend backend;
+  final RoomMemberSummary member;
+
+  @override
+  Widget build(BuildContext context) => ActivityWatch(
+    backend: backend,
+    userId: member.userId,
+    presence: member.presence,
+    child: InkWell(
+      onTap: () => showMobileProfileSheet(context, backend, member.userId),
+      onLongPress: () => showMemberManagement(context, backend, member),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            children: [
+              MobileAvatar(
+                size: 34,
                 bytes: member.avatarBytes,
                 fallback: member.displayName,
                 userId: member.userId,
                 presence: member.presence,
               ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      member.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: member.nameColor == null
-                            ? null
-                            : Color(member.nameColor!),
-                      ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            member.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: member.nameColor == null
+                                  ? null
+                                  : Color(member.nameColor!),
+                            ),
+                          ),
+                        ),
+                        if (member.powerLevel >= 50) ...[
+                          const SizedBox(width: 6),
+                          MemberRoleBadge(powerLevel: member.powerLevel),
+                        ],
+                      ],
                     ),
-                  ),
-                  if (member.powerLevel >= 50)
-                    MemberRoleBadge(powerLevel: member.powerLevel),
-                ],
-              ),
-              subtitle: !online
-                  ? null
-                  : ActivityStatus(
+                    ActivityStatus(
                       backend: backend,
                       userId: member.userId,
                       presence: member.presence,
                       status: member.statusMessage,
+                      reserveLine: true,
                     ),
-              onTap: () =>
-                  showMobileProfileSheet(context, backend, member.userId),
-              onLongPress: () => showMemberManagement(context, backend, member),
-            ),
-        ],
-      ],
-    );
-  }
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

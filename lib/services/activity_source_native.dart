@@ -11,6 +11,7 @@ import 'activity_artwork_native.dart';
 import 'activity_discovery.dart';
 import 'activity_ipc_native.dart';
 import 'activity_pipe_windows.dart';
+import 'windows_game_catalogue.dart';
 import 'windows_music.dart';
 
 /// Local-only discovery. Never executes desktop entries or launcher commands.
@@ -30,11 +31,18 @@ class DesktopActivitySource {
   final Map<Object, ActivityCandidate> _pipeRpc = {};
   List<ActivityCandidate> _catalogue = [];
   DateTime? _catalogueAt;
+  List<ActivityCandidate> _windowsCatalogue = [];
+  DateTime? _windowsCatalogueStartedAt;
+  int _windowsCatalogueGeneration = 0;
+  bool _windowsCatalogueLoading = false;
   bool _disposed = false;
   final _artwork = ActivityArtworkCache();
+  final _windowsIcons = _WindowsActivityIcons();
 
   Future<List<ActivityCandidate>> scan(ActivitySettings settings) async {
     if (_disposed || !supported || !settings.detect) {
+      _windowsIcons.clear();
+      _clearWindowsCatalogue();
       await _closeRpc();
       return [];
     }
@@ -66,16 +74,22 @@ class DesktopActivitySource {
       _catalogue = await Isolate.run(loadLocalActivityCatalogue);
       _catalogueAt = DateTime.now();
     }
-    final catalogue = _catalogue;
+    if (Platform.isWindows) _refreshWindowsCatalogue();
+    final catalogue = Platform.isWindows
+        ? [..._catalogue, ..._windowsCatalogue]
+        : _catalogue;
     final rules = settings.rules;
     // A closure created in this method can capture the same context as the RPC
     // filters below, including this source's non-sendable live ServerSocket.
     final windowsMusic = Platform.isWindows
         ? readWindowsMusic()
         : Future<ActivityCandidate?>.value();
-    final detected = await Isolate.run(
+    var detected = await Isolate.run(
       ActivityProcessScan(catalogue, rules).call,
     );
+    if (Platform.isWindows && !_disposed) {
+      detected = _windowsIcons.decorate(detected);
+    }
     var music = Platform.isLinux
         ? await _linuxMusic(_artwork)
         : await windowsMusic;
@@ -94,6 +108,7 @@ class DesktopActivitySource {
           iconBytes: music.iconBytes,
           playback: music.playback,
           priority: 100,
+          mediaSession: true,
         );
       }
     }
@@ -333,7 +348,169 @@ class DesktopActivitySource {
 
   Future<void> dispose() async {
     _disposed = true;
+    _windowsIcons.clear();
+    _clearWindowsCatalogue();
     await _closeRpc();
+  }
+
+  void _clearWindowsCatalogue() {
+    _windowsCatalogueGeneration++;
+    _windowsCatalogueStartedAt = null;
+    _windowsCatalogue = [];
+  }
+
+  void _refreshWindowsCatalogue() {
+    if (_windowsCatalogueLoading) return;
+    final now = DateTime.now();
+    final previous = _windowsCatalogueStartedAt;
+    if (previous != null &&
+        now.difference(previous) < const Duration(minutes: 5)) {
+      return;
+    }
+    _windowsCatalogueStartedAt = now;
+    _windowsCatalogueLoading = true;
+    final generation = ++_windowsCatalogueGeneration;
+    unawaited(_loadWindowsCatalogue(generation));
+  }
+
+  Future<void> _loadWindowsCatalogue(int generation) async {
+    try {
+      final entries = await Isolate.run(loadWindowsGameCatalogue);
+      if (generation == _windowsCatalogueGeneration && !_disposed) {
+        _windowsCatalogue = entries;
+      }
+    } catch (_) {
+      // Continue using Steam and the last successful launcher catalogue.
+    } finally {
+      _windowsCatalogueLoading = false;
+    }
+  }
+}
+
+/// Icons are best-effort. A scan only uses already cached artwork and never
+/// waits for the shell to extract icons from running executables.
+class _WindowsActivityIcons {
+  final _icons = <String, Uint8List?>{};
+  bool _loading = false;
+  int _generation = 0;
+  Process? _process;
+
+  void clear() {
+    _generation++;
+    _process?.kill();
+    _icons.clear();
+  }
+
+  List<ActivityCandidate> decorate(List<ActivityCandidate> candidates) {
+    if (!_loading) {
+      final paths = candidates
+          .where((item) => item.iconBytes == null)
+          .map((item) => item.id)
+          .where(
+            (path) =>
+                RegExp(r'^[a-z]:[/\\]', caseSensitive: false).hasMatch(path),
+          )
+          .toSet();
+      _icons.removeWhere((path, _) => !paths.contains(path));
+      final missing = paths
+          .take(128)
+          .where((path) => !_icons.containsKey(path))
+          .take(8)
+          .toList();
+      if (missing.isNotEmpty) unawaited(_fetch(missing));
+    }
+    return candidates.map((item) {
+      final icon = item.iconBytes ?? _icons[item.id];
+      if (icon == null || item.iconBytes != null) return item;
+      return ActivityCandidate(
+        id: item.id,
+        name: item.name,
+        kind: item.kind,
+        iconBytes: icon,
+        steamAppId: item.steamAppId,
+        priority: item.priority,
+      );
+    }).toList();
+  }
+
+  Future<void> _fetch(List<String> paths) async {
+    _loading = true;
+    final generation = _generation;
+    Timer? timer;
+    try {
+      final process = await Process.start(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          r'''
+Add-Type -AssemblyName System.Drawing
+$paths = @(ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:SEND_ACTIVITY_ICON_PATHS))))
+for ($i = 0; $i -lt $paths.Count; $i++) {
+  $icon = $null; $bitmap = $null; $stream = $null
+  try {
+    $icon = [Drawing.Icon]::ExtractAssociatedIcon($paths[$i])
+    if ($icon) {
+      $bitmap = $icon.ToBitmap()
+      $stream = New-Object IO.MemoryStream
+      $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
+      if ($stream.Length -le 65536) {
+        @{index=$i; png=[Convert]::ToBase64String($stream.ToArray())} | ConvertTo-Json -Compress
+      }
+    }
+  } catch {} finally {
+    if ($stream) { $stream.Dispose() }
+    if ($bitmap) { $bitmap.Dispose() }
+    if ($icon) { $icon.Dispose() }
+  }
+}
+''',
+        ],
+        environment: {
+          'SEND_ACTIVITY_ICON_PATHS': base64Encode(
+            utf8.encode(jsonEncode(paths)),
+          ),
+        },
+      );
+      _process = process;
+      if (generation != _generation) process.kill();
+      timer = Timer(const Duration(seconds: 5), () => process.kill());
+      final errors = process.stderr.drain<void>();
+      await for (final line
+          in process.stdout
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .transform(const LineSplitter())) {
+        if (generation != _generation || line.length > 90 * 1024) continue;
+        try {
+          final row = jsonDecode(line);
+          if (row is! Map) continue;
+          final index = row['index'];
+          final png = row['png'];
+          if (index is int &&
+              index >= 0 &&
+              index < paths.length &&
+              png is String) {
+            _icons[paths[index]] = base64Decode(png);
+          }
+        } on FormatException {
+          // Ignore an incomplete or invalid icon and keep scanning normally.
+        }
+      }
+      await errors;
+      await process.exitCode;
+    } catch (_) {
+      // An icon failure is not an activity-discovery failure.
+    } finally {
+      timer?.cancel();
+      if (generation == _generation) {
+        for (final path in paths) {
+          _icons.putIfAbsent(path, () => null);
+        }
+      }
+      _process = null;
+      _loading = false;
+    }
   }
 }
 
@@ -812,79 +989,165 @@ Future<List<ActivityCandidate>> _windowsApplications(
   List<ActivityCandidate> catalogue,
   Map<String, ActivityRule> rules,
 ) async {
-  // One bounded snapshot; no window titles, command lines or process injection.
+  // Emit the process snapshot before optional Java classification. A slow
+  // metadata provider must not discard the ordinary Steam/manual matches.
   final process = await Process.start('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-Command',
     r'''
-Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class SendWindows { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class SendWindows {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+  static extern int GetPackageFamilyName(IntPtr handle, ref uint length, StringBuilder name);
+  public static bool IsBedrock(uint pid) {
+    var handle = OpenProcess(0x1000, false, pid);
+    if (handle == IntPtr.Zero) return false;
+    try {
+      uint length = 128;
+      var family = new StringBuilder((int)length);
+      return GetPackageFamilyName(handle, ref length, family) == 0 &&
+        String.Equals(family.ToString(), "Microsoft.MinecraftUWP_8wekyb3d8bbwe", StringComparison.OrdinalIgnoreCase);
+    } finally { CloseHandle(handle); }
+  }
+}
+'@
 [uint32]$foreground = 0
 [void][SendWindows]::GetWindowThreadProcessId([SendWindows]::GetForegroundWindow(), [ref]$foreground)
-$items = @(Get-Process | Select-Object -First 2048 | ForEach-Object {
+$javaProcesses = @()
+Get-Process | Select-Object -First 2048 | ForEach-Object {
   try {
-    $p = $_.Path
-    if ($p) {
-      $icon = if ($_.MainWindowHandle -ne 0) { [System.Drawing.Icon]::ExtractAssociatedIcon($p) } else { $null }
-      $stream = New-Object System.IO.MemoryStream
-      if ($icon) { $bitmap = $icon.ToBitmap(); $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png); $bitmap.Dispose(); $icon.Dispose() }
-      @{id=$p; name=$_.ProcessName; window=($_.MainWindowHandle -ne 0); foreground=($_.Id -eq $foreground); title=$_.FileVersionInfo.ProductName; icon=[Convert]::ToBase64String($stream.ToArray())}
-      $stream.Dispose()
+    $p = $null
+    try { $p = $_.Path } catch {}
+    $name = $_.ProcessName
+    $window = $_.MainWindowHandle -ne 0
+    $bedrock = ($name -eq 'Minecraft.Windows') -and [SendWindows]::IsBedrock($_.Id)
+    if ($p -or $bedrock) {
+      $title = $null
+      try { $title = $_.FileVersionInfo.ProductName } catch {}
+      $row = @{id=$p; pid=$_.Id; name=$name; window=$window; foreground=($_.Id -eq $foreground); title=$title; bedrock=$bedrock}
+      $row | ConvertTo-Json -Compress
+      if ($window -and ($name -in 'java', 'javaw')) {
+        $javaProcesses += $_.Id
+      }
     }
   } catch {}
-})
-ConvertTo-Json -InputObject $items -Compress
+}
+[Console]::Out.Flush()
+if ($javaProcesses.Count -gt 0) {
+  $filter = ($javaProcesses | Select-Object -First 32 | ForEach-Object { "ProcessId = $_" }) -join ' OR '
+  # Inspect only the visible Java processes above. Emit a PID and a boolean
+  # match, never command lines (Minecraft arguments can contain credentials).
+  Get-CimInstance -ClassName Win32_Process -Filter "($filter) AND (Name = 'java.exe' OR Name = 'javaw.exe')" -ErrorAction SilentlyContinue | ForEach-Object {
+    $line = $_.CommandLine
+    $client = $line -cmatch '(?:^|\s)"?(?:net\.minecraft\.client\.main\.Main|net\.fabricmc\.loader(?:\.impl)?\.launch\.knot\.KnotClient|org\.quiltmc\.loader\.impl\.launch\.knot\.KnotClient)"?(?=\s|$)'
+    $modLauncher = ($line -cmatch '(?:^|\s)"?(?:cpw\.mods\.modlauncher\.Launcher|cpw\.mods\.bootstraplauncher\.BootstrapLauncher)"?(?=\s|$)') -and
+      ($line -cmatch '(?:^|\s)"?--launchTarget"?\s+"?(?:forgeclient|neoforgeclient|fmlclient)"?(?=\s|$)')
+    if ($client -or $modLauncher) {
+      @{minecraftJavaPid=$_.ProcessId} | ConvertTo-Json -Compress
+    }
+  }
+}
 ''',
   ]);
   final timer = Timer(const Duration(seconds: 8), () => process.kill());
   try {
     final errors = process.stderr.drain<void>();
-    final out = await process.stdout.transform(utf8.decoder).join();
-    await errors;
-    if (await process.exitCode != 0 || out.length > 2 * 1024 * 1024) return [];
-    final rows = jsonDecode(out);
-    if (rows is! List) return [];
-    final candidates = <ActivityCandidate>[];
-    for (final row in rows.whereType<Map>()) {
-      final path = row['id'];
-      if (path is! String || isActivityHelper(path)) continue;
-      final match = matchRunningActivity(path, catalogue);
-      if (row['window'] != true && match == null && !rules.containsKey(path)) {
-        continue;
+    final rows = <Map<Object?, Object?>>[];
+    await for (final line
+        in process.stdout
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .transform(const LineSplitter())) {
+      if (rows.length >= 2080 || line.length > 16 * 1024) continue;
+      try {
+        final row = jsonDecode(line);
+        if (row is Map<String, dynamic>) rows.add(row);
+      } on FormatException {
+        // A terminated scan can leave one incomplete final row.
       }
-      candidates.add(
-        ActivityCandidate(
-          id: path,
-          name:
-              match?.name ??
-              (row['title'] is String &&
-                      (row['title'] as String).trim().isNotEmpty
-                  ? row['title']
-                  : row['name']),
-          kind: isSpotifyApplication(path)
-              ? ActivityKind.application
-              : match?.kind,
-          steamAppId: match?.steamAppId,
-          priority:
-              (row['foreground'] == true ? 100 : 0) +
-              (row['window'] == true ? 40 : 0) +
-              (match != null ? 20 : 0),
-          iconBytes:
-              row['icon'] is String &&
-                  (row['icon'] as String).isNotEmpty &&
-                  (row['icon'] as String).length < 128 * 1024
-              ? base64Decode(row['icon'])
-              : match?.iconBytes,
-        ),
-      );
     }
-    return rankActivities(candidates);
+    await errors;
+    await process.exitCode;
+    return classifyWindowsActivitySnapshot(rows, catalogue, rules);
   } catch (_) {
     return [];
   } finally {
     timer.cancel();
   }
+}
+
+List<ActivityCandidate> classifyWindowsActivitySnapshot(
+  List<Map<Object?, Object?>> rows,
+  List<ActivityCandidate> catalogue,
+  Map<String, ActivityRule> rules,
+) {
+  final javaClients = rows
+      .map((row) => row['minecraftJavaPid'])
+      .whereType<int>()
+      .toSet();
+  final candidates = <ActivityCandidate>[];
+  final games = WindowsGameIndex(catalogue);
+  for (final row in rows) {
+    final path = row['id'];
+    final name = row['name'];
+    if (name is! String || name.isEmpty) continue;
+    if (path is String && isActivityHelper(path)) continue;
+    final window = row['window'] == true;
+    final bedrock =
+        row['bedrock'] == true && name.toLowerCase() == 'minecraft.windows';
+    final java =
+        window &&
+        (name.toLowerCase() == 'java' || name.toLowerCase() == 'javaw') &&
+        javaClients.contains(row['pid']);
+    final id = bedrock
+        ? 'windows-game:minecraft-bedrock'
+        : java
+        ? 'windows-game:minecraft-java'
+        : path;
+    if (id is! String || id.isEmpty) continue;
+    final match = path is String ? games.match(path, window: window) : null;
+    if (!window && !bedrock && match == null && !rules.containsKey(id)) {
+      continue;
+    }
+    final title = row['title'];
+    final previousRule = path is String ? rules[path] : null;
+    // Keep explicit executable rules effective if a formerly unknown game is
+    // now recognized. Otherwise use a stable identity across client updates.
+    final candidateId = previousRule == null || rules.containsKey(id)
+        ? id
+        : path as String;
+    candidates.add(
+      ActivityCandidate(
+        id: candidateId,
+        name: bedrock
+            ? 'Minecraft: Bedrock Edition'
+            : java
+            ? 'Minecraft: Java Edition'
+            : match?.name ??
+                  (title is String && title.trim().isNotEmpty ? title : name),
+        kind: bedrock || java
+            ? ActivityKind.game
+            : isSpotifyApplication(id)
+            ? ActivityKind.application
+            : match?.kind,
+        steamAppId: bedrock || java ? null : match?.steamAppId,
+        priority:
+            (row['foreground'] == true ? 100 : 0) +
+            (window ? 40 : 0) +
+            (bedrock || java || match != null ? 20 : 0),
+        iconBytes: match?.iconBytes,
+      ),
+    );
+  }
+  return rankActivities(candidates);
 }
 
 Future<ActivityCandidate?> _linuxMusic(ActivityArtworkCache artwork) async {
@@ -922,6 +1185,7 @@ Future<ActivityCandidate?> _linuxMusic(ActivityArtworkCache artwork) async {
           name: _boundedText(fields[3], 128),
           kind: ActivityKind.music,
           details: _boundedText(fields[2], 256),
+          mediaSession: true,
           iconBytes: fields.length > 4 ? await artwork.load(fields[4]) : null,
           playback: fields.length >= 7
               ? playbackFromMpris(

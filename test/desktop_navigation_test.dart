@@ -11,11 +11,12 @@ import 'support/widget_helpers.dart';
 
 class _IslandBackend extends FakeBackend {
   UserActivity? activity;
+  String? customStatus = 'Custom status';
   UserPresence presence = UserPresence.online;
   @override
   String get userId => '@self:test';
   @override
-  String get profileStatusMessage => 'Custom status';
+  String? get profileStatusMessage => customStatus;
   @override
   UserPresence get profilePresence => presence;
   @override
@@ -23,7 +24,7 @@ class _IslandBackend extends FakeBackend {
 }
 
 void main() {
-  testWidgets('desktop island follows DM activity and status priority', (
+  testWidgets('desktop island prefers custom status, then bare activity', (
     tester,
   ) async {
     final backend = _IslandBackend()..currentStatus = SessionStatus.signedIn;
@@ -40,12 +41,16 @@ void main() {
     );
     backend.notifyListeners();
     await tester.pump();
-    expect(subtitle('Playing Test Game'), findsOneWidget);
-    expect(subtitle('Custom status'), findsNothing);
+    expect(subtitle('Test Game'), findsNothing);
+    expect(subtitle('Custom status'), findsOneWidget);
+    backend.customStatus = null;
+    backend.notifyListeners();
+    await tester.pump();
+    expect(subtitle('Test Game'), findsOneWidget);
     backend.presence = UserPresence.offline;
     backend.notifyListeners();
     await tester.pump();
-    expect(subtitle('Playing Test Game'), findsNothing);
+    expect(subtitle('Test Game'), findsNothing);
     expect(subtitle('Custom status'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });

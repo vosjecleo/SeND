@@ -620,6 +620,13 @@ abstract class ChatBackend extends ChangeNotifier {
   /// updated the selected room.
   void setApplicationForeground(bool foreground) {}
 
+  /// Activity can refresh on a visible but unfocused surface. This must not
+  /// affect read receipts or notification suppression.
+  void setActivitySurfaceVisible(bool visible) {}
+
+  /// A contact's activity row has become visible after layout.
+  void refreshVisibleActivity(String userId) {}
+
   /// Reconciles authoritative settings and lightweight transient state after
   /// an application resume without rebuilding the Matrix session/timelines.
   void refreshApplicationState() {}

@@ -98,11 +98,10 @@ extension _MatrixRoomMetadata on MatrixBackend {
       if (user.id == _matrix.userID) continue;
       // Room summaries are synchronous; sync refreshes this SDK cache and
       // notifies the backend whenever presence changes.
-      // ignore: deprecated_member_use
-      switch (_matrix.presences[user.id]?.presence) {
-        case PresenceType.online:
+      switch (_matrixPresenceFor(user.id, UserPresence.offline)) {
+        case UserPresence.online:
           return UserPresence.online;
-        case PresenceType.unavailable:
+        case UserPresence.away:
           result = UserPresence.away;
         default:
           break;

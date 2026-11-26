@@ -55,6 +55,10 @@ jobs:
           flutter analyze --no-pub
       - name: Native unit and widget tests
         run: flutter test --no-pub --concurrency=2
+      - name: Desktop controller idle logic
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror test/native/controller_idle_test.cc -o "$RUNNER_TEMP/controller_idle_test"
+          "$RUNNER_TEMP/controller_idle_test"
       - name: Server, configuration and packaging tests
         run: |
           "$RUNNER_TEMP/test-python/bin/python" -m unittest discover -s server -p 'test_*.py'

@@ -13,6 +13,47 @@ import 'package:deltiecord/services/activity_source_native.dart';
 import 'package:deltiecord/services/lastfm_auth.dart';
 
 void main() {
+  test('Steam utilities and standalone overlays are opt-in, not automatic', () {
+    const allow = ActivityRule(name: 'Overlay', kind: ActivityKind.application);
+    for (final app in const [
+      ActivityCandidate(
+        id: 'game-looking',
+        name: 'Engine',
+        steamAppId: '431960',
+        kind: ActivityKind.game,
+      ),
+      ActivityCandidate(
+        id: r'C:\Steam\wallpaper_engine\wallpaper64.exe',
+        name: 'Wallpaper Engine',
+        kind: ActivityKind.application,
+      ),
+      ActivityCandidate(
+        id: '/tmp/app',
+        name: 'Simple Sight',
+        kind: ActivityKind.game,
+      ),
+      ActivityCandidate(
+        id: r'C:\Utility\CrosshairX.exe',
+        name: 'Overlay',
+        kind: ActivityKind.application,
+      ),
+    ]) {
+      expect(allowsActivitySharing(app, null), isFalse, reason: app.name);
+      expect(allowsActivitySharing(app, allow), isTrue);
+    }
+    expect(
+      allowsActivitySharing(
+        const ActivityCandidate(
+          id: 'real-game',
+          name: 'Game',
+          kind: ActivityKind.game,
+        ),
+        null,
+      ),
+      isTrue,
+    );
+  });
+
   test(
     'Steam utilities are applications, with games still classified as games',
     () {
@@ -40,6 +81,77 @@ void main() {
       matchRunningActivity(r'C:\Other\BeamNG.drive.exe', catalogue),
       isNull,
     );
+  });
+  test(
+    'Windows game recognition distinguishes clients from launchers and Java apps',
+    () {
+      const java = r'C:\Runtime\bin\javaw.exe';
+      final games = classifyWindowsActivitySnapshot(
+        [
+          {'id': java, 'pid': 1, 'name': 'javaw', 'window': true},
+          {'id': java, 'pid': 2, 'name': 'javaw', 'window': true},
+          {'id': java, 'pid': 3, 'name': 'javaw', 'window': false},
+          {'minecraftJavaPid': 1},
+          {'minecraftJavaPid': 3},
+          {'name': 'Minecraft.Windows', 'bedrock': true, 'window': true},
+          {
+            'id': r'C:\Other\Minecraft.Windows.exe',
+            'name': 'Minecraft.Windows',
+            'window': true,
+          },
+          {
+            'id': r'C:\Xbox\MinecraftLauncher.exe',
+            'name': 'MinecraftLauncher',
+            'window': true,
+            'bedrock': true,
+          },
+        ],
+        [],
+        {},
+      );
+      expect(
+        games
+            .where((item) => allowsActivitySharing(item, null))
+            .map((item) => item.name),
+        unorderedEquals([
+          'Minecraft: Java Edition',
+          'Minecraft: Bedrock Edition',
+        ]),
+      );
+      expect(games.singleWhere((item) => item.id == java).kind, isNull);
+    },
+  );
+  test('Windows snapshot keeps Steam and existing overrides without icons', () {
+    const java = r'C:\Runtime\bin\javaw.exe';
+    const optOut = ActivityRule(
+      name: 'Java',
+      kind: ActivityKind.game,
+      allowed: false,
+    );
+    final games = classifyWindowsActivitySnapshot(
+      [
+        {'id': java, 'pid': 1, 'name': 'javaw', 'window': true},
+        {'minecraftJavaPid': 1},
+        {
+          'id': r'C:\Steam\games\example\Example.exe',
+          'name': 'Example',
+          'window': true,
+          'foreground': true,
+        },
+      ],
+      const [
+        ActivityCandidate(
+          id: 'C:/Steam/games/example/',
+          name: 'Example Game',
+          kind: ActivityKind.game,
+          steamAppId: '123',
+        ),
+      ],
+      const {java: optOut},
+    );
+    expect(games.first.steamAppId, '123');
+    expect(games.last.id, java);
+    expect(allowsActivitySharing(games.last, optOut), isFalse);
   });
   test(
     'real game window outranks sibling processes; helper names excluded',

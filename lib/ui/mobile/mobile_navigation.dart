@@ -1275,11 +1275,13 @@ class _MobileUserIsland extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  Text(
-                    backend.profileStatusMessage ??
-                        mobilePresenceLabel(backend.profilePresence),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  ActivityStatus(
+                    backend: backend,
+                    userId: backend.userId,
+                    presence: backend.profilePresence,
+                    status: backend.profileStatusMessage,
+                    preferStatus: true,
+                    fallback: mobilePresenceLabel(backend.profilePresence),
                   ),
                 ],
               ),

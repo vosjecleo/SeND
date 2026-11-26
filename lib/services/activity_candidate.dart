@@ -14,6 +14,7 @@ class ActivityCandidate {
     this.lastFmArtwork,
     this.steamAppId,
     this.priority = 0,
+    this.mediaSession = false,
   });
   final String id, name, details;
   final ActivityKind? kind;
@@ -24,4 +25,7 @@ class ActivityCandidate {
   final Uri? lastFmArtwork;
   final String? steamAppId;
   final int priority;
+
+  /// A track observed through the OS media session, not merely a process.
+  final bool mediaSession;
 }

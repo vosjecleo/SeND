@@ -69,6 +69,7 @@ ActivityCandidate? windowsMusicFromJson(Object? value, {DateTime? now}) {
           )
         : null,
     priority: 100,
+    mediaSession: true,
   );
 }
 

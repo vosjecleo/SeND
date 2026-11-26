@@ -3,6 +3,27 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.43 build 142 (2026-11-26)
+
+- Refresh activity on visible surfaces even when the desktop window is
+  unfocused. Refresh Home when it comes back into view, without changing
+  when messages are marked read.
+- Prefer a regular desktop badge when desktop and phone are both online. If
+  desktop is away and the phone is online, show the phone badge. Show custom
+  statuses in the user island and keep activity labels short outside profiles.
+- Group mobile server members by role and presence, keep admin badges visible,
+  and keep row spacing consistent as members come online or go offline.
+- Recognize Minecraft Java and Bedrock on Windows, and match running games
+  from local Steam, Epic, GOG, Xbox, Battle.net, EA and Ubisoft install records.
+  Load optional icons separately, explain sharing blocks in Settings, and
+  keep Spotify playback separate from game activity.
+- Count controller movement and button changes toward the desktop Away timer.
+  A connected controller with no input does not keep you online. This covers
+  Linux joystick devices and Windows XInput-compatible controllers.
+
+Latest only; Stable is unchanged. No client database migration or homeserver
+update is required. Physical controller and launcher checks remain open.
+
 ## SeND 0.9.43 build 141 (2026-11-25)
 
 - Add editable caption bars and free text to photos and videos, with separate

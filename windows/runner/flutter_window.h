@@ -6,8 +6,10 @@
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 
+#include <array>
 #include <memory>
 
+#include "../../desktop/controller_idle.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -25,6 +27,18 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void SampleControllers();
+
+  struct ControllerState {
+    bool connected = false;
+    int64_t retry_at = 0;
+    uint16_t buttons = 0;
+    std::array<send::ControllerAxis, 6> axes{};
+  };
+  std::array<ControllerState, 4> controllers_{};
+  send::ControllerIdleClock controller_idle_;
+  UINT_PTR controller_timer_ = 0;
+
   // The project to run.
   flutter::DartProject project_;
 

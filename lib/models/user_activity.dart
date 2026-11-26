@@ -1,13 +1,64 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'chat_models.dart' show UserPresence;
 
 enum ActivityKind { game, music, application }
+
+bool isSpotifyActivityIdentity(String value) {
+  final name = value.trim().toLowerCase();
+  return const {
+        'spotify',
+        'spotify.exe',
+        'com.spotify.client',
+        'com.spotify.client.desktop',
+        'spotify.desktop',
+      }.contains(name) ||
+      name.startsWith('spotifyab.spotifymusic_') ||
+      name.startsWith('spotify.instance');
+}
 
 const activityProfileField = 'net.deltiecord.activity';
 const activityDevicePrefix = 'net.deltiecord.activity.device.';
 const mobilePresencePrefix = 'net.deltiecord.mobile.device.';
+const desktopPresencePrefix = 'net.deltiecord.desktop.device.';
 String mobilePresenceField(String deviceId) =>
     '$mobilePresencePrefix${sha256.convert(utf8.encode(deviceId))}';
+String desktopPresenceField(String deviceId) =>
+    '$desktopPresencePrefix${sha256.convert(utf8.encode(deviceId))}';
+
+class OnlineDevices {
+  const OnlineDevices({this.mobile = false, this.desktop = false});
+  final bool mobile, desktop;
+  bool get any => mobile || desktop;
+  bool get prefersPhone => mobile && !desktop;
+  UserPresence resolve(UserPresence aggregate) =>
+      aggregate == UserPresence.away && any ? UserPresence.online : aggregate;
+
+  factory OnlineDevices.fromRecords(Map<String, Object?> records) {
+    var mobile = false, desktop = false;
+    for (final entry
+        in records.entries
+            .where(
+              (entry) =>
+                  entry.key.startsWith(mobilePresencePrefix) ||
+                  entry.key.startsWith(desktopPresencePrefix),
+            )
+            .take(64)) {
+      if (activityRecordExpiry(entry.value) == null) continue;
+      final value = entry.value as Map;
+      if (entry.key.startsWith(mobilePresencePrefix) &&
+          value['mobile'] == true) {
+        mobile = true;
+      } else if (entry.key.startsWith(desktopPresencePrefix) &&
+          value['desktop'] == true) {
+        desktop = true;
+      }
+      if (mobile && desktop) break;
+    }
+    return OnlineDevices(mobile: mobile, desktop: desktop);
+  }
+}
+
 const lastFmHistoryPrefix = 'net.deltiecord.lastfm_recent.device.';
 // Keep the existing device field namespace for upgrades. Its track URL now
 // identifies Last.fm or Libre.fm; no credentials are included in these records.
@@ -25,8 +76,9 @@ class UserActivities {
     this.music,
     this.recent,
     this.mobileOnline = false,
+    this.desktopOnline = false,
   });
-  final bool mobileOnline;
+  final bool mobileOnline, desktopOnline;
   final UserActivity? program, music;
   final LastFmTrack? recent;
   UserActivity? get primary => program ?? music;
@@ -44,13 +96,9 @@ class UserActivities {
     });
     UserActivity? program, music;
     LastFmTrack? recent;
-    var mobile = false;
+    final devices = OnlineDevices.fromRecords(records);
     for (final entry in entries.take(64)) {
       final record = entry.value as Map;
-      if (entry.key.startsWith(mobilePresencePrefix) &&
-          record['mobile'] == true) {
-        mobile = true;
-      }
       final slots = record['slots'];
       final legacy = UserActivity.fromJson(record);
       final p = slots is Map
@@ -63,7 +111,13 @@ class UserActivities {
           : legacy?.kind == ActivityKind.music
           ? legacy
           : null;
-      if (p != null && p.kind != ActivityKind.music) program ??= p;
+      // Older publishers could classify the Spotify process as a game even
+      // while a separate music slot carried the actual track.
+      if (p != null &&
+          p.kind != ActivityKind.music &&
+          !isSpotifyActivityIdentity(p.name)) {
+        program ??= p;
+      }
       if (m != null &&
           m.kind == ActivityKind.music &&
           (music == null || (music.lastFmUrl != null && m.lastFmUrl == null))) {
@@ -94,7 +148,8 @@ class UserActivities {
       program: program,
       music: music,
       recent: recent,
-      mobileOnline: mobile,
+      mobileOnline: devices.mobile,
+      desktopOnline: devices.desktop,
     );
   }
 }

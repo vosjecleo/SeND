@@ -103,6 +103,7 @@ class FakeBackend extends ChatBackend {
   final List<(String, String?, String?)> roomMoves = [];
   final List<String> jumpedEventIds = [];
   final List<bool> applicationForegroundStates = [];
+  final List<bool> activitySurfaceStates = [];
   final List<bool> conversationVisibilityStates = [];
   final List<bool> conversationAtPresentStates = [];
   String? lastReplyToMessageId;
@@ -124,6 +125,10 @@ class FakeBackend extends ChatBackend {
   @override
   void setApplicationForeground(bool foreground) =>
       applicationForegroundStates.add(foreground);
+
+  @override
+  void setActivitySurfaceVisible(bool visible) =>
+      activitySurfaceStates.add(visible);
 
   @override
   void refreshApplicationState() => applicationRefreshCount++;

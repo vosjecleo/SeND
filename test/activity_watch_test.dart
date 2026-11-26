@@ -19,6 +19,9 @@ class _Source extends DesktopActivitySource {
 
 class _Backend extends FakeBackend {
   final watching = <String, bool Function()>{};
+  final exposed = <String>[];
+  @override
+  void refreshVisibleActivity(String userId) => exposed.add(userId);
   @override
   VoidCallback watchActivity(String id, {required bool Function() isVisible}) {
     watching[id] = isVisible;
@@ -29,6 +32,88 @@ class _Backend extends FakeBackend {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test(
+    'returning to a visible contact refreshes its existing activity sample',
+    () async {
+      var visible = true, reads = 0;
+      final fresh = Completer<void>();
+      final controller = ActivityController(
+        userId: '@self:test',
+        source: _Source(),
+        read: (_) async {
+          if (++reads == 2) fresh.complete();
+          return {
+            'devices': {
+              mobilePresenceField('phone'): {
+                'mobile': true,
+                'version': 1,
+                'expires_at': DateTime.now()
+                    .add(const Duration(minutes: 2))
+                    .millisecondsSinceEpoch,
+              },
+            },
+          };
+        },
+        write: (_) async {},
+        upload: (_) async => Uri.parse('mxc://test/icon'),
+        canShare: () => false,
+        pollInterval: const Duration(milliseconds: 15),
+        readInterval: const Duration(days: 1),
+        visibleReadInterval: const Duration(days: 1),
+        exposureFreshness: Duration.zero,
+      );
+      addTearDown(controller.close);
+      controller.watchUser('@peer:test', () => visible);
+      await controller.start();
+      expect(reads, 1);
+      visible = false;
+      await Future<void>.delayed(const Duration(milliseconds: 90));
+      expect(reads, 1);
+      visible = true;
+      await fresh.future.timeout(const Duration(seconds: 2));
+      expect(reads, 2);
+    },
+  );
+
+  test(
+    'watched activity refreshes sooner without polling hidden contacts',
+    () async {
+      final reads = <String, int>{};
+      final refreshed = Completer<void>();
+      final controller = ActivityController(
+        userId: '@self:test',
+        source: _Source(),
+        read: (id) async {
+          reads.update(id, (n) => n + 1, ifAbsent: () => 1);
+          if (id == '@shown:test' && reads[id] == 2) refreshed.complete();
+          return {
+            'devices': {
+              mobilePresenceField('phone'): {
+                'version': 1,
+                'mobile': true,
+                'expires_at': DateTime.now()
+                    .add(const Duration(minutes: 2))
+                    .millisecondsSinceEpoch,
+              },
+            },
+          };
+        },
+        write: (_) async {},
+        upload: (_) async => Uri.parse('mxc://test/icon'),
+        canShare: () => false,
+        readInterval: const Duration(days: 1),
+        visibleReadInterval: const Duration(milliseconds: 40),
+        pollInterval: const Duration(milliseconds: 15),
+      );
+      addTearDown(controller.close);
+      controller.watchUser('@shown:test', () => true);
+      controller.watchUser('@hidden:test', () => false);
+      await controller.start();
+      await refreshed.future.timeout(const Duration(seconds: 2));
+      expect(reads, {'@shown:test': 2});
+    },
+  );
 
   test(
     'visible phone gets one early lookup when its device field arrives late',
@@ -174,12 +259,14 @@ void main() {
       );
       await tester.pump();
       expect(backend.watching['@first:test']!(), isTrue);
+      expect(backend.exposed, contains('@first:test'));
       expect(backend.watching['@last:test']!(), isFalse);
       expect(backend.watching, isNot(contains('@offline:test')));
       scroll.jumpTo(scroll.position.maxScrollExtent);
       await tester.pump();
       expect(backend.watching['@first:test']!(), isFalse);
       expect(backend.watching['@last:test']!(), isTrue);
+      expect(backend.exposed, contains('@last:test'));
       await tester.pumpWidget(const SizedBox());
       expect(backend.watching, isEmpty);
     },

@@ -274,6 +274,54 @@ void main() {
     },
   );
   test(
+    'online desktop wins the badge, but Away desktop does not beat online phone',
+    () {
+      final until = DateTime.now()
+          .add(const Duration(minutes: 2))
+          .millisecondsSinceEpoch;
+      final phone = {'version': 1, 'mobile': true, 'expires_at': until};
+      final pc = {'version': 1, 'desktop': true, 'expires_at': until};
+      final devices = OnlineDevices.fromRecords({
+        mobilePresenceField('phone'): phone,
+        desktopPresenceField('pc'): pc,
+      });
+      expect(devices.resolve(UserPresence.away), UserPresence.online);
+      expect(devices.prefersPhone, isFalse);
+      expect(devices.resolve(UserPresence.offline), UserPresence.offline);
+      final phoneOnly = OnlineDevices.fromRecords({
+        mobilePresenceField('phone'): phone,
+        desktopPresenceField('pc'): {...pc, 'expires_at': 1},
+      });
+      expect(phoneOnly.resolve(UserPresence.away), UserPresence.online);
+      expect(phoneOnly.prefersPhone, isTrue);
+      expect(
+        const OnlineDevices().resolve(UserPresence.away),
+        UserPresence.away,
+      );
+    },
+  );
+
+  test(
+    'desktop publishes an expiring desktop signal and clears it on Away',
+    () async {
+      final writes = <Map<String, Object?>?>[];
+      var online = true;
+      final publisher = MobilePresencePublisher(
+        mobile: false,
+        enabled: () => online,
+        write: (value) async => writes.add(value),
+      );
+      addTearDown(publisher.close);
+      await publisher.refresh();
+      expect(writes.single!['desktop'], isTrue);
+      expect(writes.single!.containsKey('mobile'), isFalse);
+      online = false;
+      await publisher.refresh();
+      expect(writes.last, isNull);
+    },
+  );
+
+  test(
     'phone cutout removes avatar pixels behind the badge but retains the face',
     () {
       final path = const PhonePresenceCutout(

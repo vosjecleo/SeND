@@ -39,6 +39,72 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
+    'Spotify process and Steam utilities stay private, real Spotify tracks stay music',
+    () async {
+      const spotify = r'C:\Users\me\Spotify\Spotify.exe';
+      const utilities = [
+        ActivityCandidate(
+          id: spotify,
+          name: 'Spotify',
+          kind: ActivityKind.application,
+        ),
+        ActivityCandidate(
+          id: 'wallpaper',
+          name: 'Wallpaper Engine',
+          kind: ActivityKind.application,
+          steamAppId: '431960',
+        ),
+        ActivityCandidate(
+          id: 'crosshair',
+          name: 'Simple Sight',
+          kind: ActivityKind.game,
+          steamAppId: '3256420',
+        ),
+      ];
+      final source = Source()..values = utilities;
+      final published = <UserActivity?>[];
+      final controller = ActivityController(
+        userId: '@self:test',
+        source: source,
+        pollInterval: const Duration(days: 1),
+        read: (_) async => null,
+        write: (value) async => published.add(value),
+        upload: (_) async => Uri.parse('mxc://test/icon'),
+        canShare: () => true,
+      );
+      addTearDown(controller.close);
+      await controller.start();
+      const settings = ActivitySettings(
+        detect: true,
+        share: true,
+        rules: {
+          spotify: ActivityRule(
+            name: 'Spotify as a game',
+            kind: ActivityKind.game,
+          ),
+        },
+      );
+      await controller.update(settings);
+      expect(published, isEmpty);
+      source.values = [
+        const ActivityCandidate(
+          id: spotify,
+          name: 'Song title',
+          details: 'Artist',
+          kind: ActivityKind.music,
+          mediaSession: true,
+        ),
+        ...utilities.skip(1),
+      ];
+      await controller.update(settings);
+      expect(published.single?.kind, ActivityKind.music);
+      expect(published.single?.name, 'Song title');
+      source.values = utilities;
+      await controller.update(settings);
+      expect(published.last, isNull);
+    },
+  );
+  test(
     'periodic activity scan recovers and renews without toggling settings',
     () async {
       final source = Source()
@@ -446,10 +512,11 @@ void main() {
       ),
     );
     await tester.pumpWidget(view(UserPresence.online));
-    expect(find.text('Listening to Song'), findsOneWidget);
+    expect(find.text('Song'), findsOneWidget);
+    expect(find.text('Listening to Song'), findsNothing);
     expect(find.byIcon(Icons.music_note), findsOneWidget);
     await tester.pumpWidget(view(UserPresence.offline));
-    expect(find.text('Listening to Song'), findsNothing);
+    expect(find.text('Song'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     backend.dispose();
   });
