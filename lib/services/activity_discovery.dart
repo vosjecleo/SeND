@@ -113,7 +113,12 @@ class WindowsGameIndex {
   final _directories = <String, ActivityCandidate>{};
   final _executables = <String, ActivityCandidate>{};
 
-  static String _key(String path) => normalizeActivityPath(path).toLowerCase();
+  static String _key(String path) {
+    final key = normalizeActivityPath(path).toLowerCase();
+    if (key.startsWith('//?/unc/')) return '//${key.substring(8)}';
+    if (RegExp(r'^//\?/[a-z]:/').hasMatch(key)) return key.substring(4);
+    return key;
+  }
 
   ActivityCandidate? match(String executable, {required bool window}) {
     final key = _key(executable);

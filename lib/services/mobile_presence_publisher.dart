@@ -19,7 +19,11 @@ class MobilePresencePublisher extends ChangeNotifier {
   Future<void>? _operation;
   DateTime? _renewAt, _retryAt;
   bool _published = false, _closed = false, _again = false;
-  bool get active => !_closed && _published && enabled();
+
+  /// The current device knows its own eligibility without waiting for a
+  /// profile write. Other devices still require the published record.
+  bool get locallyEligible => !_closed && enabled();
+  bool get active => _published && locallyEligible;
 
   void start() {
     _timer ??= Timer.periodic(

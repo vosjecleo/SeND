@@ -20,11 +20,10 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Text(
-            'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
-            '• More reliable activity updates and phone status badges\n\n'
-            '• Better Windows game detection, including Minecraft\n\n'
-            '• Controller input counts toward staying Online\n\n'
-            '• Mobile member lists now group admins and online members',
+            'SeND $deltiecordVersion, build $deltiecordBuildNumber - Hotfix\n\n'
+            '• Stay online during a swipe that leaves SeND visible\n\n'
+            '• Online status and the phone badge recover when you return\n\n'
+            '• Improved detection of running games on Windows',
           ),
         ),
       ),

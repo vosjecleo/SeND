@@ -152,6 +152,13 @@ class MatrixBackend extends ChatBackend {
   bool? _activitySurfaceVisible;
   bool get _mayRefreshActivity =>
       _activitySurfaceVisible ?? _applicationForeground;
+  bool get _nativeMobilePresence => !kIsWeb && _isMobilePlatform;
+  bool get _presenceForeground => presenceForeground(
+    applicationForeground: _applicationForeground,
+    surfaceVisible: _activitySurfaceVisible,
+    nativeMobile: _nativeMobilePresence,
+    browserVisible: !kIsWeb || browser.browserApplicationVisible,
+  );
   final _activityInterests = <Object, (String, bool Function())>{};
   final _activityWatchStops = <Object, void Function()>{};
   MobilePresencePublisher? _mobilePresence;
@@ -169,7 +176,7 @@ class MatrixBackend extends ChatBackend {
     return OnlineDevices(
       mobile:
           remote.mobile ||
-          (_isMobilePlatform && (_mobilePresence?.active ?? false)),
+          (_isMobilePlatform && (_mobilePresence?.locallyEligible ?? false)),
       desktop:
           remote.desktop ||
           (!_isMobilePlatform &&
@@ -219,8 +226,19 @@ class MatrixBackend extends ChatBackend {
   @override
   void setActivitySurfaceVisible(bool visible) {
     final previous = _mayRefreshActivity;
+    final previousPresence = _effectiveClientPresence;
     _activitySurfaceVisible = visible;
     if (visible == previous) return;
+    if (_nativeMobilePresence) {
+      // A phone surface can be visible without owning input focus (e.g. a
+      // system gesture or permission dialog). Keep read receipts independent.
+      _presenceReconciler?.invalidate();
+      _configureClientPresence();
+      unawaited(_mobilePresence?.refresh());
+      if (previousPresence != _effectiveClientPresence) {
+        unawaited(_refreshDesktopPresence());
+      }
+    }
     if (visible) {
       _activities?.refreshVisibleUsers();
       unawaited(_refreshVisiblePresence());
@@ -244,7 +262,7 @@ class MatrixBackend extends ChatBackend {
       return _preferences.sharePresence &&
           _presenceMode != PresenceMode.invisible &&
           _connectionStatus != ConnectionStatus.offline &&
-          (supportsActivityDetection || _applicationForeground);
+          (supportsActivityDetection || _presenceForeground);
     }
     return _matrixPresenceFor(
           id,
@@ -375,7 +393,7 @@ class MatrixBackend extends ChatBackend {
           _settingsHydrated &&
           _devicePreferencesLoaded &&
           _ownProfileHydrated &&
-          (!mobile || _applicationForeground) &&
+          (!mobile || _presenceForeground) &&
           _preferences.sharePresence &&
           (!mobile ||
               (_preferences.shareMobilePresence &&
@@ -2116,7 +2134,9 @@ class MatrixBackend extends ChatBackend {
     if (kIsWeb && _client?.isLogged() == true) {
       unawaited(reconcileBrowserPush(_matrix).catchError((Object _) {}));
     }
-    if (_applicationForeground) {
+    // On a phone the window can resume before it regains focus. Retire any
+    // suspended offline sync even if no view-focus event has arrived yet.
+    if (_presenceForeground) {
       unawaited(_refreshVisiblePresence(force: true));
       unawaited(_refreshTimelineAfterResume());
     }

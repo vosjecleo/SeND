@@ -4,6 +4,39 @@ import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/services/presence_policy.dart';
 
 void main() {
+  test('native phone presence follows visibility, not view focus', () {
+    PresenceType current({required bool focused, required bool? visible}) =>
+        clientPresence(
+          share: true,
+          mode: PresenceMode.online,
+          idle: false,
+          foreground: presenceForeground(
+            applicationForeground: focused,
+            surfaceVisible: visible,
+            nativeMobile: true,
+            browserVisible: true,
+          ),
+          offlineInBackground: true,
+        );
+    expect(current(focused: true, visible: true), PresenceType.online);
+    expect(current(focused: false, visible: true), PresenceType.online);
+    expect(current(focused: false, visible: false), PresenceType.offline);
+    expect(current(focused: false, visible: true), PresenceType.online);
+    expect(current(focused: false, visible: null), PresenceType.offline);
+  });
+
+  test('a hidden browser page cannot publish foreground presence', () {
+    expect(
+      presenceForeground(
+        applicationForeground: true,
+        surfaceVisible: true,
+        nativeMobile: false,
+        browserVisible: false,
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'background phone/PWA stays offline; desktop focus does not determine idle',
     () {

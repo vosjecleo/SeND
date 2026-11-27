@@ -1858,10 +1858,6 @@ extension _MatrixSession on MatrixBackend {
     // The activity watcher can fire before the own profile has restored the
     // existing status. Publishing presence before then would erase it.
     if (userId != null && _ownProfileHydrated) {
-      final idle = _desktopIdle;
-      final mode = _presenceMode;
-      final share = _preferences.sharePresence;
-      final foreground = _applicationForeground;
       _configureClientPresence();
       final presence = _effectiveClientPresence;
       _desktopPresencePublishing = true;
@@ -1894,10 +1890,7 @@ extension _MatrixSession on MatrixBackend {
         _desktopPresencePublishing = false;
         if (lease.isCurrent &&
             identical(client, _client) &&
-            (idle != _desktopIdle ||
-                mode != _presenceMode ||
-                share != _preferences.sharePresence ||
-                foreground != _applicationForeground)) {
+            presence != _effectiveClientPresence) {
           unawaited(_refreshDesktopPresence());
         }
       }
@@ -1908,9 +1901,7 @@ extension _MatrixSession on MatrixBackend {
     share: _preferences.sharePresence,
     mode: _presenceMode,
     idle: !_isMobilePlatform && _desktopIdle,
-    foreground:
-        _applicationForeground &&
-        (!kIsWeb || browser.browserApplicationVisible),
+    foreground: _presenceForeground,
     offlineInBackground: kIsWeb || _isMobilePlatform,
   );
 

@@ -177,6 +177,35 @@ void main() {
     },
   );
   test(
+    'the local phone badge returns while the resumed profile write is pending',
+    () async {
+      var enabled = true;
+      Completer<void>? gate;
+      final publisher = MobilePresencePublisher(
+        enabled: () => enabled,
+        write: (record) async {
+          if (record != null) await gate?.future;
+        },
+      );
+      addTearDown(publisher.close);
+      await publisher.refresh();
+      expect(publisher.active, isTrue);
+      enabled = false;
+      await publisher.refresh();
+      expect(publisher.locallyEligible, isFalse);
+      expect(publisher.active, isFalse);
+
+      enabled = true;
+      gate = Completer<void>();
+      final resumed = publisher.refresh();
+      expect(publisher.locallyEligible, isTrue);
+      expect(publisher.active, isFalse);
+      gate.complete();
+      await resumed;
+      expect(publisher.active, isTrue);
+    },
+  );
+  test(
     'disabling while a publication is in flight clears the same device',
     () async {
       var enabled = true;

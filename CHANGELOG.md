@@ -3,6 +3,19 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.43 build 143 - Hotfix (2026-11-27)
+
+- Keep mobile presence while SeND is still visible but briefly loses focus.
+  Restore online status when returning to the app without requiring a message
+  or typing. Read receipts still require app focus.
+- Restore the local phone badge while its server update is pending. An online
+  desktop still takes precedence.
+- Improve Windows detection when a running game's executable path is hard to
+  read or Steam uses an alternate library path.
+
+Latest only; Stable is unchanged. No client database migration or homeserver
+update is required. The Pixel gesture and WARDOGS still need device checks.
+
 ## SeND 0.9.43 build 142 (2026-11-26)
 
 - Refresh activity on visible surfaces even when the desktop window is

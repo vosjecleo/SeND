@@ -121,6 +121,45 @@ void main() {
       expect(games.singleWhere((item) => item.id == java).kind, isNull);
     },
   );
+  test('Windows catalogue matches extended drive paths and UNC aliases', () {
+    final index = WindowsGameIndex(const [
+      ActivityCandidate(
+        id: 'D:/SteamLibrary/steamapps/common/WARDOGS/',
+        name: 'WARDOGS',
+        kind: ActivityKind.game,
+        steamAppId: '1867240',
+      ),
+      ActivityCandidate(
+        id: '//storage/Games/Title/',
+        name: 'Title',
+        kind: ActivityKind.game,
+      ),
+    ]);
+    expect(
+      index
+          .match(
+            r'\\?\D:\SteamLibrary\steamapps\common\WARDOGS\Binaries\Game.exe',
+            window: false,
+          )
+          ?.name,
+      'WARDOGS',
+    );
+    expect(
+      index.match(r'\\?\UNC\storage\Games\Title\Game.exe', window: true)?.name,
+      'Title',
+    );
+  });
+  test('Windows foreground process is listed without MainWindowHandle', () {
+    final games = classifyWindowsActivitySnapshot(
+      [
+        {'id': r'D:\Games\Unknown.exe', 'name': 'Unknown', 'foreground': true},
+      ],
+      [],
+      {},
+    );
+    expect(games.single.name, 'Unknown');
+    expect(games.single.kind, isNull);
+  });
   test('Windows snapshot keeps Steam and existing overrides without icons', () {
     const java = r'C:\Runtime\bin\javaw.exe';
     const optOut = ActivityRule(

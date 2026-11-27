@@ -681,16 +681,33 @@ Future<List<ActivityCandidate>> loadLocalActivityCatalogue() async {
             r'"installdir"\s+"([^"/]+)"',
           ).firstMatch(content)?.group(1);
           if (name != null && install != null && install != '..') {
-            entries.add(
-              ActivityCandidate(
-                id: '${normalizeActivityPath(Directory('$library/steamapps/common/$install').resolveSymbolicLinksSync())}/',
-                name: name,
-                kind: steamActivityKind(appId),
-                steamAppId: appId,
-                iconBytes:
-                    shortcut?.iconBytes ?? await _steamIcon(steam, appId),
-              ),
-            );
+            final directory = Directory('$library/steamapps/common/$install');
+            final paths = <String>{};
+            // Windows can report the library/junction path instead of the
+            // resolved target. Accept both names for this installed game.
+            if (Platform.isWindows) {
+              paths.add(normalizeActivityPath(directory.path));
+            }
+            try {
+              paths.add(
+                normalizeActivityPath(directory.resolveSymbolicLinksSync()),
+              );
+            } on FileSystemException {
+              if (paths.isEmpty) continue;
+            }
+            final iconBytes =
+                shortcut?.iconBytes ?? await _steamIcon(steam, appId);
+            for (final path in paths) {
+              entries.add(
+                ActivityCandidate(
+                  id: '$path/',
+                  name: name,
+                  kind: steamActivityKind(appId),
+                  steamAppId: appId,
+                  iconBytes: iconBytes,
+                ),
+              );
+            }
           }
         } catch (_) {}
       }
@@ -1007,7 +1024,18 @@ public class SendWindows {
   [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
   [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
   [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+  static extern bool QueryFullProcessImageNameW(IntPtr handle, uint flags, StringBuilder path, ref uint length);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
   static extern int GetPackageFamilyName(IntPtr handle, ref uint length, StringBuilder name);
+  public static string ImagePath(uint pid) {
+    var handle = OpenProcess(0x1000, false, pid);
+    if (handle == IntPtr.Zero) return null;
+    try {
+      uint length = 32768;
+      var path = new StringBuilder((int)length);
+      return QueryFullProcessImageNameW(handle, 0, path, ref length) ? path.ToString() : null;
+    } finally { CloseHandle(handle); }
+  }
   public static bool IsBedrock(uint pid) {
     var handle = OpenProcess(0x1000, false, pid);
     if (handle == IntPtr.Zero) return false;
@@ -1027,13 +1055,18 @@ Get-Process | Select-Object -First 2048 | ForEach-Object {
   try {
     $p = $null
     try { $p = $_.Path } catch {}
+    if (!$p) { $p = [SendWindows]::ImagePath($_.Id) }
     $name = $_.ProcessName
-    $window = $_.MainWindowHandle -ne 0
+    $isForeground = $_.Id -eq $foreground
+    $window = $isForeground
+    if (!$window) {
+      try { $window = $_.MainWindowHandle -ne 0 } catch {}
+    }
     $bedrock = ($name -eq 'Minecraft.Windows') -and [SendWindows]::IsBedrock($_.Id)
     if ($p -or $bedrock) {
       $title = $null
       try { $title = $_.FileVersionInfo.ProductName } catch {}
-      $row = @{id=$p; pid=$_.Id; name=$name; window=$window; foreground=($_.Id -eq $foreground); title=$title; bedrock=$bedrock}
+      $row = @{id=$p; pid=$_.Id; name=$name; window=$window; foreground=$isForeground; title=$title; bedrock=$bedrock}
       $row | ConvertTo-Json -Compress
       if ($window -and ($name -in 'java', 'javaw')) {
         $javaProcesses += $_.Id
@@ -1100,7 +1133,7 @@ List<ActivityCandidate> classifyWindowsActivitySnapshot(
     final name = row['name'];
     if (name is! String || name.isEmpty) continue;
     if (path is String && isActivityHelper(path)) continue;
-    final window = row['window'] == true;
+    final window = row['window'] == true || row['foreground'] == true;
     final bedrock =
         row['bedrock'] == true && name.toLowerCase() == 'minecraft.windows';
     final java =

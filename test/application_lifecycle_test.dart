@@ -1,6 +1,6 @@
+import 'dart:ui' show ViewFocusEvent, ViewFocusState, ViewFocusDirection;
 import 'package:deltiecord/models/chat_models.dart';
 import 'package:deltiecord/app.dart';
-import 'dart:ui' show ViewFocusEvent, ViewFocusState, ViewFocusDirection;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,6 +8,44 @@ import 'support/fake_backend.dart';
 import 'support/widget_helpers.dart';
 
 void main() {
+  testWidgets('phone gesture can lose focus without hiding the app surface', (
+    tester,
+  ) async {
+    final backend = FakeBackend()..currentStatus = SessionStatus.signedIn;
+    await pumpMobile(tester, backend);
+    final lifecycle =
+        tester.state(find.byType(ApplicationLifecycle))
+            as WidgetsBindingObserver;
+    final binding = tester.binding;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    lifecycle.didChangeViewFocus(
+      ViewFocusEvent(
+        viewId: tester.view.viewId,
+        state: ViewFocusState.unfocused,
+        direction: ViewFocusDirection.forward,
+      ),
+    );
+    await tester.pump();
+    expect(backend.activitySurfaceStates.last, isTrue);
+    expect(backend.applicationForegroundStates.last, isFalse);
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(backend.activitySurfaceStates.last, isFalse);
+
+    final refreshes = backend.applicationRefreshCount;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(backend.activitySurfaceStates.last, isTrue);
+    expect(backend.applicationForegroundStates.last, isFalse);
+    expect(backend.applicationRefreshCount, greaterThan(refreshes));
+    await tester.pumpWidget(const SizedBox());
+    backend.dispose();
+  });
+
   testWidgets(
     'an unfocused visible surface still refreshes activity but not receipts',
     (tester) async {
