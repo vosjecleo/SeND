@@ -1005,7 +1005,8 @@ class MatrixBackend extends ChatBackend {
   final Map<String, String> _lastMarkedReadEventIds = {};
   bool _applicationForeground = true;
   bool _desktopIdle = true;
-  bool _desktopPresencePublishing = false;
+  Completer<void>? _desktopPresenceWrite;
+  Future<void>? _ownStatusEdit;
   Timer? _desktopActivityLeaseTimer;
   bool _conversationVisible = false;
   bool _conversationAtPresent = false;

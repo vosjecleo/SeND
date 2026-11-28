@@ -85,7 +85,10 @@ extension _MatrixProfiles on MatrixBackend {
         cached.profile,
         presence: _matrixPresenceFor(id, cached.profile.presence),
         statusMessage: _normalizedProfileStatus(value.statusMsg),
-        replaceStatusMessage: replaceStatus,
+        // A presence-only response can omit our status. Losing the saved
+        // value here would also make the next heartbeat clear it on Synapse.
+        replaceStatusMessage:
+            value.statusMsg != null || (replaceStatus && id != _matrix.userID),
       );
       cached.statusFetchedAt = DateTime.now();
       if (id == _matrix.userID) _applyOwnProfileSummary(cached.profile);
@@ -414,9 +417,13 @@ extension _MatrixProfiles on MatrixBackend {
       bio: properties?[_profileBioField] as String? ?? old?.bio,
       pronouns: properties?[_profilePronounsField] as String? ?? old?.pronouns,
       timezone: remoteProfile?.mTz ?? old?.timezone,
-      statusMessage: presence == null
+      statusMessage: presence?.statusMsg != null
+          ? _normalizedProfileStatus(presence!.statusMsg)
+          : userId == client?.userID
+          ? _profileStatusMessage
+          : presence == null
           ? old?.statusMessage
-          : _normalizedProfileStatus(presence.statusMsg),
+          : null,
       profileColor: remoteProfile == null
           ? old?.profileColor
           : _parseProfileColor(colorValue),
@@ -657,6 +664,7 @@ extension _MatrixProfiles on MatrixBackend {
       profile,
       presence: _matrixPresenceFor(profile.userId, profile.presence),
       statusMessage: _normalizedProfileStatus(synced.statusMsg),
+      replaceStatusMessage: synced.statusMsg != null,
     );
   }
 
@@ -1073,6 +1081,56 @@ extension _MatrixProfiles on MatrixBackend {
     });
   }
 
+  Future<void> _saveOwnStatusMessage(String userId, String status) async {
+    final client = _matrix;
+    final lease = _sessionScope.capture();
+    final previous = _ownStatusEdit ?? _desktopPresenceWrite?.future;
+    final done = Completer<void>();
+    final queued = _ownStatusEdit = done.future;
+    PresenceType? sentPresence;
+    try {
+      // Explicit edits and periodic presence writes share this server field.
+      // A heartbeat carrying the old text must finish before the edit.
+      await previous;
+      if (!lease.isCurrent || !identical(client, _client)) {
+        throw StateError('Session changed.');
+      }
+      final presence = sentPresence = _effectiveClientPresence;
+      await client
+          .setPresence(userId, presence, statusMsg: status)
+          .timeout(const Duration(seconds: 10));
+      if (!lease.isCurrent || !identical(client, _client)) {
+        throw StateError('Session changed.');
+      }
+      _profileStatusMessage = _normalizedProfileStatus(status);
+      _configureClientPresence();
+      _presenceReconciler?.observeSync(userId);
+      final current = _effectiveClientPresence;
+      _publishPresenceValue(
+        userId,
+        CachedPresence(
+          current,
+          0,
+          status,
+          current == PresenceType.online,
+          userId,
+        ),
+        source: 'status-edit',
+      );
+    } finally {
+      if (identical(_ownStatusEdit, queued)) {
+        _ownStatusEdit = null;
+        if (lease.isCurrent &&
+            identical(client, _client) &&
+            sentPresence != null &&
+            sentPresence != _effectiveClientPresence) {
+          unawaited(_refreshDesktopPresence());
+        }
+      }
+      done.complete();
+    }
+  }
+
   Future<void> _updateOwnProfileFields({
     String? bio,
     String? pronouns,
@@ -1114,15 +1172,7 @@ extension _MatrixProfiles on MatrixBackend {
 
     try {
       if (statusMessage != null) {
-        final normalizedStatus = statusMessage.trim();
-        await _matrix.setPresence(
-          userId,
-          _effectiveClientPresence,
-          statusMsg: normalizedStatus,
-        );
-        _profileStatusMessage = normalizedStatus.isEmpty
-            ? null
-            : normalizedStatus;
+        await _saveOwnStatusMessage(userId, statusMessage.trim());
       }
       await setText(_profileBioField, bio);
       await setText(_profilePronounsField, normalizedProfilePronouns(pronouns));

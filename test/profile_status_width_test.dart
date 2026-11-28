@@ -5,6 +5,51 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('offline profiles show the island centered on the banner edge', (
+    tester,
+  ) async {
+    for (final width in [340.0, 500.0]) {
+      for (final presence in [UserPresence.offline, UserPresence.away]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(
+              extensions: [DeltiecordPalette.forMode(DeltiecordThemeMode.dark)],
+            ),
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: width,
+                  child: DeltiecordProfileCard(
+                    preview: true,
+                    profile: UserProfileSummary(
+                      userId: '@alice:test',
+                      displayName: 'Alice',
+                      presence: presence,
+                      statusMessage: 'Making tea',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final island = find.byKey(const ValueKey('profile-presence-island'));
+        if (presence == UserPresence.offline) {
+          final banner = find.byKey(const ValueKey('profile-banner'));
+          expect(find.text('Offline'), findsOneWidget);
+          expect(find.byType(ProfileStatusBubble), findsNothing);
+          expect(
+            tester.getCenter(island).dy,
+            closeTo(tester.getRect(banner).bottom, .01),
+          );
+        } else {
+          expect(island, findsNothing);
+          expect(find.byType(ProfileStatusBubble), findsOneWidget);
+        }
+      }
+    }
+  });
+
   testWidgets('short profile statuses shrink without stretching longer ones', (
     tester,
   ) async {

@@ -10,6 +10,8 @@ import 'activity_widgets.dart';
 import 'lifecycle_memory_image.dart';
 import 'profile_media_viewer.dart';
 import 'profile_watch.dart';
+import 'profile_status_editor.dart';
+import 'emoji_typography.dart';
 import 'avatar_presence.dart';
 import '../models/profile_image_geometry.dart';
 
@@ -55,6 +57,11 @@ class DeltiecordProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.deltiecord;
+    final backend = ActivityScope.of(context);
+    final editStatus =
+        !preview && backend != null && backend.userId == profile.userId
+        ? () => showQuickProfileStatusEditor(context, backend)
+        : null;
     final accent = Color(
       profile.profileColor ?? Theme.of(context).colorScheme.primary.toARGB32(),
     );
@@ -102,6 +109,7 @@ class DeltiecordProfileCard extends StatelessWidget {
               accent: accent,
               secondaryAccent: secondaryAccent,
               onEdit: onEdit,
+              onEditStatus: editStatus,
               onClose: onClose,
               avatarPreview: avatarPreview,
               bannerPreview: bannerPreview,
@@ -260,11 +268,13 @@ class ProfileStatusBubble extends StatelessWidget {
   const ProfileStatusBubble({
     required this.status,
     required this.accent,
+    this.onEdit,
     super.key,
   });
 
   final String status;
   final Color accent;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -272,27 +282,60 @@ class ProfileStatusBubble extends StatelessWidget {
       accent.withValues(alpha: .12),
       context.deltiecord.elevated,
     );
-    return Tooltip(
-      message: status,
+    final parts = splitProfileStatus(status);
+    final custom = customProfileStatusEmoji(parts.emoji);
+    const style = TextStyle(fontSize: 13);
+    final bubbleText = custom == null
+        ? status
+        : joinProfileStatus(custom.fallback, parts.text);
+    final bubble = Tooltip(
+      message: bubbleText,
       child: CustomPaint(
         painter: _ThoughtBubblePainter(fill, accent.withValues(alpha: .3)),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 360),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Text(
-            status.replaceAll(RegExp(r'\s+'), ' ').trim(),
+          child: Text.rich(
+            custom == null
+                ? colourEmojiTextSpan(
+                    status.replaceAll(RegExp(r'\s+'), ' ').trim(),
+                    style,
+                  )
+                : TextSpan(
+                    style: style,
+                    children: [
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: ProfileStatusEmojiGlyph(
+                          prefix: parts.emoji!,
+                          backend: ActivityScope.of(context),
+                          size: 18,
+                        ),
+                      ),
+                      if (parts.text.isNotEmpty)
+                        colourEmojiTextSpan(
+                          ' ${parts.text.replaceAll(RegExp(r'\s+'), ' ')}',
+                          style,
+                        ),
+                    ],
+                  ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13),
           ),
         ),
       ),
     );
+    return onEdit == null
+        ? bubble
+        : InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(16),
+            child: bubble,
+          );
   }
 }
 
-/// Union the overlapping lobes before stroking, so the thought trail belongs
-/// to the bubble instead of leaving detached circles or interior outline seams.
+/// Separate, descending dots make the thought trail distinct from the bubble.
 class _ThoughtBubblePainter extends CustomPainter {
   const _ThoughtBubblePainter(this.fill, this.outline);
   final Color fill;
@@ -300,17 +343,17 @@ class _ThoughtBubblePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    var path = Path()
+    final path = Path()
       ..addRRect(
         RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(16)),
       );
-    for (final circle in [
-      Rect.fromLTWH(-8, size.height * .48, 18, 18),
-      Rect.fromLTWH(-16, size.height * .48 + 10, 12, 12),
-      Rect.fromLTWH(-21, size.height * .48 + 17, 8, 8),
-    ]) {
-      path = Path.combine(PathOperation.union, path, Path()..addOval(circle));
-    }
+    final trailStart = size.height * .68;
+    path
+      ..addOval(Rect.fromCircle(center: Offset(-7, trailStart), radius: 4))
+      ..addOval(Rect.fromCircle(center: Offset(-16, trailStart + 5), radius: 3))
+      ..addOval(
+        Rect.fromCircle(center: Offset(-23, trailStart + 9), radius: 2),
+      );
     canvas.drawPath(path, Paint()..color = fill);
     canvas.drawPath(
       path,
@@ -332,6 +375,7 @@ class _ProfileHeader extends StatelessWidget {
     required this.accent,
     required this.secondaryAccent,
     required this.onEdit,
+    required this.onEditStatus,
     required this.onClose,
     this.avatarPreview,
     this.bannerPreview,
@@ -343,6 +387,7 @@ class _ProfileHeader extends StatelessWidget {
   final Color accent;
   final Color secondaryAccent;
   final VoidCallback? onEdit;
+  final VoidCallback? onEditStatus;
   final VoidCallback? onClose;
   final Widget? avatarPreview;
   final Widget? bannerPreview;
@@ -399,6 +444,7 @@ class _ProfileHeader extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Positioned(
+                key: const ValueKey('profile-banner'),
                 left: 0,
                 top: 0,
                 right: 0,
@@ -520,50 +566,62 @@ class _ProfileHeader extends StatelessWidget {
               Positioned(
                 right: 20,
                 left: 28 + avatarSize,
-                bottom: 34,
-                child: profile.presence == UserPresence.offline
-                    ? const SizedBox.shrink()
-                    : profile.statusMessage?.trim().isNotEmpty == true
+                top: bannerHeight - avatarSize / 2,
+                height: avatarSize,
+                child:
+                    profile.presence != UserPresence.offline &&
+                        profile.statusMessage?.trim().isNotEmpty == true
                     ? Align(
                         alignment: Alignment.centerLeft,
                         child: ProfileStatusBubble(
                           status: profile.statusMessage!,
                           accent: accent,
+                          onEdit: onEditStatus,
                         ),
                       )
                     : Align(
                         alignment: Alignment.centerRight,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.elevated,
-                            borderRadius: DeltiecordCorners.borderRadius,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              PresenceBadge(
-                                presence: profile.presence,
-                                phone: showsMobilePresence(
-                                  context,
-                                  profile.userId,
-                                  profile.presence,
-                                ),
-                                size: presenceBadgeSize(
-                                  9,
+                        child: GestureDetector(
+                          onTap: onEditStatus,
+                          child: Container(
+                            key: const ValueKey('profile-presence-island'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: palette.elevated,
+                              borderRadius: DeltiecordCorners.borderRadius,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                PresenceBadge(
+                                  presence: profile.presence,
                                   phone: showsMobilePresence(
                                     context,
                                     profile.userId,
                                     profile.presence,
                                   ),
+                                  size: presenceBadgeSize(
+                                    9,
+                                    phone: showsMobilePresence(
+                                      context,
+                                      profile.userId,
+                                      profile.presence,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(_profilePresenceLabel(profile.presence)),
-                            ],
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    _profilePresenceLabel(profile.presence),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

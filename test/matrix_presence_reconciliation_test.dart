@@ -48,6 +48,8 @@ class _Client extends Client {
 
 class _OwnClient extends _Client {
   bool failWrites = true;
+  Completer<void>? writeGate;
+  final writtenStatuses = <String?>[];
   @override
   String get userID => '@self:example.org';
   @override
@@ -57,6 +59,8 @@ class _OwnClient extends _Client {
     String? statusMsg,
   }) async {
     if (failWrites) throw StateError('Presence publication unavailable');
+    writtenStatuses.add(statusMsg);
+    await writeGate?.future;
   }
 }
 
@@ -220,6 +224,54 @@ void main() {
       expect(backend.profilePresence, UserPresence.online);
     },
   );
+  test(
+    'own custom status survives a presence-only reply and profile refresh',
+    () async {
+      final client = _OwnClient()
+        ..failWrites = false
+        ..serverState = PresenceType.online;
+      final backend = _MobileBackend(client: client);
+      addTearDown(backend.dispose);
+      final id = client.userID;
+      await backend.refreshProfile();
+      await backend.updateOwnProfileFields(statusMessage: 'Making tea');
+      await backend.getUserProfile(id, refresh: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profileStatusMessage, 'Making tea');
+      expect((await backend.getUserProfile(id)).statusMessage, 'Making tea');
+
+      final offline = CachedPresence(PresenceType.offline, 0, null, false, id);
+      // ignore: deprecated_member_use
+      client.presences[id] = offline;
+      client.onPresenceChanged.add(offline);
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.profileStatusMessage, 'Making tea');
+
+      await backend.updateOwnProfileFields(statusMessage: '');
+      expect(backend.profileStatusMessage, isNull);
+      expect((await backend.getUserProfile(id)).statusMessage, isNull);
+    },
+  );
+  test('an explicit status edit waits for an older presence write', () async {
+    final gate = Completer<void>();
+    final client = _OwnClient()
+      ..failWrites = false
+      ..writeGate = gate;
+    final backend = _MobileBackend(client: client);
+    addTearDown(backend.dispose);
+    await backend.refreshProfile();
+    await Future<void>.delayed(Duration.zero);
+    expect(client.writtenStatuses, [null]);
+
+    final edit = backend.updateOwnProfileFields(statusMessage: 'New status');
+    await Future<void>.delayed(Duration.zero);
+    expect(client.writtenStatuses, [null]);
+    gate.complete();
+    await edit;
+
+    expect(client.writtenStatuses, [null, 'New status']);
+    expect(backend.profileStatusMessage, 'New status');
+  });
   test(
     'async own presence updates the island without a second profile refresh',
     () async {

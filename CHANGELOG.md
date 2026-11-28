@@ -3,6 +3,21 @@
 Changes are listed newest first. Each entry describes that release, including
 its known limitations at the time. For current issues, see [Known issues](KNOWN_ISSUES.md).
 
+## SeND 0.9.43 build 144 (2026-11-28)
+
+- Click or tap your own profile status to edit it directly. Add one Unicode
+  or custom pack emoji, with or without status text.
+- Show a live game or app before music in compact status lines, and fall back
+  to custom text when there is no live activity. Keep the status emoji next
+  to the activity. Full profiles still show status and activity separately.
+- Keep saved status text when a presence update omits it, and prevent older
+  presence writes from overtaking an explicit status edit.
+- Show the Offline badge on full profiles even when a status is saved. Center
+  the presence badge on the banner edge and separate the thought bubble dots.
+
+Latest only; Stable is unchanged. No client database migration or homeserver
+update is required.
+
 ## SeND 0.9.43 build 143 - Hotfix (2026-11-27)
 
 - Keep mobile presence while SeND is still visible but briefly loses focus.

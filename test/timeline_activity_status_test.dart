@@ -59,12 +59,17 @@ void main() {
                   backend: backend,
                   userId: '@peer:test',
                   presence: UserPresence.online,
+                  status: '🍵 Making tea',
                   fallback: const Text('Online'),
                 ),
-                ActivityStatus(
-                  backend: backend,
-                  userId: '@peer:test',
-                  presence: UserPresence.online,
+                ListenableBuilder(
+                  listenable: backend,
+                  builder: (context, _) => ActivityStatus(
+                    backend: backend,
+                    userId: '@peer:test',
+                    presence: UserPresence.online,
+                    status: '🍵 Making tea',
+                  ),
                 ),
               ],
             ),
@@ -73,6 +78,9 @@ void main() {
       ),
     );
     expect(find.text('Online'), findsNothing);
+    expect(find.text('Making tea'), findsNothing);
+    expect(find.text('🍵'), findsNWidgets(2));
+    expect(find.text(' • '), findsNWidgets(2));
     expect(find.text('Counter-Strike: Source'), findsNWidgets(2));
     expect(find.text('Playing Counter-Strike: Source'), findsNothing);
     expect(find.byIcon(Icons.sports_esports_outlined), findsNWidgets(2));
@@ -80,7 +88,8 @@ void main() {
     backend.activity = null;
     backend.notifyListeners();
     await tester.pump();
-    expect(find.text('Online'), findsOneWidget);
+    expect(find.text('Making tea'), findsNWidgets(2));
+    expect(find.text(' • '), findsNothing);
   });
   testWidgets('offline timeline never displays cached live activity', (
     tester,

@@ -1373,7 +1373,6 @@ class _CurrentUserPanel extends StatelessWidget {
                             userId: backend.userId,
                             presence: backend.profilePresence,
                             status: backend.profileStatusMessage,
-                            preferStatus: true,
                           ),
                         ],
                       ),

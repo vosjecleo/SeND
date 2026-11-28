@@ -26,7 +26,7 @@ class _IslandBackend extends FakeBackend {
 
 void main() {
   testWidgets(
-    'mobile island uses status, activity, then presence as fallback',
+    'mobile island prefers activity, then custom status and presence',
     (tester) async {
       final backend = _IslandBackend()..currentStatus = SessionStatus.signedIn;
       addTearDown(backend.dispose);
@@ -48,13 +48,22 @@ void main() {
       backend.customStatus = 'Working';
       backend.notifyListeners();
       await tester.pump();
-      expect(text('Working'), findsOneWidget);
-      expect(text('Song'), findsNothing);
+      expect(text('Song'), findsOneWidget);
+      expect(text('Working'), findsNothing);
       backend.presence = UserPresence.away;
+      backend.notifyListeners();
+      await tester.pump();
+      expect(text('Song'), findsOneWidget);
+      expect(text('Working'), findsNothing);
+      backend.activity = null;
       backend.notifyListeners();
       await tester.pump();
       expect(text('Working'), findsOneWidget);
       expect(text('Away'), findsNothing);
+      backend.customStatus = null;
+      backend.notifyListeners();
+      await tester.pump();
+      expect(text('Away'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

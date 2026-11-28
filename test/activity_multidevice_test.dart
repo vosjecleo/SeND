@@ -205,6 +205,7 @@ void main() {
         final view = controller.activitiesFor('@me:test');
         expect(view.program?.name, 'Game');
         expect(view.music?.name, 'Native song');
+        expect(controller.activityFor('@me:test')?.name, 'Game');
         expect(view.recent?.name, 'Completed song');
       }
       // Phone background/opt-out must never delete the desktop's publication.
@@ -222,6 +223,38 @@ void main() {
       expect(UserActivities.fromRecords(records).live, isEmpty);
     },
   );
+
+  test('playing or using wins over newer listening from another device', () {
+    final now = DateTime.now();
+    Map<String, Object?> record(
+      String name,
+      ActivityKind kind,
+      int expiresInSeconds,
+    ) => UserActivity(
+      name: name,
+      kind: kind,
+      expiresAt: now.add(Duration(seconds: expiresInSeconds)),
+    ).toJson();
+
+    final track = record('Song', ActivityKind.music, 90);
+    for (final kind in [ActivityKind.game, ActivityKind.application]) {
+      final records = {
+        'listener': {
+          ...track,
+          'slots': {'music': track},
+        },
+        'desktop': record('Running program', kind, 60),
+      };
+      final active = UserActivities.fromRecords(records);
+      expect(active.primary?.name, 'Running program');
+      expect(active.live.map((activity) => activity.name), [
+        'Running program',
+        'Song',
+      ]);
+      records['desktop'] = record('Running program', kind, -1);
+      expect(UserActivities.fromRecords(records).primary?.name, 'Song');
+    }
+  });
 
   test(
     'native music wins over newer Last.fm; expired and wrong-kind slots ignored',

@@ -24,7 +24,7 @@ class _IslandBackend extends FakeBackend {
 }
 
 void main() {
-  testWidgets('desktop island prefers custom status, then bare activity', (
+  testWidgets('desktop island prefers bare activity, then custom status', (
     tester,
   ) async {
     final backend = _IslandBackend()..currentStatus = SessionStatus.signedIn;
@@ -41,12 +41,15 @@ void main() {
     );
     backend.notifyListeners();
     await tester.pump();
-    expect(subtitle('Test Game'), findsNothing);
-    expect(subtitle('Custom status'), findsOneWidget);
-    backend.customStatus = null;
+    expect(subtitle('Test Game'), findsOneWidget);
+    expect(subtitle('Custom status'), findsNothing);
+    final activity = backend.activity;
+    backend.activity = null;
     backend.notifyListeners();
     await tester.pump();
-    expect(subtitle('Test Game'), findsOneWidget);
+    expect(subtitle('Test Game'), findsNothing);
+    expect(subtitle('Custom status'), findsOneWidget);
+    backend.activity = activity;
     backend.presence = UserPresence.offline;
     backend.notifyListeners();
     await tester.pump();

@@ -14,6 +14,7 @@ import '../services/secret_redaction.dart';
 import 'accent_color_picker.dart';
 import 'profile_card.dart';
 import 'profile_image_cropper.dart';
+import 'profile_status_editor.dart';
 import 'timezone_picker_dialog.dart';
 
 Future<bool> showProfileEditor(
@@ -77,11 +78,19 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
   late final _bio = TextEditingController(
     text: widget.spaceOverride?.bio ?? widget.initialProfile.bio,
   );
-  late final _status = TextEditingController(
-    text:
-        widget.spaceOverride?.statusMessage ??
-        widget.initialProfile.statusMessage,
+  late final _initialStatus = splitProfileStatus(
+    widget.spaceOverride?.statusMessage ?? widget.initialProfile.statusMessage,
   );
+  late final _status = TextEditingController(text: _initialStatus.text);
+  late String? _statusEmoji = _initialStatus.emoji;
+  String get _statusValue => joinProfileStatus(_statusEmoji, _status.text);
+
+  void _useGeneralStatus() {
+    final status = splitProfileStatus(widget.initialProfile.statusMessage);
+    setState(() => _statusEmoji = status.emoji);
+    _status.text = status.text;
+  }
+
   late int _profileColor =
       widget.spaceOverride?.accentColor ??
       widget.initialProfile.profileColor ??
@@ -162,7 +171,9 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
       _pronouns.text =
           normalizedProfilePronouns(widget.initialProfile.pronouns) ?? '';
       _bio.text = widget.initialProfile.bio ?? '';
-      _status.text = widget.initialProfile.statusMessage ?? '';
+      final status = splitProfileStatus(widget.initialProfile.statusMessage);
+      _statusEmoji = status.emoji;
+      _status.text = status.text;
       _timezone = widget.initialProfile.timezone;
       _avatar = widget.initialProfile.avatarBytes;
       _banner = widget.initialProfile.bannerBytes;
@@ -206,7 +217,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
     bio: _bio.text,
     pronouns: _pronouns.text,
     timezone: _timezone,
-    statusMessage: _status.text,
+    statusMessage: _statusValue,
     profileColor: _profileColor,
     profileColorSecondary: _profileColorSecondary,
     voiceColor: _voiceColor,
@@ -324,7 +335,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
             ),
             bio: overridden(_bio.text, widget.initialProfile.bio),
             statusMessage: overridden(
-              _status.text,
+              _statusValue,
               widget.initialProfile.statusMessage,
             ),
             timezone: _timezone == widget.initialProfile.timezone
@@ -364,7 +375,7 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
         bio: extensible ? _bio.text.trim() : null,
         pronouns: extensible ? _pronouns.text.trim() : null,
         timezone: extensible ? _timezone?.trim() ?? '' : null,
-        statusMessage: _status.text.trim(),
+        statusMessage: _statusValue,
         profileColor: extensible ? _profileColor : null,
         profileColorSecondary: extensible ? _profileColorSecondary : null,
         bannerBytes: extensible && _bannerChanged && !_removeBanner
@@ -531,24 +542,16 @@ class _ProfileEditorDialogState extends State<_ProfileEditorDialog> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              TextField(
+                              ProfileStatusField(
+                                backend: widget.backend,
                                 controller: _status,
-                                maxLength: 120,
-                                decoration: InputDecoration(
-                                  labelText: 'Status',
-                                  hintText: 'What are you up to?',
-                                  suffixIcon: _spaceProfile
-                                      ? IconButton(
-                                          tooltip: 'Use general status',
-                                          onPressed: () => _status.text =
-                                              widget
-                                                  .initialProfile
-                                                  .statusMessage ??
-                                              '',
-                                          icon: const Icon(Icons.restart_alt),
-                                        )
-                                      : null,
-                                ),
+                                emoji: _statusEmoji,
+                                onEmojiChanged: (emoji) =>
+                                    setState(() => _statusEmoji = emoji),
+                                enabled: !_saving,
+                                onReset: _spaceProfile
+                                    ? _useGeneralStatus
+                                    : null,
                               ),
                               const SizedBox(height: 8),
                               const Text('Profile outline & gradient — top'),

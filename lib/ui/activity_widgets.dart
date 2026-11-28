@@ -7,6 +7,21 @@ import '../models/chat_models.dart';
 import '../models/user_activity.dart';
 import 'deltiecord_theme.dart';
 import 'profile_watch.dart';
+import 'profile_status_editor.dart';
+
+List<Widget> _statusEmojiPrefix(
+  String? emoji,
+  ChatBackend backend, {
+  required bool withActivity,
+}) => [
+  if (emoji != null) ...[
+    ProfileStatusEmojiGlyph(prefix: emoji, backend: backend, size: 16),
+    if (withActivity)
+      const Text(' • ', style: TextStyle(fontSize: 13))
+    else
+      const SizedBox(width: 4),
+  ],
+];
 
 class ActivityScope extends InheritedWidget {
   const ActivityScope({required this.backend, required super.child, super.key});
@@ -166,21 +181,28 @@ class TimelineActivityStatus extends StatelessWidget {
         final activity = userId == null || presence == UserPresence.offline
             ? null
             : backend.activityFor(userId!);
-        final customStatus = presence == UserPresence.offline
-            ? ''
-            : status?.trim() ?? '';
-        if (activity == null && customStatus.isEmpty) return fallback;
+        final custom = splitProfileStatus(
+          presence == UserPresence.offline ? null : status,
+        );
+        if (activity == null && custom.text.isEmpty && custom.emoji == null) {
+          return fallback;
+        }
         final color = context.deltiecord.muted;
         return Row(
           key: const ValueKey('timeline-activity-status'),
           children: [
+            ..._statusEmojiPrefix(
+              custom.emoji,
+              backend,
+              withActivity: activity != null,
+            ),
             if (activity != null) ...[
               Icon(activityIcon(activity.kind), size: 14, color: color),
               const SizedBox(width: 4),
             ],
             Expanded(
               child: Text(
-                activity?.name ?? customStatus,
+                activity?.name ?? custom.text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -233,32 +255,40 @@ class ActivityStatus extends StatelessWidget {
     required this.userId,
     required this.presence,
     this.status,
-    this.preferStatus = false,
     this.fallback = '',
     this.reserveLine = false,
     super.key,
   });
   final ChatBackend backend;
   final String? userId, status;
-  final bool preferStatus;
   final bool reserveLine;
   final String fallback;
   final UserPresence presence;
   @override
   Widget build(BuildContext context) {
     final visible = presence != UserPresence.offline;
-    final custom = visible ? status?.trim() ?? '' : '';
-    final activity =
-        !visible || userId == null || (preferStatus && custom.isNotEmpty)
+    final custom = splitProfileStatus(visible ? status : null);
+    final activity = !visible || userId == null
         ? null
         : backend.activityFor(userId!);
-    final text = activity?.name ?? (custom.isNotEmpty ? custom : fallback);
-    if (text.isEmpty && !reserveLine) return const SizedBox.shrink();
+    final text =
+        activity?.name ??
+        (custom.text.isNotEmpty || custom.emoji != null
+            ? custom.text
+            : fallback);
+    if (text.isEmpty && custom.emoji == null && !reserveLine) {
+      return const SizedBox.shrink();
+    }
     final color = context.deltiecord.muted;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(
         children: [
+          ..._statusEmojiPrefix(
+            custom.emoji,
+            backend,
+            withActivity: activity != null,
+          ),
           if (activity != null) ...[
             Icon(activityIcon(activity.kind), size: 14, color: color),
             const SizedBox(width: 4),

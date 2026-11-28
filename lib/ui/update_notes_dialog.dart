@@ -20,10 +20,11 @@ Future<void> showUpdateNotes(BuildContext context) => showDialog<void>(
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Text(
-            'SeND $deltiecordVersion, build $deltiecordBuildNumber - Hotfix\n\n'
-            '• Stay online during a swipe that leaves SeND visible\n\n'
-            '• Online status and the phone badge recover when you return\n\n'
-            '• Improved detection of running games on Windows',
+            'SeND $deltiecordVersion, build $deltiecordBuildNumber\n\n'
+            '• Click or tap your own profile status to edit it\n\n'
+            '• Add one Unicode or custom pack emoji to your status\n\n'
+            '• Keep your emoji beside your game, app, or music\n\n'
+            '• Fix saved status text disappearing during presence updates',
           ),
         ),
       ),

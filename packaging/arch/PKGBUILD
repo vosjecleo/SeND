@@ -1,6 +1,6 @@
 pkgname=deltiecord
 pkgver=0.9.43
-pkgrel=143
+pkgrel=144
 pkgdesc='Compact Matrix desktop client'
 arch=('x86_64')
 url='https://deltie.net/SeND'
@@ -21,7 +21,11 @@ build() {
   # makepkg supplies its own RUSTFLAGS, so append rather than defaulting.
   export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-dead-code"
   flutter pub get --enforce-lockfile
-  python3 packaging/flutter-with-credentials.py build linux --release
+  local preview_args=()
+  if [[ "${SEND_PREVIEW:-false}" == true ]]; then
+    preview_args+=(--dart-define=SEND_PREVIEW=true)
+  fi
+  python3 packaging/flutter-with-credentials.py build linux --release "${preview_args[@]}"
   packaging/linux/verify-release.sh
 }
 

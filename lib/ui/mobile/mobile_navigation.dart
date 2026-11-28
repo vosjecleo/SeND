@@ -1280,7 +1280,6 @@ class _MobileUserIsland extends StatelessWidget {
                     userId: backend.userId,
                     presence: backend.profilePresence,
                     status: backend.profileStatusMessage,
-                    preferStatus: true,
                     fallback: mobilePresenceLabel(backend.profilePresence),
                   ),
                 ],

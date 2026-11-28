@@ -1851,7 +1851,11 @@ extension _MatrixSession on MatrixBackend {
   }
 
   Future<void> _refreshDesktopPresence() async {
-    if (_desktopPresencePublishing || _client == null) return;
+    if (_desktopPresenceWrite != null ||
+        _ownStatusEdit != null ||
+        _client == null) {
+      return;
+    }
     final lease = _sessionScope.capture();
     final client = _matrix;
     final userId = _matrix.userID;
@@ -1860,7 +1864,7 @@ extension _MatrixSession on MatrixBackend {
     if (userId != null && _ownProfileHydrated) {
       _configureClientPresence();
       final presence = _effectiveClientPresence;
-      _desktopPresencePublishing = true;
+      final write = _desktopPresenceWrite = Completer<void>();
       try {
         if (kIsWeb) {
           if (!await browser.publishBrowserPresence()) return;
@@ -1887,7 +1891,8 @@ extension _MatrixSession on MatrixBackend {
       } catch (_) {
         // The next transition/heartbeat retries without interrupting input.
       } finally {
-        _desktopPresencePublishing = false;
+        _desktopPresenceWrite = null;
+        write.complete();
         if (lease.isCurrent &&
             identical(client, _client) &&
             presence != _effectiveClientPresence) {

@@ -7,14 +7,17 @@ import '../services/favourite_reactions_store.dart';
 import 'deltiecord_theme.dart';
 import 'matrix_html_text.dart';
 
+enum EmojiPickerAction { remove }
+
 class EmojiPickerDialog extends StatefulWidget {
   const EmojiPickerDialog({
     required this.backend,
     this.embedded = false,
+    this.removeSelection = false,
     super.key,
   });
 
-  final bool embedded;
+  final bool embedded, removeSelection;
 
   final ChatBackend backend;
 
@@ -224,6 +227,15 @@ class _EmojiPickerDialogState extends State<EmojiPickerDialog> {
       surfaceTintColor: Colors.transparent,
       title: const Text('Emoji'),
       content: content,
+      actions: widget.removeSelection
+          ? [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, EmojiPickerAction.remove),
+                child: const Text('Remove emoji'),
+              ),
+            ]
+          : null,
     );
   }
 
